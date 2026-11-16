@@ -18,8 +18,10 @@ concurrency:
 # Job names are required status checks in the main ruleset. Rename only together with the ruleset.
 # A job skipped by its `if` counts as passing for a required check.
 jobs:
-  # Docs-only PRs skip the heavy jobs (#78). "Docs" = the paths Prettier ignores as prose:
-  # docs/, .claude/, root *.md, .github/*.md. Any other file, and every push to main, runs all.
+  # Docs-only PRs skip the heavy jobs (#78). "Docs" = Markdown that no check reads:
+  # *.md under docs/ or .claude/, root *.md, .github/*.md (all Prettier-ignored; ESLint and tsc
+  # skip .md). Any other file, including .ts under docs/ or .claude/, and every push to main, runs
+  # all. Fail closed: if the file list can't be read, everything runs.
   changes:
     name: changes
     runs-on: ubuntu-24.04
@@ -40,9 +42,12 @@ jobs:
           fi
           # New and old names, so a file moved out of a code path counts as a code change.
           files=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" --paginate \
-            --jq '.[] | .filename, (.previous_filename // empty)')
+            --jq '.[] | .filename, (.previous_filename // empty)') || {
+            echo "Could not list files: running everything."
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          }
           echo "$files"
-          code=$(grep -Ev '^(docs/|\.claude/|[^/]+\.md$|\.github/[^/]+\.md$)' <<<"$files" || true)
+          code=$(grep -Ev '^((docs|\.claude)/.*\.md|[^/]+\.md|\.github/[^/]+\.md)$' <<<"$files" || true)
           if [ -z "$files" ] || [ -n "$code" ]; then
             echo "code=true" >> "$GITHUB_OUTPUT"
           else
@@ -127,9 +132,10 @@ jobs:
 
   # Multi-arch image (spec §11, #50). Each arch builds natively and smoke-runs the container,
   # including the image's own HEALTHCHECK. Read-only token; nothing is pushed here.
-  # On docs-only PRs the job still starts, so the matrix expands and the required checks
-  # `image (amd64)` / `image (arm64)` report, but every step is skipped. A job-level skip
-  # would report one unexpanded `image (${{ matrix.arch }})` check and block the merge.
+  # On docs-only PRs the job still starts, so the matrix expands and `image (amd64)` /
+  # `image (arm64)` report as passed, but every step is skipped. A job-level skip would report
+  # one unexpanded `image (${{ matrix.arch }})` check instead, which would hang if these two
+  # are ever made required. Every step in this job must carry `if: env.CODE != 'false'`.
   image:
     name: image (${{ matrix.arch }})
     needs: [changes, typecheck, lint, format, test, build]
