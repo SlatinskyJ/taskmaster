@@ -60,9 +60,9 @@ Success means the family uses it every week instead of the whiteboard bookkeepin
 | Jakub | **Admin** | Looks after the system. **Not a party** to any task or agreement |
 
 Role rules:
-- **Taker**: can approve scores, bid, reserve, complete, and log unprompted chores. Has a running total.
-- **Giver**: can create tasks, templates, and instances, approve scores, respond to bids, complete tasks (no points, no running total "for now"), approve or reject completions, and run the meeting/settlement.
-- **Admin**: manages users, global settings (default levels, default period length), and templates if needed; can correct a finalized settlement and make manual point adjustments. All admin actions are logged. The admin does not count as a "party" for any agreement.
+- **Taker**: can approve scores, bid, reserve, complete, and log unprompted chores. Has a running total. Can flag a locked item as **disputed** (5.11).
+- **Giver**: can create tasks, templates, and instances, approve scores, respond to bids, complete tasks (no points, no running total "for now"), approve or reject completions, and run the meeting/settlement. Can propose a change to the **default period settings**, which needs all-party agreement (5.8), and can flag a locked item as **disputed** (5.11).
+- **Admin**: manages users, global settings (default levels, default period length), and templates if needed; can correct a finalized settlement and make manual point adjustments; **settles disputes** (5.11). All admin actions are logged. The admin does not count as a "party" for any agreement.
 - **"All parties"** = all active givers + all active takers. When Mum is added, she becomes part of "all parties" automatically.
 
 ## 4. Concepts
@@ -163,7 +163,8 @@ Givers see the same for every taker.
 
 ### 5.8 Periods
 - A period runs from the previous settlement's cutoff to its own **cutoff** (date + time). It is not tied to calendar weeks.
-- Defaults (global settings, admin-editable): length 7 days, cutoff Sunday evening (**[call]** 18:00 Europe/Prague), default lower/upper levels.
+- Defaults (global settings): length 7 days, cutoff Sunday evening (**[call]** 18:00 Europe/Prague), default lower/upper levels.
+- **Changing the defaults (Jakub, 2026-11-16):** the admin can change them directly. A **giver** can also propose a change; it takes effect only after **all-party agreement**, the same way as a per-period change. Either way, a new default applies only to periods that have not started yet; the running period never changes. **[call]** A proposal that has not been agreed by the time the next period starts stays open for the period after it, until it is agreed, rejected, or withdrawn.
 - The next period is created automatically with defaults. A different **length/cutoff** or different **levels** for a period need **all-party agreement before that period starts**. Once a period has started, its cutoff and levels are locked.
 - **[call]** If no settlement has happened by the cutoff, the next period still starts at the cutoff. Completions after the cutoff belong to the next period even if the meeting hasn't been held yet.
 - Settlement of a period is allowed any time after its cutoff.
@@ -186,9 +187,18 @@ A giver (normally Dad) runs a guided **meeting screen**:
 - **[call]** A correction never rewrites later settlements. It writes a correction record linked to the original (which may state a corrected level reached, for the money paid outside the app) and posts the point difference as an adjustment to the taker's **current** running total. Carry-over is stored per settlement, not recomputed.
 - **Manual point adjustments** (outside tasks) are admin-only, need a reason, and are logged.
 
+### 5.11 Disputes (Jakub, 2026-11-16)
+- Any **taker or giver** can mark a locked item as **disputed**, with a short reason. Locked items are: an agreed score (task or template), a confirmed or rejected completion, a settlement record, and a manual adjustment.
+- A disputed item **keeps its values and state** until the admin resolves it. A dispute blocks nothing else (the meeting and settlement go ahead) **[call]**.
+- Only the **admin** resolves a dispute, in one of two ways:
+  - **Correct:** a settlement correction or a manual point adjustment (5.9), with the original record preserved;
+  - **Dismiss:** leave things as they are, with a note.
+- Everyone involved sees the outcome. **[call]** An item has at most one open dispute at a time.
+- Opening, correcting, and dismissing a dispute are audit-logged.
+
 ### 5.10 Audit log
 - **Append-only.** Every state-changing action writes an entry: actor (user), timestamp, action type, entity type and ID, before/after values (or the relevant payload), and optional reason.
-- Covers at least: logins (**[call]** success and failure), task/template/instance creation, score offers/counters/approvals/changes, reservations/releases, completions, approvals/rejections, expiries, cancellations, period proposals/agreements, settlements, admin corrections, adjustments, user and settings changes.
+- Covers at least: logins (**[call]** success and failure), task/template/instance creation, score offers/counters/approvals/changes, reservations/releases, completions, approvals/rejections, expiries, cancellations, period proposals/agreements, default-setting proposals/agreements, disputes (opened, corrected, dismissed), settlements, admin corrections, adjustments, user and settings changes.
 - No UI. It must be queryable by the admin (direct DB access or a simple export is enough).
 - **[call]** Domain data is never hard-deleted; cancellation/expiry are states. Running totals must be reproducible from the log + settlement records.
 
@@ -207,8 +217,10 @@ A giver (normally Dad) runs a guided **meeting screen**:
   - **Log a chore**: pick a template, mark done (self-logged).
   - **Create**: one-time task (giver), template (giver), instance on demand (giver).
   - **Meeting**: the three-step flow from 5.9 (givers).
-  - **Period settings**: propose length/levels for an upcoming period, approve proposals.
-  - **Admin**: settings, corrections, adjustments.
+  - **Period settings**: propose length/levels for an upcoming period, propose a change to the defaults (givers), approve proposals.
+  - **Dispute**: mark a locked item as disputed, with a reason (takers and givers).
+  - **Admin**: settings, open disputes, corrections, adjustments.
+- The UI design (theme, tokens, effects, screen inventory) is in `2026-11-16-taskmaster-ui-design.md`.
 
 Rough home screen sketch (taker):
 
@@ -283,7 +295,7 @@ Facts only; no spec behaviour changed. Open items are marked **GAP**.
 - Scheduler mechanism for scheduled instances and expiry.
 - Exposure method, reverse proxy, TLS, and backup mechanism (infra plan).
 - Test strategy. The rules in section 5 (agreement, lifecycle, settlement arithmetic, period attribution) deserve thorough automated tests.
-- Exact screen structure and visual design within section 7.
+- Exact screen structure and visual design within section 7 (see the UI design doc).
 
 ## 11. Tech stack (decided 2026-11-16, with Jakub)
 Jakub prefers TypeScript and React and wants to explore TanStack. Next.js was rejected because its best features depend on Vercel-style hosting, and SvelteKit and Go because they are less familiar to him. Items marked **[call]** are Claude's defaults that the owner may still overturn.
