@@ -17,7 +17,7 @@ Read `.claude/skills/pr-review-rounds/judge-contract.md` first. It defines your 
 - **Backups:** still cover the DB file. A consistent copy is taken (SQLite backup API or `VACUUM INTO`), not a raw file copy during writes.
 - **Resources:** memory fits comfortably in about 2 GB shared with DSM. Health check present.
 - **Tunnel:** the `cloudflared` service and hostname `taskmaster.slatinsky.cz` are intact.
-- **CI:** required checks still run on every PR. The image is built and pushed only from `main`.
+- **CI:** required checks still report on every PR. A PR that changes only Markdown may skip them via the `changes` job (#78). Any other file, a failed file lookup, and every push to `main` run them all. The image is built and pushed only from `main`.
 
 ## Not your lane
 
