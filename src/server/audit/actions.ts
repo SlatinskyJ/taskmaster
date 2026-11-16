@@ -1,4 +1,7 @@
-// Audit action types (spec §5.10). Extend this list as features land; never rename or remove a
+// Closed lists for the audit log (spec §5.10). This file must stay import-free: the DB schema
+// (src/server/db/schema/audit.ts) imports it, and the audit module imports the schema.
+//
+// Audit action types. Extend this list as features land; never rename or remove a
 // value that may already be stored (old rows keep it). Format: `<entity>.<verb>`.
 export const AUDIT_ACTIONS = [
   // Accounts and sessions (§6)
@@ -30,6 +33,8 @@ export const AUDIT_ACTIONS = [
   'template.score_change_proposed',
   'template.score_changed',
   'template.agreed',
+  'template.updated',
+  'template.cancelled',
   'instance.created',
   'instance.self_logged',
   'instance.reserved',
@@ -66,3 +71,25 @@ export type AuditAction = (typeof AUDIT_ACTIONS)[number]
 /** Who did it: a signed-in user, the scheduler (`system`), or nobody known (failed login). */
 export const ACTOR_KINDS = ['user', 'system', 'anonymous'] as const
 export type ActorKind = (typeof ACTOR_KINDS)[number]
+
+/**
+ * What an entry is about. A closed list so one entity is never logged under two spellings
+ * (the log is append-only, so a misspelt row could never be fixed). Extend as features land.
+ */
+export const ENTITY_TYPES = [
+  'user',
+  'session',
+  'passkey',
+  'settings',
+  'task',
+  'template',
+  'instance',
+  'period',
+  'period_proposal',
+  'defaults_proposal',
+  'settlement',
+  'adjustment',
+  'dispute',
+  'app_meta',
+] as const
+export type EntityType = (typeof ENTITY_TYPES)[number]

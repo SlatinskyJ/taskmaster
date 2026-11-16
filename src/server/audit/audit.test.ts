@@ -1,10 +1,10 @@
 import { eq } from 'drizzle-orm'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Db } from '~/server/db'
 import { appMeta, auditLog } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { AUDIT_ACTIONS } from './actions'
-import { withAudit, writeAudit } from './audit'
+import { REDACTED, withAudit, writeAudit } from './audit'
 import type { AuditEntry } from './audit'
 
 const dad = { kind: 'user', userId: 7 } as const
@@ -51,7 +51,7 @@ describe('withAudit', () => {
         action: 'settings.changed',
         entityType: 'app_meta',
         entityId: 'k',
-        before: 'null',
+        before: null,
         after: '{"key":"k","value":"v"}',
         reason: 'test',
       },
@@ -126,6 +126,7 @@ describe('withAudit', () => {
     expect(() =>
       withAudit(
         db,
+        // @ts-expect-error -- async changes are rejected at compile time; this checks the backstop
         // eslint-disable-next-line @typescript-eslint/require-await -- the point of the test
         async (tx) => {
           tx.insert(appMeta).values({ key: 'k', value: 'v' }).run()
@@ -138,14 +139,25 @@ describe('withAudit', () => {
   })
 
   it('stamps the current time when no instant is given', () => {
-    const before = Date.now()
-    withAudit(db, () => undefined, entry({ at: undefined }))
-    const row = auditRows()[0]
-    expect(row).toBeDefined()
-    const stamped = Date.parse(row?.at ?? '')
-    expect(stamped).toBeGreaterThanOrEqual(before)
-    expect(stamped).toBeLessThanOrEqual(Date.now())
-    expect(row?.at).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/)
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-15T17:00:00.123Z'))
+    try {
+      withAudit(db, () => undefined, entry({ at: undefined }))
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(auditRows()[0]?.at).toBe('2026-11-15T17:00:00.123Z')
+  })
+
+  it('stores an omitted or null before/after as SQL NULL', () => {
+    withAudit(db, () => undefined, [
+      entry({ before: undefined, after: undefined }),
+      entry({ before: null, after: null }),
+    ])
+    expect(auditRows().map((r) => [r.before, r.after])).toEqual([
+      [null, null],
+      [null, null],
+    ])
   })
 })
 
@@ -161,6 +173,16 @@ describe('actors', () => {
     ])
   })
 
+  it('rejects a system or anonymous actor with a user id at the DB level', () => {
+    expect(() =>
+      db.$client
+        .prepare(
+          "insert into audit_log (at, actor_kind, actor_user_id, action, entity_type, entity_id) values ('x', 'system', 1, 'auth.logout', 'user', '1')",
+        )
+        .run(),
+    ).toThrow(/CHECK constraint/)
+  })
+
   it('rejects a user actor without an id at the DB level', () => {
     expect(() =>
       db.$client
@@ -169,6 +191,40 @@ describe('actors', () => {
         )
         .run(),
     ).toThrow(/CHECK constraint/)
+  })
+})
+
+describe('credentials never reach the log', () => {
+  it('redacts credential fields at any depth, keeping everything else', () => {
+    withAudit(
+      db,
+      () => undefined,
+      entry({
+        before: { name: 'Honza', passwordHash: '$argon2id$...', pin: '1234' },
+        after: {
+          name: 'Honza',
+          password: 'hunter2',
+          sessions: [{ id: 1, tokenHash: 'abc' }],
+          passkey: { credentialId: 'xyz', credentialPublicKey: 'pk', counter: 3 },
+          clientSecret: 's',
+          shipping: 'kept', // contains "pin" but is not a PIN
+        },
+      }),
+    )
+    const row = auditRows()[0]
+    expect(JSON.parse(row?.before ?? '')).toEqual({
+      name: 'Honza',
+      passwordHash: REDACTED,
+      pin: REDACTED,
+    })
+    expect(JSON.parse(row?.after ?? '')).toEqual({
+      name: 'Honza',
+      password: REDACTED,
+      sessions: [{ id: 1, tokenHash: REDACTED }],
+      passkey: { credentialId: REDACTED, credentialPublicKey: REDACTED, counter: 3 },
+      clientSecret: REDACTED,
+      shipping: 'kept',
+    })
   })
 })
 

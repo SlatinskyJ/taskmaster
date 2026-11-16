@@ -1,10 +1,14 @@
 import { sql } from 'drizzle-orm'
 import { check, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
-import { ACTOR_KINDS, AUDIT_ACTIONS } from '~/server/audit/actions'
+import { ACTOR_KINDS, AUDIT_ACTIONS, ENTITY_TYPES } from '~/server/audit/actions'
 
 // Append-only audit log (spec §5.10). Rows are only ever inserted, through `withAudit` /
 // `writeAudit` in ~/server/audit. DB triggers (migration 0002) reject UPDATE and DELETE.
 // Ids are plain values, not foreign keys: the log must never block or cascade from other tables.
+//
+// WARNING: if a schema change here makes drizzle-kit rebuild this table (`__new_audit_log` +
+// DROP + rename), the rebuild drops the triggers. Re-create them in the same migration, and
+// copy the rows with INSERT ... SELECT (allowed; only UPDATE/DELETE are blocked).
 export const auditLog = sqliteTable(
   'audit_log',
   {
@@ -15,7 +19,7 @@ export const auditLog = sqliteTable(
     /** Set when actorKind is `user`, null otherwise. */
     actorUserId: integer('actor_user_id'),
     action: text('action', { enum: AUDIT_ACTIONS }).notNull(),
-    entityType: text('entity_type').notNull(),
+    entityType: text('entity_type', { enum: ENTITY_TYPES }).notNull(),
     entityId: text('entity_id').notNull(),
     /** JSON: the entity's relevant values before the change (null for creations). */
     before: text('before'),
