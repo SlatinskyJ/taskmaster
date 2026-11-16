@@ -28,6 +28,11 @@ Node 22 + pnpm (`corepack enable`). `pnpm install` also installs the lefthook pr
 ## PR flow
 
 1. Branch from `main`. One feature per PR. Bigger features become **stacked PRs**, each one logical step that passes CI alone.
+   - Link a stack as a **GitHub stack** once its PRs are open: each PR's base is the branch of the PR below it, then
+     `echo '{"pull_requests":[<bottom>,<next>,...]}' | gh api -X POST repos/SlatinskyJ/taskmaster/stacks --input -`.
+     Add a PR on top later with `POST .../stacks/<stack number>/add` (same body). Find a PR's stack with
+     `gh api 'repos/SlatinskyJ/taskmaster/stacks?pull_request=<n>'`. Give Jakub the stack link
+     `https://github.com/SlatinskyJ/taskmaster/stack/<stack number>`.
 2. Commit only after the pre-commit hook passes (format, lint, typecheck). Never `--no-verify`.
 3. Open the PR as a **draft**. CI must pass: lint, typecheck, unit tests, build, migration check.
 4. Write the PR brief (skill `pr-brief`) and put its link first in the PR body. Mark the PR ready.
