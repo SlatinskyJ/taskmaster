@@ -1,0 +1,83 @@
+name: Preview cleanup
+
+# Removes per-PR previews (see the `preview` job in ci.yml and docs/runbooks/preview-host.md).
+# - PR closed (merged or not): remove that PR's preview and mark its sticky comment.
+# - Nightly and on demand: sweep every preview whose PR is no longer open.
+on:
+  pull_request:
+    types: [closed]
+  schedule:
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  remove:
+    name: remove preview
+    # Fork PRs never get a preview (and get no secrets).
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    # Same group as this PR's CI run: closing the PR cancels a deploy still in progress,
+    # then the removal runs after it, so no half-finished preview is left behind.
+    concurrency:
+      group: ci-${{ github.ref }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      PREVIEW_HOST: ${{ vars.PREVIEW_HOST || 'tm-previews' }}
+    steps:
+      - &tailscale
+        uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4.4.0
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:tm-ci
+          ping: ${{ vars.PREVIEW_HOST || 'tm-previews' }}
+      - name: Remove preview
+        run: tailscale ssh "deploy@${PREVIEW_HOST}" "remove ${PR}"
+      - name: Mark the PR comment
+        # The token is scoped to this step only, away from the third-party Tailscale action.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- tm-preview -->"))) | .id' | head -n1)
+          if [ -n "$id" ]; then
+            printf '%s\n\n<!-- tm-preview -->\n' "**Preview removed**: the PR was closed." > comment.md
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@comment.md >/dev/null
+          fi
+
+  sweep:
+    name: sweep previews
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: preview-sweep
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      PREVIEW_HOST: ${{ vars.PREVIEW_HOST || 'tm-previews' }}
+    steps:
+      - name: List open PRs
+        # A failed or empty-by-error listing must stop the job: `sweep` with no PRs removes everything.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" --paginate --jq '.[].number' > open-prs.txt
+          echo "Open PRs: $(tr '\n' ' ' < open-prs.txt)"
+      - *tailscale
+      - name: Sweep
+        run: |
+          set -euo pipefail
+          tailscale ssh "deploy@${PREVIEW_HOST}" list
+          tailscale ssh "deploy@${PREVIEW_HOST}" "sweep $(tr '\n' ' ' < open-prs.txt)"
+          tailscale ssh "deploy@${PREVIEW_HOST}" list
