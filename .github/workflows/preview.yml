@@ -42,7 +42,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           run_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${HEAD_SHA}&event=pull_request" \
-            --jq '.workflow_runs | sort_by(.created_at) | last | .id // empty')
+            --jq '[.workflow_runs[] | select(.head_repository.full_name == env.GITHUB_REPOSITORY)] | sort_by(.created_at) | last | .id // empty')
           if [ -z "$run_id" ]; then echo "No CI run for ${HEAD_SHA}: push to start one."; exit 1; fi
           gh run watch "$run_id" -R "$GITHUB_REPOSITORY" --exit-status --interval 30 > /dev/null
           # Docs-only PRs build no image (ci.yml `changes`); artifacts also expire after 3 days.
@@ -64,7 +64,10 @@ jobs:
       pr: ${{ github.event.pull_request.number }}
       head_sha: ${{ github.event.pull_request.head.sha }}
       run_id: ${{ needs.find-ci-run.outputs.run_id }}
-    secrets: inherit
+    secrets:
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+      PREVIEW_URL_BASE: ${{ secrets.PREVIEW_URL_BASE }}
 
   remove:
     name: preview
@@ -81,4 +84,7 @@ jobs:
       action: remove
       pr: ${{ github.event.pull_request.number }}
       head_sha: ${{ github.event.pull_request.head.sha }}
-    secrets: inherit
+    secrets:
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+      PREVIEW_URL_BASE: ${{ secrets.PREVIEW_URL_BASE }}

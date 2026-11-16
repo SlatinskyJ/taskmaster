@@ -21,6 +21,13 @@ on:
         description: CI run whose image-arm64 artifact to deploy (deploy only)
         type: string
         required: false
+    secrets:
+      TS_OAUTH_CLIENT_ID:
+        required: true
+      TS_OAUTH_SECRET:
+        required: true
+      PREVIEW_URL_BASE:
+        required: false
 
 permissions:
   contents: read
