@@ -156,6 +156,25 @@ export const unmigrated = sqliteTable('unmigrated', { id: text('id').primaryKey(
     expect(journalOrderProblems(dir)).toEqual([expect.stringContaining('0001_b: timestamp 1000')])
   })
 
+  it('flags two migrations with the same timestamp', () => {
+    const dir = tempDir()
+    writeMigrations(dir, [
+      { tag: '0000_a', sql: '', when: 1000 },
+      { tag: '0001_b', sql: '', when: 1000 },
+    ])
+    expect(journalOrderProblems(dir)).toEqual([expect.stringContaining('0001_b: timestamp 1000')])
+  })
+
+  it('flags a migration listed out of position', () => {
+    const dir = tempDir()
+    writeMigrations(dir, [{ tag: '0000_a', sql: '' }])
+    const path = join(dir, 'meta', '_journal.json')
+    const journal = JSON.parse(readFileSync(path, 'utf8')) as { entries: { idx: number }[] }
+    journal.entries[0] = { ...journal.entries[0], idx: 1 }
+    writeFileSync(path, JSON.stringify(journal))
+    expect(journalOrderProblems(dir)).toEqual(['0000_a: idx 1, expected 0'])
+  })
+
   it('every committed migration is recorded once after boot migrations', () => {
     const db = openDb(':memory:')
     runMigrations(db)
