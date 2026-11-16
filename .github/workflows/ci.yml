@@ -265,8 +265,9 @@ jobs:
       contents: read
       actions: read
       pull-requests: write
-    uses: ./.github/workflows/preview-deploy.yml
+    uses: ./.github/workflows/preview-host.yml
     with:
+      action: deploy
       pr: ${{ github.event.pull_request.number }}
       head_sha: ${{ github.event.pull_request.head.sha }}
       run_id: ${{ github.run_id }}
