@@ -11,7 +11,8 @@
 # Contract with the `preview` job in .github/workflows/ci.yml (change both together):
 #   deploy success     exit 0, stdout `port: <N>` (nothing else on stdout)
 #   at capacity        exit 75, nothing deployed
-#   any other failure  exit 1, the failed preview is removed, details on stderr
+#   refused up front   exit 1, nothing changed (egress block or network missing, bad image)
+#   failed after that  exit 1, this PR's preview is removed; details on stderr
 #
 # TASKMASTER_ENV=preview is reserved for the app (#62 demo seed); nothing reads it yet.
 # Each preview: one container, fresh /data volume, memory cap, bound to localhost and published
