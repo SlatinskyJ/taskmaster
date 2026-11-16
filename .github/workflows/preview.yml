@@ -1,0 +1,90 @@
+# The `preview` label decides whether a PR gets a preview (ci.yml deploys one on each push
+# while the label is on). This workflow reacts to the label itself:
+#   added   -> deploy the image the PR's latest CI run tested (waits for that run if needed)
+#   removed -> remove the preview and free its slot
+# Same-repo PRs only: fork PRs get no secrets and never reach the host.
+name: preview
+
+on:
+  pull_request:
+    types: [labeled, unlabeled]
+
+permissions:
+  contents: read
+
+# The last `preview` label change wins. Other labels get their own group (their runs skip
+# every job), so they never cancel a pending preview deploy. Host calls are also serialized
+# per PR in preview-host.yml, across this workflow and ci.yml.
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}-${{ github.event.label.name == 'preview' && 'label' || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  # Finds the CI run for the PR's head commit and waits for it to finish.
+  find-ci-run:
+    name: find CI run
+    if: >-
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'preview' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      run_id: ${{ steps.find.outputs.run_id }}
+    steps:
+      - name: Find and wait for the CI run
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          run_id=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${HEAD_SHA}&event=pull_request" \
+            --jq '[.workflow_runs[] | select(.head_repository.full_name == env.GITHUB_REPOSITORY)] | sort_by(.created_at) | last | .id // empty')
+          if [ -z "$run_id" ]; then echo "No CI run for ${HEAD_SHA}: push to start one."; exit 1; fi
+          gh run watch "$run_id" -R "$GITHUB_REPOSITORY" --exit-status --interval 30 > /dev/null
+          # Docs-only PRs build no image (ci.yml `changes`); artifacts also expire after 3 days.
+          has=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" \
+            --jq '[.artifacts[] | select(.name == "image-arm64" and (.expired | not))] | length')
+          if [ "$has" = 0 ]; then echo "CI run ${run_id} has no image to deploy: push to build one."; exit 1; fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: preview
+    needs: [find-ci-run]
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    uses: ./.github/workflows/preview-host.yml
+    with:
+      action: deploy
+      pr: ${{ github.event.pull_request.number }}
+      head_sha: ${{ github.event.pull_request.head.sha }}
+      run_id: ${{ needs.find-ci-run.outputs.run_id }}
+    secrets:
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+      PREVIEW_URL_BASE: ${{ secrets.PREVIEW_URL_BASE }}
+
+  remove:
+    name: preview
+    if: >-
+      github.event.action == 'unlabeled' &&
+      github.event.label.name == 'preview' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    uses: ./.github/workflows/preview-host.yml
+    with:
+      action: remove
+      pr: ${{ github.event.pull_request.number }}
+      head_sha: ${{ github.event.pull_request.head.sha }}
+    secrets:
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+      PREVIEW_URL_BASE: ${{ secrets.PREVIEW_URL_BASE }}

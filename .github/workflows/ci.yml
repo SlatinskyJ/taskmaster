@@ -17,6 +17,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Job names are required status checks in the main ruleset. Rename only together with the ruleset.
+# `preview` (and the preview.yml / preview-cleanup.yml jobs) is deliberately not required: it
+# runs only for labelled PRs, so requiring it would block every other PR.
 # A job skipped by its `if` counts as passing for a required check.
 jobs:
   # Docs-only PRs skip the heavy jobs (#78). "Docs" = Markdown that no check reads:
@@ -249,73 +251,30 @@ jobs:
             "${src}-amd64" "${src}-arm64"
           docker buildx imagetools inspect "${IMAGE}:${short}"
 
-  # Per-PR preview on the preview host (#63, runbook docs/runbooks/preview-host.md). Same-repo
-  # PRs only: fork PRs get no secrets and never reach the host. CI joins the tailnet as an
-  # ephemeral tag:tm-ci node, whose only access is Tailscale SSH as `deploy`, whose shell is
-  # the preview controller. No host names live in this repo.
+  # Per-PR preview on the preview host (#63, runbook docs/runbooks/preview-host.md). Opt-in:
+  # only PRs with the `preview` label get one; adding the label later is handled by
+  # preview.yml, removing it tears the preview down there too. Same-repo PRs only: fork PRs
+  # get no secrets and never reach the host.
   preview:
     name: preview
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(github.event.pull_request.labels.*.name, 'preview') &&
       needs.changes.outputs.code != 'false' &&
       needs.image.result == 'success'
     needs: [changes, image]
-    runs-on: ubuntu-24.04
     permissions:
       contents: read
+      actions: read
       pull-requests: write
-    env:
-      PR: ${{ github.event.pull_request.number }}
-      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-      PREVIEW_HOST: ${{ vars.PREVIEW_HOST || 'tm-previews' }}
-      # Full https base (e.g. https://<host>.<tailnet>.ts.net); unset = the comment shows the port only.
+    uses: ./.github/workflows/preview-host.yml
+    with:
+      action: deploy
+      pr: ${{ github.event.pull_request.number }}
+      head_sha: ${{ github.event.pull_request.head.sha }}
+      run_id: ${{ github.run_id }}
+    secrets:
+      TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+      TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
       PREVIEW_URL_BASE: ${{ secrets.PREVIEW_URL_BASE }}
-    steps:
-      # The preview host is arm64 (Raspberry Pi); change this if the host moves to another arch.
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: image-arm64
-      - uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4.4.0
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:tm-ci
-          ping: ${{ env.PREVIEW_HOST }}
-      - name: Deploy preview
-        id: deploy
-        run: |
-          set +e
-          out=$(tailscale ssh "deploy@${PREVIEW_HOST}" "deploy ${PR}" < image-arm64.tar.gz 2>deploy.err)
-          rc=$?
-          set -e
-          cat deploy.err >&2
-          port=$(sed -n 's/^port: //p' <<<"$out")
-          if [ "$rc" = 0 ] && [ -n "$port" ]; then
-            if [ -n "$PREVIEW_URL_BASE" ]; then where="${PREVIEW_URL_BASE}:${port}"; else where="port ${port} on the preview host"; fi
-            body="**Preview** for ${HEAD_SHA::7}: ${where} (tailnet only)"
-          elif [ "$rc" = 75 ]; then
-            body="**Preview skipped** for ${HEAD_SHA::7}: the preview host already runs its maximum. Free a slot with \`remove\` on the host (see docs/runbooks/preview-host.md), then push again."
-          else
-            body="**Preview failed** for ${HEAD_SHA::7}. See the \`preview\` job log."
-          fi
-          printf '%s\n\n<!-- tm-preview -->\n' "$body" > comment.md
-          echo "rc=$rc" >> "$GITHUB_OUTPUT"
-      - name: Comment on the PR
-        if: always() && steps.deploy.outcome == 'success'
-        # One sticky comment per PR, found by its marker, not by "last bot comment".
-        # Marker and lookup are shared with preview-cleanup.yml; change both together.
-        # The token is scoped to this step only, away from the third-party Tailscale action.
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          id=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate \
-            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- tm-preview -->"))) | .id' | head -n1)
-          if [ -n "$id" ]; then
-            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@comment.md >/dev/null
-          else
-            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" -F body=@comment.md >/dev/null
-          fi
-      - name: Fail on deploy error
-        if: steps.deploy.outputs.rc != '0' && steps.deploy.outputs.rc != '75'
-        run: exit 1
