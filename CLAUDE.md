@@ -7,12 +7,12 @@ Family chore-points web app. Read `HANDOFF.md`, then the spec `docs/superpowers/
 
 ## Work tracking
 
-- Every piece of work is a GitHub issue. Epics are parent issues with sub-issues; one issue ≈ one PR.
+- Planned work is a GitHub issue. Epics are parent issues with sub-issues; one issue ≈ one PR. Small ad-hoc work (a quick ask, a rules or skill tweak) gets no issue: the PR is the only item.
 - Labels: `feature`, `bug`, `chore`, `follow-up` (deferred from review), `needs-jakub` (waiting on Jakub).
 - Milestones are releases (e.g. `v1 trial week`). The GitHub Project board picks issues up by its own automations.
-- A PR says `Closes #<issue>`.
+- A PR for an issue says `Closes #<issue>`.
 - When you mention an issue or PR to Jakub (thread, brief, PR body), give its title and a GitHub link, e.g. [#61 Prepare the preview host](https://github.com/SlatinskyJ/taskmaster/issues/61). Never a bare number.
-- Name the branch and the PR after the issue: branch `<n>-<short-slug>` (e.g. `14-scaffold`), PR title `#<n> <issue title>`. The agent owns that issue's workflow: assignee set, a comment when the PR opens and when it is blocked or ready, `needs-jakub` on/off as it applies. Board status moves by the board's automations.
+- Name the branch and the PR after the issue: branch `<n>-<short-slug>` (e.g. `14-scaffold`), PR title = the issue title, with no `#<n>` prefix (issues and PRs share one number counter, so the prefix shows a different number than the PR's own). Ad-hoc PRs: branch `<short-slug>`, a plain title. The agent owns that issue's workflow: assignee set, a comment when the PR opens and when it is blocked or ready, `needs-jakub` on/off as it applies. Board status moves by the board's automations.
 
 ## Dev commands
 
