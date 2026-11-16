@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# Taskmaster PR preview controller. Installed on the preview host as the login shell of the
+# `deploy` user, so CI (over Tailscale SSH) can run only these commands:
+#
+#   deploy <pr>        image tar (docker save | gzip) on stdin; (re)starts the PR's preview
+#   remove <pr>        stops and deletes the PR's container, volume, image and URL
+#   list               prints running preview PR numbers
+#   sweep <pr>...      removes every preview whose PR is not in the given list (open PRs)
+#
+# Each preview: one container, fresh /data volume, memory cap, bound to localhost and published
+# on the tailnet with `tailscale serve` on HTTPS port BASE_PORT+PR. No host names live here.
+set -euo pipefail
+
+MAX_PREVIEWS="${TM_MAX_PREVIEWS:-3}"
+MEMORY="${TM_PREVIEW_MEMORY:-256m}"
+BASE_PORT=10000
+PREFIX=tm-pr-
+
+die() { echo "error: $*" >&2; exit 1; }
+
+# Login-shell mode: sshd / Tailscale SSH call us as `tm-preview -c "<command>"`.
+if [[ "${1:-}" == "-c" ]]; then
+  read -r -a args <<<"${2:-}"
+  set -- "${args[@]}"
+fi
+
+valid_pr() { [[ "$1" =~ ^[1-9][0-9]{0,4}$ ]] || die "invalid PR number: $1"; }
+port_of() { echo $((BASE_PORT + $1)); }
+running() { docker ps --filter "name=^${PREFIX}" --format '{{.Names}}' | sed "s/^${PREFIX}//" | sort -n; }
+
+remove() {
+  local pr=$1 port
+  port=$(port_of "$pr")
+  tailscale serve --https="$port" off >/dev/null 2>&1 || true
+  docker rm -f "${PREFIX}${pr}" >/dev/null 2>&1 || true
+  docker volume rm "${PREFIX}${pr}-data" >/dev/null 2>&1 || true
+  docker image rm "taskmaster:pr-${pr}" >/dev/null 2>&1 || true
+  echo "removed preview ${pr}"
+}
+
+deploy() {
+  local pr=$1 port count
+  port=$(port_of "$pr")
+  if ! running | grep -qx "$pr"; then
+    count=$(running | wc -l)
+    if (( count >= MAX_PREVIEWS )); then
+      echo "skipped: ${count}/${MAX_PREVIEWS} previews already running" >&2
+      exit 75
+    fi
+  fi
+  # Only a gzip'd `docker save` stream is accepted; the loaded image is retagged per PR.
+  local loaded
+  loaded=$(gunzip -c | docker load | sed -n 's/^Loaded image: //p' | tail -n1)
+  [[ -n "$loaded" ]] || die "no image on stdin"
+  docker tag "$loaded" "taskmaster:pr-${pr}"
+  [[ "$loaded" == "taskmaster:pr-${pr}" ]] || docker image rm "$loaded" >/dev/null 2>&1 || true
+
+  docker rm -f "${PREFIX}${pr}" >/dev/null 2>&1 || true
+  docker volume rm "${PREFIX}${pr}-data" >/dev/null 2>&1 || true
+  docker run -d --name "${PREFIX}${pr}" \
+    --memory "$MEMORY" --memory-swap "$MEMORY" --cpus 1 --pids-limit 256 \
+    --restart unless-stopped --security-opt no-new-privileges --cap-drop ALL \
+    -e TASKMASTER_ENV=preview \
+    -p "127.0.0.1:${port}:3000" \
+    -v "${PREFIX}${pr}-data:/data" \
+    "taskmaster:pr-${pr}" >/dev/null
+
+  for _ in $(seq 1 30); do
+    if curl -fsS "http://127.0.0.1:${port}/api/health" >/dev/null 2>&1; then
+      tailscale serve --bg --https="$port" "http://127.0.0.1:${port}" >/dev/null
+      # Only the port: the host name stays out of public CI logs; CI builds the URL from a secret.
+      echo "port: ${port}"
+      return 0
+    fi
+    sleep 1
+  done
+  docker logs --tail 50 "${PREFIX}${pr}" >&2 || true
+  die "preview ${pr} did not become healthy"
+}
+
+sweep() {
+  local keep=" $* " pr
+  for pr in $(running); do
+    [[ "$keep" == *" ${pr} "* ]] || remove "$pr"
+  done
+  docker image prune -f >/dev/null
+}
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  deploy) [[ $# -eq 1 ]] || die "usage: deploy <pr>"; valid_pr "$1"; deploy "$1" ;;
+  remove) [[ $# -eq 1 ]] || die "usage: remove <pr>"; valid_pr "$1"; remove "$1" ;;
+  list) running ;;
+  sweep) for p in "$@"; do valid_pr "$p"; done; sweep "$@" ;;
+  *) die "unknown command '${cmd}'. Allowed: deploy, remove, list, sweep" ;;
+esac
