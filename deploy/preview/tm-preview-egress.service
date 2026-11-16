@@ -1,0 +1,13 @@
+[Unit]
+Description=Taskmaster previews: block egress to private networks
+After=docker.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/tm-preview-egress
+
+[Install]
+WantedBy=docker.service
