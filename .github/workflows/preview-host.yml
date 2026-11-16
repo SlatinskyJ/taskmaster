@@ -72,7 +72,7 @@ jobs:
           go=true
           if [ "$ACTION" = deploy ]; then
             pr=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" --jq '[.state, (.labels[].name)] | join(" ")')
-            [[ " $pr " == "open "* ]] || { echo "PR is not open: nothing to deploy."; go=false; }
+            [[ "$pr " == "open "* ]] || { echo "PR is not open: nothing to deploy."; go=false; }
             [[ " $pr " == *" preview "* ]] || { echo "No preview label: nothing to deploy."; go=false; }
           fi
           echo "go=$go" >> "$GITHUB_OUTPUT"
