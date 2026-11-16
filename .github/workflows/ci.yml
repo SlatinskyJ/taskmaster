@@ -187,3 +187,59 @@ jobs:
             -t "${IMAGE}:main" -t "${IMAGE}:${short}" \
             "${src}-amd64" "${src}-arm64"
           docker buildx imagetools inspect "${IMAGE}:${short}"
+
+  # Per-PR preview on the preview host (#63, runbook docs/runbooks/preview-host.md). Same-repo
+  # PRs only: fork PRs get no secrets and never reach the host. CI joins the tailnet as an
+  # ephemeral tag:tm-ci node, whose only access is Tailscale SSH as `deploy`, whose shell is
+  # the preview controller. No host names live in this repo.
+  preview:
+    name: preview
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    needs: [image]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      PREVIEW_HOST: ${{ vars.PREVIEW_HOST || 'tm-previews' }}
+      # Full https base (e.g. https://<host>.<tailnet>.ts.net); unset = the comment shows the port only.
+      PREVIEW_URL_BASE: ${{ secrets.PREVIEW_URL_BASE }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image-arm64
+      - uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4.4.0
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:tm-ci
+          ping: ${{ vars.PREVIEW_HOST || 'tm-previews' }}
+      - name: Deploy preview
+        id: deploy
+        run: |
+          set +e
+          out=$(tailscale ssh "deploy@${PREVIEW_HOST}" "deploy ${PR}" < image-arm64.tar.gz 2>deploy.err)
+          rc=$?
+          set -e
+          cat deploy.err >&2
+          port=$(sed -n 's/^port: //p' <<<"$out")
+          if [ "$rc" = 0 ] && [ -n "$port" ]; then
+            if [ -n "$PREVIEW_URL_BASE" ]; then where="${PREVIEW_URL_BASE}:${port}"; else where="port ${port} on the preview host"; fi
+            body="**Preview** for ${GITHUB_SHA::7}: ${where} (tailnet only)"
+          elif [ "$rc" = 75 ]; then
+            body="**Preview skipped** for ${GITHUB_SHA::7}: the preview host already runs its maximum. Close or merge another PR, then push again."
+          else
+            body="**Preview failed** for ${GITHUB_SHA::7}. See the \`preview\` job log."
+          fi
+          printf '%s\n\n<!-- tm-preview -->\n' "$body" > comment.md
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+      - name: Comment on the PR
+        if: always() && steps.deploy.outcome == 'success'
+        run: gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --edit-last --create-if-none --body-file comment.md
+      - name: Fail on deploy error
+        if: steps.deploy.outputs.rc != '0' && steps.deploy.outputs.rc != '75'
+        run: exit 1
