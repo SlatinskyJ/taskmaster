@@ -80,3 +80,83 @@ jobs:
             sleep 1
           done
           echo "server did not answer"; cat server.log; exit 1
+
+  # Multi-arch image (spec §11, #50). Each arch builds natively, then smoke-runs the container.
+  # On main, after all gates pass, the arch images are pushed and joined into one tag.
+  image:
+    name: image (${{ matrix.arch }})
+    needs: [typecheck, lint, format, test, build]
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/slatinskyj/taskmaster
+    steps:
+      - *checkout
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          platforms: linux/${{ matrix.arch }}
+          load: true
+          tags: taskmaster:ci
+          cache-from: type=gha,scope=image-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=image-${{ matrix.arch }}
+      - name: Smoke-run the container
+        run: |
+          docker run -d --name tm -p 3000:3000 -v tm-data:/data taskmaster:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3000/api/health; then
+              echo; docker exec tm sh -c 'id -u && touch /data/.write-test && rm /data/.write-test'
+              echo "image ok"; docker stats --no-stream tm; exit 0
+            fi
+            sleep 1
+          done
+          docker logs tm; exit 1
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push arch image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          tag="${IMAGE}:sha-${GITHUB_SHA::7}-${{ matrix.arch }}"
+          docker tag taskmaster:ci "$tag"
+          docker push "$tag"
+
+  publish:
+    name: publish image
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [image]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/slatinskyj/taskmaster
+    steps:
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Join arch images into main + sha tags
+        run: |
+          sha="sha-${GITHUB_SHA::7}"
+          docker buildx imagetools create \
+            -t "${IMAGE}:main" -t "${IMAGE}:${sha}" \
+            "${IMAGE}:${sha}-amd64" "${IMAGE}:${sha}-arm64"
+          docker buildx imagetools inspect "${IMAGE}:${sha}"
