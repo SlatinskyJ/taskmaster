@@ -1,0 +1,39 @@
+name: GHCR retention
+
+# Keeps ghcr.io/slatinskyj/taskmaster small (#68). Every green main push leaves a multi-arch
+# image (tags `sha-<7>` + per-arch `sha-<full>-amd64/arm64`, see ci.yml). This keeps `main`
+# and the 10 newest tagged images (rollback targets) and deletes the rest plus untagged ones.
+# Multi-arch aware: platform children are never judged on their own, only deleted together
+# with their parent image, so `main` can't lose an architecture.
+on:
+  schedule:
+    - cron: '17 4 * * 1' # Mondays 04:17 UTC
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Only log what would be deleted
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ghcr-retention
+
+jobs:
+  cleanup:
+    name: cleanup
+    runs-on: ubuntu-24.04
+    permissions:
+      packages: write
+    steps:
+      - uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
+        with:
+          package: taskmaster
+          exclude-tags: main
+          keep-n-tagged: 10
+          delete-untagged: true
+          validate: true
+          # Scheduled runs delete; manual runs default to a dry run.
+          dry-run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry-run }}
