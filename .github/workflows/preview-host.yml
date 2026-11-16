@@ -29,6 +29,11 @@ jobs:
   host:
     name: ${{ inputs.action }}
     runs-on: ubuntu-24.04
+    # One host call per PR at a time, from ci.yml or preview.yml: a remove waits for a running
+    # deploy, and a waiting deploy then sees at its label check that the label is gone.
+    concurrency:
+      group: preview-host-${{ inputs.pr }}
+      cancel-in-progress: false
     permissions:
       contents: read
       actions: read

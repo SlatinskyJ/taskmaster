@@ -12,9 +12,11 @@ on:
 permissions:
   contents: read
 
-# The last label change wins; a remove never races a deploy for the same PR.
+# The last `preview` label change wins. Other labels get their own group (their runs skip
+# every job), so they never cancel a pending preview deploy. Host calls are also serialized
+# per PR in preview-host.yml, across this workflow and ci.yml.
 concurrency:
-  group: preview-${{ github.event.pull_request.number }}
+  group: preview-${{ github.event.pull_request.number }}-${{ github.event.label.name == 'preview' && 'label' || github.run_id }}
   cancel-in-progress: true
 
 jobs:
