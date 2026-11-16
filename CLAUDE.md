@@ -3,7 +3,7 @@
 Family chore-points web app. Read `HANDOFF.md`, then the spec `docs/superpowers/specs/2026-11-16-taskmaster-design.md`. **The spec is the source of truth.** Don't change its behaviour without Jakub's OK. Items marked **[call]** are defaults he may overturn. The stack is in spec §11.
 
 - UI labels in Czech. Code, identifiers, DB, commits and logs in English.
-- Owner: Jakub (GitHub `SlatinskyJ`). He reads PR briefs, not code.
+- Owner: Jakub (GitHub `SlatinskyJ`). He reads PR briefs, not diffs; briefs may show crucial code (skill `pr-brief`).
 
 ## Work tracking
 
