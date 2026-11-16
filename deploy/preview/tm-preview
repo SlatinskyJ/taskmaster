@@ -60,6 +60,9 @@ deploy() {
       exit 75
     fi
   fi
+  # Preconditions first, so a refusal leaves the current preview untouched.
+  [[ -f /run/tm-preview-egress.ok ]] || die "egress block not active since boot (see runbook)"
+  docker network inspect "$NETWORK" >/dev/null 2>&1 || die "network ${NETWORK} missing (see runbook)"
   # Only a gzip'd `docker save` stream is accepted; the loaded image is retagged per PR.
   local loaded
   loaded=$(gunzip -c | docker load | sed -n 's/^Loaded image: //p')
@@ -73,8 +76,6 @@ deploy() {
 
   docker rm -f "${PREFIX}${pr}" >/dev/null 2>&1 || true
   docker volume rm "${PREFIX}${pr}-data" >/dev/null 2>&1 || true
-  [[ -f /run/tm-preview-egress.ok ]] || die "egress block not active since boot (see runbook)"
-  docker network inspect "$NETWORK" >/dev/null 2>&1 || die "network ${NETWORK} missing (see runbook)"
   docker run -d --name "${PREFIX}${pr}" --network "$NETWORK" \
     --memory "$MEMORY" --memory-swap "$MEMORY" --cpus 1 --pids-limit 256 \
     --restart no --security-opt no-new-privileges --cap-drop ALL \
