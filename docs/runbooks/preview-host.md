@@ -64,7 +64,7 @@ incus exec tm-previews -- bash -euxc '
 Copy the controller in and create the `deploy` user:
 
 ```bash
-incus file push deploy/preview/tm-preview tm-previews/usr/local/bin/tm-preview --mode 0755
+incus file push deploy/preview/tm-preview tm-previews/usr/local/bin/tm-preview --mode 0755 --uid 0 --gid 0
 incus exec tm-previews -- bash -euxc '
   grep -qx /usr/local/bin/tm-preview /etc/shells || echo /usr/local/bin/tm-preview >> /etc/shells
   id deploy || useradd --create-home --shell /usr/local/bin/tm-preview --groups docker deploy
