@@ -1,0 +1,118 @@
+# Talks to the preview host (runbook docs/runbooks/preview-host.md): deploys a PR's tested
+# arm64 image, or removes its preview and frees the slot. Called by ci.yml and preview.yml.
+# CI joins the tailnet as an ephemeral tag:tm-ci node, whose only access is Tailscale SSH as
+# `deploy`, whose shell is the preview controller. No host names live in this repo.
+name: preview host
+
+on:
+  workflow_call:
+    inputs:
+      action:
+        description: deploy or remove
+        type: string
+        required: true
+      pr:
+        type: number
+        required: true
+      head_sha:
+        type: string
+        required: true
+      run_id:
+        description: CI run whose image-arm64 artifact to deploy (deploy only)
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  host:
+    name: ${{ inputs.action }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    env:
+      ACTION: ${{ inputs.action }}
+      PR: ${{ inputs.pr }}
+      HEAD_SHA: ${{ inputs.head_sha }}
+      PREVIEW_HOST: ${{ vars.PREVIEW_HOST || 'tm-previews' }}
+      # Full https base (e.g. https://<host>.<tailnet>.ts.net); unset = the comment shows the port only.
+      PREVIEW_URL_BASE: ${{ secrets.PREVIEW_URL_BASE }}
+    steps:
+      # A deploy re-checks the label now: it may have been taken off since the run started.
+      - name: Check input and label
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "$ACTION" in deploy|remove) ;; *) echo "bad action: $ACTION"; exit 1 ;; esac
+          go=true
+          if [ "$ACTION" = deploy ]; then
+            labels=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/labels" --jq '.[].name')
+            grep -qx preview <<<"$labels" || { echo "No preview label any more: nothing to deploy."; go=false; }
+          fi
+          echo "go=$go" >> "$GITHUB_OUTPUT"
+      # The preview host is arm64 (Raspberry Pi); change this if the host moves to another arch.
+      # The image comes from the CI run that tested it, which may be an earlier run.
+      - if: inputs.action == 'deploy' && steps.check.outputs.go == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image-arm64
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+      - if: steps.check.outputs.go == 'true'
+        uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4.4.0
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:tm-ci
+          ping: ${{ env.PREVIEW_HOST }}
+      - name: Run on the preview host
+        if: steps.check.outputs.go == 'true'
+        id: host
+        run: |
+          set +e
+          if [ "$ACTION" = deploy ]; then
+            out=$(tailscale ssh "deploy@${PREVIEW_HOST}" "deploy ${PR}" < image-arm64.tar.gz 2>host.err)
+          else
+            out=$(tailscale ssh "deploy@${PREVIEW_HOST}" "remove ${PR}" < /dev/null 2>host.err)
+          fi
+          rc=$?
+          set -e
+          cat host.err >&2
+          port=$(sed -n 's/^port: //p' <<<"$out")
+          if [ "$ACTION" = remove ]; then
+            if [ "$rc" = 0 ]; then
+              body="**Preview removed**: the \`preview\` label was taken off. Add it again to get a new preview."
+            else
+              body="**Preview removal failed**. See the \`preview\` job log."
+            fi
+          elif [ "$rc" = 0 ] && [ -n "$port" ]; then
+            if [ -n "$PREVIEW_URL_BASE" ]; then where="${PREVIEW_URL_BASE}:${port}"; else where="port ${port} on the preview host"; fi
+            body="**Preview** for ${HEAD_SHA::7}: ${where} (tailnet only)"
+          elif [ "$rc" = 75 ]; then
+            body="**Preview skipped** for ${HEAD_SHA::7}: the preview host already runs its maximum. Take the \`preview\` label off a PR that no longer needs one, then remove and re-add the label here."
+          else
+            body="**Preview failed** for ${HEAD_SHA::7}. See the \`preview\` job log."
+          fi
+          printf '%s\n\n<!-- tm-preview -->\n' "$body" > comment.md
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+      - name: Comment on the PR
+        if: always() && steps.host.outcome == 'success'
+        # One sticky comment per PR, found by its marker, not by "last bot comment".
+        # The token is scoped to this step only, away from the third-party Tailscale action.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" --paginate \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- tm-preview -->"))) | .id' | head -n1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@comment.md >/dev/null
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" -F body=@comment.md >/dev/null
+          fi
+      - name: Fail on host error
+        if: steps.check.outputs.go == 'true' && steps.host.outputs.rc != '0' && steps.host.outputs.rc != '75'
+        run: exit 1

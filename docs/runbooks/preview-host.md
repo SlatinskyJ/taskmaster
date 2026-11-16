@@ -15,6 +15,8 @@ generic on purpose: host names, addresses and ports live in private notes, never
   can run only `deploy`, `remove`, `list` and `sweep`. No SSH keys exist anywhere.
 - Each preview: one Docker container, fresh data volume, 256 MB memory cap, at most 3 at once,
   published on the tailnet with `tailscale serve` on HTTPS port `10000 + PR number`.
+- Opt-in: only PRs with the `preview` label get one. Adding the label deploys the PR's last
+  tested image; removing it runs `remove` and frees the slot (`.github/workflows/preview.yml`).
 
 ## Tailscale policy (admin console)
 
