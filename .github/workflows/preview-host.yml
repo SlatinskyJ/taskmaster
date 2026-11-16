@@ -1,5 +1,7 @@
 # Talks to the preview host (runbook docs/runbooks/preview-host.md): deploys a PR's tested
-# arm64 image, or removes its preview and frees the slot. Called by ci.yml and preview.yml.
+# arm64 image, or removes its preview and frees the slot. Called by ci.yml, preview.yml and
+# preview-cleanup.yml, so this is the only place that calls the host or edits the PR's preview
+# comment (marker `<!-- tm-preview -->`).
 # CI joins the tailnet as an ephemeral tag:tm-ci node, whose only access is Tailscale SSH as
 # `deploy`, whose shell is the preview controller. No host names live in this repo.
 name: preview host
@@ -21,6 +23,11 @@ on:
         description: CI run whose image-arm64 artifact to deploy (deploy only)
         type: string
         required: false
+      reason:
+        description: why a remove runs, for the PR comment (label or closed)
+        type: string
+        required: false
+        default: label
     secrets:
       TS_OAUTH_CLIENT_ID:
         required: true
@@ -36,8 +43,8 @@ jobs:
   host:
     name: ${{ inputs.action }}
     runs-on: ubuntu-24.04
-    # One host call per PR at a time, from ci.yml or preview.yml: a remove waits for a running
-    # deploy, and a waiting deploy then sees at its label check that the label is gone.
+    # One host call per PR at a time, from any caller: a remove waits for a running deploy, and
+    # a waiting deploy then sees at its check that the label is gone or the PR is closed.
     concurrency:
       group: preview-host-${{ inputs.pr }}
       cancel-in-progress: false
@@ -47,6 +54,7 @@ jobs:
       pull-requests: write
     env:
       ACTION: ${{ inputs.action }}
+      REASON: ${{ inputs.reason }}
       PR: ${{ inputs.pr }}
       HEAD_SHA: ${{ inputs.head_sha }}
       PREVIEW_HOST: ${{ vars.PREVIEW_HOST || 'tm-previews' }}
@@ -62,8 +70,9 @@ jobs:
           case "$ACTION" in deploy|remove) ;; *) echo "bad action: $ACTION"; exit 1 ;; esac
           go=true
           if [ "$ACTION" = deploy ]; then
-            labels=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/labels" --jq '.[].name')
-            grep -qx preview <<<"$labels" || { echo "No preview label any more: nothing to deploy."; go=false; }
+            pr=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}" --jq '[.state, (.labels[].name)] | join(" ")')
+            [[ " $pr " == "open "* ]] || { echo "PR is not open: nothing to deploy."; go=false; }
+            [[ " $pr " == *" preview "* ]] || { echo "No preview label: nothing to deploy."; go=false; }
           fi
           echo "go=$go" >> "$GITHUB_OUTPUT"
       # The preview host is arm64 (Raspberry Pi); change this if the host moves to another arch.
@@ -96,7 +105,9 @@ jobs:
           cat host.err >&2
           port=$(sed -n 's/^port: //p' <<<"$out")
           if [ "$ACTION" = remove ]; then
-            if [ "$rc" = 0 ]; then
+            if [ "$rc" = 0 ] && [ "$REASON" = closed ]; then
+              body="**Preview removed**: the PR was closed."
+            elif [ "$rc" = 0 ]; then
               body="**Preview removed**: the \`preview\` label was taken off. Add it again to get a new preview."
             else
               body="**Preview removal failed**. See the \`preview\` job log."
@@ -122,7 +133,7 @@ jobs:
             --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- tm-preview -->"))) | .id' | head -n1)
           if [ -n "$id" ]; then
             gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${id}" -F body=@comment.md >/dev/null
-          else
+          elif [ "$ACTION" = deploy ]; then
             gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" -F body=@comment.md >/dev/null
           fi
       - name: Fail on host error

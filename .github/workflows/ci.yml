@@ -11,11 +11,14 @@ permissions:
 env:
   IMAGE: ghcr.io/slatinskyj/taskmaster
 
+# preview-cleanup.yml joins this group on PR close to cancel a running deploy; rename both together.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Job names are required status checks in the main ruleset. Rename only together with the ruleset.
+# `preview` (and the preview.yml / preview-cleanup.yml jobs) is deliberately not required: it
+# runs only for labelled PRs, so requiring it would block every other PR.
 # A job skipped by its `if` counts as passing for a required check.
 jobs:
   # Docs-only PRs skip the heavy jobs (#78). "Docs" = Markdown that no check reads:
