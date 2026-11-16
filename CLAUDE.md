@@ -1,0 +1,45 @@
+# Taskmaster: rules for agents
+
+Family chore-points web app. Read `HANDOFF.md`, then the spec `docs/superpowers/specs/2026-11-16-taskmaster-design.md`. **The spec is the source of truth.** Don't change its behaviour without Jakub's OK. Items marked **[call]** are defaults he may overturn. The stack is in spec §11.
+
+- UI labels in Czech. Code, identifiers, DB, commits and logs in English.
+- Owner: Jakub (GitHub `SlatinskyJ`). He reads PR briefs, not code.
+
+## Work tracking
+
+- Every piece of work is a GitHub issue. Epics are parent issues with sub-issues; one issue ≈ one PR.
+- Labels: `feature`, `bug`, `chore`, `follow-up` (deferred from review), `needs-jakub` (waiting on Jakub).
+- Milestones are releases (e.g. `v1 trial week`). The GitHub Project board picks issues up by its own automations.
+- A PR says `Closes #<issue>`.
+
+## PR flow
+
+1. Branch from `main`. One feature per PR. Bigger features become **stacked PRs**, each one logical step that passes CI alone.
+2. Commit only after the pre-commit hook passes (format, lint, typecheck). Never `--no-verify`.
+3. Open the PR as a **draft**. CI must pass: lint, typecheck, unit tests, build, migration check.
+4. Write the PR brief (skill `pr-brief`) and put its link first in the PR body. Mark the PR ready.
+5. Run the review rounds (skill `pr-review-rounds`): a panel of judges (skills `judge-rules`, `judge-security`, `judge-architecture`, `judge-ux`, `judge-tests`, `judge-ops`). At most **5 rounds**.
+6. **Jakub merges** (squash). His merge is the approval. Agents merge only trivial PRs.
+
+PR size is a soft goal of about 400 changed lines (not counting tests, migrations and generated files). Parallel PRs are fine; `main` requires branches to be up to date, so update your branch after other merges.
+
+## Trivial PRs
+
+A PR is trivial only if it touches **none** of the protected areas below, and the Architecture judge agrees. Any doubt → not trivial → ask Jakub (label `needs-jakub`).
+
+Protected areas:
+- DB schema, migrations, the audit log;
+- the §5 domain layer (agreement, lifecycle, periods, settlement);
+- auth, sessions, passkeys, role checks;
+- the scheduler;
+- CI, Docker, deploy, backup config;
+- new or upgraded dependencies (patch bumps excepted);
+- shared modules other code depends on (date helpers, theme tokens, the Czech strings module).
+
+## Hard rules
+
+- Never skip, delete or weaken a test to get green.
+- Never fix the spec inside a PR. If the spec is wrong or unclear, stop and ask Jakub.
+- Problems that were already there before your PR → a `follow-up` issue, not a fix in your PR.
+- Every state change writes its audit entry in the same transaction.
+- Ask Jakub when unsure: label `needs-jakub`, a PR comment mentioning him, and a message in the project thread.
