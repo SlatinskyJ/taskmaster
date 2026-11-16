@@ -53,7 +53,7 @@ incus config device add tm-previews tun unix-char path=/dev/net/tun
 
 incus exec tm-previews -- bash -euxc '
   apt-get update
-  apt-get install -y --no-install-recommends docker.io curl jq ca-certificates gnupg
+  apt-get install -y --no-install-recommends docker.io docker-cli curl jq ca-certificates gnupg
   curl -fsSL https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg -o /usr/share/keyrings/tailscale-archive-keyring.gpg
   curl -fsSL https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list -o /etc/apt/sources.list.d/tailscale.list
   apt-get update && apt-get install -y tailscale
