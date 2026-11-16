@@ -6,7 +6,14 @@
 #   remove <pr>        stops and deletes the PR's container, volume, image and URL
 #   list               prints running preview PR numbers
 #   sweep <pr>...      removes every preview whose PR is not in the given list (open PRs)
+#   version            prints a short hash of this script, to spot drift from the repo copy
 #
+# Contract with the `preview` job in .github/workflows/ci.yml (change both together):
+#   deploy success     exit 0, stdout `port: <N>` (nothing else on stdout)
+#   at capacity        exit 75, nothing deployed
+#   any other failure  exit 1, the failed preview is removed, details on stderr
+#
+# TASKMASTER_ENV=preview is reserved for the app (#62 demo seed); nothing reads it yet.
 # Each preview: one container, fresh /data volume, memory cap, bound to localhost and published
 # on the tailnet with `tailscale serve` on HTTPS port BASE_PORT+PR. No host names live here.
 set -euo pipefail
@@ -15,6 +22,8 @@ MAX_PREVIEWS="${TM_MAX_PREVIEWS:-3}"
 MEMORY="${TM_PREVIEW_MEMORY:-256m}"
 BASE_PORT=10000
 PREFIX=tm-pr-
+# Previews run on their own Docker network; tm-preview-egress blocks it from private ranges.
+NETWORK=tm-previews
 
 die() { echo "error: $*" >&2; exit 1; }
 
@@ -24,7 +33,8 @@ if [[ "${1:-}" == "-c" ]]; then
   set -- "${args[@]}"
 fi
 
-valid_pr() { [[ "$1" =~ ^[1-9][0-9]{0,4}$ ]] || die "invalid PR number: $1"; }
+# 1..9999, so BASE_PORT+PR stays a valid port.
+valid_pr() { [[ "$1" =~ ^[1-9][0-9]{0,3}$ ]] || die "invalid PR number: $1"; }
 port_of() { echo $((BASE_PORT + $1)); }
 running() { docker ps --filter "name=^${PREFIX}" --format '{{.Names}}' | sed "s/^${PREFIX}//" | sort -n; }
 
@@ -50,14 +60,17 @@ deploy() {
   fi
   # Only a gzip'd `docker save` stream is accepted; the loaded image is retagged per PR.
   local loaded
-  loaded=$(gunzip -c | docker load | sed -n 's/^Loaded image: //p' | tail -n1)
+  loaded=$(gunzip -c | docker load | sed -n 's/^Loaded image: //p')
   [[ -n "$loaded" ]] || die "no image on stdin"
+  # CI's tested image is tagged taskmaster:ci; anything else (extra or foreign tags) is refused.
+  [[ "$loaded" == "taskmaster:ci" ]] || die "expected exactly one image tagged taskmaster:ci"
   docker tag "$loaded" "taskmaster:pr-${pr}"
-  [[ "$loaded" == "taskmaster:pr-${pr}" ]] || docker image rm "$loaded" >/dev/null 2>&1 || true
+  docker image rm taskmaster:ci >/dev/null
 
   docker rm -f "${PREFIX}${pr}" >/dev/null 2>&1 || true
   docker volume rm "${PREFIX}${pr}-data" >/dev/null 2>&1 || true
-  docker run -d --name "${PREFIX}${pr}" \
+  docker network inspect "$NETWORK" >/dev/null 2>&1 || die "network ${NETWORK} missing (see runbook)"
+  docker run -d --name "${PREFIX}${pr}" --network "$NETWORK" \
     --memory "$MEMORY" --memory-swap "$MEMORY" --cpus 1 --pids-limit 256 \
     --restart unless-stopped --security-opt no-new-privileges --cap-drop ALL \
     -e TASKMASTER_ENV=preview \
@@ -75,6 +88,7 @@ deploy() {
     sleep 1
   done
   docker logs --tail 50 "${PREFIX}${pr}" >&2 || true
+  remove "$pr" >&2
   die "preview ${pr} did not become healthy"
 }
 
@@ -88,9 +102,14 @@ sweep() {
 
 cmd="${1:-}"; shift || true
 case "$cmd" in
-  deploy) [[ $# -eq 1 ]] || die "usage: deploy <pr>"; valid_pr "$1"; deploy "$1" ;;
+  deploy)
+    [[ $# -eq 1 ]] || die "usage: deploy <pr>"; valid_pr "$1"
+    # One deploy at a time, so the capacity check and `docker run` can't race.
+    exec 9>"${HOME}/.tm-preview.lock"; flock 9
+    deploy "$1" ;;
   remove) [[ $# -eq 1 ]] || die "usage: remove <pr>"; valid_pr "$1"; remove "$1" ;;
   list) running ;;
+  version) sha256sum "$(readlink -f "${BASH_SOURCE[0]}")" | cut -c1-12 ;;
   sweep) for p in "$@"; do valid_pr "$p"; done; sweep "$@" ;;
-  *) die "unknown command '${cmd}'. Allowed: deploy, remove, list, sweep" ;;
+  *) die "unknown command '${cmd}'. Allowed: deploy, remove, list, sweep, version" ;;
 esac

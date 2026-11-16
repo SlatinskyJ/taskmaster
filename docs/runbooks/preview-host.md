@@ -73,6 +73,17 @@ incus exec tm-previews -- bash -euxc '
 '
 ```
 
+Block previews from private networks. Previews run unreviewed PR code, so they get their own
+Docker network that may reach the public internet but not the home LAN, other containers or the
+tailnet:
+
+```bash
+incus file push deploy/preview/tm-preview-egress tm-previews/usr/local/sbin/tm-preview-egress --mode 0755 --uid 0 --gid 0
+incus file push deploy/preview/tm-preview-egress.service tm-previews/etc/systemd/system/tm-preview-egress.service --mode 0644 --uid 0 --gid 0
+incus exec tm-previews -- systemctl enable --now tm-preview-egress </dev/null
+incus exec tm-previews -- iptables -S DOCKER-USER </dev/null   # expect 5 REJECT rules for the preview subnet
+```
+
 Join the tailnet (prints a login link; approve it in the browser as the tailnet owner):
 
 ```bash
@@ -87,6 +98,7 @@ From a tailnet device that has SSH access to the container (or from CI):
 
 ```bash
 ssh deploy@tm-previews list                      # prints nothing: no previews yet
+ssh deploy@tm-previews version                   # must match: sha256sum deploy/preview/tm-preview | cut -c1-12
 docker save taskmaster:ci | gzip | ssh deploy@tm-previews deploy 999
 ssh deploy@tm-previews remove 999
 ```
@@ -94,7 +106,20 @@ ssh deploy@tm-previews remove 999
 ## Updating the controller script
 
 The script is copied in by hand (above), so a change to `deploy/preview/tm-preview` needs a
-fresh `incus file push` after it merges. CI never changes the host.
+fresh `incus file push` (as above, with `--uid 0 --gid 0`) after it merges. CI never changes
+the host. Compare `version` with the repo copy to spot drift.
+
+## Disk
+
+Memory and CPU are capped; disk is not, beyond the server's own storage pool. Check that nested
+Docker uses overlay2, not `vfs` (which copies every layer and fills the disk fast):
+
+```bash
+incus exec tm-previews -- docker info --format '{{.Driver}}'   # expect overlay2
+```
+
+On a storage pool that supports quotas, also cap the container's root disk, e.g.
+`incus config device override tm-previews root size=40GiB`.
 
 ## Recovery
 
