@@ -1,5 +1,6 @@
-# Dependabot (#68): keeps the Dockerfile's digest-pinned Node base image current.
-# Only the docker ecosystem for now; npm updates are a separate decision.
+# Dependabot (#68): keeps the digest-pinned Node base image and the SHA-pinned GitHub Actions
+# current (security fixes included). npm updates are a separate decision.
+# Its PRs touch protected areas (Docker, CI): treat them like any PR (CLAUDE.md, Dependabot).
 version: 2
 updates:
   - package-ecosystem: docker
@@ -16,3 +17,17 @@ updates:
     labels: [chore]
     commit-message:
       prefix: 'chore(docker)'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Prague
+    groups:
+      actions:
+        patterns: ['*']
+    labels: [chore]
+    commit-message:
+      prefix: 'chore(ci)'
