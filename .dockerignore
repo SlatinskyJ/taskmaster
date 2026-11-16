@@ -1,0 +1,15 @@
+.git
+node_modules
+.output
+.nitro
+.tanstack
+coverage
+*.db
+*.db-*
+.env
+.env.*
+docs
+.claude
+.github
+Dockerfile
+.dockerignore
