@@ -182,7 +182,7 @@ jobs:
       - name: Join arch images into main + sha tags
         run: |
           src="${IMAGE}:sha-${GITHUB_SHA}"
-          short="sha-${GITHUB_SHA::7}"
+          short="sha-${HEAD_SHA::7}"
           docker buildx imagetools create \
             -t "${IMAGE}:main" -t "${IMAGE}:${short}" \
             "${src}-amd64" "${src}-arm64"
@@ -204,6 +204,7 @@ jobs:
       pull-requests: write
     env:
       PR: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       PREVIEW_HOST: ${{ vars.PREVIEW_HOST || 'tm-previews' }}
       # Full https base (e.g. https://<host>.<tailnet>.ts.net); unset = the comment shows the port only.
       PREVIEW_URL_BASE: ${{ secrets.PREVIEW_URL_BASE }}
@@ -229,11 +230,11 @@ jobs:
           port=$(sed -n 's/^port: //p' <<<"$out")
           if [ "$rc" = 0 ] && [ -n "$port" ]; then
             if [ -n "$PREVIEW_URL_BASE" ]; then where="${PREVIEW_URL_BASE}:${port}"; else where="port ${port} on the preview host"; fi
-            body="**Preview** for ${GITHUB_SHA::7}: ${where} (tailnet only)"
+            body="**Preview** for ${HEAD_SHA::7}: ${where} (tailnet only)"
           elif [ "$rc" = 75 ]; then
-            body="**Preview skipped** for ${GITHUB_SHA::7}: the preview host already runs its maximum. Close or merge another PR, then push again."
+            body="**Preview skipped** for ${HEAD_SHA::7}: the preview host already runs its maximum. Close or merge another PR, then push again."
           else
-            body="**Preview failed** for ${GITHUB_SHA::7}. See the \`preview\` job log."
+            body="**Preview failed** for ${HEAD_SHA::7}. See the \`preview\` job log."
           fi
           printf '%s\n\n<!-- tm-preview -->\n' "$body" > comment.md
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
