@@ -1,0 +1,16 @@
+node_modules
+.DS_Store
+.env
+.env.*
+!.env.example
+.output
+.nitro
+.tanstack
+.vinxi
+dist
+coverage
+*.db
+*.db-shm
+*.db-wal
+/test-results/
+/playwright-report/

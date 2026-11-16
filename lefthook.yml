@@ -1,0 +1,14 @@
+# Pre-commit: format, lint and typecheck. Never bypass with --no-verify (CLAUDE.md).
+pre-commit:
+  parallel: true
+  jobs:
+    - name: format
+      glob: '*.{ts,tsx,js,json,css,md,yml,yaml}'
+      run: pnpm exec prettier --write --ignore-unknown {staged_files}
+      stage_fixed: true
+    - name: lint
+      glob: '*.{ts,tsx,js}'
+      run: pnpm exec eslint --max-warnings=0 --no-warn-ignored {staged_files}
+    - name: typecheck
+      glob: '*.{ts,tsx}'
+      run: pnpm typecheck

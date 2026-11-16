@@ -1,0 +1,6 @@
+@import 'tailwindcss';
+
+/* Hřiště / Pastelky tokens land here with the UI shell (spec §11 UI). */
+html {
+  color-scheme: light dark;
+}
