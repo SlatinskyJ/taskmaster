@@ -40,6 +40,8 @@ reach or come from them.
 
 ## One-time setup (on the home server, as the Incus admin)
 
+If you script these steps, add `</dev/null` to each `incus exec`, which otherwise eats the script's stdin.
+
 ```bash
 incus snapshot create <an existing container> pre-tm-previews   # habit: snapshot before changes
 
