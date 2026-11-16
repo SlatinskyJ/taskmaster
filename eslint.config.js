@@ -1,5 +1,6 @@
 // @ts-check
 import js from '@eslint/js'
+import { builtinModules } from 'node:module'
 import pluginQuery from '@tanstack/eslint-plugin-query'
 import pluginRouter from '@tanstack/eslint-plugin-router'
 import reactHooks from 'eslint-plugin-react-hooks'
@@ -10,16 +11,22 @@ import tseslint from 'typescript-eslint'
 /** Imports the framework-free domain layer (spec §11) must never use. */
 export const domainForbiddenImports = [
   {
-    group: ['react', 'react-dom', 'react/*', 'react-dom/*'],
+    group: ['react', 'react-dom', 'react/*', 'react-dom/*', '@tanstack/*'],
     message: 'Domain layer is framework-free (spec §11).',
   },
-  { group: ['@tanstack/*'], message: 'Domain layer is framework-free (spec §11).' },
   {
     group: ['drizzle-orm', 'drizzle-orm/*', 'better-sqlite3'],
     message: 'Domain layer has no DB access; pass data in.',
   },
+  {
+    group: ['croner', '@simplewebauthn/*', '@node-rs/*'],
+    message: 'Domain layer has no scheduler or auth code; server code calls into it.',
+  },
   { group: ['node:*'], message: 'Domain layer has no Node APIs.' },
-  { group: ['~/*', '../*'], message: 'Domain layer imports only from src/domain.' },
+  {
+    group: ['~/*', '!~/domain', '!~/domain/*', '../*', 'src/*'],
+    message: 'Domain layer imports only from src/domain (use ~/domain/... across subfolders).',
+  },
 ]
 
 export default defineConfig(
@@ -45,9 +52,19 @@ export default defineConfig(
   pluginRouter.configs['flat/recommended'],
   pluginQuery.configs['flat/recommended'],
   {
-    files: ['src/domain/**/*.ts'],
+    files: ['src/domain/**/*.{ts,tsx}'],
     rules: {
-      'no-restricted-imports': ['error', { patterns: domainForbiddenImports }],
+      'no-restricted-imports': [
+        'error',
+        {
+          // Bare Node built-ins ('fs', 'path') as exact names; a pattern would also catch ~/domain.
+          paths: builtinModules.map((name) => ({
+            name,
+            message: 'Domain layer has no Node APIs.',
+          })),
+          patterns: domainForbiddenImports,
+        },
+      ],
     },
   },
   {

@@ -12,6 +12,7 @@ Family chore-points web app. Read `HANDOFF.md`, then the spec `docs/superpowers/
 - Milestones are releases (e.g. `v1 trial week`). The GitHub Project board picks issues up by its own automations.
 - A PR says `Closes #<issue>`.
 - When you mention an issue or PR to Jakub (thread, brief, PR body), give its title and a GitHub link, e.g. [#61 Prepare the preview host](https://github.com/SlatinskyJ/taskmaster/issues/61). Never a bare number.
+- Name the branch and the PR after the issue: branch `<n>-<short-slug>` (e.g. `14-scaffold`), PR title `#<n> <issue title>`. The agent owns that issue's workflow: assignee set, a comment when the PR opens and when it is blocked or ready, `needs-jakub` on/off as it applies. Board status moves by the board's automations.
 
 ## Dev commands
 
