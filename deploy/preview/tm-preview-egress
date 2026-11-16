@@ -1,0 +1,28 @@
+#!/bin/sh
+# Blocks preview containers from opening connections to private networks (home LAN, other
+# containers, the tailnet), so unreviewed PR code can reach only the public internet. These are
+# FORWARD rules; traffic to the container's own addresses (INPUT) is not covered, so nothing
+# sensitive may listen inside tm-previews. Replies to `tailscale serve` go to the bridge gateway
+# (INPUT) and are unaffected. On success it writes /run/tm-preview-egress.ok, which `deploy` requires.
+# Run as root on the preview host after Docker starts (tm-preview-egress.service). Idempotent.
+set -eu
+NETWORK=tm-previews
+SUBNET=172.31.250.0/24
+
+docker network inspect "$NETWORK" >/dev/null 2>&1 ||
+  docker network create --subnet "$SUBNET" "$NETWORK" >/dev/null
+
+for dst in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10 169.254.0.0/16; do
+  rule="-s $SUBNET -d $dst -j REJECT"
+  # shellcheck disable=SC2086
+  iptables -C DOCKER-USER $rule 2>/dev/null || iptables -I DOCKER-USER $rule
+done
+
+# DNS stays open (the resolver usually sits in a private range); inserted last, so it is checked first.
+for proto in udp tcp; do
+  rule="-s $SUBNET -p $proto --dport 53 -j RETURN"
+  # shellcheck disable=SC2086
+  iptables -C DOCKER-USER $rule 2>/dev/null || iptables -I DOCKER-USER $rule
+done
+
+touch /run/tm-preview-egress.ok

@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# Taskmaster PR preview controller. Installed on the preview host as the login shell of the
+# `deploy` user, so CI (over Tailscale SSH) can run only these commands:
+#
+#   deploy <pr>        image tar (docker save | gzip) on stdin; (re)starts the PR's preview
+#   remove <pr>        stops and deletes the PR's container, volume, image and URL
+#   list               prints running preview PR numbers
+#   sweep <pr>...      removes every preview whose PR is not in the given list (open PRs)
+#   version            prints a short hash of this script, to spot drift from the repo copy
+#
+# Contract with the `preview` job in .github/workflows/ci.yml (change both together):
+#   deploy success     exit 0, stdout `port: <N>` (nothing else on stdout)
+#   at capacity        exit 75, nothing deployed
+#   refused up front   exit 1, nothing changed (egress block or network missing, bad image)
+#   failed after that  exit 1, this PR's preview is removed; details on stderr
+#
+# TASKMASTER_ENV=preview is reserved for the app (#62 demo seed); nothing reads it yet.
+# Each preview: one container, fresh /data volume, memory cap, bound to localhost and published
+# on the tailnet with `tailscale serve` on HTTPS port BASE_PORT+PR. No host names live here.
+set -euo pipefail
+
+MAX_PREVIEWS="${TM_MAX_PREVIEWS:-3}"
+MEMORY="${TM_PREVIEW_MEMORY:-256m}"
+BASE_PORT=10000
+PREFIX=tm-pr-
+# Previews run on their own Docker network; tm-preview-egress blocks it from private ranges.
+NETWORK=tm-previews
+
+die() { echo "error: $*" >&2; exit 1; }
+
+# Login-shell mode: sshd / Tailscale SSH call us as `tm-preview -c "<command>"`.
+if [[ "${1:-}" == "-c" ]]; then
+  read -r -a args <<<"${2:-}"
+  set -- "${args[@]}"
+fi
+
+# 1..9999, so BASE_PORT+PR stays a valid port.
+valid_pr() { [[ "$1" =~ ^[1-9][0-9]{0,3}$ ]] || die "invalid PR number: $1"; }
+port_of() { echo $((BASE_PORT + $1)); }
+# Running previews count toward the cap; `sweep` also clears stopped leftovers.
+running() { docker ps --filter "name=^${PREFIX}" --format '{{.Names}}' | sed "s/^${PREFIX}//" | sort -n; }
+all_previews() { docker ps -a --filter "name=^${PREFIX}" --format '{{.Names}}' | sed "s/^${PREFIX}//" | sort -n; }
+
+remove() {
+  local pr=$1 port
+  port=$(port_of "$pr")
+  tailscale serve --https="$port" off >/dev/null 2>&1 || true
+  docker rm -f "${PREFIX}${pr}" >/dev/null 2>&1 || true
+  docker volume rm "${PREFIX}${pr}-data" >/dev/null 2>&1 || true
+  docker image rm "taskmaster:pr-${pr}" >/dev/null 2>&1 || true
+  echo "removed preview ${pr}"
+}
+
+deploy() {
+  local pr=$1 port count
+  port=$(port_of "$pr")
+  if ! running | grep -qx "$pr"; then
+    count=$(running | wc -l)
+    if (( count >= MAX_PREVIEWS )); then
+      echo "skipped: ${count}/${MAX_PREVIEWS} previews already running" >&2
+      exit 75
+    fi
+  fi
+  # Preconditions first, so a refusal leaves the current preview untouched.
+  [[ -f /run/tm-preview-egress.ok ]] || die "egress block not active since boot (see runbook)"
+  docker network inspect "$NETWORK" >/dev/null 2>&1 || die "network ${NETWORK} missing (see runbook)"
+  # Only a gzip'd `docker save` stream is accepted; the loaded image is retagged per PR.
+  local loaded
+  loaded=$(gunzip -c | docker load | sed -n 's/^Loaded image: //p')
+  [[ -n "$loaded" ]] || die "no image on stdin"
+  # CI's tested image is tagged taskmaster:ci; anything else (extra or foreign tags) is refused.
+  [[ "$loaded" == "taskmaster:ci" ]] || die "expected exactly one image tagged taskmaster:ci"
+  docker tag "$loaded" "taskmaster:pr-${pr}"
+  # From here on, any failure removes this PR's preview and exits 1 (see the contract above).
+  trap 'remove "$pr" >&2; trap - ERR; exit 1' ERR
+  docker image rm taskmaster:ci >/dev/null
+
+  docker rm -f "${PREFIX}${pr}" >/dev/null 2>&1 || true
+  docker volume rm "${PREFIX}${pr}-data" >/dev/null 2>&1 || true
+  docker run -d --name "${PREFIX}${pr}" --network "$NETWORK" \
+    --memory "$MEMORY" --memory-swap "$MEMORY" --cpus 1 --pids-limit 256 \
+    --restart no --security-opt no-new-privileges --cap-drop ALL \
+    -e TASKMASTER_ENV=preview \
+    -p "127.0.0.1:${port}:3000" \
+    -v "${PREFIX}${pr}-data:/data" \
+    "taskmaster:pr-${pr}" >/dev/null
+
+  for _ in $(seq 1 30); do
+    if curl -fsS "http://127.0.0.1:${port}/api/health" >/dev/null 2>&1; then
+      tailscale serve --bg --https="$port" "http://127.0.0.1:${port}" >/dev/null
+      # Only the port: the host name stays out of public CI logs; CI builds the URL from a secret.
+      trap - ERR
+      echo "port: ${port}"
+      return 0
+    fi
+    sleep 1
+  done
+  docker logs --tail 50 "${PREFIX}${pr}" >&2 || true
+  trap - ERR
+  remove "$pr" >&2
+  die "preview ${pr} did not become healthy"
+}
+
+sweep() {
+  local keep=" $* " pr
+  for pr in $(all_previews); do
+    [[ "$keep" == *" ${pr} "* ]] || remove "$pr"
+  done
+  docker image prune -f >/dev/null
+}
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  deploy)
+    [[ $# -eq 1 ]] || die "usage: deploy <pr>"; valid_pr "$1"
+    # One deploy at a time, so the capacity check and `docker run` can't race.
+    exec 9>"${HOME}/.tm-preview.lock"; flock 9
+    deploy "$1" ;;
+  remove) [[ $# -eq 1 ]] || die "usage: remove <pr>"; valid_pr "$1"; remove "$1" ;;
+  list) running ;;
+  version) sha256sum "$(readlink -f "${BASH_SOURCE[0]}")" | cut -c1-12 ;;
+  sweep) for p in "$@"; do valid_pr "$p"; done; sweep "$@" ;;
+  *) die "unknown command '${cmd}'. Allowed: deploy, remove, list, sweep, version" ;;
+esac

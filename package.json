@@ -16,7 +16,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepare": "lefthook install"
+    "prepare": "node -e \"require('node:fs').existsSync('.git') && require('node:child_process').execSync('lefthook install', { stdio: 'inherit' })\""
   },
   "dependencies": {
     "@tanstack/react-router": "^1.170.46",
