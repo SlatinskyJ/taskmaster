@@ -127,9 +127,18 @@ jobs:
             sleep 1
           done
           echo "container health: $status"; docker logs tm; exit 1
+      # The exact tested image, handed to the main-only push job (and later to preview deploys).
+      - name: Save tested image
+        run: docker save taskmaster:ci | gzip -1 > image-${{ matrix.arch }}.tar.gz
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-${{ matrix.arch }}
+          path: image-${{ matrix.arch }}.tar.gz
+          retention-days: 3
+          compression-level: 0
 
-  # main only: rebuild each arch from the cache above and push it; only this job and
-  # `publish` get a token that can write packages.
+  # main only: push the exact images the `image` job tested. Only this job and `publish`
+  # get a token that can write packages.
   push:
     name: push image (${{ matrix.arch }})
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -141,23 +150,21 @@ jobs:
       contents: read
       packages: write
     steps:
-      - *checkout
-      - *buildx
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image-${{ matrix.arch }}
       - &ghcr-login
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push arch image
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          platforms: linux/${{ matrix.arch }}
-          push: true
-          provenance: false
-          tags: ${{ env.IMAGE }}:sha-${{ github.sha }}-${{ matrix.arch }}
-          cache-from: type=gha,scope=image-${{ matrix.arch }}
+      - name: Load and push tested arch image
+        run: |
+          gunzip -c image-${{ matrix.arch }}.tar.gz | docker load
+          tag="${IMAGE}:sha-${GITHUB_SHA}-${{ matrix.arch }}"
+          docker tag taskmaster:ci "$tag"
+          docker push "$tag"
 
   publish:
     name: publish image
