@@ -70,7 +70,7 @@ State is shown in three places, the same way everywhere: a **chip** (rounded pil
 - **Done** (taker taps Hotovo): confetti burst plus a floating "+N" in the pending colour.
 - **Confirmed** (giver approves): a floating "+N" in green, and the bar grows.
 - **Level reached** (confirmed points cross a level): a toast ("Spodní hranice!") and a short glow on the bar.
-- **Speed (Jakub: the first draft was too fast):** the default is 1.7× slower than the first draft; confetti lasts about 2.4 s and the "+N" float about 1.9 s. Jakub has not picked the final speed yet; the theme mockup has a slider for it.
+- **Speed (Jakub, 2026-11-16):** 1.7× slower than the first draft, which was too fast. Confetti lasts about 2.4 s and the "+N" float about 1.9 s.
 - `prefers-reduced-motion` and the profile's "Efekty" switch turn effects into a plain colour change.
 - Library: `canvas-confetti` (spec 11). Keyframes live in one small CSS file.
 
