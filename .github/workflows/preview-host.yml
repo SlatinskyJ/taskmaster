@@ -43,6 +43,7 @@ jobs:
   host:
     name: ${{ inputs.action }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     # One host call per PR at a time, from any caller: a remove waits for a running deploy, and
     # a waiting deploy then sees at its check that the label is gone or the PR is closed.
     concurrency:
