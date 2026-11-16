@@ -109,16 +109,18 @@ sweep() {
   docker image prune -f >/dev/null
 }
 
+lock() { exec 9>"${HOME}/.tm-preview.lock"; flock 9; }
+
 cmd="${1:-}"; shift || true
 case "$cmd" in
   deploy)
     [[ $# -eq 1 ]] || die "usage: deploy <pr>"; valid_pr "$1"
-    # One deploy at a time, so the capacity check and `docker run` can't race.
-    exec 9>"${HOME}/.tm-preview.lock"; flock 9
-    deploy "$1" ;;
-  remove) [[ $# -eq 1 ]] || die "usage: remove <pr>"; valid_pr "$1"; remove "$1" ;;
+    # One change at a time: the capacity check and `docker run` can't race, and a `remove` or
+    # `sweep` waits for a deploy still running (e.g. after CI cancelled its client) to finish.
+    lock; deploy "$1" ;;
+  remove) [[ $# -eq 1 ]] || die "usage: remove <pr>"; valid_pr "$1"; lock; remove "$1" ;;
   list) running ;;
   version) sha256sum "$(readlink -f "${BASH_SOURCE[0]}")" | cut -c1-12 ;;
-  sweep) for p in "$@"; do valid_pr "$p"; done; sweep "$@" ;;
+  sweep) for p in "$@"; do valid_pr "$p"; done; lock; sweep "$@" ;;
   *) die "unknown command '${cmd}'. Allowed: deploy, remove, list, sweep, version" ;;
 esac

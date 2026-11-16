@@ -11,6 +11,7 @@ permissions:
 env:
   IMAGE: ghcr.io/slatinskyj/taskmaster
 
+# preview-cleanup.yml joins this group on PR close to cancel a running deploy; rename both together.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -243,6 +244,7 @@ jobs:
       - name: Comment on the PR
         if: always() && steps.deploy.outcome == 'success'
         # One sticky comment per PR, found by its marker, not by "last bot comment".
+        # Marker and lookup are shared with preview-cleanup.yml; change both together.
         # The token is scoped to this step only, away from the third-party Tailscale action.
         env:
           GH_TOKEN: ${{ github.token }}
