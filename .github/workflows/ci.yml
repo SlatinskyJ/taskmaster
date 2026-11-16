@@ -16,9 +16,44 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Job names are required status checks in the main ruleset. Rename only together with the ruleset.
+# A job skipped by its `if` counts as passing for a required check.
 jobs:
+  # Docs-only PRs skip the heavy jobs (#78). "Docs" = the paths Prettier ignores as prose:
+  # docs/, .claude/, root *.md, .github/*.md. Any other file, and every push to main, runs all.
+  changes:
+    name: changes
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.detect.outputs.code }}
+    steps:
+      - name: Detect code changes
+        id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # New and old names, so a file moved out of a code path counts as a code change.
+          files=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" --paginate \
+            --jq '.[] | .filename, (.previous_filename // empty)')
+          echo "$files"
+          code=$(grep -Ev '^(docs/|\.claude/|[^/]+\.md$|\.github/[^/]+\.md$)' <<<"$files" || true)
+          if [ -z "$files" ] || [ -n "$code" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No code changed: skipping checks."
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   typecheck:
     name: typecheck
+    needs: [changes]
+    if: needs.changes.outputs.code != 'false'
     runs-on: ubuntu-24.04
     steps:
       - &checkout
@@ -38,6 +73,8 @@ jobs:
 
   lint:
     name: lint
+    needs: [changes]
+    if: needs.changes.outputs.code != 'false'
     runs-on: ubuntu-24.04
     steps:
       - *checkout
@@ -48,6 +85,8 @@ jobs:
 
   format:
     name: format
+    needs: [changes]
+    if: needs.changes.outputs.code != 'false'
     runs-on: ubuntu-24.04
     steps:
       - *checkout
@@ -88,9 +127,15 @@ jobs:
 
   # Multi-arch image (spec §11, #50). Each arch builds natively and smoke-runs the container,
   # including the image's own HEALTHCHECK. Read-only token; nothing is pushed here.
+  # On docs-only PRs the job still starts, so the matrix expands and the required checks
+  # `image (amd64)` / `image (arm64)` report, but every step is skipped. A job-level skip
+  # would report one unexpanded `image (${{ matrix.arch }})` check and block the merge.
   image:
     name: image (${{ matrix.arch }})
-    needs: [typecheck, lint, format, test, build]
+    needs: [changes, typecheck, lint, format, test, build]
+    if: ${{ !cancelled() && !failure() }}
+    env:
+      CODE: ${{ needs.changes.outputs.code }}
     strategy:
       matrix: &arches
         include:
@@ -100,10 +145,14 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - *checkout
-      - &buildx
+      - if: env.CODE != 'false'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: env.CODE != 'false'
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Build
+        if: env.CODE != 'false'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
@@ -113,6 +162,7 @@ jobs:
           cache-from: type=gha,scope=image-${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=image-${{ matrix.arch }}
       - name: Smoke-run the container
+        if: env.CODE != 'false'
         run: |
           docker run -d --name tm -p 3000:3000 -v tm-data:/data taskmaster:ci
           for i in $(seq 1 40); do
@@ -131,8 +181,10 @@ jobs:
           echo "container health: $status"; docker logs tm; exit 1
       # The exact tested image, handed to the main-only push job (and later to preview deploys).
       - name: Save tested image
+        if: env.CODE != 'false'
         run: docker save taskmaster:ci | gzip -1 > image-${{ matrix.arch }}.tar.gz
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - if: env.CODE != 'false'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: image-${{ matrix.arch }}
           path: image-${{ matrix.arch }}.tar.gz
@@ -177,7 +229,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - *buildx
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - *ghcr-login
       - name: Join arch images into main + sha tags
         run: |
@@ -198,8 +250,10 @@ jobs:
     name: preview
     if: >-
       github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.repository
-    needs: [image]
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      needs.changes.outputs.code != 'false' &&
+      needs.image.result == 'success'
+    needs: [changes, image]
     runs-on: ubuntu-24.04
     permissions:
       contents: read
