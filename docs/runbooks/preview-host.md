@@ -108,6 +108,14 @@ docker save taskmaster:ci | gzip | ssh deploy@tm-previews deploy 999
 ssh deploy@tm-previews remove 999
 ```
 
+## Cleanup
+
+`.github/workflows/preview-cleanup.yml` removes a PR's preview when the PR closes (merged or not)
+and marks its PR comment "Preview removed". Every night, and on demand from the Actions tab
+(**Preview cleanup** → Run workflow), it runs `sweep` with the open PR numbers, which removes any
+preview left behind (its PR comment is not changed; only removal on close updates the comment).
+By hand: `ssh deploy@tm-previews remove <pr>`. `remove` and `sweep` wait for a running `deploy`.
+
 ## Updating the controller script
 
 The script is copied in by hand (above), so a change to `deploy/preview/tm-preview` needs a
