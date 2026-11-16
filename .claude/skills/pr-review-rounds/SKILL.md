@@ -82,8 +82,9 @@ How: add the label `needs-jakub` to the PR, post one PR comment that mentions `@
 ## Stacked PRs
 
 - Each PR in the stack runs its own rounds on its own diff.
-- Jakub merges bottom-up. After a merge, retarget the next PR to `main` and update it (step 7).
-- A fix in a lower PR → rebase the PRs above it.
+- Stacked PRs are linked as a GitHub stack (see CLAUDE.md, PR flow step 1).
+- Jakub merges bottom-up, or several PRs of the stack at once. GitHub rebases the PRs above onto `main` after a merge; check that each one's base is now `main` and its CI is green (step 7).
+- A fix in a lower PR → rebase the PRs above it (`gh stack rebase` or "Rebase stack" in the merge box).
 
 ## Common mistakes
 
