@@ -3,7 +3,7 @@ import { drizzle } from 'drizzle-orm/better-sqlite3'
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
 import { mkdirSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
+import { applyMigrations } from './migrate'
 import * as schema from './schema'
 
 export type Db = BetterSQLite3Database<typeof schema> & { $client: Database.Database }
@@ -41,9 +41,12 @@ export function openDb(file: string): Db {
   return drizzle({ client: sqlite, schema })
 }
 
-/** Applies every pending migration. Idempotent; drizzle records applied ones in `__drizzle_migrations`. */
+/**
+ * Applies every pending migration, all or nothing (see `applyMigrations`). Idempotent; drizzle
+ * records applied ones in `__drizzle_migrations`.
+ */
 export function runMigrations(db: Db, folder: string = migrationsFolder()): void {
-  migrate(db, { migrationsFolder: folder })
+  applyMigrations(db.$client, folder)
 }
 
 let instance: Db | undefined

@@ -1,0 +1,174 @@
+import Database from 'better-sqlite3'
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import { DB_FILE_NAME, openDb, runMigrations } from './client'
+import { applyMigrations } from './migrate'
+import { journalOrderProblems, unmigratedSchemaChanges } from './migration-check'
+
+const dirs: string[] = []
+function tempDir(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'tm-migrate-test-'))
+  dirs.push(dir)
+  return dir
+}
+afterEach(() => {
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+})
+
+/** Writes a migrations folder in drizzle-kit's layout: one SQL file per entry plus the journal. */
+function writeMigrations(dir: string, migrations: { tag: string; sql: string; when?: number }[]) {
+  mkdirSync(join(dir, 'meta'), { recursive: true })
+  migrations.forEach((m) => {
+    writeFileSync(join(dir, `${m.tag}.sql`), m.sql)
+  })
+  const entries = migrations.map((m, idx) => ({
+    idx,
+    version: '6',
+    when: m.when ?? 1_700_000_000_000 + idx,
+    tag: m.tag,
+    breakpoints: true,
+  }))
+  writeFileSync(
+    join(dir, 'meta', '_journal.json'),
+    JSON.stringify({ version: '7', dialect: 'sqlite', entries }),
+  )
+}
+
+const tables = (sqlite: Database.Database) =>
+  (
+    sqlite.prepare("select name from sqlite_master where type = 'table' order by name").all() as {
+      name: string
+    }[]
+  ).map((t) => t.name)
+
+const PARENT_CHILD = `CREATE TABLE parent (id integer PRIMARY KEY, name text NOT NULL);
+--> statement-breakpoint
+CREATE TABLE child (id integer PRIMARY KEY, parent_id integer NOT NULL REFERENCES parent(id) ON DELETE CASCADE);`
+
+// What drizzle-kit writes when a column change forces a table rebuild.
+const REBUILD_PARENT = `PRAGMA foreign_keys=OFF;--> statement-breakpoint
+CREATE TABLE __new_parent (id integer PRIMARY KEY, name text NOT NULL, note text);
+--> statement-breakpoint
+INSERT INTO __new_parent (id, name) SELECT id, name FROM parent;--> statement-breakpoint
+DROP TABLE parent;--> statement-breakpoint
+ALTER TABLE __new_parent RENAME TO parent;--> statement-breakpoint
+PRAGMA foreign_keys=ON;`
+
+describe('applyMigrations', () => {
+  it('keeps child rows when a migration rebuilds their parent table', () => {
+    const dir = tempDir()
+    const sqlite = new Database(join(dir, 'db.sqlite'))
+    sqlite.pragma('foreign_keys = ON')
+    writeMigrations(join(dir, 'm'), [{ tag: '0000_tables', sql: PARENT_CHILD }])
+    applyMigrations(sqlite, join(dir, 'm'))
+    sqlite.exec("insert into parent values (1, 'a'); insert into child values (10, 1), (11, 1);")
+
+    writeMigrations(join(dir, 'm'), [
+      { tag: '0000_tables', sql: PARENT_CHILD },
+      { tag: '0001_rebuild', sql: REBUILD_PARENT },
+    ])
+    applyMigrations(sqlite, join(dir, 'm'))
+
+    expect(sqlite.prepare('select count(*) as n from child').get()).toEqual({ n: 2 })
+    expect(sqlite.pragma('foreign_keys', { simple: true })).toBe(1)
+    sqlite.close()
+  })
+
+  it('refuses to continue after migrations that leave dangling foreign keys', () => {
+    const dir = tempDir()
+    const sqlite = new Database(join(dir, 'db.sqlite'))
+    sqlite.pragma('foreign_keys = ON')
+    writeMigrations(join(dir, 'm'), [
+      { tag: '0000_tables', sql: PARENT_CHILD },
+      { tag: '0001_orphan', sql: 'INSERT INTO child VALUES (1, 999);' },
+    ])
+    expect(() => {
+      applyMigrations(sqlite, join(dir, 'm'))
+    }).toThrow(/foreign key violation/)
+    expect(sqlite.pragma('foreign_keys', { simple: true })).toBe(1)
+    sqlite.close()
+  })
+
+  it('a failing migration throws and leaves the database as it was', () => {
+    const dir = tempDir()
+    const file = join(dir, DB_FILE_NAME)
+    writeMigrations(join(dir, 'm'), [{ tag: '0000_a', sql: 'CREATE TABLE a (id integer);' }])
+    const db = openDb(file)
+    runMigrations(db, join(dir, 'm'))
+
+    writeMigrations(join(dir, 'm'), [
+      { tag: '0000_a', sql: 'CREATE TABLE a (id integer);' },
+      {
+        tag: '0001_broken',
+        sql: 'CREATE TABLE b (id integer);\n--> statement-breakpoint\nTHIS IS NOT SQL;',
+      },
+    ])
+    expect(() => {
+      runMigrations(db, join(dir, 'm'))
+    }).toThrow()
+    expect(tables(db.$client)).toContain('a')
+    expect(tables(db.$client)).not.toContain('b')
+    expect(db.$client.prepare('select count(*) as n from __drizzle_migrations').get()).toEqual({
+      n: 1,
+    })
+    db.$client.close()
+  })
+})
+
+describe('migration check (pnpm db:check)', () => {
+  const schemaDir = resolve('src/server/db/schema')
+
+  it('passes when the schema matches the committed migrations', () => {
+    expect(unmigratedSchemaChanges('drizzle', './src/server/db/schema')).toEqual([])
+  })
+
+  it('fails when the schema has a change with no migration', () => {
+    // A schema entry point that adds one table on top of the real schema. It must sit inside
+    // the repo so drizzle-kit can resolve drizzle-orm from it.
+    mkdirSync('node_modules/.cache', { recursive: true })
+    const dir = mkdtempSync(resolve('node_modules/.cache/tm-schema-'))
+    dirs.push(dir)
+    const schema = join(dir, 'schema.ts')
+    writeFileSync(
+      schema,
+      `export * from '${schemaDir}'
+import { sqliteTable, text } from 'drizzle-orm/sqlite-core'
+export const unmigrated = sqliteTable('unmigrated', { id: text('id').primaryKey() })
+`,
+    )
+    const added = unmigratedSchemaChanges('drizzle', schema)
+    expect(added.some((f) => f.endsWith('.sql'))).toBe(true)
+  }, 30_000)
+
+  it('the committed journal is in order', () => {
+    expect(journalOrderProblems('drizzle')).toEqual([])
+  })
+
+  it('flags a migration whose timestamp is older than the one before it', () => {
+    const dir = tempDir()
+    cpSync('drizzle', dir, { recursive: true })
+    writeMigrations(dir, [
+      { tag: '0000_a', sql: '', when: 2000 },
+      { tag: '0001_b', sql: '', when: 1000 },
+    ])
+    expect(journalOrderProblems(dir)).toEqual([expect.stringContaining('0001_b: timestamp 1000')])
+  })
+
+  it('every committed migration is recorded once after boot migrations', () => {
+    const db = openDb(':memory:')
+    runMigrations(db)
+    const journal = JSON.parse(readFileSync('drizzle/meta/_journal.json', 'utf8')) as {
+      entries: unknown[]
+    }
+    expect(db.$client.prepare('select count(*) as n from __drizzle_migrations').get()).toEqual({
+      n: journal.entries.length,
+    })
+    runMigrations(db)
+    expect(db.$client.prepare('select count(*) as n from __drizzle_migrations').get()).toEqual({
+      n: journal.entries.length,
+    })
+    db.$client.close()
+  })
+})
