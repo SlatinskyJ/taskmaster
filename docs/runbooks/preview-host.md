@@ -144,3 +144,5 @@ succeeded since boot.
 - Broken container: `incus restore tm-previews ready`.
 - Remove everything: `incus delete --force tm-previews`, then delete the node in the Tailscale
   admin console. The rest of the server is untouched.
+
+<!-- teardown test, do not merge -->
