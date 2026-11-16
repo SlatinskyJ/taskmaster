@@ -106,7 +106,8 @@ const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
 export function parseIsoUtc(value: string): Date {
   const date = new Date(value)
   if (!ISO_UTC.test(value) || Number.isNaN(date.getTime()) || date.toISOString() !== value) {
-    throw new RangeError(`Not an ISO UTC instant: ${value}`)
+    // Quote only a short, single-line excerpt: the value may come from a request.
+    throw new RangeError(`Not an ISO UTC instant: ${JSON.stringify(value.slice(0, 40))}`)
   }
   return date
 }

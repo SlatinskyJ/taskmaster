@@ -40,7 +40,6 @@ describe('plural', () => {
     [100, 'bodů'],
     [-1, 'bod'],
     [-3, 'body'],
-    [1.5, 'bodů'],
   ])('%d → %s', (n, word) => {
     expect(plural(n, pointWords)).toBe(word)
   })

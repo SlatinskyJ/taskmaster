@@ -162,6 +162,12 @@ describe('ISO UTC round trip', () => {
     expect(() => parseIsoUtc(value)).toThrow(RangeError)
   })
 
+  it('quotes only a short excerpt of a bad value', () => {
+    expect(() => parseIsoUtc('x'.repeat(10_000) + '\nfake log line')).toThrow(
+      /^Not an ISO UTC instant: "x{40}"$/,
+    )
+  })
+
   it('refuses to serialise an invalid date', () => {
     expect(() => toIsoUtc(new Date('nope'))).toThrow(RangeError)
   })
