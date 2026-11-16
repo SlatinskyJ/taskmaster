@@ -19,6 +19,7 @@
     "prepare": "node -e \"require('node:fs').existsSync('.git') && require('node:child_process').execSync('lefthook install', { stdio: 'inherit' })\""
   },
   "dependencies": {
+    "@date-fns/tz": "^1.5.0",
     "@tanstack/react-router": "^1.170.46",
     "@tanstack/react-start": "^1.169.5",
     "react": "^19.3.1",
