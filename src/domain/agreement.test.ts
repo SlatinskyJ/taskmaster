@@ -13,8 +13,8 @@ import {
   proposeTemplate,
   proposeTemplateScoreChange,
   scoreForNewInstance,
-  settleOneTime,
-  settleTemplate,
+  resolveOneTime,
+  resolveTemplate,
 } from './agreement'
 import type { Person } from './parties'
 import { allParties, isParty } from './parties'
@@ -190,7 +190,7 @@ describe('recurring templates (spec §5.1)', () => {
       expect(canCreateInstances(t)).toBe(true)
     })
 
-    it('[call] applies to instances created after it is agreed; earlier ones keep theirs', () => {
+    it('[call] new instances get the new score only once it is agreed (existing instances keep theirs: tested with instance storage)', () => {
       const before = value(scoreForNewInstance(changing()))
       const t = approveAll(changing(), [DAD, YOUNGER], approve(family))
       expect(t).toEqual({ status: 'agreed', score: 8, pendingChange: null })
@@ -237,22 +237,33 @@ describe('recurring templates (spec §5.1)', () => {
       expect(value(approveTemplate(afterYounger, withMum, MUM)).status).toBe('agreed')
     })
 
-    it('a deactivated party: settling promotes a proposal everyone left has approved', () => {
+    it('a deactivated party: resolving promotes a proposal everyone left has approved', () => {
       const t = value(approveTemplate(proposed(), family, OLDER))
       expect(t.status).toBe('proposed')
-      expect(settleTemplate(t, withoutYounger)).toEqual({
+      expect(resolveTemplate(t, withoutYounger)).toEqual({
         status: 'agreed',
         score: 5,
         pendingChange: null,
       })
     })
 
-    it('settling also applies a score change that is now fully approved', () => {
+    it('a party deactivated and later reactivated must approve again', () => {
+      const t = value(approveTemplate(proposed(), family, YOUNGER))
+      const whileInactive = resolveTemplate(t, withoutYounger)
+      expect(whileInactive.status === 'proposed' && whileInactive.proposal.approvedBy).toEqual([
+        DAD,
+      ])
+      const back = resolveTemplate(whileInactive, family)
+      expect(back.status).toBe('proposed')
+      expect(value(approveTemplate(back, family, YOUNGER)).status).toBe('proposed')
+    })
+
+    it('resolving also applies a score change that is now fully approved', () => {
       const t = value(
         approveTemplate(value(proposeTemplateScoreChange(agreed(), family, DAD, 8)), family, OLDER),
       )
-      expect(settleTemplate(t, family)).toBe(t)
-      expect(settleTemplate(t, withoutYounger)).toEqual({
+      expect(resolveTemplate(t, family)).toBe(t)
+      expect(resolveTemplate(t, withoutYounger)).toEqual({
         status: 'agreed',
         score: 8,
         pendingChange: null,
@@ -305,9 +316,24 @@ describe('one-time tasks, path 1: all-party approval (spec §5.2)', () => {
     })
   })
 
-  it('settling after a deactivation opens a task everyone left has approved', () => {
+  it('an inactive giver cannot create a task', () => {
+    const inactiveDad = family.map((p) => (p.id === DAD ? { ...p, active: false } : p))
+    expect(createOneTimeTask(inactiveDad, DAD, 20)).toEqual({ ok: false, error: 'not_a_giver' })
+  })
+
+  it('is open at once when the giver is the only party', () => {
+    const dadAlone: Person[] = [{ id: DAD, role: 'giver', active: true }]
+    expect(value(createOneTimeTask(dadAlone, DAD, 20))).toEqual({ status: 'open', score: 20 })
+    expect(value(proposeTemplate(dadAlone, DAD, 5))).toEqual({
+      status: 'agreed',
+      score: 5,
+      pendingChange: null,
+    })
+  })
+
+  it('a deactivated party is no longer waited for, once resolved', () => {
     const t = value(approve(proposed(), OLDER))
-    expect(settleOneTime(t, family)).toBe(t)
-    expect(settleOneTime(t, withoutYounger)).toEqual({ status: 'open', score: 20 })
+    expect(resolveOneTime(t, family)).toBe(t)
+    expect(resolveOneTime(t, withoutYounger)).toEqual({ status: 'open', score: 20 })
   })
 })

@@ -8,8 +8,13 @@ import { fail, ok } from './result'
 // "All parties" is evaluated **live**, at every check, from the current people list:
 // - a party added while a proposal is in flight must approve it too;
 // - a party deactivated while a proposal is in flight is no longer needed, and their earlier
-//   approval no longer counts. If that leaves every remaining party approved, the proposal is
-//   agreed at the next `settle…` call (the caller runs it after changing people).
+//   approval is dropped: if they are reactivated later they must approve again.
+//
+// Caller duty: whenever people change (added, deactivated, reactivated; #26), run
+// `resolveTemplate` / `resolveOneTime` on every proposal still in flight. That drops approvals
+// of people who are no longer parties and promotes anything everyone left has approved;
+// without it a proposal could wait forever for someone who is gone.
+// ("Resolve" here, not "settle": settlement is the end-of-period accounting, spec §4.)
 // The spec doesn't say what happens to in-flight proposals when the parties change; this is
 // the default proposed to Jakub on #19.
 
@@ -61,6 +66,13 @@ export function approveScore(
   return ok({ ...proposal, approvedBy: [...proposal.approvedBy, approverId] })
 }
 
+/** Drops approvals of people who are not parties right now (deactivated, or now admin). */
+export function pruneApprovals(proposal: ScoreProposal, people: readonly Person[]): ScoreProposal {
+  const parties = allParties(people)
+  const approvedBy = proposal.approvedBy.filter((id) => parties.includes(id))
+  return approvedBy.length === proposal.approvedBy.length ? proposal : { ...proposal, approvedBy }
+}
+
 /** Current parties who have not approved yet. */
 export function missingApprovals(proposal: ScoreProposal, people: readonly Person[]): PersonId[] {
   return allParties(people).filter((id) => !proposal.approvedBy.includes(id))
@@ -89,26 +101,31 @@ export function proposeTemplate(
   if (!giver || !isActiveGiver(giver)) return fail('not_a_giver')
   const proposal = proposeScore(people, giverId, score)
   if (!proposal.ok) return proposal
-  return ok(settleTemplate({ status: 'proposed', proposal: proposal.value }, people))
+  return ok(resolveTemplate({ status: 'proposed', proposal: proposal.value }, people))
 }
 
 /**
  * Promotes whatever is now fully approved: a proposed template becomes agreed, a pending
- * score change replaces the score. Call after any approval or change of people.
+ * score change replaces the score, after dropping approvals of people who are no longer
+ * parties. Call after any approval and on every proposal whenever people change.
  */
-export function settleTemplate(
+export function resolveTemplate(
   template: TemplateAgreement,
   people: readonly Person[],
 ): TemplateAgreement {
   if (template.status === 'proposed') {
-    return isAgreed(template.proposal, people)
-      ? { status: 'agreed', score: template.proposal.score, pendingChange: null }
-      : template
+    const proposal = pruneApprovals(template.proposal, people)
+    if (isAgreed(proposal, people)) {
+      return { status: 'agreed', score: proposal.score, pendingChange: null }
+    }
+    return proposal === template.proposal ? template : { status: 'proposed', proposal }
   }
-  if (template.pendingChange && isAgreed(template.pendingChange, people)) {
-    return { status: 'agreed', score: template.pendingChange.score, pendingChange: null }
+  if (!template.pendingChange) return template
+  const change = pruneApprovals(template.pendingChange, people)
+  if (isAgreed(change, people)) {
+    return { status: 'agreed', score: change.score, pendingChange: null }
   }
-  return template
+  return change === template.pendingChange ? template : { ...template, pendingChange: change }
 }
 
 /** A party approves the template's proposed score, or its pending score change. */
@@ -125,7 +142,7 @@ export function approveTemplate(
     template.status === 'proposed'
       ? { status: 'proposed', proposal: approved.value }
       : { ...template, pendingChange: approved.value }
-  return ok(settleTemplate(next, people))
+  return ok(resolveTemplate(next, people))
 }
 
 /**
@@ -143,7 +160,7 @@ export function proposeTemplateScoreChange(
   if (score === template.score) return fail('same_score')
   const proposal = proposeScore(people, proposerId, score)
   if (!proposal.ok) return proposal
-  return ok(settleTemplate({ ...template, pendingChange: proposal.value }, people))
+  return ok(resolveTemplate({ ...template, pendingChange: proposal.value }, people))
 }
 
 /** Instances can only come from an agreed template (spec §5.1). */
@@ -179,15 +196,18 @@ export function createOneTimeTask(
   if (!giver || !isActiveGiver(giver)) return fail('not_a_giver')
   const offer = proposeScore(people, giverId, score)
   if (!offer.ok) return offer
-  return ok(settleOneTime({ status: 'proposed', offer: offer.value }, people))
+  return ok(resolveOneTime({ status: 'proposed', offer: offer.value }, people))
 }
 
-/** Promotes a fully approved offer to open. Call after any approval or change of people. */
-export function settleOneTime(task: OneTimeAgreement, people: readonly Person[]): OneTimeAgreement {
-  if (task.status === 'proposed' && isAgreed(task.offer, people)) {
-    return { status: 'open', score: task.offer.score }
-  }
-  return task
+/** Drops non-party approvals and opens a fully approved offer. Call whenever people change. */
+export function resolveOneTime(
+  task: OneTimeAgreement,
+  people: readonly Person[],
+): OneTimeAgreement {
+  if (task.status !== 'proposed') return task
+  const offer = pruneApprovals(task.offer, people)
+  if (isAgreed(offer, people)) return { status: 'open', score: offer.score }
+  return offer === task.offer ? task : { status: 'proposed', offer }
 }
 
 /** A party approves the offered score; once every party has, the task is open. */
@@ -199,5 +219,5 @@ export function approveOneTimeOffer(
   if (task.status !== 'proposed') return fail('not_proposed')
   const approved = approveScore(task.offer, people, approverId)
   if (!approved.ok) return approved
-  return ok(settleOneTime({ status: 'proposed', offer: approved.value }, people))
+  return ok(resolveOneTime({ status: 'proposed', offer: approved.value }, people))
 }
