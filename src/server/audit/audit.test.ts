@@ -207,6 +207,10 @@ describe('credentials never reach the log', () => {
           sessions: [{ id: 1, tokenHash: 'abc' }],
           passkey: { credentialId: 'xyz', credentialPublicKey: 'pk', counter: 3 },
           clientSecret: 's',
+          pinCode: '1',
+          pin_code: '2',
+          newPin: '3',
+          challenge: 'c',
           shipping: 'kept', // contains "pin" but is not a PIN
         },
       }),
@@ -223,6 +227,10 @@ describe('credentials never reach the log', () => {
       sessions: [{ id: 1, tokenHash: REDACTED }],
       passkey: { credentialId: REDACTED, credentialPublicKey: REDACTED, counter: 3 },
       clientSecret: REDACTED,
+      pinCode: REDACTED,
+      pin_code: REDACTED,
+      newPin: REDACTED,
+      challenge: REDACTED,
       shipping: 'kept',
     })
   })

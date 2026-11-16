@@ -32,7 +32,8 @@ export interface AuditEntry {
  * session tokens, secrets, passkey credentials. The log is append-only and in every backup,
  * so a leaked secret could never be removed.
  */
-const CREDENTIAL_KEY = /password|passwd|secret|token|^pin$|pin_?hash|credential|private_?key/i
+const CREDENTIAL_KEY =
+  /password|passwd|secret|token|^pin$|pin_?(hash|code)|new_?pin|credential|private_?key|challenge/i
 export const REDACTED = '[redacted]'
 
 function redact(value: unknown): unknown {
