@@ -81,8 +81,13 @@ tailnet:
 incus file push deploy/preview/tm-preview-egress tm-previews/usr/local/sbin/tm-preview-egress --mode 0755 --uid 0 --gid 0
 incus file push deploy/preview/tm-preview-egress.service tm-previews/etc/systemd/system/tm-preview-egress.service --mode 0644 --uid 0 --gid 0
 incus exec tm-previews -- systemctl enable --now tm-preview-egress </dev/null
-incus exec tm-previews -- iptables -S DOCKER-USER </dev/null   # expect 5 REJECT rules for the preview subnet
+incus exec tm-previews -- iptables -S DOCKER-USER </dev/null   # expect 2 DNS RETURN + 5 REJECT rules
+incus exec tm-previews -- docker run --rm --network tm-previews busybox sh -c \
+  'nslookup example.com && wget -qO- -T5 http://example.com >/dev/null && echo internet-ok' </dev/null
 ```
+
+The LAN must be blocked: from the same `busybox` container, `wget -T5 http://<your router's IP>`
+should fail with "Connection refused".
 
 Join the tailnet (prints a login link; approve it in the browser as the tailnet owner):
 
@@ -120,6 +125,12 @@ incus exec tm-previews -- docker info --format '{{.Driver}}'   # expect overlay2
 
 On a storage pool that supports quotas, also cap the container's root disk, e.g.
 `incus config device override tm-previews root size=40GiB`.
+
+## After a reboot
+
+Previews don't restart on their own (`--restart no`), so none runs before the egress block is back.
+They come back on the PR's next push. `deploy` refuses to run until `tm-preview-egress` has
+succeeded since boot.
 
 ## Recovery
 

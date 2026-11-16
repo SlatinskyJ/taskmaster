@@ -36,7 +36,9 @@ fi
 # 1..9999, so BASE_PORT+PR stays a valid port.
 valid_pr() { [[ "$1" =~ ^[1-9][0-9]{0,3}$ ]] || die "invalid PR number: $1"; }
 port_of() { echo $((BASE_PORT + $1)); }
+# Running previews count toward the cap; `sweep` also clears stopped leftovers.
 running() { docker ps --filter "name=^${PREFIX}" --format '{{.Names}}' | sed "s/^${PREFIX}//" | sort -n; }
+all_previews() { docker ps -a --filter "name=^${PREFIX}" --format '{{.Names}}' | sed "s/^${PREFIX}//" | sort -n; }
 
 remove() {
   local pr=$1 port
@@ -65,14 +67,17 @@ deploy() {
   # CI's tested image is tagged taskmaster:ci; anything else (extra or foreign tags) is refused.
   [[ "$loaded" == "taskmaster:ci" ]] || die "expected exactly one image tagged taskmaster:ci"
   docker tag "$loaded" "taskmaster:pr-${pr}"
+  # From here on, any failure removes this PR's preview and exits 1 (see the contract above).
+  trap 'remove "$pr" >&2; trap - ERR; exit 1' ERR
   docker image rm taskmaster:ci >/dev/null
 
   docker rm -f "${PREFIX}${pr}" >/dev/null 2>&1 || true
   docker volume rm "${PREFIX}${pr}-data" >/dev/null 2>&1 || true
+  [[ -f /run/tm-preview-egress.ok ]] || die "egress block not active since boot (see runbook)"
   docker network inspect "$NETWORK" >/dev/null 2>&1 || die "network ${NETWORK} missing (see runbook)"
   docker run -d --name "${PREFIX}${pr}" --network "$NETWORK" \
     --memory "$MEMORY" --memory-swap "$MEMORY" --cpus 1 --pids-limit 256 \
-    --restart unless-stopped --security-opt no-new-privileges --cap-drop ALL \
+    --restart no --security-opt no-new-privileges --cap-drop ALL \
     -e TASKMASTER_ENV=preview \
     -p "127.0.0.1:${port}:3000" \
     -v "${PREFIX}${pr}-data:/data" \
@@ -82,19 +87,21 @@ deploy() {
     if curl -fsS "http://127.0.0.1:${port}/api/health" >/dev/null 2>&1; then
       tailscale serve --bg --https="$port" "http://127.0.0.1:${port}" >/dev/null
       # Only the port: the host name stays out of public CI logs; CI builds the URL from a secret.
+      trap - ERR
       echo "port: ${port}"
       return 0
     fi
     sleep 1
   done
   docker logs --tail 50 "${PREFIX}${pr}" >&2 || true
+  trap - ERR
   remove "$pr" >&2
   die "preview ${pr} did not become healthy"
 }
 
 sweep() {
   local keep=" $* " pr
-  for pr in $(running); do
+  for pr in $(all_previews); do
     [[ "$keep" == *" ${pr} "* ]] || remove "$pr"
   done
   docker image prune -f >/dev/null
