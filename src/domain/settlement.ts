@@ -1,5 +1,5 @@
 import type { Person, PersonId } from './parties'
-import { findPerson } from './parties'
+import { findPerson, isActiveAdmin, isActiveGiver } from './parties'
 import type { Result } from './result'
 import { fail, ok } from './result'
 
@@ -13,11 +13,17 @@ import { fail, ok } from './result'
 //   lower ≤ total < upper  → level "lower", deduct lower, the rest carries over;
 //   total < lower          → level "none", deduct nothing, everything carries over, no debt.
 //
+// Who acts is checked here, like everywhere in the domain: a giver settles (at the meeting), the
+// admin adjusts and corrects.
+//
 // Settlements are final. Only the admin corrects one, with a reason: the original stays as it
 // is, a correction record links to it, and [call] the point difference is posted as an
 // adjustment to the taker's **current** running total. Later settlements are never rewritten.
 
+export type PeriodId = number
+
 export type SettlementError =
+  | 'not_a_giver'
   | 'invalid_levels'
   | 'invalid_total'
   | 'invalid_points'
@@ -56,7 +62,7 @@ export function levelReached(total: number, levels: Levels): Level {
 
 /** One taker's settlement of one period (spec §5.9). Carry-over is stored, not recomputed. */
 export interface SettlementRecord {
-  periodId: number
+  periodId: PeriodId
   takerId: PersonId
   totalBefore: number
   level: Level
@@ -64,13 +70,18 @@ export interface SettlementRecord {
   carryOver: number
 }
 
-/** Settles one taker's running total against the period's levels. */
+/** A giver settles one taker's running total against the period's levels. */
 export function settle(
-  periodId: number,
+  people: readonly Person[],
+  giverId: PersonId,
+  periodId: PeriodId,
   takerId: PersonId,
   totalBefore: number,
   levels: Levels,
 ): Result<SettlementRecord, SettlementError> {
+  const giver = findPerson(people, giverId)
+  if (!giver || !isActiveGiver(giver)) return fail('not_a_giver')
+  if (findPerson(people, takerId)?.role !== 'taker') return fail('not_a_taker')
   if (!isValidLevels(levels)) return fail('invalid_levels')
   if (!isPoints(totalBefore)) return fail('invalid_total')
   const level = levelReached(totalBefore, levels)
@@ -108,9 +119,9 @@ export interface Adjustment {
   reason: string
 }
 
-function isActiveAdmin(people: readonly Person[], id: PersonId): boolean {
+function admin(people: readonly Person[], id: PersonId): boolean {
   const p = findPerson(people, id)
-  return p !== undefined && p.active && p.role === 'admin'
+  return p !== undefined && isActiveAdmin(p)
 }
 
 function checkReason(reason: string): string | null {
@@ -130,7 +141,7 @@ export function adjustPoints(
   reason: string,
   currentTotal: number,
 ): Result<Adjustment, SettlementError> {
-  if (!isActiveAdmin(people, adminId)) return fail('not_admin')
+  if (!admin(people, adminId)) return fail('not_admin')
   const taker = findPerson(people, takerId)
   if (taker?.role !== 'taker') return fail('not_a_taker')
   if (!Number.isInteger(points) || points === 0) return fail('invalid_points')
@@ -143,7 +154,7 @@ export function adjustPoints(
 /** A correction of a final settlement. The original record stays unchanged (spec §5.9). */
 export interface SettlementCorrection {
   /** Links to the original settlement (period + taker identify it). */
-  periodId: number
+  periodId: PeriodId
   takerId: PersonId
   originalLevel: Level
   originalDeducted: number
@@ -153,28 +164,44 @@ export interface SettlementCorrection {
   reason: string
 }
 
+/** What a settlement stands at now: the latest correction, else the original record. */
+export function effectiveSettlement(
+  original: SettlementRecord,
+  latest: SettlementCorrection | null,
+): { level: Level; deducted: number } {
+  return latest
+    ? { level: latest.correctedLevel, deducted: latest.correctedDeducted }
+    : { level: original.level, deducted: original.deducted }
+}
+
 /**
- * The admin corrects a settlement: says what level and deduction it should have had. Writes a
- * correction record and [call] posts the difference (original deducted − corrected deducted) as
- * an adjustment to the taker's **current** running total; `null` when the points don't change
- * (only the level for the money changes). Refused if the adjustment would go below zero.
+ * The admin corrects a settlement: says what level and deduction it should have had. `latest`
+ * is the newest earlier correction of the same settlement, if any; the change is measured from
+ * it, so correcting twice never double-counts. Writes a correction record and [call] posts the
+ * difference (deducted now − corrected deducted) as an adjustment to the taker's **current**
+ * running total; `null` when the points don't change (only the level for the money changes).
+ * Level "none" means 0 deducted, a reached level means more than 0. Refused if the adjustment
+ * would go below zero.
  */
 export function correctSettlement(
   people: readonly Person[],
   adminId: PersonId,
   original: SettlementRecord,
+  latest: SettlementCorrection | null,
   corrected: { level: Level; deducted: number },
   reason: string,
   currentTotal: number,
 ): Result<{ correction: SettlementCorrection; adjustment: Adjustment | null }, SettlementError> {
-  if (!isActiveAdmin(people, adminId)) return fail('not_admin')
+  if (!admin(people, adminId)) return fail('not_admin')
   if (!isPoints(corrected.deducted)) return fail('invalid_points')
+  if ((corrected.level === 'none') !== (corrected.deducted === 0)) return fail('invalid_points')
   const why = checkReason(reason)
   if (!why) return fail('reason_required')
-  if (corrected.level === original.level && corrected.deducted === original.deducted) {
+  const now = effectiveSettlement(original, latest)
+  if (corrected.level === now.level && corrected.deducted === now.deducted) {
     return fail('no_change')
   }
-  const difference = original.deducted - corrected.deducted
+  const difference = now.deducted - corrected.deducted
   if (currentTotal + difference < 0) return fail('would_go_negative')
   const correction: SettlementCorrection = {
     periodId: original.periodId,

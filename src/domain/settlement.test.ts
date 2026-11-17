@@ -35,7 +35,7 @@ function error<T>(result: Result<T, SettlementError>): SettlementError {
 
 describe('settlement arithmetic (spec §5.9)', () => {
   it('spec example: 130 → upper, 100 deducted, 30 carries', () => {
-    expect(value(settle(WEEK, OLDER, 130, LEVELS))).toEqual({
+    expect(value(settle(family, DAD, WEEK, OLDER, 130, LEVELS))).toEqual({
       periodId: WEEK,
       takerId: OLDER,
       totalBefore: 130,
@@ -46,7 +46,7 @@ describe('settlement arithmetic (spec §5.9)', () => {
   })
 
   it('spec example: 30 → none, nothing deducted, 30 carries, no debt', () => {
-    expect(value(settle(WEEK, OLDER, 30, LEVELS))).toMatchObject({
+    expect(value(settle(family, DAD, WEEK, OLDER, 30, LEVELS))).toMatchObject({
       level: 'none',
       deducted: 0,
       carryOver: 30,
@@ -54,7 +54,7 @@ describe('settlement arithmetic (spec §5.9)', () => {
   })
 
   it('between the levels → lower, lower deducted', () => {
-    expect(value(settle(WEEK, OLDER, 75, LEVELS))).toMatchObject({
+    expect(value(settle(family, DAD, WEEK, OLDER, 75, LEVELS))).toMatchObject({
       level: 'lower',
       deducted: 50,
       carryOver: 25,
@@ -66,16 +66,19 @@ describe('settlement arithmetic (spec §5.9)', () => {
     expect(levelReached(50, LEVELS)).toBe('lower')
     expect(levelReached(99, LEVELS)).toBe('lower')
     expect(levelReached(100, LEVELS)).toBe('upper')
-    expect(value(settle(WEEK, OLDER, 100, LEVELS)).carryOver).toBe(0)
-    expect(value(settle(WEEK, OLDER, 50, LEVELS)).carryOver).toBe(0)
+    expect(value(settle(family, DAD, WEEK, OLDER, 100, LEVELS)).carryOver).toBe(0)
+    expect(value(settle(family, DAD, WEEK, OLDER, 50, LEVELS)).carryOver).toBe(0)
   })
 
   it('zero points: none, nothing happens', () => {
-    expect(value(settle(WEEK, OLDER, 0, LEVELS))).toMatchObject({ level: 'none', carryOver: 0 })
+    expect(value(settle(family, DAD, WEEK, OLDER, 0, LEVELS))).toMatchObject({
+      level: 'none',
+      carryOver: 0,
+    })
   })
 
   it('equal levels work: reaching it is upper', () => {
-    expect(value(settle(WEEK, OLDER, 60, { lower: 60, upper: 60 }))).toMatchObject({
+    expect(value(settle(family, DAD, WEEK, OLDER, 60, { lower: 60, upper: 60 }))).toMatchObject({
       level: 'upper',
       deducted: 60,
     })
@@ -89,10 +92,10 @@ describe('settlement arithmetic (spec §5.9)', () => {
       { lower: 50, upper: Number.NaN },
     ]) {
       expect(isValidLevels(levels)).toBe(false)
-      expect(error(settle(WEEK, OLDER, 80, levels))).toBe('invalid_levels')
+      expect(error(settle(family, DAD, WEEK, OLDER, 80, levels))).toBe('invalid_levels')
     }
     for (const total of [-1, 2.5, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expect(error(settle(WEEK, OLDER, total, LEVELS))).toBe('invalid_total')
+      expect(error(settle(family, DAD, WEEK, OLDER, total, LEVELS))).toBe('invalid_total')
     }
   })
 
@@ -100,7 +103,7 @@ describe('settlement arithmetic (spec §5.9)', () => {
     for (let lower = 1; lower <= 30; lower += 7) {
       for (let upper = lower; upper <= 60; upper += 11) {
         for (let total = 0; total <= 150; total++) {
-          const r = value(settle(WEEK, OLDER, total, { lower, upper }))
+          const r = value(settle(family, DAD, WEEK, OLDER, total, { lower, upper }))
           expect(r.carryOver).toBe(total - r.deducted)
           expect(r.carryOver).toBeGreaterThanOrEqual(0)
           expect([0, lower, upper]).toContain(r.deducted)
@@ -133,15 +136,15 @@ describe('running total is reproducible (spec §4, §5.10)', () => {
   it('property: after settling, the ledger total equals the stored carry-over', () => {
     for (let total = 0; total <= 250; total += 3) {
       const entries: LedgerEntry[] = [{ kind: 'completion', takerId: OLDER, points: total }]
-      const r = value(settle(WEEK, OLDER, runningTotal(entries, OLDER), LEVELS))
+      const r = value(settle(family, DAD, WEEK, OLDER, runningTotal(entries, OLDER), LEVELS))
       entries.push({ kind: 'settlement', takerId: OLDER, deducted: r.deducted })
       expect(runningTotal(entries, OLDER)).toBe(r.carryOver)
     }
   })
 
   it('carry-over feeds the next week', () => {
-    const w1 = value(settle(1, OLDER, 130, LEVELS))
-    const w2 = value(settle(2, OLDER, w1.carryOver + 40, LEVELS))
+    const w1 = value(settle(family, DAD, 1, OLDER, 130, LEVELS))
+    const w2 = value(settle(family, DAD, 2, OLDER, w1.carryOver + 40, LEVELS))
     expect(w2).toMatchObject({ totalBefore: 70, level: 'lower', carryOver: 20 })
   })
 })
@@ -184,7 +187,7 @@ describe('manual adjustments (spec §5.9): admin only, reason required', () => {
 
 describe('settlement correction (spec §5.9) [call] difference goes to the current total', () => {
   // Week 7: older had 130 but was settled as if he had 75 (lower, 50 deducted).
-  const wrong: SettlementRecord = value(settle(WEEK, OLDER, 75, LEVELS))
+  const wrong: SettlementRecord = value(settle(family, DAD, WEEK, OLDER, 75, LEVELS))
 
   it('keeps the original, writes a linked correction, posts the difference', () => {
     const before = structuredClone(wrong)
@@ -193,6 +196,7 @@ describe('settlement correction (spec §5.9) [call] difference goes to the curre
         family,
         JAKUB,
         wrong,
+        null,
         { level: 'upper', deducted: 100 },
         'špatný součet',
         60,
@@ -212,25 +216,25 @@ describe('settlement correction (spec §5.9) [call] difference goes to the curre
   })
 
   it('too much deducted: the points come back as a positive adjustment', () => {
-    const tooMuch = value(settle(WEEK, OLDER, 130, LEVELS))
+    const tooMuch = value(settle(family, DAD, WEEK, OLDER, 130, LEVELS))
     const r = value(
-      correctSettlement(family, JAKUB, tooMuch, { level: 'lower', deducted: 50 }, 'x', 0),
+      correctSettlement(family, JAKUB, tooMuch, null, { level: 'lower', deducted: 50 }, 'x', 0),
     )
     expect(r.adjustment?.points).toBe(50)
   })
 
   it('only the level changes (money outside the app): no point adjustment', () => {
     const r = value(
-      correctSettlement(family, JAKUB, wrong, { level: 'upper', deducted: 50 }, 'x', 10),
+      correctSettlement(family, JAKUB, wrong, null, { level: 'upper', deducted: 50 }, 'x', 10),
     )
     expect(r.adjustment).toBeNull()
     expect(r.correction.correctedLevel).toBe('upper')
   })
 
   it('the adjustment lands on the current total; later settlements stay as they were', () => {
-    const later = value(settle(WEEK + 1, OLDER, 60, LEVELS))
+    const later = value(settle(family, DAD, WEEK + 1, OLDER, 60, LEVELS))
     const r = value(
-      correctSettlement(family, JAKUB, wrong, { level: 'upper', deducted: 100 }, 'x', 70),
+      correctSettlement(family, JAKUB, wrong, null, { level: 'upper', deducted: 100 }, 'x', 70),
     )
     const ledger: LedgerEntry[] = [
       { kind: 'completion', takerId: OLDER, points: 75 },
@@ -247,21 +251,100 @@ describe('settlement correction (spec §5.9) [call] difference goes to the curre
 
   it('admin only, reason required, a real change, whole points', () => {
     const fix = { level: 'upper' as const, deducted: 100 }
-    expect(error(correctSettlement(family, DAD, wrong, fix, 'x', 60))).toBe('not_admin')
-    expect(error(correctSettlement(family, JAKUB, wrong, fix, '', 60))).toBe('reason_required')
+    expect(error(correctSettlement(family, DAD, wrong, null, fix, 'x', 60))).toBe('not_admin')
+    expect(error(correctSettlement(family, JAKUB, wrong, null, fix, '', 60))).toBe(
+      'reason_required',
+    )
     expect(
-      error(correctSettlement(family, JAKUB, wrong, { level: 'lower', deducted: 50 }, 'x', 60)),
+      error(
+        correctSettlement(family, JAKUB, wrong, null, { level: 'lower', deducted: 50 }, 'x', 60),
+      ),
     ).toBe('no_change')
     expect(
-      error(correctSettlement(family, JAKUB, wrong, { level: 'upper', deducted: -1 }, 'x', 60)),
+      error(
+        correctSettlement(family, JAKUB, wrong, null, { level: 'upper', deducted: -1 }, 'x', 60),
+      ),
     ).toBe('invalid_points')
   })
 
   it('refused if the difference would take the current total below zero', () => {
     const fix = { level: 'upper' as const, deducted: 100 }
-    expect(error(correctSettlement(family, JAKUB, wrong, fix, 'x', 49))).toBe('would_go_negative')
-    expect(value(correctSettlement(family, JAKUB, wrong, fix, 'x', 50)).adjustment?.points).toBe(
-      -50,
+    expect(error(correctSettlement(family, JAKUB, wrong, null, fix, 'x', 49))).toBe(
+      'would_go_negative',
     )
+    expect(
+      value(correctSettlement(family, JAKUB, wrong, null, fix, 'x', 50)).adjustment?.points,
+    ).toBe(-50)
+  })
+
+  it('nobody but an active admin corrects', () => {
+    const fix = { level: 'upper' as const, deducted: 100 }
+    for (const who of [DAD, OLDER, YOUNGER]) {
+      expect(error(correctSettlement(family, who, wrong, null, fix, 'x', 60))).toBe('not_admin')
+    }
+    const exAdmin = family.map((p) => (p.id === JAKUB ? { ...p, active: false } : p))
+    expect(error(correctSettlement(exAdmin, JAKUB, wrong, null, fix, 'x', 60))).toBe('not_admin')
+  })
+
+  it('refuses bad points, a blank reason, and a level that does not match the deduction', () => {
+    for (const deducted of [1.5, Number.NaN, -1]) {
+      const bad = { level: 'upper' as const, deducted }
+      expect(error(correctSettlement(family, JAKUB, wrong, null, bad, 'x', 60))).toBe(
+        'invalid_points',
+      )
+    }
+    const fix = { level: 'upper' as const, deducted: 100 }
+    expect(error(correctSettlement(family, JAKUB, wrong, null, fix, '   ', 60))).toBe(
+      'reason_required',
+    )
+    for (const bad of [
+      { level: 'none' as const, deducted: 100 },
+      { level: 'upper' as const, deducted: 0 },
+    ]) {
+      expect(error(correctSettlement(family, JAKUB, wrong, null, bad, 'x', 60))).toBe(
+        'invalid_points',
+      )
+    }
+    const none = value(
+      correctSettlement(family, JAKUB, wrong, null, { level: 'none', deducted: 0 }, 'x', 0),
+    )
+    expect(none.adjustment?.points).toBe(50)
+  })
+
+  it('correcting twice measures from the latest correction, never double-counts', () => {
+    const settled = value(settle(family, DAD, WEEK, OLDER, 130, LEVELS)) // upper, −100
+    const toLower = { level: 'lower' as const, deducted: 50 }
+    const first = value(correctSettlement(family, JAKUB, settled, null, toLower, 'x', 0))
+    expect(first.adjustment?.points).toBe(50)
+    // Same fix again: nothing to change.
+    expect(
+      error(correctSettlement(family, JAKUB, settled, first.correction, toLower, 'x', 50)),
+    ).toBe('no_change')
+    // Back to the original: −50 is owed again.
+    const back = value(
+      correctSettlement(
+        family,
+        JAKUB,
+        settled,
+        first.correction,
+        { level: 'upper', deducted: 100 },
+        'x',
+        50,
+      ),
+    )
+    expect(back.adjustment?.points).toBe(-50)
+    expect(back.correction).toMatchObject({ originalDeducted: 100, correctedDeducted: 100 })
+    expect(settled.deducted).toBe(100)
+  })
+})
+
+describe('who settles (spec §5.9)', () => {
+  it('an active giver settles a taker; nobody else', () => {
+    for (const who of [OLDER, JAKUB]) {
+      expect(error(settle(family, who, WEEK, OLDER, 80, LEVELS))).toBe('not_a_giver')
+    }
+    const exDad = family.map((p) => (p.id === DAD ? { ...p, active: false } : p))
+    expect(error(settle(exDad, DAD, WEEK, OLDER, 80, LEVELS))).toBe('not_a_giver')
+    expect(error(settle(family, DAD, WEEK, JAKUB, 80, LEVELS))).toBe('not_a_taker')
   })
 })
