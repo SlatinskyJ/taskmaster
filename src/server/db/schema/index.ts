@@ -3,3 +3,4 @@
 export * from './audit'
 export * from './meta'
 export * from './users'
+export * from './auth'
