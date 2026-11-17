@@ -46,6 +46,10 @@ Node 22 + pnpm (`corepack enable`). `pnpm install` also installs the lefthook pr
 
 PR size is a soft goal of about 400 changed lines (not counting tests, migrations and generated files). Parallel PRs are fine; `main` requires branches to be up to date, so update your branch after other merges.
 
+## Dependabot PRs
+
+Dependabot bumps the Docker base image digest and the pinned GitHub Actions (`.github/dependabot.yml`). Its PRs get no issue, brief or full panel: CI (including the image smoke test) must be green, an agent asked to handle one runs the Ops and Security judges, and Jakub merges.
+
 ## Trivial PRs
 
 A PR is trivial only if it touches **none** of the protected areas below, and the Architecture judge agrees. Any doubt → not trivial → ask Jakub (label `needs-jakub`).
