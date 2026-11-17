@@ -9,22 +9,13 @@ import type { NewUser } from './manage'
 // `ADMIN_PASSWORD` (login `ADMIN_USERNAME`, default "admin"). Once an admin exists the
 // variable is ignored, so it may stay set (a deploy secret reused for every fresh preview DB);
 // it never changes an existing password. Everyone else is added in the admin console. The
-// password is never logged.
-//
-// `TEST_USERS=1` (dev and previews only, Jakub 2026-11-17) also creates Táta, Starší and
-// Mladší with the same password, in the same step. Ignored in production unless
-// `TASKMASTER_ENV=preview`. Fuller demo data is #62.
+// password is never logged. Dev and previews get their test family from the demo seed
+// (src/server/demo) instead, which runs first and fills an empty DB.
 
 export const MIN_ADMIN_PASSWORD = 12
 
-export const TEST_USERS: readonly NewUser[] = [
-  { username: 'tata', displayName: 'Táta', role: 'giver' },
-  { username: 'starsi', displayName: 'Starší', role: 'taker' },
-  { username: 'mladsi', displayName: 'Mladší', role: 'taker' },
-]
-
 export type BootstrapOutcome =
-  | { kind: 'created'; username: string; testUsers: string[] }
+  | { kind: 'created'; username: string }
   /** No admin yet and no `ADMIN_PASSWORD`: nobody can manage people until it is set. */
   | { kind: 'no_admin' }
   | { kind: 'nothing' }
@@ -44,36 +35,19 @@ export function bootstrapAdmin(
   }
   const username = env.ADMIN_USERNAME ?? 'admin'
   const passwordHash = hashSync(password)
-  const withTestUsers = testUsersAllowed(env)
-  // One transaction: a failure leaves no half-made family behind.
+  const admin: NewUser = { username, displayName: 'Admin', role: 'admin', passwordHash }
+  // One transaction: the user row and its audit entry land together or not at all.
   return db.transaction((tx) => {
-    const people: NewUser[] = [
-      { username, displayName: 'Admin', role: 'admin', passwordHash },
-      ...(withTestUsers ? TEST_USERS.map((u) => ({ ...u, passwordHash })) : []),
-    ]
-    for (const person of people) {
-      const created = createUser(tx, { kind: 'system' }, person, now)
-      if (!created.ok) throw new Error(`Cannot create user "${person.username}": ${created.error}`)
-    }
-    return {
-      kind: 'created',
-      username,
-      testUsers: withTestUsers ? TEST_USERS.map((u) => u.username) : [],
-    }
+    const created = createUser(tx, { kind: 'system' }, admin, now)
+    if (!created.ok) throw new Error(`Cannot create user "${username}": ${created.error}`)
+    return { kind: 'created', username }
   })
-}
-
-function testUsersAllowed(env: NodeJS.ProcessEnv): boolean {
-  if (env.TEST_USERS !== '1') return false
-  return env.NODE_ENV !== 'production' || env.TASKMASTER_ENV === 'preview'
 }
 
 export function describeBootstrap(outcome: BootstrapOutcome): string | null {
   switch (outcome.kind) {
     case 'created':
-      return outcome.testUsers.length > 0
-        ? `[users] admin "${outcome.username}" and test users ${outcome.testUsers.join(', ')} created`
-        : `[users] first admin "${outcome.username}" created from ADMIN_PASSWORD`
+      return `[users] first admin "${outcome.username}" created from ADMIN_PASSWORD`
     case 'no_admin':
       return '[users] no admin yet: set ADMIN_PASSWORD and restart to create one'
     case 'nothing':
