@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Dispute, DisputeError, DisputeTarget } from './disputes'
+import type { Dispute, DisputeCorrection, DisputeError, DisputeTarget } from './disputes'
 import { correctDispute, dismissDispute, isDisputed, isLocked, openDispute } from './disputes'
 import type { Person } from './parties'
 import type { Result } from './result'
@@ -24,7 +24,24 @@ function error<T>(result: Result<T, DisputeError>): DisputeError {
   return result.error
 }
 
-const SETTLEMENT: DisputeTarget = { kind: 'settlement', id: 7 }
+const SETTLEMENT: DisputeTarget = { kind: 'settlement', id: 7, periodId: 46, takerId: OLDER }
+const SETTLEMENT_REF = { kind: 'settlement', id: 7, periodId: 46, takerId: OLDER } as const
+const fix = (periodId = 46, takerId = OLDER): DisputeCorrection => ({
+  kind: 'settlement_correction',
+  correction: {
+    periodId,
+    takerId,
+    originalLevel: 'lower',
+    originalDeducted: 50,
+    correctedLevel: 'lower',
+    correctedDeducted: 45,
+    reason: 'Chyběla myčka',
+  },
+})
+const ADJ: DisputeCorrection = {
+  kind: 'adjustment',
+  adjustment: { takerId: OLDER, points: 10, reason: '+10 za koš' },
+}
 const open = (target: DisputeTarget = SETTLEMENT, by = OLDER, existing: Dispute[] = []) =>
   openDispute(family, by, target, 'Vyndat myčku chybí v součtu', existing)
 
@@ -38,7 +55,7 @@ describe('locked items (spec §5.11)', () => {
     ['confirmed completion', { kind: 'completion', id: 3, outcome: 'confirmed' }, true],
     ['rejected completion', { kind: 'completion', id: 3, outcome: 'rejected' }, true],
     ['pending completion', { kind: 'completion', id: 3, outcome: 'pending' }, false],
-    ['settlement record', { kind: 'settlement', id: 4 }, true],
+    ['settlement record', { kind: 'settlement', id: 4, periodId: 46, takerId: OLDER }, true],
     ['manual adjustment', { kind: 'adjustment', id: 5 }, true],
   ])('%s → locked: %s', (_, target, locked) => {
     expect(isLocked(target)).toBe(locked)
@@ -48,7 +65,7 @@ describe('locked items (spec §5.11)', () => {
 describe('opening a dispute', () => {
   it('a taker opens one with a reason; it records only the item reference', () => {
     expect(value(open())).toEqual({
-      item: { kind: 'settlement', id: 7 },
+      item: SETTLEMENT_REF,
       openedBy: OLDER,
       reason: 'Vyndat myčku chybí v součtu',
       status: 'open',
@@ -87,10 +104,10 @@ describe('opening a dispute', () => {
 
   it('isDisputed shows only open disputes on that item', () => {
     const first = value(open())
-    expect(isDisputed({ kind: 'settlement', id: 7 }, [first])).toBe(true)
-    expect(isDisputed({ kind: 'settlement', id: 8 }, [first])).toBe(false)
+    expect(isDisputed(SETTLEMENT_REF, [first])).toBe(true)
+    expect(isDisputed({ ...SETTLEMENT_REF, id: 8 }, [first])).toBe(false)
     const closed = value(dismissDispute(first, family, JAKUB, 'ok'))
-    expect(isDisputed({ kind: 'settlement', id: 7 }, [closed])).toBe(false)
+    expect(isDisputed(SETTLEMENT_REF, [closed])).toBe(false)
   })
 })
 
@@ -107,47 +124,56 @@ describe('resolving a dispute (admin only)', () => {
 
   it('correct a settlement by a settlement correction', () => {
     const d = value(open())
-    expect(
-      value(correctDispute(d, family, JAKUB, 'settlement_correction', 'Chyběla myčka')),
-    ).toEqual({
+    expect(value(correctDispute(d, family, JAKUB, fix(), 'Chyběla myčka'))).toEqual({
       ...d,
       status: 'corrected',
       resolvedBy: JAKUB,
-      via: 'settlement_correction',
+      correction: fix(),
       note: 'Chyběla myčka',
     })
   })
 
   it('correct any item by an adjustment', () => {
     const d = value(open({ kind: 'completion', id: 3, outcome: 'rejected' }))
-    expect(value(correctDispute(d, family, JAKUB, 'adjustment', '+10 za koš'))).toMatchObject({
+    expect(value(correctDispute(d, family, JAKUB, ADJ, '+10 za koš'))).toMatchObject({
       status: 'corrected',
-      via: 'adjustment',
+      correction: ADJ,
     })
   })
 
   it('a settlement correction only fits a disputed settlement', () => {
     const d = value(open({ kind: 'template_score', id: 2, agreement: 'agreed' }))
-    expect(error(correctDispute(d, family, JAKUB, 'settlement_correction', 'x'))).toBe(
-      'wrong_correction',
-    )
+    expect(error(correctDispute(d, family, JAKUB, fix(), 'x'))).toBe('wrong_correction')
   })
 
-  it('givers and takers cannot resolve', () => {
+  it('a settlement correction for another period or taker is refused', () => {
+    const d = value(open())
+    expect(error(correctDispute(d, family, JAKUB, fix(47), 'x'))).toBe('wrong_correction')
+    expect(error(correctDispute(d, family, JAKUB, fix(46, YOUNGER), 'x'))).toBe('wrong_correction')
+  })
+
+  it('givers, takers and unknown ids cannot resolve', () => {
     const d = value(open())
     expect(error(dismissDispute(d, family, DAD, 'ok'))).toBe('not_admin')
-    expect(error(correctDispute(d, family, OLDER, 'adjustment', 'ok'))).toBe('not_admin')
+    expect(error(correctDispute(d, family, OLDER, ADJ, 'ok'))).toBe('not_admin')
+    expect(error(dismissDispute(d, family, 99, 'ok'))).toBe('not_admin')
+    expect(error(correctDispute(d, family, 99, ADJ, 'ok'))).toBe('not_admin')
   })
 
   it('a note is required for both outcomes', () => {
     const d = value(open())
     expect(error(dismissDispute(d, family, JAKUB, ''))).toBe('note_required')
-    expect(error(correctDispute(d, family, JAKUB, 'adjustment', ' '))).toBe('note_required')
+    expect(error(correctDispute(d, family, JAKUB, ADJ, ' '))).toBe('note_required')
   })
 
-  it('a closed dispute cannot be resolved again', () => {
-    const d = value(dismissDispute(value(open()), family, JAKUB, 'ok'))
+  it.each([
+    ['dismissed', (d: Dispute) => dismissDispute(d, family, JAKUB, 'ok')],
+    ['corrected', (d: Dispute) => correctDispute(d, family, JAKUB, ADJ, 'ok')],
+  ] as const)('a %s dispute is closed: not resolvable again, not shown, no block', (_, close) => {
+    const d = value(close(value(open())))
     expect(error(dismissDispute(d, family, JAKUB, 'again'))).toBe('not_open')
-    expect(error(correctDispute(d, family, JAKUB, 'adjustment', 'again'))).toBe('not_open')
+    expect(error(correctDispute(d, family, JAKUB, ADJ, 'again'))).toBe('not_open')
+    expect(isDisputed(SETTLEMENT_REF, [d])).toBe(false)
+    expect(open(SETTLEMENT, YOUNGER, [d]).ok).toBe(true)
   })
 })

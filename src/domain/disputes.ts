@@ -3,6 +3,7 @@ import type { Person, PersonId } from './parties'
 import { findPerson, isActiveAdmin, isParty } from './parties'
 import type { Result } from './result'
 import { fail, ok } from './result'
+import type { Adjustment, PeriodId, SettlementCorrection } from './settlement'
 
 // Disputes on locked items (spec §5.11, Jakub 2026-11-16).
 //
@@ -17,6 +18,8 @@ import { fail, ok } from './result'
 //
 // Caller duty: opening, correcting and dismissing are audit actions (spec §5.10). A correction
 // writes its settlement correction / adjustment and closes the dispute in one transaction.
+// The "one open dispute per item" check (`existing`) must read in the same transaction as the
+// insert (or sit behind a partial unique index), so two taps at once can't both open one.
 
 export type DisputeError =
   | 'not_a_party'
@@ -31,22 +34,24 @@ export type DisputeError =
 export type DisputeKind =
   'task_score' | 'template_score' | 'completion' | 'settlement' | 'adjustment'
 
-/** Which record a dispute is about. `id` is that record's id. */
-export interface DisputeRef {
-  kind: DisputeKind
-  id: number
-}
+/**
+ * Which record a dispute is about. `id` is that record's id. A settlement also carries the key
+ * `settlement.ts` uses (period + taker), so a correction can be checked against it.
+ */
+export type DisputeRef =
+  | { kind: Exclude<DisputeKind, 'settlement'>; id: number }
+  | { kind: 'settlement'; id: number; periodId: PeriodId; takerId: PersonId }
 
 /** A completion record's outcome; only a confirmed or rejected one is locked. */
 export type CompletionOutcome = 'pending' | 'confirmed' | 'rejected'
 
 /** The disputed record with the state that decides whether it is locked. */
 export type DisputeTarget =
-  | (DisputeRef & { kind: 'task_score'; agreement: OneTimeAgreement['status'] })
-  | (DisputeRef & { kind: 'template_score'; agreement: TemplateAgreement['status'] })
-  | (DisputeRef & { kind: 'completion'; outcome: CompletionOutcome })
-  | (DisputeRef & { kind: 'settlement' })
-  | (DisputeRef & { kind: 'adjustment' })
+  | { kind: 'task_score'; id: number; agreement: OneTimeAgreement['status'] }
+  | { kind: 'template_score'; id: number; agreement: TemplateAgreement['status'] }
+  | { kind: 'completion'; id: number; outcome: CompletionOutcome }
+  | { kind: 'settlement'; id: number; periodId: PeriodId; takerId: PersonId }
+  | { kind: 'adjustment'; id: number }
 
 /**
  * Locked items (spec §5.11): an agreed score (task or template), a confirmed or rejected
@@ -65,8 +70,13 @@ export function isLocked(target: DisputeTarget): boolean {
   }
 }
 
-/** How the admin corrected: a settlement correction (settlements only) or an adjustment. */
-export type CorrectionKind = 'settlement_correction' | 'adjustment'
+/**
+ * What the admin wrote to correct: the result of `correctSettlement` (settlements only) or of
+ * `adjustPoints`.
+ */
+export type DisputeCorrection =
+  | { kind: 'settlement_correction'; correction: SettlementCorrection }
+  | { kind: 'adjustment'; adjustment: Adjustment }
 
 export type Dispute = {
   item: DisputeRef
@@ -74,7 +84,7 @@ export type Dispute = {
   reason: string
 } & (
   | { status: 'open' }
-  | { status: 'corrected'; resolvedBy: PersonId; via: CorrectionKind; note: string }
+  | { status: 'corrected'; resolvedBy: PersonId; correction: DisputeCorrection; note: string }
   | { status: 'dismissed'; resolvedBy: PersonId; note: string }
 )
 
@@ -108,7 +118,10 @@ export function openDispute(
   if (!isLocked(target)) return fail('not_locked')
   const why = cleanText(reason)
   if (!why) return fail('reason_required')
-  const item: DisputeRef = { kind: target.kind, id: target.id }
+  const item: DisputeRef =
+    target.kind === 'settlement'
+      ? { kind: 'settlement', id: target.id, periodId: target.periodId, takerId: target.takerId }
+      : { kind: target.kind, id: target.id }
   if (isDisputed(item, existing)) return fail('dispute_open')
   return ok({ item, openedBy: openerId, reason: why, status: 'open' })
 }
@@ -125,21 +138,25 @@ function checkAdminOnOpen(
 }
 
 /**
- * The admin closes the dispute as corrected. The correction itself (`correctSettlement` or
- * `adjustPoints`) is written in the same transaction. A settlement correction only fits a
- * disputed settlement; an adjustment fits any item.
+ * The admin closes the dispute as corrected, with the correction `correctSettlement` or
+ * `adjustPoints` returned (written in the same transaction). A settlement correction only fits
+ * the disputed settlement (same period and taker); an adjustment fits any item.
  */
 export function correctDispute(
   dispute: Dispute,
   people: readonly Person[],
   adminId: PersonId,
-  via: CorrectionKind,
+  correction: DisputeCorrection,
   note: string,
 ): Result<Dispute, DisputeError> {
   const refused = checkAdminOnOpen(dispute, people, adminId)
   if (refused) return fail(refused)
-  if (via === 'settlement_correction' && dispute.item.kind !== 'settlement') {
-    return fail('wrong_correction')
+  if (correction.kind === 'settlement_correction') {
+    const { item } = dispute
+    const c = correction.correction
+    if (item.kind !== 'settlement' || item.periodId !== c.periodId || item.takerId !== c.takerId) {
+      return fail('wrong_correction')
+    }
   }
   const text = cleanText(note)
   if (!text) return fail('note_required')
@@ -149,7 +166,7 @@ export function correctDispute(
     reason: dispute.reason,
     status: 'corrected',
     resolvedBy: adminId,
-    via,
+    correction,
     note: text,
   })
 }
