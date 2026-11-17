@@ -1,0 +1,55 @@
+/*
+ * Effect keyframes, UI doc §4. Timings are the final ones Jakub confirmed (2026-11-16,
+ * 1.7× slower than the first draft). Components add these classes only when effects are
+ * enabled (src/lib/effects.ts); the media query below is a second guard.
+ */
+
+@theme {
+  --animate-float-up: float-up 1.9s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  --animate-bar-glow: bar-glow 1.4s ease;
+
+  @keyframes float-up {
+    0% {
+      opacity: 0;
+      transform: translateY(8px) scale(0.7);
+    }
+    18% {
+      opacity: 1;
+      transform: translateY(-6px) scale(1.12);
+    }
+    70% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-56px) scale(1);
+    }
+  }
+
+  @keyframes bar-glow {
+    0% {
+      box-shadow: 0 0 0 0 transparent;
+    }
+    40% {
+      box-shadow: 0 0 0 7px color-mix(in srgb, var(--s-confirmed) 35%, transparent);
+    }
+    100% {
+      box-shadow: 0 0 0 0 transparent;
+    }
+  }
+}
+
+/* Bar growth: 1 s in the mockup. */
+@utility bar-grow {
+  transition: width 1s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-float-up,
+  .animate-bar-glow {
+    animation: none;
+  }
+  .bar-grow {
+    transition: none;
+  }
+}

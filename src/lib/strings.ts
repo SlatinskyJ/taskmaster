@@ -55,6 +55,14 @@ export const cs = {
     pending: 'čeká',
     lowerLevel: 'spodní hranice',
     upperLevel: 'horní',
+    /** Tick labels under the points bar, UI doc §3: `spodní 50`, `horní 100`. */
+    lowerTick: 'spodní',
+    upperTick: 'horní',
+  },
+  /** Effects, UI doc §4. */
+  effects: {
+    lowerReached: 'Spodní hranice!',
+    upperReached: 'Horní hranice!',
   },
 } as const
 

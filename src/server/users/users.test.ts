@@ -367,3 +367,19 @@ describe('people list for the admin console', () => {
     expect(listUsers(db).map((u) => u.username)).toEqual(['admin', 'tata', 'starsi', 'mladsi'])
   })
 })
+
+describe('people list for the admin console', () => {
+  it('returns exactly the shown fields, never the password hash', () => {
+    const { db, admin } = family()
+    const [first] = listUsers(db)
+    expect(first).toEqual({
+      id: admin.id,
+      username: 'admin',
+      displayName: 'Admin',
+      role: 'admin',
+      active: true,
+    })
+    expect(JSON.stringify(listUsers(db))).not.toContain('argon2')
+    expect(listUsers(db).map((u) => u.username)).toEqual(['admin', 'tata', 'starsi', 'mladsi'])
+  })
+})
