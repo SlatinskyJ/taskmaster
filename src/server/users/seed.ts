@@ -2,12 +2,15 @@ import { eq } from 'drizzle-orm'
 import { existsSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import type { Tx } from '~/server/audit'
+import { toIsoUtc } from '~/domain/dates'
 import { writeAudit } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { users } from '~/server/db/schema'
 import type { UserRow } from '~/server/db/schema'
 import type { FamilyConfig, FamilyUser } from './config'
 import { parseFamilyConfig } from './config'
+import { PEOPLE_CHANGE_HOOKS } from './hooks'
+import type { PeopleChangeHook } from './people'
 import { runPeopleChangeHooks } from './people'
 
 /** Where the family config lives: `$FAMILY_CONFIG`, else `$DATA_DIR/family.json`. */
@@ -47,10 +50,16 @@ function differs(row: UserRow, want: FamilyUser): boolean {
  * Applies the family config: creates missing people, updates changed ones, leaves the rest.
  * Idempotent: a second run with the same config changes nothing and writes no audit entry.
  * All in one transaction with an audit entry per change (actor: system, reason "family
- * config"); then, if anyone changed, the people-change hooks run in the same transaction.
+ * config"); then, if anyone changed, the people-change hooks (default: `PEOPLE_CHANGE_HOOKS`)
+ * run in the same transaction.
  */
-export function seedUsers(db: Db, config: FamilyConfig, now: Date = new Date()): SeedResult {
-  const at = now.toISOString()
+export function seedUsers(
+  db: Db,
+  config: FamilyConfig,
+  now: Date = new Date(),
+  hooks: readonly PeopleChangeHook[] = PEOPLE_CHANGE_HOOKS,
+): SeedResult {
+  const at = toIsoUtc(now)
   return db.transaction((tx) => {
     const result: SeedResult = { created: [], updated: [] }
     for (const want of config.users) {
@@ -78,10 +87,20 @@ export function seedUsers(db: Db, config: FamilyConfig, now: Date = new Date()):
         .where(eq(users.id, row.id))
         .returning()
         .get()
-      audit(tx, 'user.updated', row.id, auditView(row), auditView(updated), now)
+      const after = auditView(updated)
+      // hashSet alone reads true → true on a rotation; say so, or the log can't show it.
+      const hashChanged = updated.passwordHash !== row.passwordHash
+      audit(
+        tx,
+        'user.updated',
+        row.id,
+        auditView(row),
+        hashChanged ? { ...after, hashChanged } : after,
+        now,
+      )
       result.updated.push(want.username)
     }
-    if (result.created.length > 0 || result.updated.length > 0) runPeopleChangeHooks(tx)
+    if (result.created.length > 0 || result.updated.length > 0) runPeopleChangeHooks(tx, hooks)
     return result
   })
 }

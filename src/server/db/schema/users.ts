@@ -1,11 +1,14 @@
 import { sql } from 'drizzle-orm'
 import { check, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { ROLES } from '~/domain/parties'
+import type { Role } from '~/domain/parties'
 
 // Accounts (spec §3, §6). Created and changed only by the admin through the family config
 // (src/server/users), never by self-signup. Never deleted: a person who leaves is deactivated,
 // so history and the audit log keep pointing at a real row.
-export const USER_ROLES = ['taker', 'giver', 'admin'] as const
-export type UserRole = (typeof USER_ROLES)[number]
+/** The domain's roles (spec §3); one list, so the DB check and the domain never drift. */
+export const USER_ROLES = ROLES
+export type UserRole = Role
 
 export const users = sqliteTable(
   'users',

@@ -1,7 +1,8 @@
 // Who counts as "all parties" (spec §3).
 
 export type PersonId = number
-export type Role = 'taker' | 'giver' | 'admin'
+export const ROLES = ['taker', 'giver', 'admin'] as const
+export type Role = (typeof ROLES)[number]
 
 export interface Person {
   id: PersonId

@@ -1,13 +1,15 @@
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { allParties } from '~/domain'
 import { createTestDb } from '~/server/db/testing'
 import { auditLog, users } from '~/server/db/schema'
 import type { FamilyConfig } from './config'
 import { parseFamilyConfig } from './config'
-import { listPeople, onPeopleChange } from './people'
+import type { PeopleChangeHook } from './people'
+import { listPeople } from './people'
 import { familyConfigPath, seedUsers, seedUsersFromFile } from './seed'
 
 const HASH = '$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHQ$aGFzaGhhc2hoYXNo'
@@ -79,6 +81,18 @@ describe('family config parsing (spec §6)', () => {
     expect(message).toContain('users[3]: active')
     expect(message).toContain('users[4]: passwordHash')
     expect(message).not.toContain('hunter2')
+  })
+
+  it('pins the length limits and a blank name', () => {
+    const one = (u: Record<string, unknown>) => () =>
+      parseFamilyConfig(JSON.stringify({ users: [{ displayName: 'A', role: 'taker', ...u }] }))
+    expect(one({ username: 'ab' })).not.toThrow()
+    expect(one({ username: 'a'.repeat(32) })).not.toThrow()
+    expect(one({ username: 'x' })).toThrow('users[0]: username')
+    expect(one({ username: 'a'.repeat(33) })).toThrow('users[0]: username')
+    expect(one({ username: 'ok', displayName: 'N'.repeat(40) })).not.toThrow()
+    expect(one({ username: 'ok', displayName: 'N'.repeat(41) })).toThrow('users[0]: displayName')
+    expect(one({ username: 'ok', displayName: '   ' })).toThrow('users[0]: displayName')
   })
 
   it('refuses non-JSON and a wrong shape', () => {
@@ -171,6 +185,21 @@ describe('seeding people (spec §3, §6)', () => {
     expect(JSON.parse(last?.after ?? '{}')).toMatchObject({ role: 'giver' })
   })
 
+  it('a display-name change alone is applied and logged', () => {
+    const db = createTestDb()
+    seedUsers(db, family, T0)
+    const renamed: FamilyConfig = {
+      users: family.users.map((u) =>
+        u.username === 'giver' ? { ...u, displayName: 'Tatínek' } : u,
+      ),
+    }
+    expect(seedUsers(db, renamed, T1).updated).toEqual(['giver'])
+    expect(db.select().from(users).all()[1]?.displayName).toBe('Tatínek')
+    const last = db.select().from(auditLog).all().at(-1)
+    expect(JSON.parse(last?.before ?? '{}')).toMatchObject({ displayName: 'Táta' })
+    expect(JSON.parse(last?.after ?? '{}')).not.toHaveProperty('hashChanged')
+  })
+
   it('a hash in the config replaces the stored one; no hash keeps it', () => {
     const db = createTestDb()
     seedUsers(db, family, T0)
@@ -179,6 +208,10 @@ describe('seeding people (spec §3, §6)', () => {
       users: family.users.map((u) => (u.username === 'admin' ? { ...u, passwordHash: NEW } : u)),
     }
     expect(seedUsers(db, rotated, T1).updated).toEqual(['admin'])
+    const rotation = db.select().from(auditLog).all().at(-1)
+    expect(JSON.parse(rotation?.before ?? '{}')).toMatchObject({ hashSet: true })
+    expect(JSON.parse(rotation?.after ?? '{}')).toMatchObject({ hashSet: true, hashChanged: true })
+    expect(JSON.stringify(rotation)).not.toContain('argon2')
     const noHash: FamilyConfig = {
       users: family.users.map((u) => ({ ...u, passwordHash: null })),
     }
@@ -189,29 +222,39 @@ describe('seeding people (spec §3, §6)', () => {
   it('runs people-change hooks in the same transaction, only when people changed', () => {
     const db = createTestDb()
     const calls: number[] = []
-    const off = onPeopleChange((_tx, people) => calls.push(people.length))
-    try {
-      seedUsers(db, family, T0)
-      seedUsers(db, family, T1)
-      seedUsers(db, withMum(true), T1)
-      expect(calls).toEqual([4, 5])
-    } finally {
-      off()
-    }
+    const hooks: PeopleChangeHook[] = [(_tx, people) => calls.push(people.length)]
+    seedUsers(db, family, T0, hooks)
+    seedUsers(db, family, T1, hooks)
+    seedUsers(db, withMum(true), T1, hooks)
+    expect(calls).toEqual([4, 5])
   })
 
   it('a failing hook rolls the whole seed back, audit included', () => {
     const db = createTestDb()
-    const off = onPeopleChange(() => {
-      throw new Error('boom')
-    })
-    try {
-      expect(() => seedUsers(db, family, T0)).toThrow('boom')
-    } finally {
-      off()
-    }
+    const hooks: PeopleChangeHook[] = [
+      () => {
+        throw new Error('boom')
+      },
+    ]
+    expect(() => seedUsers(db, family, T0, hooks)).toThrow('boom')
     expect(db.select().from(users).all()).toHaveLength(0)
     expect(db.select().from(auditLog).all()).toHaveLength(0)
+  })
+
+  it('a failing audit write rolls the user change back', () => {
+    const db = createTestDb()
+    seedUsers(db, family, T0)
+    db.run(
+      sql`CREATE TRIGGER no_audit BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT, 'audit down'); END`,
+    )
+    expect(() => seedUsers(db, withMum(true), T1)).toThrow('audit down')
+    expect(
+      db
+        .select()
+        .from(users)
+        .all()
+        .map((u) => u.username),
+    ).not.toContain('mama')
   })
 })
 
