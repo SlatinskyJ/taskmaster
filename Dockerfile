@@ -18,10 +18,13 @@ FROM node:22-bookworm-slim AS runtime
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000 \
-    DATA_DIR=/data
+    DATA_DIR=/data \
+    MIGRATIONS_DIR=/app/drizzle
 WORKDIR /app
 # Nitro bundles the server and its traced dependencies into .output; no node_modules needed.
 COPY --from=build --chown=node:node /app/.output ./.output
+# SQL migrations, applied by the server at boot (#16). Root-owned: the app only reads them.
+COPY --from=build /app/drizzle ./drizzle
 RUN mkdir -p /data && chown node:node /data
 VOLUME ["/data"]
 USER node

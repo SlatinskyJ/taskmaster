@@ -13,7 +13,8 @@ async function restrictedImportErrors(code: string): Promise<number> {
   return result.messages.filter((m) => m.ruleId === 'no-restricted-imports').length
 }
 
-describe('domain layer import boundary', () => {
+// The first lint builds the type-aware program, which can pass the 5 s default on a busy CI runner.
+describe('domain layer import boundary', { timeout: 30_000 }, () => {
   it.each([
     "import { useState } from 'react'",
     "import { createServerFn } from '@tanstack/react-start'",
