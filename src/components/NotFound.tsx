@@ -1,12 +1,12 @@
 import { Link } from '@tanstack/react-router'
+import { cs } from '~/lib/strings'
 
-// Placeholder copy; moves to the Czech strings module with the UI shell.
 export function NotFound() {
   return (
     <main className="grid min-h-dvh place-items-center gap-4 p-4">
-      <p>Tahle stránka neexistuje.</p>
+      <p>{cs.notFound.message}</p>
       <Link to="/" className="underline">
-        Domů
+        {cs.nav.home}
       </Link>
     </main>
   )
