@@ -2,3 +2,4 @@
 export * from './agreement'
 export * from './parties'
 export * from './result'
+export * from './settlement'
