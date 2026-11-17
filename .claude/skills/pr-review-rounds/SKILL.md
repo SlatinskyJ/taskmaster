@@ -68,6 +68,7 @@ Must print `0`. A thread whose last reply is the judge's `Fixed in …` / `Accep
 
 Then:
 - Update the PR brief's review summary (rounds used, fixed, deferred issue links).
+- Update the PR body: tick every `## Checklist` box that is now true (`- [x]`), append `· all judges APPROVE · 0 open threads` to the `Review round` line, and replace any `Needs Jakub` section with his decision once he gives it. An unticked box is a claim that the item is not done; leave one unticked only if it is false, and say why on that line.
 - **Trivial PR** (no protected area touched, see `CLAUDE.md`, and the Architecture judge didn't object): merge it (squash) and tell Jakub afterwards in one line.
 - **Anything else:** tell Jakub it is ready, with the brief link. He merges.
 
