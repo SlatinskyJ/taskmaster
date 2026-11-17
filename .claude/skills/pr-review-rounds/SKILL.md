@@ -12,6 +12,7 @@ You opened the PR, so you run its review. Judges are fresh subagents, each loadi
 - CI is green on the draft PR (lint, typecheck, unit tests, build, migration check).
 - The PR brief exists (skill `pr-brief`) and its link is at the top of the PR body.
 - The PR body has the line `Review round: 0/5`.
+- The `preview` label is set if the PR changes something a user sees (screens, flows, styles, Czech text) and off otherwise (`CLAUDE.md`, PR flow step 3). With the label, the brief links the preview.
 - Mark the PR ready for review.
 
 ## 2. Pick the panel
