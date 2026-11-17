@@ -8,7 +8,7 @@ Family chore-points web app. Read `HANDOFF.md`, then the spec `docs/superpowers/
 ## Work tracking
 
 - Planned work is a GitHub issue. Epics are parent issues with sub-issues; one issue ≈ one PR. Small ad-hoc work (a quick ask, a rules or skill tweak) gets no issue: the PR is the only item.
-- Labels: `feature`, `bug`, `chore`, `follow-up` (deferred from review), `needs-jakub` (waiting on Jakub). On PRs only: `preview` (deploy a preview, see PR flow).
+- Labels: `feature`, `bug`, `chore`, `follow-up` (deferred from review), `needs-jakub` (waiting on Jakub). On PRs only: `preview` (deploy a preview, see PR flow), `merge-me` (Jakub accepts the PR; an agent may land it with skill `merge-approved-prs`).
 - Milestones are releases (e.g. `v1 trial week`). The GitHub Project board picks issues up by its own automations.
 - A PR for an issue says `Closes #<issue>`.
 - When you mention an issue or PR to Jakub (thread, brief, PR body), give its title and a GitHub link, e.g. [#61 Prepare the preview host](https://github.com/SlatinskyJ/taskmaster/issues/61). Never a bare number.
@@ -42,7 +42,7 @@ Node 22 + pnpm (`corepack enable`). `pnpm install` also installs the lefthook pr
    - Add the `preview` label when the PR changes something a user sees (screens, flows, styles, Czech text). Only labelled PRs get a preview; taking the label off removes the preview and frees its slot. Leave it off for CI, docs, rules and backend-only PRs.
 4. Write the PR brief (skill `pr-brief`) and put its link first in the PR body. Mark the PR ready.
 5. Run the review rounds (skill `pr-review-rounds`): a panel of judges (skills `judge-rules`, `judge-security`, `judge-architecture`, `judge-ux`, `judge-tests`, `judge-ops`). At most **5 rounds**.
-6. **Jakub merges** (squash). His merge is the approval. Agents merge only trivial PRs.
+6. **Jakub merges** (squash). His merge is the approval. Agents merge only trivial PRs, or PRs Jakub labelled `merge-me` when he asks an agent to land them (skill `merge-approved-prs`).
 
 PR size is a soft goal of about 400 changed lines (not counting tests, migrations and generated files). Parallel PRs are fine; `main` requires branches to be up to date, so update your branch after other merges.
 
