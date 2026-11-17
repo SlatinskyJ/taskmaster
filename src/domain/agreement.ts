@@ -28,12 +28,11 @@ export type AgreementError =
   | 'same_score'
   | 'not_a_taker'
   | 'no_bid'
+  | 'no_offer'
   | 'no_bids'
-  | 'needs_taker'
   | 'not_involved'
   | 'score_frozen'
   | 'not_changeable'
-  | 'not_lowest'
 
 /** Points must be a positive whole number. */
 export function isValidScore(score: number): boolean {
@@ -101,10 +100,16 @@ export type TemplateAgreement =
   /** Not yet agreed: creates no instances. */
   | { status: 'proposed'; proposal: ScoreProposal }
   /**
-   * Agreed at `score`. A score change in flight (`change`, its open bids) leaves `score` in force
-   * until the giver side accepts a bid (spec §5.1; `scoreChange.ts`). One change at a time.
+   * Agreed at `score`. A score change in flight (`change`: takers' open bids and the giver side's
+   * current offer) leaves `score` in force until someone accepts (spec §5.1; `scoreChange.ts`).
+   * One change at a time.
    */
-  | { status: 'agreed'; score: number; change: BidBook | null }
+  | { status: 'agreed'; score: number; change: TemplateChange | null }
+
+/** A template score change in flight: takers' open bids, and the giver side's offer (if any). */
+export interface TemplateChange extends BidBook {
+  offer: { score: number; by: PersonId } | null
+}
 
 /** A giver proposes a new template's score (only givers create templates, spec §3). */
 export function proposeTemplate(
@@ -137,10 +142,13 @@ export function resolveTemplate(
   return change === template.change ? template : { ...template, change }
 }
 
-/** A template change's bid book without bids of people who are no longer parties. */
-export function liveTemplateBook(book: BidBook, people: readonly Person[]): BidBook {
-  const party = (id: PersonId) => isActiveAs(people, id, 'giver') || isActiveAs(people, id, 'taker')
-  return pruneBook(book, party, party)
+/** A template change without bids of people who are no longer takers. */
+export function liveTemplateBook(
+  change: TemplateChange,
+  people: readonly Person[],
+): TemplateChange {
+  const book = pruneBook(change, (id) => isActiveAs(people, id, 'taker'))
+  return book === change ? change : { ...change, bids: book.bids }
 }
 
 /** A party approves a proposed template's score. Score changes go through `scoreChange.ts`. */

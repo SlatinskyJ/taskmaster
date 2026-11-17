@@ -1,4 +1,4 @@
-import type { AgreementError, ScoreProposal, TemplateAgreement } from './agreement'
+import type { AgreementError, ScoreProposal, TemplateAgreement, TemplateChange } from './agreement'
 import {
   approveScore,
   isAgreed,
@@ -7,7 +7,7 @@ import {
   proposeScore,
   pruneApprovals,
 } from './agreement'
-import { EMPTY_BOOK, bidOf, lowestBid, placeBid } from './bids'
+import { bidOf, lowestBid, placeBid } from './bids'
 import type { Item } from './lifecycle'
 import type { Person, PersonId } from './parties'
 import { isActiveAs } from './parties'
@@ -16,10 +16,12 @@ import { fail, ok } from './result'
 
 // Changing a score that is already agreed (spec §5.1, §5.2 "Changing the score…").
 //
-// Templates (Jakub 2026-11-17): a change runs like bidding. Any party bids; the first bid starts
-// the change. Each party has one open bid (re-bid replaces it). The giver side accepts the
-// lowest open bid and the template gets that score; nobody is reserved anything. The old score
-// stays in force until then, and only instances created afterwards get the new score.
+// Templates (Jakub 2026-11-17): a change runs like bidding. Takers bid; the first bid starts the
+// change; each taker has one open bid (re-bid replaces it). The giver side doesn't bid: it
+// counters with one offer to every taker (and may start a change that way). It ends only by a
+// person's action: a giver accepts the lowest taker bid, or a taker accepts the giver's offer.
+// Nobody is reserved anything. The old score stays in force until then, and only instances
+// created afterwards get the new score.
 //
 // One-time tasks:
 //   - reserved: the reserving taker and a giver must both approve the new score;
@@ -35,58 +37,68 @@ const isGiver = (people: readonly Person[], id: PersonId) => isActiveAs(people, 
 
 // ── Templates ────────────────────────────────────────────────────────────────────────────
 
-/** Any party bids a new score for an agreed template; the first bid starts the change. */
+const NO_CHANGE: TemplateChange = { bids: [], offer: null }
+
+/** A taker bids a new score for an agreed template; the first bid starts the change. */
 export function bidTemplateScore(
   template: TemplateAgreement,
   people: readonly Person[],
-  partyId: PersonId,
+  takerId: PersonId,
   score: number,
 ): Result<TemplateAgreement, AgreementError> {
   if (template.status !== 'agreed') return fail('not_agreed')
-  if (!isTaker(people, partyId) && !isGiver(people, partyId)) return fail('not_a_party')
+  if (!isTaker(people, takerId)) return fail('not_a_taker')
   if (!isValidScore(score)) return fail('invalid_score')
-  const book = template.change ? liveTemplateBook(template.change, people) : EMPTY_BOOK
-  if (score === template.score || bidOf(book, partyId)?.score === score) return fail('same_score')
-  return ok({ ...template, change: placeBid(book, partyId, score) })
+  const change = template.change ? liveTemplateBook(template.change, people) : NO_CHANGE
+  if (
+    score === template.score ||
+    score === change.offer?.score ||
+    score === bidOf(change, takerId)?.score
+  ) {
+    return fail('same_score')
+  }
+  return ok({ ...template, change: { ...change, bids: placeBid(change, takerId, score).bids } })
 }
 
-/**
- * A giver accepts the lowest open bid: the template gets that score and the change closes.
- * Score agreement needs a taker (spec §3), so the lowest bid must include a taker's; if only
- * givers hold it, a taker accepts it instead (`acceptTemplateBid`).
- */
+/** A giver counters (or starts a change) with one new offer to every taker; it replaces the last. */
+export function counterTemplateScore(
+  template: TemplateAgreement,
+  people: readonly Person[],
+  giverId: PersonId,
+  score: number,
+): Result<TemplateAgreement, AgreementError> {
+  if (template.status !== 'agreed') return fail('not_agreed')
+  if (!isGiver(people, giverId)) return fail('not_a_giver')
+  if (!isValidScore(score)) return fail('invalid_score')
+  const change = template.change ?? NO_CHANGE
+  if (score === template.score || score === change.offer?.score) return fail('same_score')
+  return ok({ ...template, change: { ...change, offer: { score, by: giverId } } })
+}
+
+/** A giver accepts the lowest taker bid: the template gets that score and the change closes. */
 export function acceptLowestTemplateBid(
   template: TemplateAgreement,
   people: readonly Person[],
   giverId: PersonId,
 ): Result<TemplateAgreement, AgreementError> {
   if (template.status !== 'agreed') return fail('not_agreed')
-  if (!template.change) return fail('no_bids')
   if (!isGiver(people, giverId)) return fail('not_a_giver')
-  const lowest = lowestBid(liveTemplateBook(template.change, people))
+  const lowest = template.change ? lowestBid(liveTemplateBook(template.change, people)) : null
   if (!lowest) return fail('no_bids')
-  if (!lowest.bidders.some((id) => isTaker(people, id))) return fail('needs_taker')
   return ok({ status: 'agreed', score: lowest.score, change: null })
 }
 
-/**
- * A taker accepts a giver's open bid: agreed at that score. Only when that bid is the lowest
- * open bid (the change always ends at the lowest, spec §5.1); used when only givers hold it.
- */
-export function acceptTemplateBid(
+/** A taker accepts the giver side's offer: the template gets that score and the change closes. */
+export function acceptTemplateOffer(
   template: TemplateAgreement,
   people: readonly Person[],
   takerId: PersonId,
-  giverId: PersonId,
 ): Result<TemplateAgreement, AgreementError> {
   if (template.status !== 'agreed') return fail('not_agreed')
-  if (!template.change) return fail('no_bids')
   if (!isTaker(people, takerId)) return fail('not_a_taker')
-  const book = liveTemplateBook(template.change, people)
-  const bid = isGiver(people, giverId) ? bidOf(book, giverId) : undefined
-  if (!bid) return fail('no_bid')
-  if (bid.score !== lowestBid(book)?.score) return fail('not_lowest')
-  return ok({ status: 'agreed', score: bid.score, change: null })
+  const offer = template.change?.offer
+  if (!offer) return fail('no_offer')
+  return ok({ status: 'agreed', score: offer.score, change: null })
 }
 
 // ── One-time tasks ───────────────────────────────────────────────────────────────────────

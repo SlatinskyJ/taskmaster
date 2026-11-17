@@ -22,9 +22,10 @@ import type { Person } from './parties'
 import type { Result } from './result'
 import {
   acceptLowestTemplateBid,
-  acceptTemplateBid,
+  acceptTemplateOffer,
   approveOneTimeScoreChange,
   bidTemplateScore,
+  counterTemplateScore,
   isOneTimeChangeAgreed,
   proposeOneTimeScoreChange,
   resolveOneTimeChange,
@@ -69,31 +70,33 @@ const tbid = (t: TemplateAgreement, who: number, score: number, people: Person[]
   value(bidTemplateScore(t, people, who, score))
 const bids = (t: TemplateAgreement) => (t.status === 'agreed' ? t.change?.bids : undefined)
 
+const tcounter = (t: TemplateAgreement, who: number, score: number, people: Person[] = family) =>
+  value(counterTemplateScore(t, people, who, score))
+
 describe('template score change runs like bidding (spec §5.1)', () => {
-  it('any party starts a change by bidding; the old score stays in force', () => {
+  it('a taker starts a change by bidding; the old score stays in force', () => {
     const t = tbid(dishwasher(), OLDER, 8)
     expect(t).toEqual({
       status: 'agreed',
       score: 5,
-      change: { bids: [{ by: OLDER, score: 8 }], counters: [] },
+      change: { bids: [{ by: OLDER, score: 8 }], offer: null },
     })
     expect(value(scoreForNewInstance(t))).toBe(5)
     expect(canCreateInstances(t)).toBe(true)
   })
 
-  it('each party one open bid, re-bid replaces it; givers bid too', () => {
+  it('each taker one open bid, re-bid replaces it; givers do not bid', () => {
     let t = tbid(dishwasher(), OLDER, 8)
     t = tbid(t, YOUNGER, 9)
     t = tbid(t, OLDER, 7)
-    t = tbid(t, DAD, 6)
     expect(bids(t)).toEqual([
       { by: YOUNGER, score: 9 },
       { by: OLDER, score: 7 },
-      { by: DAD, score: 6 },
     ])
+    expect(error(bidTemplateScore(t, family, DAD, 6))).toBe('not_a_taker')
   })
 
-  it('a giver accepts the lowest open bid: new score for new instances only', () => {
+  it('a giver accepts the lowest taker bid: new score for new instances only', () => {
     const t = tbid(tbid(dishwasher(), OLDER, 8), YOUNGER, 7)
     const before = value(scoreForNewInstance(t)) // an instance created now stores 5 and keeps it
     const agreed = value(acceptLowestTemplateBid(t, family, DAD))
@@ -111,25 +114,28 @@ describe('template score change runs like bidding (spec §5.1)', () => {
     })
   })
 
-  it("a giver's own lowest bid needs a taker: giver accepting it is refused, a taker may accept", () => {
-    const t = tbid(tbid(dishwasher(), OLDER, 8), DAD, 4)
-    expect(error(acceptLowestTemplateBid(t, family, DAD))).toBe('needs_taker')
-    expect(value(acceptTemplateBid(t, family, YOUNGER, DAD))).toEqual({
-      status: 'agreed',
-      score: 4,
-      change: null,
-    })
+  it('the giver counters the lowest bid with one offer to both; either taker accepts it', () => {
+    const t = tcounter(tbid(tbid(dishwasher(), OLDER, 9), YOUNGER, 8), DAD, 7)
+    expect(t).toMatchObject({ score: 5, change: { offer: { score: 7, by: DAD } } })
+    for (const who of [OLDER, YOUNGER]) {
+      expect(value(acceptTemplateOffer(t, family, who))).toEqual({
+        status: 'agreed',
+        score: 7,
+        change: null,
+      })
+    }
   })
 
-  it("a taker may only accept a giver's bid if it is the lowest", () => {
-    const t = tbid(tbid(dishwasher(), DAD, 9), YOUNGER, 6)
-    expect(error(acceptTemplateBid(t, family, OLDER, DAD))).toBe('not_lowest')
+  it('a giver may start a change with an offer; a new counter replaces it', () => {
+    const t = tcounter(tcounter(dishwasher(withMum), DAD, 4, withMum), MUM, 3, withMum)
+    expect(t).toMatchObject({ change: { bids: [], offer: { score: 3, by: MUM } } })
+    expect(error(bidTemplateScore(t, withMum, OLDER, 3))).toBe('same_score')
   })
 
-  it("a lower bid from someone who left doesn't block accepting a giver's bid", () => {
-    const t = tbid(tbid(dishwasher(), OLDER, 3), DAD, 4)
-    const noOlder = deactivate(family, OLDER)
-    expect(value(acceptTemplateBid(t, noOlder, YOUNGER, DAD))).toMatchObject({ score: 4 })
+  it('nothing is agreed until someone accepts: bids and offers leave the score in force', () => {
+    const t = tcounter(tbid(dishwasher(), OLDER, 7), DAD, 7)
+    expect(value(scoreForNewInstance(t))).toBe(5)
+    expect(resolveTemplate(t, family)).toBe(t)
   })
 
   it('a new bid drops bids of people who left', () => {
@@ -138,46 +144,52 @@ describe('template score change runs like bidding (spec §5.1)', () => {
     expect(bids(tbid(t, YOUNGER, 9, noOlder))).toEqual([{ by: YOUNGER, score: 9 }])
   })
 
-  it('a tie between a giver and a taker at the lowest is agreed by the giver side', () => {
-    const t = tbid(tbid(dishwasher(), OLDER, 4), DAD, 4)
-    expect(value(acceptLowestTemplateBid(t, family, DAD))).toMatchObject({ score: 4 })
-  })
-
   it('Mum may accept the lowest bid', () => {
     const t = tbid(dishwasher(withMum), YOUNGER, 6, withMum)
     expect(value(acceptLowestTemplateBid(t, withMum, MUM))).toMatchObject({ score: 6 })
   })
 
-  it('refusals: not agreed, no change, wrong actors, same or bad scores', () => {
+  it('refusals: not agreed, nothing to accept, wrong actors, same or bad scores', () => {
     const proposed = value(proposeTemplate(family, DAD, 5))
     expect(error(bidTemplateScore(proposed, family, OLDER, 8))).toBe('not_agreed')
+    expect(error(counterTemplateScore(proposed, family, DAD, 8))).toBe('not_agreed')
     expect(error(acceptLowestTemplateBid(proposed, family, DAD))).toBe('not_agreed')
-    expect(error(acceptTemplateBid(proposed, family, OLDER, DAD))).toBe('not_agreed')
+    expect(error(acceptTemplateOffer(proposed, family, OLDER))).toBe('not_agreed')
     expect(error(acceptLowestTemplateBid(dishwasher(), family, DAD))).toBe('no_bids')
-    expect(error(acceptTemplateBid(dishwasher(), family, OLDER, DAD))).toBe('no_bids')
-    expect(error(bidTemplateScore(dishwasher(), family, JAKUB, 8))).toBe('not_a_party')
+    expect(error(acceptLowestTemplateBid(tcounter(dishwasher(), DAD, 4), family, DAD))).toBe(
+      'no_bids',
+    )
+    expect(error(acceptTemplateOffer(dishwasher(), family, OLDER))).toBe('no_offer')
+    expect(error(acceptTemplateOffer(tbid(dishwasher(), OLDER, 8), family, OLDER))).toBe('no_offer')
+    expect(error(bidTemplateScore(dishwasher(), family, JAKUB, 8))).toBe('not_a_taker')
     expect(error(bidTemplateScore(dishwasher(), family, OLDER, 5))).toBe('same_score')
     expect(error(bidTemplateScore(tbid(dishwasher(), OLDER, 8), family, OLDER, 8))).toBe(
       'same_score',
     )
     for (const score of [0, 1.5, -2]) {
       expect(error(bidTemplateScore(dishwasher(), family, OLDER, score))).toBe('invalid_score')
+      expect(error(counterTemplateScore(dishwasher(), family, DAD, score))).toBe('invalid_score')
     }
-    const t = tbid(dishwasher(), OLDER, 8)
-    expect(error(acceptLowestTemplateBid(t, family, OLDER))).toBe('not_a_giver')
-    expect(error(acceptLowestTemplateBid(t, family, JAKUB))).toBe('not_a_giver')
-    expect(error(acceptTemplateBid(t, family, DAD, OLDER))).toBe('not_a_taker')
-    expect(error(acceptTemplateBid(t, family, YOUNGER, OLDER))).toBe('no_bid')
+    expect(error(counterTemplateScore(dishwasher(), family, DAD, 5))).toBe('same_score')
+    expect(error(counterTemplateScore(tcounter(dishwasher(), DAD, 4), family, DAD, 4))).toBe(
+      'same_score',
+    )
+    const t = tcounter(tbid(dishwasher(), OLDER, 8), DAD, 6)
+    for (const who of [OLDER, JAKUB]) {
+      expect(error(acceptLowestTemplateBid(t, family, who))).toBe('not_a_giver')
+      expect(error(counterTemplateScore(t, family, who, 7))).toBe('not_a_giver')
+    }
+    for (const who of [DAD, JAKUB]) {
+      expect(error(acceptTemplateOffer(t, family, who))).toBe('not_a_taker')
+    }
   })
 
-  it("people change: a deactivated party's bid drops out", () => {
+  it("people change: a deactivated taker's bid drops out", () => {
     const t = tbid(tbid(dishwasher(), OLDER, 6), YOUNGER, 8)
     const noOlder = deactivate(family, OLDER)
     expect(value(acceptLowestTemplateBid(t, noOlder, DAD))).toMatchObject({ score: 8 })
     expect(bids(resolveTemplate(t, noOlder))).toEqual([{ by: YOUNGER, score: 8 }])
     expect(resolveTemplate(t, family)).toBe(t)
-    const dadBid = tbid(dishwasher(withMum), DAD, 4, withMum)
-    expect(error(acceptTemplateBid(dadBid, deactivate(withMum, DAD), OLDER, DAD))).toBe('no_bid')
   })
 })
 
