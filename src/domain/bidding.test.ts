@@ -91,8 +91,8 @@ describe('counters (spec §5.2) [call] any active giver', () => {
   it("a giver counters a brother's bid; that becomes the giver's offer to him", () => {
     const t = proposed(value(counterOneTimeBid(bid(carWash(), OLDER, 20), family, DAD, OLDER, 26)))
     expect(t.book.counters).toEqual([{ by: DAD, to: OLDER, score: 26 }])
-    expect(currentOfferTo(t, OLDER)).toBe(26)
-    expect(currentOfferTo(t, YOUNGER)).toBe(30)
+    expect(currentOfferTo(t, family, OLDER)).toEqual({ score: 26, giverId: DAD })
+    expect(currentOfferTo(t, family, YOUNGER)).toEqual({ score: 30, giverId: DAD })
   })
 
   it('Mum may counter too, replacing the earlier counter to that brother', () => {
@@ -104,7 +104,16 @@ describe('counters (spec §5.2) [call] any active giver', () => {
 
   it('a brother may re-bid after a counter, but not the counter itself', () => {
     const t = value(counterOneTimeBid(bid(carWash(), OLDER, 20), family, DAD, OLDER, 26))
-    expect(proposed(bid(t, OLDER, 23)).book.bids).toEqual([{ by: OLDER, score: 23 }])
+    const rebid = proposed(bid(t, OLDER, 23))
+    expect(rebid.book.bids).toEqual([{ by: OLDER, score: 23 }])
+    // Dad's counter is still his current offer to Older.
+    expect(currentOfferTo(rebid, family, OLDER)).toEqual({ score: 26, giverId: DAD })
+    expect(value(acceptOneTimeOffer(rebid, family, OLDER))).toEqual({
+      status: 'reserved',
+      score: 26,
+      takerId: OLDER,
+      giverId: DAD,
+    })
     expect(error(placeOneTimeBid(t, family, OLDER, 26))).toBe('same_score')
   })
 
@@ -148,6 +157,21 @@ describe('a brother accepts the offer (spec §5.2): agreed + reserved in one ste
     )
     const r = value(acceptOneTimeOffer(t, withMum, OLDER))
     expect(r.status === 'reserved' && r.giverId).toBe(MUM)
+  })
+
+  it("a counter from a giver who has left no longer counts: the task's offer applies", () => {
+    let t = bid(carWash(withMum), OLDER, 20, withMum)
+    t = value(counterOneTimeBid(t, withMum, MUM, OLDER, 25))
+    const noMum = deactivate(withMum, MUM)
+    expect(currentOfferTo(proposed(t), noMum, OLDER)).toEqual({ score: 30, giverId: DAD })
+    expect(value(acceptOneTimeOffer(t, noMum, OLDER))).toEqual({
+      status: 'reserved',
+      score: 30,
+      takerId: OLDER,
+      giverId: DAD,
+    })
+    // And he may now bid Mum's old counter.
+    expect(proposed(bid(t, OLDER, 25, noMum)).book.bids).toEqual([{ by: OLDER, score: 25 }])
   })
 
   it('needs his own open bid; without one he approves the offer instead (path 1)', () => {

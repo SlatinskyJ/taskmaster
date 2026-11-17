@@ -13,3 +13,7 @@ ESLint enforces this. Server functions are thin wrappers that call into this fol
   agreement agreed → `markAgreed`; `releaseReservation` back to `proposed` → `reopenOneTimeOffer`.
 - Actors: lifecycle steps take an `Actor` (a person or the scheduler); agreement steps take the
   people list plus an id, because they re-check every approval against current people.
+- Bidding (`bidding.ts`) works on the one-time task's agreement. When it returns `open`, call
+  `markAgreed(item, null)`; when it returns `reserved`, call `markAgreed(item, { takerId, giverId })`.
+  `bids.ts` holds the raw bid book; it is internal (not exported from `index.ts`), so callers go
+  through the checked actions.

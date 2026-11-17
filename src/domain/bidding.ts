@@ -1,19 +1,19 @@
 import type { AgreementError, OneTimeAgreement } from './agreement'
-import { isValidScore } from './agreement'
-import { bidOf, counterTo, lowestBid, placeBid, placeCounter, pruneBook } from './bids'
+import { isValidScore, liveBook } from './agreement'
+import { bidOf, counterTo, lowestBid, placeBid, placeCounter } from './bids'
 import type { Person, PersonId } from './parties'
-import { findPerson, isActiveGiver, isActiveTaker } from './parties'
+import { isActiveAs } from './parties'
 import type { Result } from './result'
 import { fail, ok } from './result'
 
 // Bidding on a one-time task (spec §5.2 path 2; Jakub 2026-11-17).
 //
-// - Several brothers may bid at once. Each has at most one open bid; bidding again replaces it.
-// - The giver side may counter a brother's bid; that counter is the giver's offer to him.
-// - A brother may accept the giver's current offer to him (the counter, else the task's offer):
+// - Several takers may bid at once. Each has at most one open bid; bidding again replaces it.
+// - The giver side may counter a taker's bid; that counter is the giver's offer to that taker.
+// - A taker may accept the giver's current offer to them (the counter, else the task's offer):
 //   agreement + reservation in one step.
-// - The giver side accepts the **lowest** open bid: one lowest bidder → reserved to him; a tie
-//   at the lowest → open at that score, the tied brothers sort it out.
+// - The giver side accepts the **lowest** open bid: one lowest bidder → reserved to that taker; a tie
+//   at the lowest → open at that score, the tied takers sort it out.
 // - [call] Any active giver may counter or accept.
 // - On agreement every open bid and counter closes, pending approvals of the offer are dropped.
 //   Path 1 (approving the offer) and bidding race; the first to finish wins, after that every
@@ -25,22 +25,25 @@ import { fail, ok } from './result'
 
 type Proposed = Extract<OneTimeAgreement, { status: 'proposed' }>
 
-function taker(people: readonly Person[], id: PersonId): boolean {
-  const p = findPerson(people, id)
-  return p !== undefined && isActiveTaker(p)
+const taker = (people: readonly Person[], id: PersonId) => isActiveAs(people, id, 'taker')
+const giver = (people: readonly Person[], id: PersonId) => isActiveAs(people, id, 'giver')
+
+/**
+ * The giver side's current offer to this taker: a live counter to them, else the task's offer.
+ * Counters of givers who are no longer active don't count (checked live, like approvals).
+ */
+export function currentOfferTo(
+  task: Proposed,
+  people: readonly Person[],
+  takerId: PersonId,
+): { score: number; giverId: PersonId } {
+  const counter = counterTo(liveBook(task.book, people), takerId)
+  return counter
+    ? { score: counter.score, giverId: counter.by }
+    : { score: task.offer.score, giverId: task.offer.proposedBy }
 }
 
-function giver(people: readonly Person[], id: PersonId): boolean {
-  const p = findPerson(people, id)
-  return p !== undefined && isActiveGiver(p)
-}
-
-/** The giver side's current offer to this taker: its counter to him, else the task's offer. */
-export function currentOfferTo(task: Proposed, takerId: PersonId): number {
-  return counterTo(task.book, takerId)?.score ?? task.offer.score
-}
-
-/** A brother bids (or re-bids) a score different from the giver's current offer to him. */
+/** A taker bids (or re-bids) a score different from the giver's current offer to them. */
 export function placeOneTimeBid(
   task: OneTimeAgreement,
   people: readonly Person[],
@@ -50,13 +53,16 @@ export function placeOneTimeBid(
   if (task.status !== 'proposed') return fail('not_proposed')
   if (!taker(people, takerId)) return fail('not_a_taker')
   if (!isValidScore(score)) return fail('invalid_score')
-  if (score === currentOfferTo(task, takerId) || score === bidOf(task.book, takerId)?.score) {
+  if (
+    score === currentOfferTo(task, people, takerId).score ||
+    score === bidOf(task.book, takerId)?.score
+  ) {
     return fail('same_score')
   }
   return ok({ ...task, book: placeBid(task.book, takerId, score) })
 }
 
-/** A giver counters one brother's open bid with a different score. */
+/** A giver counters one taker's open bid with a different score. */
 export function counterOneTimeBid(
   task: OneTimeAgreement,
   people: readonly Person[],
@@ -76,8 +82,8 @@ export function counterOneTimeBid(
 }
 
 /**
- * A brother who has bid accepts the giver's current offer to him: agreed at that score and
- * reserved to him. The offering giver is the one who countered, else the one who offered.
+ * A taker who has bid accepts the giver side's current offer to them: agreed at that score and
+ * reserved to them. The offering giver is the one who countered, else the one who offered.
  */
 export function acceptOneTimeOffer(
   task: OneTimeAgreement,
@@ -87,15 +93,14 @@ export function acceptOneTimeOffer(
   if (task.status !== 'proposed') return fail('not_proposed')
   if (!taker(people, takerId)) return fail('not_a_taker')
   if (!bidOf(task.book, takerId)) return fail('no_bid')
-  const counter = counterTo(task.book, takerId)
-  const giverId = counter ? counter.by : task.offer.proposedBy
+  const { score, giverId } = currentOfferTo(task, people, takerId)
+  // The task's own offer from a giver who has left: another giver must counter first.
   if (!giver(people, giverId)) return fail('not_a_giver')
-  const score = counter ? counter.score : task.offer.score
   return ok({ status: 'reserved', score, takerId, giverId })
 }
 
 /**
- * A giver accepts the lowest open bid. One lowest bidder → reserved to him; a tie → open at
+ * A giver accepts the lowest open bid. One lowest bidder → reserved to that taker; a tie → open at
  * that score.
  */
 export function acceptLowestBid(
@@ -105,13 +110,8 @@ export function acceptLowestBid(
 ): Result<OneTimeAgreement, AgreementError> {
   if (task.status !== 'proposed') return fail('not_proposed')
   if (!giver(people, giverId)) return fail('not_a_giver')
-  // Only bids of brothers who are still active takers count.
-  const book = pruneBook(
-    task.book,
-    (id) => taker(people, id),
-    (id) => giver(people, id),
-  )
-  const lowest = lowestBid(book)
+  // Only bids of takers who are still active count.
+  const lowest = lowestBid(liveBook(task.book, people))
   if (!lowest) return fail('no_bids')
   const [only, ...rest] = lowest.bidders
   if (only !== undefined && rest.length === 0) {
