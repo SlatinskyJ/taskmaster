@@ -126,6 +126,12 @@ describe('template score change runs like bidding (spec §5.1)', () => {
     expect(error(acceptTemplateBid(t, family, OLDER, DAD))).toBe('not_lowest')
   })
 
+  it("a lower bid from someone who left doesn't block accepting a giver's bid", () => {
+    const t = tbid(tbid(dishwasher(), OLDER, 3), DAD, 4)
+    const noOlder = deactivate(family, OLDER)
+    expect(value(acceptTemplateBid(t, noOlder, YOUNGER, DAD))).toMatchObject({ score: 4 })
+  })
+
   it('a new bid drops bids of people who left', () => {
     const t = tbid(dishwasher(), OLDER, 8)
     const noOlder = deactivate(family, OLDER)
