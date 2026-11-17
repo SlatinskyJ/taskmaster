@@ -1,5 +1,5 @@
 import type { AgreementError, OneTimeAgreement } from './agreement'
-import { isValidScore, liveBook } from './agreement'
+import { isValidScore, liveBook, proposeScore } from './agreement'
 import { bidOf, lowestBid, placeBid } from './bids'
 import type { Person, PersonId } from './parties'
 import { isActiveAs } from './parties'
@@ -13,6 +13,7 @@ import { fail, ok } from './result'
 // - The giver side counters by changing its offer. A counter is one offer to every taker, not to
 //   one of them; it replaces the earlier offer (and its path-1 approvals).
 // - A taker who has bid accepts the current offer: agreement + reservation to him in one step.
+// - Every accept names the number the person saw; if it changed meanwhile, it is refused.
 // - A giver accepts the **lowest** open bid: one lowest bidder → reserved to that taker; a tie at
 //   the lowest → open at that score, the tied takers sort it out.
 // - Nothing is agreed automatically: every agreement is a person's action (accept or approve).
@@ -58,39 +59,46 @@ export function counterOneTimeOffer(
   if (!giver(people, giverId)) return fail('not_a_giver')
   if (!isValidScore(score)) return fail('invalid_score')
   if (score === task.offer.score) return fail('same_score')
-  return ok({ ...task, offer: { score, proposedBy: giverId, approvedBy: [giverId] } })
+  const offer = proposeScore(people, giverId, score)
+  if (!offer.ok) return offer
+  return ok({ ...task, offer: offer.value })
 }
 
 /**
  * A taker who has bid accepts the current offer: agreed at that score and reserved to him, with
  * the giver who made the offer. Without a bid, he approves the offer instead (path 1: open).
+ * `score` is the number he accepted; if the offer changed meanwhile, it is refused.
  */
 export function acceptOneTimeOffer(
   task: OneTimeAgreement,
   people: readonly Person[],
   takerId: PersonId,
+  score: number,
 ): Result<OneTimeAgreement, AgreementError> {
   if (task.status !== 'proposed') return fail('not_proposed')
   if (!taker(people, takerId)) return fail('not_a_taker')
   if (!bidOf(task.book, takerId)) return fail('no_bid')
-  const { score, proposedBy: giverId } = task.offer
+  if (score !== task.offer.score) return fail('offer_changed')
+  const giverId = task.offer.proposedBy
   if (!giver(people, giverId)) return fail('not_a_giver')
   return ok({ status: 'reserved', score, takerId, giverId })
 }
 
 /**
  * A giver accepts the lowest open bid. One lowest bidder → reserved to that taker; a tie → open at
- * that score.
+ * that score. `score` is the lowest bid the giver saw; if it moved meanwhile, it is refused.
  */
 export function acceptLowestBid(
   task: OneTimeAgreement,
   people: readonly Person[],
   giverId: PersonId,
+  score: number,
 ): Result<OneTimeAgreement, AgreementError> {
   if (task.status !== 'proposed') return fail('not_proposed')
   if (!giver(people, giverId)) return fail('not_a_giver')
   const lowest = lowestBid(liveBook(task.book, people))
   if (!lowest) return fail('no_bids')
+  if (lowest.score !== score) return fail('offer_changed')
   const [only, ...rest] = lowest.bidders
   if (only !== undefined && rest.length === 0) {
     return ok({ status: 'reserved', score: lowest.score, takerId: only, giverId })
