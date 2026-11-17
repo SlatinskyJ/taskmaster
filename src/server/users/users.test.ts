@@ -1,253 +1,262 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { verify } from '@node-rs/argon2'
 import { sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { allParties } from '~/domain'
-import { createTestDb } from '~/server/db/testing'
+import type { Actor } from '~/server/audit'
+import type { Db } from '~/server/db'
 import { auditLog, users } from '~/server/db/schema'
-import type { FamilyConfig } from './config'
-import { parseFamilyConfig } from './config'
+import { createTestDb } from '~/server/db/testing'
+import { bootstrapAdmin, describeBootstrap, MIN_ADMIN_PASSWORD } from './bootstrap'
+import type { NewUser } from './manage'
+import { createUser, setPasswordHash, updateUser } from './manage'
 import type { PeopleChangeHook } from './people'
 import { listPeople } from './people'
-import { familyConfigPath, seedUsers, seedUsersFromFile } from './seed'
 
 const HASH = '$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHQ$aGFzaGhhc2hoYXNo'
 const T0 = new Date('2026-11-17T10:00:00.000Z')
 const T1 = new Date('2026-11-18T10:00:00.000Z')
+const SYSTEM: Actor = { kind: 'system' }
+const NO_HOOKS: PeopleChangeHook[] = []
 
-const family: FamilyConfig = parseFamilyConfig(
-  JSON.stringify({
-    users: [
+function must<T>(r: { ok: true; value: T } | { ok: false; error: string }): T {
+  if (!r.ok) throw new Error(r.error)
+  return r.value
+}
+
+/** Admin + Táta + two takers, the admin created by the system (bootstrap). */
+function family(db: Db = createTestDb()) {
+  const admin = must(
+    createUser(
+      db,
+      SYSTEM,
       { username: 'admin', displayName: 'Admin', role: 'admin', passwordHash: HASH },
-      { username: 'giver', displayName: 'Táta', role: 'giver' },
-      { username: 'taker1', displayName: 'Starší', role: 'taker' },
-      { username: 'taker2', displayName: 'Mladší', role: 'taker' },
-    ],
-  }),
-)
-const withMum = (active: boolean): FamilyConfig => ({
-  users: [
-    ...family.users,
-    { username: 'mama', displayName: 'Máma', role: 'giver', active, passwordHash: null },
-  ],
-})
+      T0,
+    ),
+  )
+  const by: Actor = { kind: 'user', userId: admin.id }
+  const add = (u: NewUser) => must(createUser(db, by, u, T0))
+  const giver = add({ username: 'tata', displayName: 'Táta', role: 'giver' })
+  const older = add({ username: 'starsi', displayName: 'Starší', role: 'taker' })
+  const younger = add({ username: 'mladsi', displayName: 'Mladší', role: 'taker' })
+  return { db, admin, by, giver, older, younger }
+}
 
-describe('family config parsing (spec §6)', () => {
-  it('reads users; active defaults to true; hashes are optional', () => {
-    expect(family.users[1]).toEqual({
-      username: 'giver',
-      displayName: 'Táta',
-      role: 'giver',
-      active: true,
-      passwordHash: null,
-    })
-    expect(family.users[0]?.passwordHash).toBe(HASH)
-  })
+const auditRows = (db: Db) => db.select().from(auditLog).all()
 
-  it('the example file in the repo is valid', async () => {
-    const { readFileSync } = await import('node:fs')
-    const example = parseFamilyConfig(readFileSync('config/family.example.json', 'utf8'))
-    expect(example.users.map((u) => u.role).sort()).toEqual([
-      'admin',
-      'giver',
-      'giver',
-      'taker',
-      'taker',
-    ])
-  })
-
-  it('lists every problem at once and never accepts a plain password', () => {
-    const bad = JSON.stringify({
-      users: [
-        { username: 'Tata', displayName: 'Táta', role: 'giver' },
-        { username: 'x', displayName: '', role: 'boss' },
-        { username: 'ok', displayName: 'Ok', role: 'taker', password: 'hunter2' },
-        { username: 'ok', displayName: 'Ok', role: 'taker', active: 'yes' },
-        { username: 'h', displayName: 'H', role: 'taker', passwordHash: 'plain' },
-      ],
-    })
-    let message = ''
-    try {
-      parseFamilyConfig(bad)
-    } catch (e) {
-      message = (e as Error).message
-    }
-    expect(message).toContain('users[0]: username')
-    expect(message).toContain('users[1]: displayName')
-    expect(message).toContain('users[1]: role')
-    expect(message).toContain('users[2]: unknown field "password"')
-    expect(message).toContain('users[3]: duplicate username "ok"')
-    expect(message).toContain('users[3]: active')
-    expect(message).toContain('users[4]: passwordHash')
-    expect(message).not.toContain('hunter2')
-  })
-
-  it('pins the length limits and a blank name', () => {
-    const one = (u: Record<string, unknown>) => () =>
-      parseFamilyConfig(JSON.stringify({ users: [{ displayName: 'A', role: 'taker', ...u }] }))
-    expect(one({ username: 'ab' })).not.toThrow()
-    expect(one({ username: 'a'.repeat(32) })).not.toThrow()
-    expect(one({ username: 'x' })).toThrow('users[0]: username')
-    expect(one({ username: 'a'.repeat(33) })).toThrow('users[0]: username')
-    expect(one({ username: 'ok', displayName: 'N'.repeat(40) })).not.toThrow()
-    expect(one({ username: 'ok', displayName: 'N'.repeat(41) })).toThrow('users[0]: displayName')
-    expect(one({ username: 'ok', displayName: '   ' })).toThrow('users[0]: displayName')
-  })
-
-  it('refuses non-JSON and a wrong shape', () => {
-    expect(() => parseFamilyConfig('{')).toThrow('not valid JSON')
-    expect(() => parseFamilyConfig('[]')).toThrow('expected { "users"')
-  })
-})
-
-describe('seeding people (spec §3, §6)', () => {
-  it('creates admin, giver and takers; the admin is not a party', () => {
-    const db = createTestDb()
-    expect(seedUsers(db, family, T0)).toEqual({
-      created: ['admin', 'giver', 'taker1', 'taker2'],
-      updated: [],
-    })
-    const rows = db.select().from(users).all()
-    expect(rows.map((r) => [r.username, r.role, r.active])).toEqual([
+describe('adding people in the admin console (spec §6)', () => {
+  it('the admin adds givers and takers; the admin is not a party', () => {
+    const { db, admin, giver, older, younger } = family()
+    expect(
+      db
+        .select()
+        .from(users)
+        .all()
+        .map((u) => [u.username, u.role, u.active]),
+    ).toEqual([
       ['admin', 'admin', true],
-      ['giver', 'giver', true],
-      ['taker1', 'taker', true],
-      ['taker2', 'taker', true],
+      ['tata', 'giver', true],
+      ['starsi', 'taker', true],
+      ['mladsi', 'taker', true],
     ])
-    expect(rows[0]?.createdAt).toBe(T0.toISOString())
-    const people = listPeople(db)
-    expect(allParties(people)).toEqual(rows.filter((r) => r.role !== 'admin').map((r) => r.id))
+    expect(allParties(listPeople(db))).toEqual([giver.id, older.id, younger.id])
+    expect(admin.createdAt).toBe(T0.toISOString())
   })
 
-  it('is idempotent: a second run changes nothing and logs nothing', () => {
-    const db = createTestDb()
-    seedUsers(db, family, T0)
-    const logged = db.select().from(auditLog).all().length
-    expect(seedUsers(db, family, T1)).toEqual({ created: [], updated: [] })
-    expect(db.select().from(auditLog).all()).toHaveLength(logged)
+  it('adding Mum later is one admin action, and she joins the parties', () => {
+    const { db, by } = family()
+    const mum = must(
+      createUser(db, by, { username: 'mama', displayName: 'Máma', role: 'giver' }, T1),
+    )
+    expect(allParties(listPeople(db))).toContain(mum.id)
   })
 
-  it('adding Mum is a config change only; deactivating her drops her from the parties', () => {
-    const db = createTestDb()
-    seedUsers(db, family, T0)
-    expect(seedUsers(db, withMum(true), T1).created).toEqual(['mama'])
-    const mum = db
-      .select()
-      .from(users)
-      .all()
-      .find((u) => u.username === 'mama')
-    expect(allParties(listPeople(db))).toContain(mum?.id)
-    expect(seedUsers(db, withMum(false), T1).updated).toEqual(['mama'])
-    expect(allParties(listPeople(db))).not.toContain(mum?.id)
-  })
-
-  it('people missing from the config are left as they are', () => {
-    const db = createTestDb()
-    seedUsers(db, withMum(true), T0)
-    seedUsers(db, family, T1)
-    expect(db.select().from(users).all()).toHaveLength(5)
-  })
-
-  it('every change is audit-logged without the hash', () => {
-    const db = createTestDb()
-    seedUsers(db, family, T0)
-    const entries = db.select().from(auditLog).all()
-    expect(entries).toHaveLength(4)
-    const admin = entries[0]
-    expect(admin).toMatchObject({
-      actorKind: 'system',
+  it('every change is audit-logged by its actor, never with the hash', () => {
+    const { db, admin, giver } = family()
+    const [first, second] = auditRows(db)
+    expect(first).toMatchObject({
       action: 'user.created',
-      entityType: 'user',
-      reason: 'family config',
-      at: T0.toISOString(),
+      actorKind: 'system',
+      entityId: String(admin.id),
     })
-    expect(JSON.parse(admin?.after ?? '{}')).toEqual({
+    expect(second).toMatchObject({
+      action: 'user.created',
+      actorKind: 'user',
+      actorUserId: admin.id,
+      entityId: String(giver.id),
+    })
+    expect(JSON.parse(first?.after ?? '{}')).toEqual({
       username: 'admin',
       displayName: 'Admin',
       role: 'admin',
       active: true,
       hashSet: true,
     })
-    expect(JSON.stringify(entries)).not.toContain('argon2')
+    expect(JSON.stringify(auditRows(db))).not.toContain('argon2')
   })
 
-  it('a role change is logged with before and after', () => {
-    const db = createTestDb()
-    seedUsers(db, family, T0)
-    const changed: FamilyConfig = {
-      users: family.users.map((u) => (u.username === 'taker1' ? { ...u, role: 'giver' } : u)),
-    }
-    seedUsers(db, changed, T1)
-    const last = db.select().from(auditLog).all().at(-1)
-    expect(last?.action).toBe('user.updated')
-    expect(JSON.parse(last?.before ?? '{}')).toMatchObject({ role: 'taker' })
-    expect(JSON.parse(last?.after ?? '{}')).toMatchObject({ role: 'giver' })
+  it('refuses bad input before touching the DB', () => {
+    const { db, by } = family()
+    const before = auditRows(db).length
+    const add = (u: Partial<NewUser>) =>
+      createUser(db, by, { username: 'ok', displayName: 'Ok', role: 'taker', ...u }, T1)
+    expect(add({ username: 'Tata' })).toEqual({ ok: false, error: 'invalid_username' })
+    expect(add({ username: 'x' })).toEqual({ ok: false, error: 'invalid_username' })
+    expect(add({ username: 'a'.repeat(33) })).toEqual({ ok: false, error: 'invalid_username' })
+    expect(add({ displayName: '   ' })).toEqual({ ok: false, error: 'invalid_name' })
+    expect(add({ displayName: 'N'.repeat(41) })).toEqual({ ok: false, error: 'invalid_name' })
+    expect(add({ role: 'boss' as NewUser['role'] })).toEqual({ ok: false, error: 'invalid_role' })
+    expect(add({ passwordHash: 'hunter2' })).toEqual({ ok: false, error: 'invalid_hash' })
+    expect(add({ username: 'tata' })).toEqual({ ok: false, error: 'username_taken' })
+    expect(auditRows(db)).toHaveLength(before)
+    expect(add({ username: 'a'.repeat(32), displayName: 'N'.repeat(40) }).ok).toBe(true)
   })
 
-  it('a display-name change alone is applied and logged', () => {
-    const db = createTestDb()
-    seedUsers(db, family, T0)
-    const renamed: FamilyConfig = {
-      users: family.users.map((u) =>
-        u.username === 'giver' ? { ...u, displayName: 'Tatínek' } : u,
-      ),
-    }
-    expect(seedUsers(db, renamed, T1).updated).toEqual(['giver'])
-    expect(db.select().from(users).all()[1]?.displayName).toBe('Tatínek')
-    const last = db.select().from(auditLog).all().at(-1)
-    expect(JSON.parse(last?.before ?? '{}')).toMatchObject({ displayName: 'Táta' })
-    expect(JSON.parse(last?.after ?? '{}')).not.toHaveProperty('hashChanged')
+  it('only an active admin (or the system) may manage people', () => {
+    const { db, by, giver, older } = family()
+    const asGiver: Actor = { kind: 'user', userId: giver.id }
+    const u = { username: 'host', displayName: 'Host', role: 'taker' } as const
+    expect(createUser(db, asGiver, u, T1)).toEqual({ ok: false, error: 'not_admin' })
+    expect(createUser(db, { kind: 'anonymous' }, u, T1)).toEqual({ ok: false, error: 'not_admin' })
+    expect(updateUser(db, asGiver, older.id, { active: false }, T1)).toEqual({
+      ok: false,
+      error: 'not_admin',
+    })
+    expect(setPasswordHash(db, asGiver, older.id, HASH, T1)).toEqual({
+      ok: false,
+      error: 'not_admin',
+    })
+    // A second admin, deactivated, loses the right.
+    const second = must(
+      createUser(db, by, { username: 'admin2', displayName: 'A2', role: 'admin' }, T1),
+    )
+    must(updateUser(db, by, second.id, { active: false }, T1))
+    expect(createUser(db, { kind: 'user', userId: second.id }, u, T1)).toEqual({
+      ok: false,
+      error: 'not_admin',
+    })
+  })
+})
+
+describe('changing people (spec §3, §6)', () => {
+  it('rename, role change, deactivate and reactivate, each logged with before and after', () => {
+    const { db, by, older } = family()
+    must(updateUser(db, by, older.id, { displayName: 'Honza' }, T1))
+    must(updateUser(db, by, older.id, { role: 'giver' }, T1))
+    must(updateUser(db, by, older.id, { active: false }, T1))
+    expect(allParties(listPeople(db))).not.toContain(older.id)
+    must(updateUser(db, by, older.id, { active: true }, T1))
+    const log = auditRows(db).slice(-4)
+    expect(log.map((r) => r.action)).toEqual(Array(4).fill('user.updated'))
+    expect(JSON.parse(log[0]?.before ?? '{}')).toMatchObject({ displayName: 'Starší' })
+    expect(JSON.parse(log[0]?.after ?? '{}')).toMatchObject({ displayName: 'Honza' })
+    expect(JSON.parse(log[1]?.after ?? '{}')).toMatchObject({ role: 'giver' })
+    expect(JSON.parse(log[2]?.after ?? '{}')).toMatchObject({ active: false })
+    expect(JSON.parse(log[3]?.after ?? '{}')).toMatchObject({ active: true })
+    expect(
+      db
+        .select()
+        .from(users)
+        .all()
+        .find((u) => u.id === older.id)?.updatedAt,
+    ).toBe(T1.toISOString())
   })
 
-  it('a hash in the config replaces the stored one; no hash keeps it', () => {
-    const db = createTestDb()
-    seedUsers(db, family, T0)
-    const NEW = `${HASH}x`
-    const rotated: FamilyConfig = {
-      users: family.users.map((u) => (u.username === 'admin' ? { ...u, passwordHash: NEW } : u)),
-    }
-    expect(seedUsers(db, rotated, T1).updated).toEqual(['admin'])
-    const rotation = db.select().from(auditLog).all().at(-1)
-    expect(JSON.parse(rotation?.before ?? '{}')).toMatchObject({ hashSet: true })
-    expect(JSON.parse(rotation?.after ?? '{}')).toMatchObject({ hashSet: true, hashChanged: true })
-    expect(JSON.stringify(rotation)).not.toContain('argon2')
-    const noHash: FamilyConfig = {
-      users: family.users.map((u) => ({ ...u, passwordHash: null })),
-    }
-    expect(seedUsers(db, noHash, T1).updated).toEqual([])
-    expect(db.select().from(users).all()[0]?.passwordHash).toBe(NEW)
+  it('a change to nothing new writes nothing', () => {
+    const { db, by, older } = family()
+    const before = auditRows(db).length
+    expect(
+      must(updateUser(db, by, older.id, { displayName: 'Starší', role: 'taker' }, T1)),
+    ).toEqual(older)
+    expect(auditRows(db)).toHaveLength(before)
   })
 
-  it('runs people-change hooks in the same transaction, only when people changed', () => {
-    const db = createTestDb()
+  it('unknown user and bad values are refused', () => {
+    const { db, by, older } = family()
+    expect(updateUser(db, by, 999, { active: false }, T1)).toEqual({
+      ok: false,
+      error: 'not_found',
+    })
+    expect(updateUser(db, by, older.id, { displayName: '' }, T1)).toEqual({
+      ok: false,
+      error: 'invalid_name',
+    })
+    expect(setPasswordHash(db, by, 999, HASH, T1)).toEqual({ ok: false, error: 'not_found' })
+  })
+
+  it('the last active admin cannot be deactivated or demoted', () => {
+    const { db, by, admin } = family()
+    expect(updateUser(db, by, admin.id, { active: false }, T1)).toEqual({
+      ok: false,
+      error: 'last_admin',
+    })
+    expect(updateUser(db, by, admin.id, { role: 'giver' }, T1)).toEqual({
+      ok: false,
+      error: 'last_admin',
+    })
+    must(createUser(db, by, { username: 'admin2', displayName: 'A2', role: 'admin' }, T1))
+    expect(updateUser(db, by, admin.id, { active: false }, T1).ok).toBe(true)
+  })
+
+  it('a password reset replaces the hash and the log says so without showing it', () => {
+    const { db, by, older } = family()
+    must(setPasswordHash(db, by, older.id, HASH, T1))
+    expect(
+      db
+        .select()
+        .from(users)
+        .all()
+        .find((u) => u.id === older.id)?.passwordHash,
+    ).toBe(HASH)
+    const row = auditRows(db).at(-1)
+    expect(JSON.parse(row?.before ?? '{}')).toMatchObject({ hashSet: false })
+    expect(JSON.parse(row?.after ?? '{}')).toMatchObject({ hashSet: true, hashChanged: true })
+    expect(JSON.stringify(row)).not.toContain('argon2')
+    expect(setPasswordHash(db, by, older.id, 'plain', T1)).toEqual({
+      ok: false,
+      error: 'invalid_hash',
+    })
+  })
+})
+
+describe('people-change hooks (spec §3)', () => {
+  it('run in the same transaction when someone is added or takes part differently, not on a rename', () => {
+    const { db, by, older } = family()
     const calls: number[] = []
     const hooks: PeopleChangeHook[] = [(_tx, people) => calls.push(people.length)]
-    seedUsers(db, family, T0, hooks)
-    seedUsers(db, family, T1, hooks)
-    seedUsers(db, withMum(true), T1, hooks)
-    expect(calls).toEqual([4, 5])
+    must(createUser(db, by, { username: 'mama', displayName: 'Máma', role: 'giver' }, T1, hooks))
+    must(updateUser(db, by, older.id, { displayName: 'Honza' }, T1, hooks))
+    must(updateUser(db, by, older.id, { active: false }, T1, hooks))
+    must(updateUser(db, by, older.id, { role: 'giver' }, T1, hooks))
+    expect(calls).toEqual([5, 5, 5])
   })
 
-  it('a failing hook rolls the whole seed back, audit included', () => {
-    const db = createTestDb()
-    const hooks: PeopleChangeHook[] = [
+  it('a failing hook rolls the change back, audit included', () => {
+    const { db, by, older } = family()
+    const before = auditRows(db).length
+    const boom: PeopleChangeHook[] = [
       () => {
         throw new Error('boom')
       },
     ]
-    expect(() => seedUsers(db, family, T0, hooks)).toThrow('boom')
-    expect(db.select().from(users).all()).toHaveLength(0)
-    expect(db.select().from(auditLog).all()).toHaveLength(0)
+    expect(() => updateUser(db, by, older.id, { active: false }, T1, boom)).toThrow('boom')
+    expect(
+      db
+        .select()
+        .from(users)
+        .all()
+        .find((u) => u.id === older.id)?.active,
+    ).toBe(true)
+    expect(auditRows(db)).toHaveLength(before)
   })
 
   it('a failing audit write rolls the user change back', () => {
-    const db = createTestDb()
-    seedUsers(db, family, T0)
+    const { db, by } = family()
     db.run(
       sql`CREATE TRIGGER no_audit BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT, 'audit down'); END`,
     )
-    expect(() => seedUsers(db, withMum(true), T1)).toThrow('audit down')
+    expect(() =>
+      createUser(db, by, { username: 'mama', displayName: 'Máma', role: 'giver' }, T1, NO_HOOKS),
+    ).toThrow('audit down')
     expect(
       db
         .select()
@@ -258,29 +267,113 @@ describe('seeding people (spec §3, §6)', () => {
   })
 })
 
-describe('boot: config file', () => {
-  it('path: FAMILY_CONFIG, else DATA_DIR/family.json', () => {
-    expect(familyConfigPath({ FAMILY_CONFIG: '/etc/tm/family.json' })).toBe('/etc/tm/family.json')
-    expect(familyConfigPath({ DATA_DIR: '/data' })).toBe('/data/family.json')
+describe('first admin from ADMIN_PASSWORD (spec §6)', () => {
+  const PASSWORD = 'correct horse battery'
+
+  it('creates the admin on an empty DB with a real argon2id hash', async () => {
+    const db = createTestDb()
+    const outcome = bootstrapAdmin(db, { ADMIN_PASSWORD: PASSWORD, ADMIN_USERNAME: 'jakub' }, T0)
+    expect(outcome).toEqual({ kind: 'created', username: 'jakub', testUsers: [] })
+    const [row] = db.select().from(users).all()
+    expect(row).toMatchObject({ username: 'jakub', role: 'admin', active: true })
+    expect(row?.passwordHash?.startsWith('$argon2id$')).toBe(true)
+    await expect(verify(row?.passwordHash ?? '', PASSWORD)).resolves.toBe(true)
+    expect(auditRows(db)[0]).toMatchObject({ action: 'user.created', actorKind: 'system' })
+    expect(describeBootstrap(outcome)).not.toContain(PASSWORD)
   })
 
-  it('a missing file seeds nothing; a present one is applied', () => {
+  it('username defaults to "admin"', () => {
     const db = createTestDb()
-    const dir = mkdtempSync(join(tmpdir(), 'tm-family-'))
-    const file = join(dir, 'family.json')
-    expect(seedUsersFromFile(db, file)).toBeNull()
-    writeFileSync(
-      file,
-      JSON.stringify({ users: [{ username: 'giver', displayName: 'Táta', role: 'giver' }] }),
+    expect(bootstrapAdmin(db, { ADMIN_PASSWORD: PASSWORD }, T0)).toEqual({
+      kind: 'created',
+      username: 'admin',
+      testUsers: [],
+    })
+  })
+
+  it('does nothing once an admin exists, and asks to remove a leftover variable', () => {
+    const { db } = family()
+    const before = auditRows(db).length
+    expect(bootstrapAdmin(db, { ADMIN_PASSWORD: PASSWORD }, T1)).toEqual({ kind: 'remove_env' })
+    expect(bootstrapAdmin(db, {}, T1)).toEqual({ kind: 'nothing' })
+    expect(
+      db
+        .select()
+        .from(users)
+        .all()
+        .filter((u) => u.role === 'admin'),
+    ).toHaveLength(1)
+    expect(auditRows(db)).toHaveLength(before)
+    expect(describeBootstrap({ kind: 'remove_env' })).toContain('remove')
+    expect(describeBootstrap({ kind: 'nothing' })).toBeNull()
+  })
+
+  it('no admin and no variable: warns, creates nothing', () => {
+    const db = createTestDb()
+    expect(bootstrapAdmin(db, {}, T0)).toEqual({ kind: 'no_admin' })
+    expect(db.select().from(users).all()).toHaveLength(0)
+    expect(describeBootstrap({ kind: 'no_admin' })).toContain('ADMIN_PASSWORD')
+  })
+
+  it('a short password or bad username stops boot without echoing the password', () => {
+    const short = 'x'.repeat(MIN_ADMIN_PASSWORD - 1)
+    const db = createTestDb()
+    expect(() => bootstrapAdmin(db, { ADMIN_PASSWORD: short }, T0)).toThrow(/at least 12/)
+    expect(() => bootstrapAdmin(db, { ADMIN_PASSWORD: short }, T0)).not.toThrow(short)
+    expect(() =>
+      bootstrapAdmin(db, { ADMIN_PASSWORD: PASSWORD, ADMIN_USERNAME: 'Jakub' }, T0),
+    ).toThrow('invalid_username')
+    expect(db.select().from(users).all()).toHaveLength(0)
+    expect(bootstrapAdmin(db, { ADMIN_PASSWORD: 'x'.repeat(MIN_ADMIN_PASSWORD) }, T0).kind).toBe(
+      'created',
     )
-    expect(seedUsersFromFile(db, file)).toEqual({ created: ['giver'], updated: [] })
   })
 
-  it('an invalid file throws, so the server does not start on it', () => {
+  it('TEST_USERS=1 adds Táta, Starší and Mladší with the same password, in dev or preview', async () => {
     const db = createTestDb()
-    const dir = mkdtempSync(join(tmpdir(), 'tm-family-'))
-    const file = join(dir, 'family.json')
-    writeFileSync(file, '{"users":[{"username":"X"}]}')
-    expect(() => seedUsersFromFile(db, file)).toThrow('Family config')
+    const outcome = bootstrapAdmin(db, { ADMIN_PASSWORD: PASSWORD, TEST_USERS: '1' }, T0)
+    expect(outcome).toEqual({
+      kind: 'created',
+      username: 'admin',
+      testUsers: ['tata', 'starsi', 'mladsi'],
+    })
+    const rows = db.select().from(users).all()
+    expect(rows.map((u) => [u.username, u.role])).toEqual([
+      ['admin', 'admin'],
+      ['tata', 'giver'],
+      ['starsi', 'taker'],
+      ['mladsi', 'taker'],
+    ])
+    expect(await verify(rows[3]?.passwordHash ?? '', PASSWORD)).toBe(true)
+    expect(describeBootstrap(outcome)).toContain('mladsi')
+    const preview = createTestDb()
+    const env = {
+      ADMIN_PASSWORD: PASSWORD,
+      TEST_USERS: '1',
+      NODE_ENV: 'production',
+      TASKMASTER_ENV: 'preview',
+    }
+    expect(bootstrapAdmin(preview, env, T0)).toMatchObject({
+      testUsers: ['tata', 'starsi', 'mladsi'],
+    })
+  })
+
+  it('TEST_USERS is ignored in production', () => {
+    const db = createTestDb()
+    const env = { ADMIN_PASSWORD: PASSWORD, TEST_USERS: '1', NODE_ENV: 'production' }
+    expect(bootstrapAdmin(db, env, T0)).toEqual({
+      kind: 'created',
+      username: 'admin',
+      testUsers: [],
+    })
+    expect(db.select().from(users).all()).toHaveLength(1)
+  })
+
+  it('a failing test user rolls the admin back too', () => {
+    const db = createTestDb()
+    const env = { ADMIN_PASSWORD: PASSWORD, ADMIN_USERNAME: 'tata', TEST_USERS: '1' }
+    expect(() => bootstrapAdmin(db, env, T0)).toThrow('username_taken')
+    expect(db.select().from(users).all()).toHaveLength(0)
+    expect(auditRows(db)).toHaveLength(0)
   })
 })
