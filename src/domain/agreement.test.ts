@@ -43,15 +43,6 @@ function value<T>(result: Result<T, string>): T {
   return result.value
 }
 
-/** Applies approvals in order, failing the test on any error. */
-function approveAll<T>(
-  start: T,
-  ids: number[],
-  approve: (t: T, id: number) => Result<T, string>,
-): T {
-  return ids.reduce((t, id) => value(approve(t, id)), start)
-}
-
 describe('parties (spec §3)', () => {
   it('parties = active givers + active takers; the admin never counts', () => {
     expect(allParties(family)).toEqual([DAD, OLDER, YOUNGER])
@@ -150,8 +141,6 @@ describe('score agreement: one giver + one taker (spec §3)', () => {
 
 describe('recurring templates (spec §5.1)', () => {
   const proposed = (): TemplateAgreement => value(proposeTemplate(family, DAD, 5))
-  const approve = (people: Person[]) => (t: TemplateAgreement, id: number) =>
-    approveTemplate(t, people, id)
   const agreed = (): TemplateAgreement => value(approveTemplate(proposed(), family, OLDER))
 
   it('only an active giver creates a template', () => {
@@ -276,10 +265,6 @@ describe('recurring templates (spec §5.1)', () => {
       const c = value(proposeTemplateScoreChange(agreed(), family, OLDER, 8))
       expect(resolveTemplate(c, family)).toBe(c)
     })
-
-    it('approve helper works across several approvals', () => {
-      expect(approveAll(proposed(), [YOUNGER], approve(family)).status).toBe('agreed')
-    })
   })
 })
 
@@ -311,6 +296,11 @@ describe('one-time tasks, path 1: score agreement (spec §5.2)', () => {
   it('refuses the admin and double approvals', () => {
     expect(approve(proposed(), JAKUB)).toEqual({ ok: false, error: 'not_a_party' })
     expect(approve(proposed(), DAD)).toEqual({ ok: false, error: 'already_approved' })
+  })
+
+  it('two givers without a taker stay unagreed', () => {
+    const t = value(createOneTimeTask(withMum, DAD, 20))
+    expect(value(approveOneTimeOffer(t, withMum, MUM)).status).toBe('proposed')
   })
 
   it('a second giver (Mum) is not needed', () => {
