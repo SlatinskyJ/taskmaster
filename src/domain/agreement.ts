@@ -1,5 +1,7 @@
 import type { Person, PersonId } from './parties'
-import { allParties, findPerson, isActiveGiver, isParty } from './parties'
+import type { BidBook } from './bids'
+import { EMPTY_BOOK, pruneBook } from './bids'
+import { allParties, findPerson, isActiveAs, isActiveGiver, isParty } from './parties'
 import type { Result } from './result'
 import { fail, ok } from './result'
 
@@ -21,10 +23,17 @@ export type AgreementError =
   | 'not_a_giver'
   | 'already_approved'
   | 'not_proposed'
+  | 'offer_changed'
   | 'not_agreed'
   | 'change_pending'
-  | 'no_change_pending'
   | 'same_score'
+  | 'not_a_taker'
+  | 'no_bid'
+  | 'no_offer'
+  | 'no_bids'
+  | 'not_involved'
+  | 'score_frozen'
+  | 'not_changeable'
 
 /** Points must be a positive whole number. */
 export function isValidScore(score: number): boolean {
@@ -91,8 +100,17 @@ export function isAgreed(proposal: ScoreProposal, people: readonly Person[]): bo
 export type TemplateAgreement =
   /** Not yet agreed: creates no instances. */
   | { status: 'proposed'; proposal: ScoreProposal }
-  /** Agreed at `score`. A score change in flight leaves `score` in force until it is agreed. */
-  | { status: 'agreed'; score: number; pendingChange: ScoreProposal | null }
+  /**
+   * Agreed at `score`. A score change in flight (`change`: takers' open bids and the giver side's
+   * current offer) leaves `score` in force until someone accepts (spec §5.1; `scoreChange.ts`).
+   * One change at a time.
+   */
+  | { status: 'agreed'; score: number; change: TemplateChange | null }
+
+/** A template score change in flight: takers' open bids, and the giver side's offer (if any). */
+export interface TemplateChange extends BidBook {
+  offer: { score: number; proposedBy: PersonId } | null
+}
 
 /** A giver proposes a new template's score (only givers create templates, spec §3). */
 export function proposeTemplate(
@@ -108,9 +126,8 @@ export function proposeTemplate(
 }
 
 /**
- * Promotes whatever is now fully approved: a proposed template becomes agreed, a pending
- * score change replaces the score, after dropping approvals of people who are no longer
- * parties. Call after any approval and on every proposal whenever people change.
+ * Drops approvals and change bids of people who are no longer parties, and promotes a proposed
+ * template that is now fully approved. Call after any approval and whenever people change.
  */
 export function resolveTemplate(
   template: TemplateAgreement,
@@ -118,52 +135,33 @@ export function resolveTemplate(
 ): TemplateAgreement {
   if (template.status === 'proposed') {
     const proposal = pruneApprovals(template.proposal, people)
-    if (isAgreed(proposal, people)) {
-      return { status: 'agreed', score: proposal.score, pendingChange: null }
-    }
+    if (isAgreed(proposal, people)) return { status: 'agreed', score: proposal.score, change: null }
     return proposal === template.proposal ? template : { status: 'proposed', proposal }
   }
-  if (!template.pendingChange) return template
-  const change = pruneApprovals(template.pendingChange, people)
-  if (isAgreed(change, people)) {
-    return { status: 'agreed', score: change.score, pendingChange: null }
-  }
-  return change === template.pendingChange ? template : { ...template, pendingChange: change }
+  if (!template.change) return template
+  const change = liveTemplateBook(template.change, people)
+  return change === template.change ? template : { ...template, change }
 }
 
-/** A party approves the template's proposed score, or its pending score change. */
+/** A template change without bids of people who are no longer takers. */
+export function liveTemplateBook(
+  change: TemplateChange,
+  people: readonly Person[],
+): TemplateChange {
+  const book = pruneBook(change, (id) => isActiveAs(people, id, 'taker'))
+  return book === change ? change : { ...change, bids: book.bids }
+}
+
+/** A party approves a proposed template's score. Score changes go through `scoreChange.ts`. */
 export function approveTemplate(
   template: TemplateAgreement,
   people: readonly Person[],
   approverId: PersonId,
 ): Result<TemplateAgreement, AgreementError> {
-  const proposal = template.status === 'proposed' ? template.proposal : template.pendingChange
-  if (!proposal) return fail('no_change_pending')
-  const approved = approveScore(proposal, people, approverId)
+  if (template.status !== 'proposed') return fail('not_proposed')
+  const approved = approveScore(template.proposal, people, approverId)
   if (!approved.ok) return approved
-  const next: TemplateAgreement =
-    template.status === 'proposed'
-      ? { status: 'proposed', proposal: approved.value }
-      : { ...template, pendingChange: approved.value }
-  return ok(resolveTemplate(next, people))
-}
-
-/**
- * Any party proposes a new score for an agreed template. Needs a giver + a taker again; the
- * old score stays in force until then (spec §5.1). One change at a time.
- */
-export function proposeTemplateScoreChange(
-  template: TemplateAgreement,
-  people: readonly Person[],
-  proposerId: PersonId,
-  score: number,
-): Result<TemplateAgreement, AgreementError> {
-  if (template.status !== 'agreed') return fail('not_agreed')
-  if (template.pendingChange) return fail('change_pending')
-  if (score === template.score) return fail('same_score')
-  const proposal = proposeScore(people, proposerId, score)
-  if (!proposal.ok) return proposal
-  return ok(resolveTemplate({ ...template, pendingChange: proposal.value }, people))
+  return ok(resolveTemplate({ status: 'proposed', proposal: approved.value }, people))
 }
 
 /** Instances can only come from an agreed template (spec §5.1). */
@@ -173,21 +171,26 @@ export function canCreateInstances(template: TemplateAgreement): boolean {
 
 /**
  * The score a new instance gets: the template's agreed score at the moment of creation.
- * [call] A later score change applies only to instances created after it is agreed; existing
- * instances keep the score they were created with (spec §4, §5.1).
+ * A later score change applies only to instances created after it is agreed; existing
+ * instances keep the score they were created with (spec §4, §5.1; Jakub 2026-11-17).
  */
 export function scoreForNewInstance(template: TemplateAgreement): Result<number, AgreementError> {
   return template.status === 'agreed' ? ok(template.score) : fail('not_agreed')
 }
 
-// ── One-time tasks, path 1: score agreement (spec §5.2) ───────────────────────────────
-// Path 2 (bidding) and the race between the two paths arrive with #20.
+// ── One-time tasks (spec §5.2) ──────────────────────────────────────────────────────────
+// Two paths run in parallel; the first to finish wins:
+//   1. score agreement: a taker approves the giver's offer → open (any taker may do it);
+//   2. bidding (`bidding.ts`): a taker and the giver side agree on a number → reserved to that taker.
+// Once a task is open or reserved, every action of either path is refused (`not_proposed`).
 
 export type OneTimeAgreement =
-  /** The giver's offer, waiting for a taker's approval. */
-  | { status: 'proposed'; offer: ScoreProposal }
+  /** Negotiating: the giver's offer waiting for a taker's approval, and any open bids. */
+  | { status: 'proposed'; offer: ScoreProposal; book: BidBook }
   /** A giver and a taker approved: in the queue at `score`, any taker may reserve or do it. */
   | { status: 'open'; score: number }
+  /** Agreed by bidding between `takerId` and `giverId`: reserved to that taker (spec §5.2 path 2). */
+  | { status: 'reserved'; score: number; takerId: PersonId; giverId: PersonId }
 
 /** A giver creates a one-time task with an initial offer. */
 export function createOneTimeTask(
@@ -199,10 +202,18 @@ export function createOneTimeTask(
   if (!giver || !isActiveGiver(giver)) return fail('not_a_giver')
   const offer = proposeScore(people, giverId, score)
   if (!offer.ok) return offer
-  return ok(resolveOneTime({ status: 'proposed', offer: offer.value }, people))
+  return ok(resolveOneTime({ status: 'proposed', offer: offer.value, book: EMPTY_BOOK }, people))
 }
 
-/** Drops non-party approvals and opens a fully approved offer. Call whenever people change. */
+/** The bid book without bids of people who no longer take part (spec §3, live). */
+export function liveBook(book: BidBook, people: readonly Person[]): BidBook {
+  return pruneBook(book, (id) => isActiveAs(people, id, 'taker'))
+}
+
+/**
+ * Drops approvals and bids of people who no longer count, and opens a fully approved
+ * offer. Call whenever people change.
+ */
 export function resolveOneTime(
   task: OneTimeAgreement,
   people: readonly Person[],
@@ -210,7 +221,8 @@ export function resolveOneTime(
   if (task.status !== 'proposed') return task
   const offer = pruneApprovals(task.offer, people)
   if (isAgreed(offer, people)) return { status: 'open', score: offer.score }
-  return offer === task.offer ? task : { status: 'proposed', offer }
+  const book = liveBook(task.book, people)
+  return offer === task.offer && book === task.book ? task : { ...task, offer, book }
 }
 
 /** A party approves the offered score; once a giver and a taker have, the task is open. */
@@ -222,7 +234,7 @@ export function approveOneTimeOffer(
   if (task.status !== 'proposed') return fail('not_proposed')
   const approved = approveScore(task.offer, people, approverId)
   if (!approved.ok) return approved
-  return ok(resolveOneTime({ status: 'proposed', offer: approved.value }, people))
+  return ok(resolveOneTime({ ...task, offer: approved.value }, people))
 }
 
 /**
@@ -237,5 +249,5 @@ export function reopenOneTimeOffer(
   score: number,
 ): OneTimeAgreement {
   const offer: ScoreProposal = { score, proposedBy: giverId, approvedBy: [giverId] }
-  return resolveOneTime({ status: 'proposed', offer }, people)
+  return resolveOneTime({ status: 'proposed', offer, book: EMPTY_BOOK }, people)
 }

@@ -1,0 +1,7 @@
+export { bootstrapAdmin, describeBootstrap, MIN_ADMIN_PASSWORD } from './bootstrap'
+export type { BootstrapOutcome } from './bootstrap'
+export { PEOPLE_CHANGE_HOOKS } from './hooks'
+export { createUser, MAX_DISPLAY_NAME, setPasswordHash, updateUser } from './manage'
+export type { NewUser, UserChanges, UserError } from './manage'
+export { listPeople } from './people'
+export type { PeopleChangeHook } from './people'

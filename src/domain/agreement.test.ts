@@ -12,7 +12,6 @@ import {
   missingRoles,
   proposeScore,
   proposeTemplate,
-  proposeTemplateScoreChange,
   scoreForNewInstance,
   resolveOneTime,
   resolveTemplate,
@@ -160,7 +159,7 @@ describe('recurring templates (spec §5.1)', () => {
 
   it('becomes agreed when one taker approves', () => {
     const t = agreed()
-    expect(t).toEqual({ status: 'agreed', score: 5, pendingChange: null })
+    expect(t).toEqual({ status: 'agreed', score: 5, change: null })
     expect(canCreateInstances(t)).toBe(true)
     expect(scoreForNewInstance(t)).toEqual({ ok: true, value: 5 })
   })
@@ -172,100 +171,18 @@ describe('recurring templates (spec §5.1)', () => {
     })
   })
 
-  it('approving an agreed template with no change pending is refused', () => {
+  it('approving an agreed template is refused (changes go through bidding)', () => {
     expect(approveTemplate(agreed(), family, YOUNGER)).toEqual({
       ok: false,
-      error: 'no_change_pending',
+      error: 'not_proposed',
     })
   })
 
-  describe('score change (any party may propose)', () => {
-    const changing = (): TemplateAgreement =>
-      value(proposeTemplateScoreChange(agreed(), family, OLDER, 8))
-
-    it('keeps the old score in force until a giver and a taker agree on the new one', () => {
-      const t = value(approveTemplate(changing(), family, YOUNGER))
-      expect(t.status === 'agreed' && t.score).toBe(5)
-      expect(scoreForNewInstance(t)).toEqual({ ok: true, value: 5 })
-      expect(canCreateInstances(t)).toBe(true)
-    })
-
-    it('[call] new instances get the new score only once it is agreed (existing instances keep theirs: tested with instance storage)', () => {
-      const before = value(scoreForNewInstance(changing()))
-      const t = value(approveTemplate(changing(), family, DAD))
-      expect(t).toEqual({ status: 'agreed', score: 8, pendingChange: null })
-      expect(before).toBe(5) // an instance created earlier stored 5 and keeps it
-      expect(value(scoreForNewInstance(t))).toBe(8)
-    })
-
-    it('a giver may propose too; then one taker agrees it', () => {
-      const t = value(proposeTemplateScoreChange(agreed(), family, DAD, 3))
-      expect(t.status === 'agreed' && t.score).toBe(5)
-      expect(value(approveTemplate(t, family, YOUNGER))).toEqual({
-        status: 'agreed',
-        score: 3,
-        pendingChange: null,
-      })
-    })
-
-    it('only one change at a time, only on an agreed template, only to a new value', () => {
-      expect(proposeTemplateScoreChange(changing(), family, DAD, 9)).toEqual({
-        ok: false,
-        error: 'change_pending',
-      })
-      expect(proposeTemplateScoreChange(proposed(), family, DAD, 9)).toEqual({
-        ok: false,
-        error: 'not_agreed',
-      })
-      expect(proposeTemplateScoreChange(agreed(), family, DAD, 5)).toEqual({
-        ok: false,
-        error: 'same_score',
-      })
-      expect(proposeTemplateScoreChange(agreed(), family, DAD, 0)).toEqual({
-        ok: false,
-        error: 'invalid_score',
-      })
-    })
-
-    it('the admin can neither propose nor approve a change', () => {
-      expect(proposeTemplateScoreChange(agreed(), family, JAKUB, 9)).toEqual({
-        ok: false,
-        error: 'not_a_party',
-      })
-      expect(approveTemplate(changing(), family, JAKUB)).toEqual({
-        ok: false,
-        error: 'not_a_party',
-      })
-    })
-  })
-
-  describe('when people change', () => {
-    it("resolving drops a deactivated taker's approval of a pending change", () => {
-      const t = value(proposeTemplateScoreChange(agreed(), family, OLDER, 8))
-      const resolved = resolveTemplate(t, withoutOlder)
-      expect(resolved.status === 'agreed' && resolved.pendingChange?.approvedBy).toEqual([])
-      expect(value(approveTemplate(resolved, withoutOlder, DAD))).toMatchObject({ score: 5 })
-    })
-
-    it('a taker deactivated and later reactivated must approve again', () => {
-      const t = value(proposeTemplateScoreChange(agreed(), family, OLDER, 8))
-      const back = resolveTemplate(resolveTemplate(t, withoutOlder), family)
-      expect(back.status === 'agreed' && back.pendingChange?.approvedBy).toEqual([])
-      const afterDad = value(approveTemplate(back, family, DAD))
-      expect(afterDad).toMatchObject({ score: 5 })
-      expect(value(approveTemplate(afterDad, family, OLDER))).toEqual({
-        status: 'agreed',
-        score: 8,
-        pendingChange: null,
-      })
-    })
-
-    it('resolving is a no-op when nothing changed', () => {
-      const t = proposed()
-      expect(resolveTemplate(t, family)).toBe(t)
-      const c = value(proposeTemplateScoreChange(agreed(), family, OLDER, 8))
-      expect(resolveTemplate(c, family)).toBe(c)
-    })
+  it('resolving is a no-op when nothing changed', () => {
+    const t = proposed()
+    expect(resolveTemplate(t, family)).toBe(t)
+    const a = agreed()
+    expect(resolveTemplate(a, family)).toBe(a)
   })
 })
 
@@ -337,6 +254,7 @@ describe('one-time tasks, path 1: score agreement (spec §5.2)', () => {
     expect(t).toEqual({
       status: 'proposed',
       offer: { score: 23, proposedBy: DAD, approvedBy: [DAD] },
+      book: { bids: [] },
     })
     expect(value(approveOneTimeOffer(t, family, YOUNGER))).toEqual({ status: 'open', score: 23 })
   })

@@ -1,7 +1,8 @@
 // Who counts as "all parties" (spec §3).
 
 export type PersonId = number
-export type Role = 'taker' | 'giver' | 'admin'
+export const ROLES = ['taker', 'giver', 'admin'] as const
+export type Role = (typeof ROLES)[number]
 
 export interface Person {
   id: PersonId
@@ -32,6 +33,16 @@ export function allParties(people: readonly Person[]): PersonId[] {
     .filter(isParty)
     .map((p) => p.id)
     .sort((a, b) => a - b)
+}
+
+/** Whether `id` is an active person with this party role right now. */
+export function isActiveAs(
+  people: readonly Person[],
+  id: PersonId,
+  role: 'giver' | 'taker',
+): boolean {
+  const person = findPerson(people, id)
+  return person !== undefined && person.active && person.role === role
 }
 
 export function findPerson(people: readonly Person[], id: PersonId): Person | undefined {
