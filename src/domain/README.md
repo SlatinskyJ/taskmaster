@@ -17,3 +17,6 @@ ESLint enforces this. Server functions are thin wrappers that call into this fol
   `markAgreed(item, null)`; when it returns `reserved`, call `markAgreed(item, { takerId, giverId })`.
   `bids.ts` holds the raw bid book; it is internal (not exported from `index.ts`), so callers go
   through the checked actions.
+- Disputes (`disputes.ts`) flag a locked record and hold the admin's outcome. A correction is
+  written with `correctSettlement` / `adjustPoints` (`settlement.ts`) in the same transaction as
+  `correctDispute`.
