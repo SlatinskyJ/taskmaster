@@ -13,7 +13,10 @@ import type { CurrentUser } from './sessions'
 //     .middleware([requireRole('admin')])
 //     .handler(({ context }) => ... context.user ...)
 
-/** Server functions anyone may call, signed in or not. Adding one needs a reason here. */
+/**
+ * Server functions anyone may call, signed in or not, all in ~/server/auth/functions.ts (the
+ * guard scan checks the file too). Adding one needs a reason here.
+ */
 export const PUBLIC_SERVER_FNS = [
   // The login form is the way in.
   'loginFn',
@@ -22,6 +25,14 @@ export const PUBLIC_SERVER_FNS = [
   // Route guards ask it who is signed in; it answers null for nobody.
   'getCurrentUserFn',
 ] as const
+
+/** Thrown (with HTTP 403) when a signed-in user's role may not call a server function. */
+export class ForbiddenError extends Error {
+  constructor() {
+    super('forbidden')
+    this.name = 'ForbiddenError'
+  }
+}
 
 /**
  * The signed-in user, or a redirect to the login screen. Throws 403 for a wrong role.
@@ -36,7 +47,7 @@ export const guardUser = createServerOnlyFn((roles: readonly Role[] = []): Curre
     throw redirect({ to: '/login' })
   }
   setResponseStatus(403)
-  throw new Error('forbidden')
+  throw new ForbiddenError()
 })
 
 /** Any signed-in user; `context.user` in the handler. */

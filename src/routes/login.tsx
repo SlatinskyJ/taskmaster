@@ -2,7 +2,7 @@ import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { safeRedirect } from '~/lib/redirect'
 import { cs } from '~/lib/strings'
-import { landingPath } from '~/server/auth/authorize'
+import { landingPath } from '~/lib/landing'
 import { getCurrentUserFn, loginFn } from '~/server/auth/functions'
 
 interface LoginSearch {
@@ -36,22 +36,30 @@ function Login() {
       return typeof value === 'string' ? value : ''
     }
     setBusy(true)
-    const result = await loginFn({
-      data: { username: field('username'), password: field('password') },
-    })
-    setBusy(false)
-    if (!result.ok) {
-      setError(result.error === 'rate_limited' ? cs.login.rateLimited : cs.login.invalid)
-      return
+    setError(null)
+    try {
+      const result = await loginFn({
+        data: { username: field('username'), password: field('password') },
+      })
+      if (!result.ok) {
+        setError(result.error === 'rate_limited' ? cs.login.rateLimited : cs.login.invalid)
+        return
+      }
+      await router.invalidate()
+      await router.navigate({ href: search.redirect ?? landingPath(result.user.role) })
+    } catch {
+      // Network down or server error: say so and let them try again.
+      setError(cs.login.failed)
+    } finally {
+      setBusy(false)
     }
-    await router.invalidate()
-    await router.navigate({ href: search.redirect ?? landingPath(result.user.role) })
   }
 
   return (
     <main className="mx-auto grid max-w-xs gap-4 p-4 pt-16">
       <h1 className="text-3xl font-bold">{cs.login.title}</h1>
       <form
+        method="post"
         className="grid gap-3"
         onSubmit={(e) => {
           e.preventDefault()
@@ -65,7 +73,9 @@ function Login() {
             autoComplete="username"
             autoCapitalize="none"
             required
-            className="rounded border p-2"
+            aria-invalid={error !== null}
+            aria-describedby={error ? 'login-error' : undefined}
+            className="rounded border p-3"
           />
         </label>
         <label className="grid gap-1">
@@ -75,11 +85,17 @@ function Login() {
             type="password"
             autoComplete="current-password"
             required
-            className="rounded border p-2"
+            aria-invalid={error !== null}
+            aria-describedby={error ? 'login-error' : undefined}
+            className="rounded border p-3"
           />
         </label>
-        {error && <p role="alert">{error}</p>}
-        <button type="submit" disabled={busy} className="rounded border p-2 font-semibold">
+        {error && (
+          <p id="login-error" role="alert">
+            {error}
+          </p>
+        )}
+        <button type="submit" disabled={busy} className="rounded border p-3 font-semibold">
           {cs.login.submit}
         </button>
       </form>

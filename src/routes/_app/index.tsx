@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { LogoutButton } from '~/components/LogoutButton'
 import { cs } from '~/lib/strings'
-import { landingPath } from '~/server/auth/authorize'
+import { landingPath } from '~/lib/landing'
 
 // Domů for takers and givers (UI doc §6). The admin has no Domů and lands on Správa.
 export const Route = createFileRoute('/_app/')({

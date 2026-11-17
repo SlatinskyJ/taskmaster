@@ -14,6 +14,7 @@ const EXPECTED_ROLES: Record<string, string> = {
 }
 
 const SRC = join(import.meta.dirname, '..', 'src')
+const PUBLIC_FILE = join('server', 'auth', 'functions.ts')
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -43,13 +44,17 @@ function serverFns(): ServerFn[] {
     for (const m of text.matchAll(decl)) {
       seen++
       const [body, name = ''] = m
-      const middleware = /\.middleware\(\[\s*(requireUser|requireRole\(([^)]*)\))\s*\]\)/.exec(body)
+      // The guard may sit anywhere in the middleware list, next to other middlewares.
+      const list = /\.middleware\(\[([^\]]*)\]\)/.exec(body)?.[1] ?? ''
+      const middleware = /\b(requireUser|requireRole\(([^)]*)\))/.exec(list)
       const roles = middleware?.[2]?.replace(/['"\s]/g, '')
-      const access = (PUBLIC_SERVER_FNS as readonly string[]).includes(name)
-        ? 'public'
-        : middleware
-          ? (roles ?? 'any')
-          : 'unguarded'
+      // Public by name only in the auth module: a same-named function elsewhere is not public.
+      const access =
+        (PUBLIC_SERVER_FNS as readonly string[]).includes(name) && rel === PUBLIC_FILE
+          ? 'public'
+          : middleware
+            ? (roles ?? 'any')
+            : 'unguarded'
       found.push({ name, file: rel, access })
     }
     // A server function not declared as `export const X = createServerFn(` can't be checked.

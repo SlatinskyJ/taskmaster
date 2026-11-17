@@ -8,7 +8,7 @@ export function LogoutButton() {
   return (
     <button
       type="button"
-      className="underline"
+      className="min-h-11 px-3 underline"
       onClick={() => {
         void logoutFn().then(() => router.navigate({ to: '/login' }))
       }}

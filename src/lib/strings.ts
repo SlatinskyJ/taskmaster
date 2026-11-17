@@ -20,6 +20,7 @@ export const cs = {
     submit: 'Přihlásit',
     invalid: 'Špatné jméno nebo heslo.',
     rateLimited: 'Moc pokusů. Zkus to za 15 minut.',
+    failed: 'Něco se pokazilo. Zkus to znovu.',
     logout: 'Odhlásit',
   },
   home: {

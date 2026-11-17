@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
 import { LogoutButton } from '~/components/LogoutButton'
 import { cs } from '~/lib/strings'
-import { landingPath } from '~/server/auth/authorize'
+import { landingPath } from '~/lib/landing'
 import { listUsersFn } from '~/server/users/functions'
 
 // Správa, the admin's only screen (UI doc §6, §7.5). Others go back to their landing.

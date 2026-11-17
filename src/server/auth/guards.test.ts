@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Role } from '~/domain/parties'
 import { ROLES } from '~/domain/parties'
 import { safeRedirect } from '~/lib/redirect'
-import { authorize, landingPath } from './authorize'
+import { landingPath } from '~/lib/landing'
+import { authorize } from './authorize'
 import type { CurrentUser } from './sessions'
 
 const state = vi.hoisted(() => ({ user: null as CurrentUser | null, status: [] as number[] }))
@@ -12,7 +13,7 @@ vi.mock('@tanstack/react-start/server', () => ({
   setResponseStatus: (code: number) => state.status.push(code),
 }))
 
-const { guardUser, requireRole, requireUser } = await import('./guards')
+const { ForbiddenError, guardUser, requireRole, requireUser } = await import('./guards')
 
 const person = (role: Role): CurrentUser => ({ id: 1, username: role, displayName: role, role })
 
@@ -30,7 +31,7 @@ function outcome(fn: () => unknown): 'ok' | 'login' | 'forbidden' {
     return 'ok'
   } catch (e) {
     if (isRedirect(e)) return 'login'
-    if (e instanceof Error && e.message === 'forbidden') return 'forbidden'
+    if (e instanceof ForbiddenError) return 'forbidden'
     throw e
   }
 }
@@ -106,6 +107,9 @@ describe('login redirect target', () => {
     expect(safeRedirect('//evil.example')).toBeUndefined()
     expect(safeRedirect('/\\evil.example')).toBeUndefined()
     expect(safeRedirect('https://evil.example')).toBeUndefined()
+    expect(safeRedirect('/\t/evil.example')).toBeUndefined()
+    expect(safeRedirect('/\n/evil.example')).toBeUndefined()
+    expect(safeRedirect('/\r/evil.example')).toBeUndefined()
     expect(safeRedirect(42)).toBeUndefined()
     expect(safeRedirect(undefined)).toBeUndefined()
   })

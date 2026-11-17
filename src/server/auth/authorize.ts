@@ -21,8 +21,3 @@ export function authorize(
   if (roles.length > 0 && !roles.includes(user.role)) return fail('forbidden')
   return ok(user)
 }
-
-/** Where a role lands after login (UI doc §6): admin on Správa, everyone else on Domů. */
-export function landingPath(role: Role): '/' | '/sprava' {
-  return role === 'admin' ? '/sprava' : '/'
-}
