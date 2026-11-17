@@ -10,6 +10,7 @@ import { Input } from '~/components/ui/input'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { taskErrorMessage } from '~/lib/taskErrors'
+import { TASK_TITLE_MAX } from '~/lib/taskLimits'
 import { createTaskFn } from '~/server/tasks/functions'
 
 // Nový úkol, the one-time part of GCreate (UI doc §7.2): name, points with a − value +
@@ -24,8 +25,8 @@ export const Route = createFileRoute('/_app/ukoly/novy')({
 
 const START_SCORE = 10
 const MAX_SCORE = 999
-/** Matches the server's TITLE_MAX (src/server/tasks). */
-const TITLE_MAX = 80
+/** One tap to a common value, so a 50-point task isn't 40 taps on + (UI doc §5: no typing). */
+const QUICK_PICKS = [5, 10, 20, 50] as const
 
 function NewTask() {
   const { user } = Route.useRouteContext()
@@ -69,10 +70,11 @@ function NewTask() {
             <Input
               name="title"
               required
-              maxLength={TITLE_MAX}
+              maxLength={TASK_TITLE_MAX}
               value={title}
               onChange={(e) => {
                 setTitle(e.target.value)
+                setError(null)
               }}
               aria-invalid={error !== null}
               aria-describedby={error ? 'task-error' : undefined}
@@ -98,7 +100,7 @@ function NewTask() {
               </Button>
               <output
                 aria-live="polite"
-                className="flex-1 text-center num font-display text-[32px] font-bold"
+                className="flex-1 text-center num font-display text-points font-bold"
               >
                 {score}
               </output>
@@ -114,6 +116,22 @@ function NewTask() {
               >
                 <Plus aria-hidden="true" />
               </Button>
+            </div>
+            <div className="flex gap-2" role="group" aria-label={cs.tasks.quickPick}>
+              {QUICK_PICKS.map((value) => (
+                <Button
+                  key={value}
+                  type="button"
+                  variant={score === value ? 'primary' : 'ghost'}
+                  aria-pressed={score === value}
+                  className="flex-1 num"
+                  onClick={() => {
+                    setScore(value)
+                  }}
+                >
+                  {value}
+                </Button>
+              ))}
             </div>
           </div>
           <label className="flex min-h-tap items-center gap-2.5 text-row font-extrabold">

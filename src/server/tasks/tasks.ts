@@ -4,16 +4,17 @@ import {
   createOneTimeItem,
   createOneTimeTask,
   byPerson,
+  EMPTY_BOOK,
   findPerson,
   isValidScore,
   missingRoles,
   resolveOneTime,
 } from '~/domain'
-import { EMPTY_BOOK } from '~/domain/bids'
 import type { AgreementError, LifecycleError, OneTimeAgreement, Person } from '~/domain'
 import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
 import { toIsoUtc } from '~/domain/dates'
+import { TASK_TITLE_MAX } from '~/lib/taskLimits'
 import { writeAudit } from '~/server/audit'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
@@ -25,7 +26,7 @@ import { listPeople } from '~/server/users/people'
 // src/domain (agreement + lifecycle); this module loads the rows, asks the domain, and writes
 // the result with its audit entries in one transaction. Bidding (path 2) comes with #34.
 
-export const TITLE_MAX = 80
+export const TITLE_MAX = TASK_TITLE_MAX
 
 export type TaskError = AgreementError | LifecycleError | 'invalid_title' | 'not_found'
 
@@ -45,7 +46,12 @@ function currentApprovers(tx: Db | Tx, task: TaskRow): number[] {
   return tx
     .select({ userId: taskScoreApprovals.userId })
     .from(taskScoreApprovals)
-    .where(and(eq(taskScoreApprovals.taskId, task.id), eq(taskScoreApprovals.score, task.score)))
+    .where(
+      and(
+        eq(taskScoreApprovals.taskId, task.id),
+        eq(taskScoreApprovals.offerRound, task.offerRound),
+      ),
+    )
     .orderBy(asc(taskScoreApprovals.approvedAt), asc(taskScoreApprovals.userId))
     .all()
     .map((r) => r.userId)
@@ -100,7 +106,13 @@ export function createTask(
       .returning()
       .get()
     tx.insert(taskScoreApprovals)
-      .values({ taskId: row.id, userId: giverId, score: row.score, approvedAt: at })
+      .values({
+        taskId: row.id,
+        userId: giverId,
+        offerRound: row.offerRound,
+        score: row.score,
+        approvedAt: at,
+      })
       .run()
     writeAudit(tx, {
       actor: { kind: 'user', userId: giverId },
@@ -135,7 +147,9 @@ export function approveTaskOffer(
     const people = listPeople(tx)
     const result = approveOneTimeOffer(agreementOf(tx, task), people, userId)
     if (!result.ok) return result
-    tx.insert(taskScoreApprovals).values({ taskId, userId, score, approvedAt: at }).run()
+    tx.insert(taskScoreApprovals)
+      .values({ taskId, userId, offerRound: task.offerRound, score, approvedAt: at })
+      .run()
     const actor = { kind: 'user', userId } as const
     writeAudit(tx, {
       actor,
@@ -175,7 +189,7 @@ function openTask(tx: Tx, task: TaskRow, now: Date): TaskRow {
  * be agreed (e.g. a new taker). Opens those, logged as the system. Runs inside the change's
  * transaction (src/server/users/hooks.ts).
  */
-export function resolveProposedTasks(tx: Tx, people: Person[], now: Date = new Date()): void {
+export function resolveProposedTasks(tx: Tx, people: Person[], now: Date): void {
   const proposed = tx.select().from(tasks).where(eq(tasks.status, 'proposed')).all()
   for (const task of proposed) {
     const resolved = resolveOneTime(agreementOf(tx, task), people)

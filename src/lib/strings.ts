@@ -21,6 +21,11 @@ export const cs = {
   placeholder: {
     soon: 'Tady brzy něco bude.',
   },
+  routeError: {
+    title: 'Něco se nepovedlo',
+    message: 'Data se nenačetla. Zkontroluj připojení a zkus to znovu.',
+    retry: 'Zkusit znovu',
+  },
   notFound: {
     message: 'Tahle stránka neexistuje.',
   },
@@ -59,6 +64,8 @@ export const cs = {
     score: 'Body',
     less: 'Méně',
     more: 'Více',
+    /** Before the quick-pick point values: "Rychle: 5 10 20 50". */
+    quickPick: 'Rychlá volba',
     approvalRequired: 'Po dokončení schvaluji já',
     propose: 'Navrhnout',
     proposeHint: 'Úkol bude volný, až cenu schválí jeden z kluků.',
@@ -67,9 +74,10 @@ export const cs = {
     offeredBy: 'Nabízí',
     waitingForTaker: 'Čeká na souhlas',
     approve: 'Souhlasím',
+    approving: 'Ukládám…',
     approved: 'Schváleno',
     errors: {
-      invalidTitle: 'Napiš název (nejvýš 80 znaků).',
+      invalidTitle: (max: number) => `Napiš název (nejvýš ${String(max)} znaků).`,
       invalidScore: 'Body musí být celé číslo od 1.',
       offerChanged: 'Cena se mezitím změnila. Podívej se znovu.',
       gone: 'Tenhle úkol už je vyřízený.',

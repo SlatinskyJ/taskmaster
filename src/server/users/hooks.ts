@@ -9,7 +9,7 @@ import type { PeopleChangeHook } from './people'
  * - reservations of a deactivated taker: release them (#35).
  */
 export const PEOPLE_CHANGE_HOOKS: readonly PeopleChangeHook[] = [
-  (tx, people) => {
-    resolveProposedTasks(tx, people)
+  (tx, people, now) => {
+    resolveProposedTasks(tx, people, now)
   },
 ]

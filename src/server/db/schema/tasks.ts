@@ -27,6 +27,11 @@ export const tasks = sqliteTable(
     status: text('status', { enum: TASK_STATUSES }).notNull(),
     /** Whole points from 1: the current offer while proposed, then the agreed score. */
     score: integer('score').notNull(),
+    /**
+     * Which offer `score` is: 1 for the first offer, +1 for every new one (bids, #34). Approvals
+     * belong to one offer round, so an earlier offer of the same number never counts again.
+     */
+    offerRound: integer('offer_round').notNull().default(1),
     /** Spec §5.5: on → a completion waits for a giver's approval. */
     approvalRequired: integer('approval_required', { mode: 'boolean' }).notNull(),
     /** The giver who created it and made the first offer. */
@@ -53,9 +58,10 @@ export const tasks = sqliteTable(
 export type TaskRow = typeof tasks.$inferSelect
 
 /**
- * Who approved which offered score (spec §5.2 path 1). Keyed by score, so approvals of an
- * earlier offer stop counting when the giver side changes its offer (#34). The proposer's own
- * row is written with the offer: proposing counts as approving (spec §3). Append-only.
+ * Who approved which offer (spec §5.2 path 1). Keyed by offer round, so approvals of an earlier
+ * offer stop counting once the giver side makes a new one (#34), even if the number repeats.
+ * `score` records the number that was approved. The proposer's own row is written with the
+ * offer: proposing counts as approving (spec §3). Append-only.
  */
 export const taskScoreApprovals = sqliteTable(
   'task_score_approvals',
@@ -66,10 +72,11 @@ export const taskScoreApprovals = sqliteTable(
     userId: integer('user_id')
       .notNull()
       .references(() => users.id),
+    offerRound: integer('offer_round').notNull(),
     score: integer('score').notNull(),
     approvedAt: text('approved_at').notNull(),
   },
-  (t) => [primaryKey({ columns: [t.taskId, t.score, t.userId] })],
+  (t) => [primaryKey({ columns: [t.taskId, t.offerRound, t.userId] })],
 )
 
 export type TaskScoreApprovalRow = typeof taskScoreApprovals.$inferSelect

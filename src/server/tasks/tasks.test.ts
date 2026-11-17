@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { Db } from '~/server/db'
 import { auditLog, tasks, taskScoreApprovals, users } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
+import { updateUser } from '~/server/users/manage'
 import { listPeople } from '~/server/users/people'
 import {
   approveTaskOffer,
@@ -15,6 +16,7 @@ import {
 
 const T0 = new Date('2026-11-17T10:00:00.000Z')
 const T1 = new Date('2026-11-17T11:00:00.000Z')
+const T2 = new Date('2026-11-17T12:00:00.000Z')
 
 function must<T>(r: { ok: true; value: T } | { ok: false; error: string }): T {
   if (!r.ok) throw new Error(r.error)
@@ -65,7 +67,7 @@ describe('createTask (spec §5.2)', () => {
       agreedAt: null,
     })
     expect(db.select().from(taskScoreApprovals).all()).toEqual([
-      { taskId: task.id, userId: tata, score: 18, approvedAt: T0.toISOString() },
+      { taskId: task.id, userId: tata, offerRound: 1, score: 18, approvedAt: T0.toISOString() },
     ])
     expect(auditActions(db, task.id)).toEqual([
       { action: 'task.created', actor: tata, kind: 'user' },
@@ -119,6 +121,46 @@ describe('approveTaskOffer (spec §5.2 path 1, score agreement)', () => {
       'task.score_approved',
       'task.agreed',
     ])
+    expect(db.select().from(taskScoreApprovals).all().at(-1)).toEqual({
+      taskId: task.id,
+      userId: starsi,
+      offerRound: 1,
+      score: 18,
+      approvedAt: T1.toISOString(),
+    })
+    const agreed = db
+      .select({ before: auditLog.before, after: auditLog.after })
+      .from(auditLog)
+      .where(eq(auditLog.action, 'task.agreed'))
+      .get()
+    expect(agreed && JSON.parse(agreed.before ?? 'null')).toEqual({ status: 'proposed' })
+    expect(agreed && JSON.parse(agreed.after ?? 'null')).toEqual({ status: 'open', score: 18 })
+  })
+
+  it('rolls back the approval and the opening when the audit write fails', () => {
+    const { db, tata, starsi } = family()
+    const task = must(createTask(db, tata, CAR, T0))
+    db.$client.exec(
+      `CREATE TRIGGER fail_agreed BEFORE INSERT ON audit_log WHEN NEW.action = 'task.agreed'
+       BEGIN SELECT RAISE(ABORT, 'audit down'); END`,
+    )
+    expect(() => approveTaskOffer(db, starsi, task.id, 18, T1)).toThrow(/audit down/)
+    expect(db.select().from(tasks).get()).toMatchObject({ status: 'proposed', agreedAt: null })
+    expect(db.select().from(taskScoreApprovals).all()).toHaveLength(1)
+    expect(auditActions(db, task.id).map((a) => a.action)).toEqual(['task.created'])
+  })
+
+  it('a new offer round: earlier approvals stop counting, even for the same number', () => {
+    const { db, tata, starsi } = family()
+    const task = must(createTask(db, tata, CAR, T0))
+    // What bidding (#34) will do: a new offer of the same 18 points.
+    db.update(tasks).set({ offerRound: 2 }).where(eq(tasks.id, task.id)).run()
+    expect(pendingApprovals(db, starsi)[0]?.approvedBy).toEqual([])
+    // Starší's yes alone is not an agreement: Táta's round-1 approval no longer counts.
+    expect(must(approveTaskOffer(db, starsi, task.id, 18, T1)).status).toBe('proposed')
+    // Táta can approve 18 again in round 2 (no clash with his round-1 row), which agrees it.
+    expect(must(approveTaskOffer(db, tata, task.id, 18, T2)).status).toBe('open')
+    expect(db.select().from(taskScoreApprovals).all()).toHaveLength(3)
   })
 
   it('refuses an offer that is not the one shown (offer changed)', () => {
@@ -128,6 +170,9 @@ describe('approveTaskOffer (spec §5.2 path 1, score agreement)', () => {
       ok: false,
       error: 'offer_changed',
     })
+    expect(db.select().from(taskScoreApprovals).all()).toHaveLength(1)
+    expect(auditActions(db, task.id)).toHaveLength(1)
+    expect(db.select().from(tasks).get()).toMatchObject({ status: 'proposed' })
   })
 
   it('the giver cannot approve twice; the admin is never a party', () => {
@@ -203,6 +248,27 @@ describe('pendingApprovals ("Čeká na tebe")', () => {
   })
 })
 
+describe('a second giver', () => {
+  it('completes the agreement once the offering giver no longer counts', () => {
+    const { db, tata, starsi } = family()
+    const task = must(createTask(db, tata, CAR, T0))
+    const mama = db
+      .insert(users)
+      .values({
+        username: 'mama',
+        displayName: 'Máma',
+        role: 'giver',
+        createdAt: T0.toISOString(),
+        updatedAt: T0.toISOString(),
+      })
+      .returning()
+      .get().id
+    db.update(users).set({ active: false }).where(eq(users.id, tata)).run()
+    expect(must(approveTaskOffer(db, starsi, task.id, 18, T1)).status).toBe('proposed')
+    expect(must(approveTaskOffer(db, mama, task.id, 18, T2)).status).toBe('open')
+  })
+})
+
 describe('listTasks', () => {
   it('lists every task newest first with its state', () => {
     const { db, tata, starsi } = family()
@@ -224,13 +290,38 @@ describe('resolveProposedTasks (people changed)', () => {
     const task = must(createTask(db, tata, CAR, T0))
     // Starší approved as... nobody yet. Record a taker-side approval, then make him a taker.
     db.insert(taskScoreApprovals)
-      .values({ taskId: task.id, userId: starsi, score: 18, approvedAt: T0.toISOString() })
+      .values({
+        taskId: task.id,
+        userId: starsi,
+        offerRound: 1,
+        score: 18,
+        approvedAt: T0.toISOString(),
+      })
       .run()
     db.update(users).set({ role: 'taker' }).where(eq(users.id, starsi)).run()
     db.transaction((tx) => {
       resolveProposedTasks(tx, listPeople(tx), T1)
     })
     expect(db.select().from(tasks).get()).toMatchObject({ status: 'open' })
+    expect(auditActions(db, task.id).at(-1)).toEqual({
+      action: 'task.agreed',
+      actor: null,
+      kind: 'system',
+    })
+  })
+
+  it('runs on a real people change (updateUser with the default hooks)', () => {
+    const { db, admin, tata, starsi } = family()
+    const task = must(createTask(db, tata, CAR, T0))
+    const byAdmin = { kind: 'user', userId: admin } as const
+    must(updateUser(db, byAdmin, tata, { active: false }, T0))
+    // No active giver: Starší's yes waits.
+    expect(must(approveTaskOffer(db, starsi, task.id, 18, T1)).status).toBe('proposed')
+    must(updateUser(db, byAdmin, tata, { active: true }, T2))
+    expect(db.select().from(tasks).get()).toMatchObject({
+      status: 'open',
+      agreedAt: T2.toISOString(),
+    })
     expect(auditActions(db, task.id).at(-1)).toEqual({
       action: 'task.agreed',
       actor: null,

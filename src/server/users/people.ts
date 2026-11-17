@@ -38,10 +38,11 @@ export function listUsers(db: Db | Tx): PersonSummary[] {
  * transaction as the change, with everyone as they are after it. Each hook writes its own audit
  * entries through `tx`. The hooks themselves are listed in `./hooks`.
  */
-export type PeopleChangeHook = (tx: Tx, people: Person[]) => void
+/** Runs inside a people change; `now` is the change's own time, for its audit entries. */
+export type PeopleChangeHook = (tx: Tx, people: Person[], now: Date) => void
 
-export function runPeopleChangeHooks(tx: Tx, hooks: readonly PeopleChangeHook[]): void {
+export function runPeopleChangeHooks(tx: Tx, hooks: readonly PeopleChangeHook[], now: Date): void {
   if (hooks.length === 0) return
   const people = listPeople(tx)
-  for (const hook of hooks) hook(tx, people)
+  for (const hook of hooks) hook(tx, people, now)
 }

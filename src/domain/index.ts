@@ -2,6 +2,7 @@
 export * from './agreement'
 export * from './bidding'
 export * from './disputes'
+export { EMPTY_BOOK } from './bids'
 export type { BidBook, OpenBid } from './bids'
 export * from './lifecycle'
 export * from './parties'

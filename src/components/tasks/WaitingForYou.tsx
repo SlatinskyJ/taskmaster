@@ -49,11 +49,12 @@ export function WaitingForYou({ items }: { items: readonly TaskView[] }) {
                 <Button
                   variant="ok"
                   disabled={busyId !== null}
+                  aria-busy={busyId === task.id}
                   onClick={() => {
                     void approve(task)
                   }}
                 >
-                  {cs.tasks.approve}
+                  {busyId === task.id ? cs.tasks.approving : cs.tasks.approve}
                 </Button>
               }
             />
