@@ -140,7 +140,9 @@ describe('adding people in the admin console (spec §6)', () => {
 describe('changing people (spec §3, §6)', () => {
   it('rename, role change, deactivate and reactivate, each logged with before and after', () => {
     const { db, by, older } = family()
-    must(updateUser(db, by, older.id, { displayName: 'Honza' }, T1))
+    expect(must(updateUser(db, by, older.id, { displayName: '  Honza  ' }, T1)).displayName).toBe(
+      'Honza',
+    )
     must(updateUser(db, by, older.id, { role: 'giver' }, T1))
     must(updateUser(db, by, older.id, { active: false }, T1))
     expect(allParties(listPeople(db))).not.toContain(older.id)
@@ -193,7 +195,20 @@ describe('changing people (spec §3, §6)', () => {
       ok: false,
       error: 'last_admin',
     })
-    must(createUser(db, by, { username: 'admin2', displayName: 'A2', role: 'admin' }, T1))
+    const second = must(
+      createUser(db, by, { username: 'admin2', displayName: 'A2', role: 'admin' }, T1),
+    )
+    // An inactive second admin doesn't count.
+    must(updateUser(db, by, second.id, { active: false }, T1))
+    expect(updateUser(db, by, admin.id, { active: false }, T1)).toEqual({
+      ok: false,
+      error: 'last_admin',
+    })
+    expect(updateUser(db, by, admin.id, { role: 'giver' }, T1)).toEqual({
+      ok: false,
+      error: 'last_admin',
+    })
+    must(updateUser(db, by, second.id, { active: true }, T1))
     expect(updateUser(db, by, admin.id, { active: false }, T1).ok).toBe(true)
   })
 
@@ -356,6 +371,13 @@ describe('first admin from ADMIN_PASSWORD (spec §6)', () => {
     expect(bootstrapAdmin(preview, env, T0)).toMatchObject({
       testUsers: ['tata', 'starsi', 'mladsi'],
     })
+  })
+
+  it('TEST_USERS other than "1" adds nobody', () => {
+    const db = createTestDb()
+    const env = { ADMIN_PASSWORD: PASSWORD, TEST_USERS: '0' }
+    expect(bootstrapAdmin(db, env, T0)).toMatchObject({ testUsers: [] })
+    expect(db.select().from(users).all()).toHaveLength(1)
   })
 
   it('TEST_USERS is ignored in production', () => {

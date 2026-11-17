@@ -12,7 +12,7 @@ import type { PeopleChangeHook } from './people'
 import { runPeopleChangeHooks } from './people'
 
 // People live in the database only (spec §6, Jakub 2026-11-17). The admin console (#47) and
-// the first-admin bootstrap (#27) change them through these functions and nothing else: each
+// the first-admin bootstrap (./bootstrap) change them through these functions and nothing else: each
 // change is one transaction with its audit entry, and the people-change hooks run in it when
 // who takes part changes (added, role, active).
 //
@@ -34,7 +34,7 @@ export interface NewUser {
   username: string
   displayName: string
   role: UserRole
-  /** argon2id PHC string; hashing itself arrives with password login (#27). */
+  /** argon2id PHC string; the caller hashes (see ./bootstrap). */
   passwordHash?: string | null
 }
 
@@ -123,7 +123,7 @@ export function updateUser(
 }
 
 /**
- * Sets a new password hash (an admin reset, or the bootstrap). Ending the user's sessions on
+ * Sets a new password hash (an admin reset). Ending the user's sessions on
  * a reset (spec §6) is #27's job: sessions don't exist yet.
  */
 export function setPasswordHash(
