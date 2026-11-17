@@ -224,3 +224,18 @@ export function approveOneTimeOffer(
   if (!approved.ok) return approved
   return ok(resolveOneTime({ status: 'proposed', offer: approved.value }, people))
 }
+
+/**
+ * A bid-won task was released (spec §5.4 [call]): negotiation restarts with the agreed score as
+ * the current offer from the giver who agreed to it. Only one taker had agreed, so a taker's
+ * approval is needed again. If that giver is no longer active, the offer waits for another
+ * giver's approval as well (approvals are checked live).
+ */
+export function reopenOneTimeOffer(
+  people: readonly Person[],
+  giverId: PersonId,
+  score: number,
+): OneTimeAgreement {
+  const offer: ScoreProposal = { score, proposedBy: giverId, approvedBy: [giverId] }
+  return resolveOneTime({ status: 'proposed', offer }, people)
+}

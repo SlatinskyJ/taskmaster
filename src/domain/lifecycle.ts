@@ -5,7 +5,7 @@ import { fail, ok } from './result'
 
 // Lifecycle of a one-time task or a recurring instance (spec §5.3–§5.6).
 //
-//   negotiating ──(agreed)──► open ──(reserve)──► reserved
+//   proposed ──(agreed)────► open ──(reserve)──► reserved
 //                              ▲  ◄──(release)───┘   │
 //                              ▼                     ▼
 //                        done_unconfirmed ◄──────────┘
@@ -15,12 +15,22 @@ import { fail, ok } from './result'
 //            confirmed
 //
 //   open / reserved ──(deadline + grace passed)──► expired
-//   negotiating / open / reserved ──(giver cancels)──► cancelled         [call]
+//   proposed / open / reserved ──(giver cancels)──► cancelled         [call]
 //   self-logged: born done_unconfirmed; rejected → rejected              [call]
 //
-// The score itself lives in the agreement (`agreement.ts`); this module only tracks states and
-// who may move an item between them. Nothing is ever deleted: cancelled, expired and rejected
-// are end states (spec §5.10).
+// Who owns what. The **agreement** (`agreement.ts`) owns the score and decides when a one-time
+// task's negotiation ends. This module owns the item's state and who may move it. The two meet
+// at two points, and the caller (a server function) applies both sides in one transaction:
+//   - agreement reaches `open` / reserved by a bid → call `markAgreed` here;
+//   - `releaseReservation` here sends a bid-won task back to `proposed` → call
+//     `reopenOneTimeOffer` in the agreement with the agreed score and the giver who agreed.
+// Both use the same name, `proposed`, for "still negotiating".
+//
+// Actors: this module takes an `Actor` (a person, or the scheduler) because some steps are the
+// scheduler's. The agreement takes the people list plus an id because it re-checks approvals
+// against everyone. Both re-check roles and `active` on every call.
+//
+// Nothing is ever deleted: cancelled, expired and rejected are end states (spec §5.10).
 
 /** [call] Approval is required unless the giver turns it off (spec §5.5). */
 export const DEFAULT_APPROVAL_REQUIRED = true
@@ -37,11 +47,12 @@ export interface Deadline {
   graceEndsAt: Date
 }
 
-/** A taker's claim. `bid` = reserved by winning a bid (spec §5.2 path 2), `tap` = reserved by hand. */
-export interface Reservation {
-  takerId: PersonId
-  via: 'bid' | 'tap'
-}
+/**
+ * A taker's claim: `tap` = reserved by hand; `bid` = won a bid with `giverId` (spec §5.2 path 2),
+ * who becomes the offering giver again if the taker releases it.
+ */
+export type Reservation =
+  { takerId: PersonId; via: 'tap' } | { takerId: PersonId; via: 'bid'; giverId: PersonId }
 
 export interface Completion {
   completedBy: PersonId
@@ -54,7 +65,7 @@ export interface Completion {
 }
 
 export type ItemState =
-  | { status: 'negotiating' }
+  | { status: 'proposed' }
   | { status: 'open' }
   | { status: 'reserved'; reservation: Reservation }
   | { status: 'done_unconfirmed'; completion: Completion }
@@ -91,8 +102,12 @@ export type LifecycleError =
   | 'no_deadline'
   | 'grace_not_over'
 
-const giver = (actor: Actor): boolean => actor.kind === 'person' && isActiveGiver(actor.person)
-const taker = (actor: Actor): boolean => actor.kind === 'person' && isActiveTaker(actor.person)
+/** The acting person if they are an active giver. */
+const asGiver = (actor: Actor): Person | null =>
+  actor.kind === 'person' && isActiveGiver(actor.person) ? actor.person : null
+/** The acting person if they are an active taker. */
+const asTaker = (actor: Actor): Person | null =>
+  actor.kind === 'person' && isActiveTaker(actor.person) ? actor.person : null
 
 function pastGrace(deadline: Deadline | null, at: Date): boolean {
   return deadline !== null && at.getTime() >= deadline.graceEndsAt.getTime()
@@ -101,15 +116,15 @@ function pastGrace(deadline: Deadline | null, at: Date): boolean {
 // ── Creation ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * A giver creates a one-time task. It starts in negotiation; the agreement module decides
+ * A giver creates a one-time task. It starts `proposed`; the agreement module decides
  * when it is agreed (`markAgreed`). One-time tasks have no deadline.
  */
 export function createOneTimeItem(
   actor: Actor,
   approvalRequired: boolean = DEFAULT_APPROVAL_REQUIRED,
 ): Result<Item, LifecycleError> {
-  if (!giver(actor)) return fail('not_a_giver')
-  return ok({ origin: 'one_time', approvalRequired, deadline: null, status: 'negotiating' })
+  if (!asGiver(actor)) return fail('not_a_giver')
+  return ok({ origin: 'one_time', approvalRequired, deadline: null, status: 'proposed' })
 }
 
 /**
@@ -124,7 +139,7 @@ export function createInstance(
   deadline: Deadline | null,
 ): Result<Item, LifecycleError> {
   if (origin === 'scheduled' && actor.kind !== 'system') return fail('not_allowed')
-  if (origin === 'on_demand' && !giver(actor)) return fail('not_a_giver')
+  if (origin === 'on_demand' && !asGiver(actor)) return fail('not_a_giver')
   if (deadline && deadline.graceEndsAt.getTime() < deadline.dueAt.getTime()) {
     return fail('invalid_deadline')
   }
@@ -136,8 +151,9 @@ export function createInstance(
  * a giver's approval, whatever the template's flag says.
  */
 export function selfLog(actor: Actor, at: Date): Result<Item, LifecycleError> {
-  if (actor.kind !== 'person' || !isActiveTaker(actor.person)) return fail('not_a_taker')
-  const takerId = actor.person.id
+  const taker = asTaker(actor)
+  if (!taker) return fail('not_a_taker')
+  const takerId = taker.id
   return ok({
     origin: 'self_logged',
     approvalRequired: true,
@@ -150,42 +166,46 @@ export function selfLog(actor: Actor, at: Date): Result<Item, LifecycleError> {
 // ── Agreement ────────────────────────────────────────────────────────────────────────────
 
 /**
- * The score is agreed (spec §5.2): plain agreement opens the task; a won bid reserves it to
- * that taker. Called by the agreement code, which has already checked who agreed.
+ * The agreement says the score is agreed (spec §5.2): plain agreement opens the task (`null`);
+ * a won bid reserves it to that taker. The agreement has already checked who agreed.
  */
-export function markAgreed(item: Item, bidWinner: PersonId | null): Result<Item, LifecycleError> {
-  if (item.status !== 'negotiating') return fail('wrong_state')
+export function markAgreed(
+  item: Item,
+  bid: { takerId: PersonId; giverId: PersonId } | null,
+): Result<Item, LifecycleError> {
+  if (item.status !== 'proposed') return fail('wrong_state')
   const base = withoutState(item)
-  if (bidWinner === null) return ok({ ...base, status: 'open' })
-  return ok({ ...base, status: 'reserved', reservation: { takerId: bidWinner, via: 'bid' } })
+  if (bid === null) return ok({ ...base, status: 'open' })
+  return ok({ ...base, status: 'reserved', reservation: { ...bid, via: 'bid' } })
 }
 
 // ── Reservation (spec §5.4) ──────────────────────────────────────────────────────────────
 
 /** A taker reserves an open item ("I'll do this"). Optional. */
-export function reserve(item: Item, actor: Actor, at: Date): Result<Item, LifecycleError> {
-  if (actor.kind !== 'person' || !isActiveTaker(actor.person)) return fail('not_a_taker')
+export function reserveItem(item: Item, actor: Actor, at: Date): Result<Item, LifecycleError> {
+  const taker = asTaker(actor)
+  if (!taker) return fail('not_a_taker')
   if (item.status !== 'open') return fail('wrong_state')
   if (pastGrace(item.deadline, at)) return fail('past_grace')
   return ok({
     ...withoutState(item),
     status: 'reserved',
-    reservation: { takerId: actor.person.id, via: 'tap' },
+    reservation: { takerId: taker.id, via: 'tap' },
   })
 }
 
 /**
  * [call] A taker releases their own reservation; a giver releases anyone's. A one-time task
- * reserved by winning a bid goes back to negotiation [call]: the caller must restart the
- * agreement with the agreed score as the current offer, since only one taker agreed to it.
+ * reserved by winning a bid goes back to `proposed` [call]: the caller must also call
+ * `reopenOneTimeOffer` with the agreed score and `reservation.giverId`, since only one taker
+ * agreed to that score.
  */
-export function release(item: Item, actor: Actor): Result<Item, LifecycleError> {
+export function releaseReservation(item: Item, actor: Actor): Result<Item, LifecycleError> {
   if (item.status !== 'reserved') return fail('wrong_state')
-  const own =
-    actor.kind === 'person' && taker(actor) && actor.person.id === item.reservation.takerId
-  if (!own && !giver(actor)) return fail('not_allowed')
+  const own = asTaker(actor)?.id === item.reservation.takerId
+  if (!own && !asGiver(actor)) return fail('not_allowed')
   if (item.origin === 'one_time' && item.reservation.via === 'bid') {
-    return ok({ ...withoutState(item), status: 'negotiating' })
+    return ok({ ...withoutState(item), status: 'proposed' })
   }
   return ok({ ...withoutState(item), status: 'open' })
 }
@@ -199,16 +219,16 @@ export function release(item: Item, actor: Actor): Result<Item, LifecycleError> 
  * - A giver: closes it with no points and no approval step [call], reserved or not.
  * Too late once the grace window is over.
  */
-export function complete(item: Item, actor: Actor, at: Date): Result<Item, LifecycleError> {
-  if (actor.kind !== 'person') return fail('not_allowed')
-  const isGiver = isActiveGiver(actor.person)
-  if (!isGiver && !isActiveTaker(actor.person)) return fail('not_allowed')
+export function completeItem(item: Item, actor: Actor, at: Date): Result<Item, LifecycleError> {
+  const giver = asGiver(actor)
+  const person = giver ?? asTaker(actor)
+  if (!person) return fail('not_allowed')
   if (item.status !== 'open' && item.status !== 'reserved') return fail('wrong_state')
   if (pastGrace(item.deadline, at)) return fail('past_grace')
 
   const reservation = item.status === 'reserved' ? item.reservation : null
-  const actorId = actor.person.id
-  if (isGiver) {
+  const actorId = person.id
+  if (giver) {
     const completion = { completedBy: actorId, completedAt: at, earner: null, reservation }
     return ok({ ...withoutState(item), status: 'confirmed', completion })
   }
@@ -219,8 +239,8 @@ export function complete(item: Item, actor: Actor, at: Date): Result<Item, Lifec
 }
 
 /** A giver approves a pending completion: points become confirmed. */
-export function approve(item: Item, actor: Actor): Result<Item, LifecycleError> {
-  if (!giver(actor)) return fail('not_a_giver')
+export function approveCompletion(item: Item, actor: Actor): Result<Item, LifecycleError> {
+  if (!asGiver(actor)) return fail('not_a_giver')
   if (item.status !== 'done_unconfirmed') return fail('wrong_state')
   return ok({ ...withoutState(item), status: 'confirmed', completion: item.completion })
 }
@@ -229,9 +249,11 @@ export function approve(item: Item, actor: Actor): Result<Item, LifecycleError> 
  * A giver rejects a pending completion. It goes back to where it came from: reserved by the same
  * taker if it was reserved, otherwise open. [call] A rejected self-logged chore is closed as
  * rejected, since it was never an open instance. The reason goes to the audit entry.
+ * The reservation comes back even if that taker was deactivated meanwhile; deactivating a taker
+ * must release their reservations (caller duty, #26).
  */
-export function reject(item: Item, actor: Actor): Result<Item, LifecycleError> {
-  if (!giver(actor)) return fail('not_a_giver')
+export function rejectCompletion(item: Item, actor: Actor): Result<Item, LifecycleError> {
+  if (!asGiver(actor)) return fail('not_a_giver')
   if (item.status !== 'done_unconfirmed') return fail('wrong_state')
   const base = withoutState(item)
   if (item.origin === 'self_logged') {
@@ -245,7 +267,7 @@ export function reject(item: Item, actor: Actor): Result<Item, LifecycleError> {
 // ── Expiry and cancellation ──────────────────────────────────────────────────────────────
 
 /** The scheduler expires an open or reserved deadline item once its grace window is over. */
-export function expire(item: Item, actor: Actor, now: Date): Result<Item, LifecycleError> {
+export function expireItem(item: Item, actor: Actor, now: Date): Result<Item, LifecycleError> {
   if (actor.kind !== 'system') return fail('not_allowed')
   if (item.status !== 'open' && item.status !== 'reserved') return fail('wrong_state')
   if (!item.deadline) return fail('no_deadline')
@@ -254,9 +276,9 @@ export function expire(item: Item, actor: Actor, now: Date): Result<Item, Lifecy
 }
 
 /** [call] A giver cancels any item not yet completed. */
-export function cancel(item: Item, actor: Actor): Result<Item, LifecycleError> {
-  if (!giver(actor)) return fail('not_a_giver')
-  if (item.status !== 'negotiating' && item.status !== 'open' && item.status !== 'reserved') {
+export function cancelItem(item: Item, actor: Actor): Result<Item, LifecycleError> {
+  if (!asGiver(actor)) return fail('not_a_giver')
+  if (item.status !== 'proposed' && item.status !== 'open' && item.status !== 'reserved') {
     return fail('wrong_state')
   }
   return ok({ ...withoutState(item), status: 'cancelled' })
