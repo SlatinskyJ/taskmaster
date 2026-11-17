@@ -120,7 +120,7 @@ The screens mockup has one row per role. Names are the artboard names.
 | GBid | Reply to a bid: accept or counter | 5.2 |
 | GReject | Reject a completion with a reason | 5.5 |
 | Period | This week (locked) and the proposal for next week, with who agreed | 5.8 |
-| GDefaults | Propose new default week settings; applies once everyone agrees | 5.8 |
+| GDefaults | Propose new default week settings; applies once all takers and one giver agree | 5.8 |
 
 ### 7.3 Meeting (giver)
 | Screen | What it does | Spec |
