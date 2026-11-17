@@ -11,6 +11,10 @@ import { PUBLIC_SERVER_FNS } from '~/server/auth/guards'
 /** Server function → roles allowed (`any` = every signed-in user). Add new ones here. */
 const EXPECTED_ROLES: Record<string, string> = {
   listUsersFn: 'admin',
+  createTaskFn: 'giver',
+  approveTaskOfferFn: 'giver,taker',
+  listPendingApprovalsFn: 'giver,taker',
+  listTasksFn: 'giver',
 }
 
 const SRC = join(import.meta.dirname, '..', 'src')
