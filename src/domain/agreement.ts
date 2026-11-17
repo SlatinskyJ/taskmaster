@@ -1,7 +1,7 @@
 import type { Person, PersonId } from './parties'
 import type { BidBook } from './bids'
 import { EMPTY_BOOK, pruneBook } from './bids'
-import { allParties, findPerson, isActiveGiver, isActiveTaker, isParty } from './parties'
+import { allParties, findPerson, isActiveAs, isActiveGiver, isParty } from './parties'
 import type { Result } from './result'
 import { fail, ok } from './result'
 
@@ -188,7 +188,7 @@ export function scoreForNewInstance(template: TemplateAgreement): Result<number,
 // ── One-time tasks (spec §5.2) ──────────────────────────────────────────────────────────
 // Two paths run in parallel; the first to finish wins:
 //   1. score agreement: a taker approves the giver's offer → open (any taker may do it);
-//   2. bidding (`bidding.ts`): a taker and the giver side agree on a number → reserved to him.
+//   2. bidding (`bidding.ts`): a taker and the giver side agree on a number → reserved to that taker.
 // Once a task is open or reserved, every action of either path is refused (`not_proposed`).
 
 export type OneTimeAgreement =
@@ -196,7 +196,7 @@ export type OneTimeAgreement =
   | { status: 'proposed'; offer: ScoreProposal; book: BidBook }
   /** A giver and a taker approved: in the queue at `score`, any taker may reserve or do it. */
   | { status: 'open'; score: number }
-  /** Agreed by bidding between `takerId` and `giverId`: reserved to him (spec §5.2 path 2). */
+  /** Agreed by bidding between `takerId` and `giverId`: reserved to that taker (spec §5.2 path 2). */
   | { status: 'reserved'; score: number; takerId: PersonId; giverId: PersonId }
 
 /** A giver creates a one-time task with an initial offer. */
@@ -212,6 +212,15 @@ export function createOneTimeTask(
   return ok(resolveOneTime({ status: 'proposed', offer: offer.value, book: EMPTY_BOOK }, people))
 }
 
+/** The bid book without bids or counters of people who no longer take part (spec §3, live). */
+export function liveBook(book: BidBook, people: readonly Person[]): BidBook {
+  return pruneBook(
+    book,
+    (id) => isActiveAs(people, id, 'taker'),
+    (id) => isActiveAs(people, id, 'giver'),
+  )
+}
+
 /**
  * Drops approvals, bids and counters of people who no longer count, and opens a fully approved
  * offer. Call whenever people change.
@@ -223,11 +232,7 @@ export function resolveOneTime(
   if (task.status !== 'proposed') return task
   const offer = pruneApprovals(task.offer, people)
   if (isAgreed(offer, people)) return { status: 'open', score: offer.score }
-  const is = (check: (p: Person) => boolean) => (id: PersonId) => {
-    const person = findPerson(people, id)
-    return person !== undefined && check(person)
-  }
-  const book = pruneBook(task.book, is(isActiveTaker), is(isActiveGiver))
+  const book = liveBook(task.book, people)
   return offer === task.offer && book === task.book ? task : { ...task, offer, book }
 }
 
