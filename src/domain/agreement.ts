@@ -23,6 +23,7 @@ export type AgreementError =
   | 'not_a_giver'
   | 'already_approved'
   | 'not_proposed'
+  | 'offer_changed'
   | 'not_agreed'
   | 'change_pending'
   | 'no_change_pending'
