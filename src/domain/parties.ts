@@ -35,6 +35,16 @@ export function allParties(people: readonly Person[]): PersonId[] {
     .sort((a, b) => a - b)
 }
 
+/** Whether `id` is an active person with this party role right now. */
+export function isActiveAs(
+  people: readonly Person[],
+  id: PersonId,
+  role: 'giver' | 'taker',
+): boolean {
+  const person = findPerson(people, id)
+  return person !== undefined && person.active && person.role === role
+}
+
 export function findPerson(people: readonly Person[], id: PersonId): Person | undefined {
   return people.find((p) => p.id === id)
 }
