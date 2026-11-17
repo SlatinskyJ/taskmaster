@@ -25,11 +25,14 @@ export type AgreementError =
   | 'not_proposed'
   | 'not_agreed'
   | 'change_pending'
-  | 'no_change_pending'
   | 'same_score'
   | 'not_a_taker'
   | 'no_bid'
   | 'no_bids'
+  | 'needs_taker'
+  | 'not_involved'
+  | 'score_frozen'
+  | 'wrong_state'
 
 /** Points must be a positive whole number. */
 export function isValidScore(score: number): boolean {
@@ -96,8 +99,11 @@ export function isAgreed(proposal: ScoreProposal, people: readonly Person[]): bo
 export type TemplateAgreement =
   /** Not yet agreed: creates no instances. */
   | { status: 'proposed'; proposal: ScoreProposal }
-  /** Agreed at `score`. A score change in flight leaves `score` in force until it is agreed. */
-  | { status: 'agreed'; score: number; pendingChange: ScoreProposal | null }
+  /**
+   * Agreed at `score`. A score change in flight (`change`, its open bids) leaves `score` in force
+   * until the giver side accepts a bid (spec §5.1; `scoreChange.ts`). One change at a time.
+   */
+  | { status: 'agreed'; score: number; change: BidBook | null }
 
 /** A giver proposes a new template's score (only givers create templates, spec §3). */
 export function proposeTemplate(
@@ -113,9 +119,8 @@ export function proposeTemplate(
 }
 
 /**
- * Promotes whatever is now fully approved: a proposed template becomes agreed, a pending
- * score change replaces the score, after dropping approvals of people who are no longer
- * parties. Call after any approval and on every proposal whenever people change.
+ * Drops approvals and change bids of people who are no longer parties, and promotes a proposed
+ * template that is now fully approved. Call after any approval and whenever people change.
  */
 export function resolveTemplate(
   template: TemplateAgreement,
@@ -123,52 +128,30 @@ export function resolveTemplate(
 ): TemplateAgreement {
   if (template.status === 'proposed') {
     const proposal = pruneApprovals(template.proposal, people)
-    if (isAgreed(proposal, people)) {
-      return { status: 'agreed', score: proposal.score, pendingChange: null }
-    }
+    if (isAgreed(proposal, people)) return { status: 'agreed', score: proposal.score, change: null }
     return proposal === template.proposal ? template : { status: 'proposed', proposal }
   }
-  if (!template.pendingChange) return template
-  const change = pruneApprovals(template.pendingChange, people)
-  if (isAgreed(change, people)) {
-    return { status: 'agreed', score: change.score, pendingChange: null }
-  }
-  return change === template.pendingChange ? template : { ...template, pendingChange: change }
+  if (!template.change) return template
+  const change = liveTemplateBook(template.change, people)
+  return change === template.change ? template : { ...template, change }
 }
 
-/** A party approves the template's proposed score, or its pending score change. */
+/** A template change's bid book without bids of people who are no longer parties. */
+export function liveTemplateBook(book: BidBook, people: readonly Person[]): BidBook {
+  const party = (id: PersonId) => isActiveAs(people, id, 'giver') || isActiveAs(people, id, 'taker')
+  return pruneBook(book, party, party)
+}
+
+/** A party approves a proposed template's score. Score changes go through `scoreChange.ts`. */
 export function approveTemplate(
   template: TemplateAgreement,
   people: readonly Person[],
   approverId: PersonId,
 ): Result<TemplateAgreement, AgreementError> {
-  const proposal = template.status === 'proposed' ? template.proposal : template.pendingChange
-  if (!proposal) return fail('no_change_pending')
-  const approved = approveScore(proposal, people, approverId)
+  if (template.status !== 'proposed') return fail('not_proposed')
+  const approved = approveScore(template.proposal, people, approverId)
   if (!approved.ok) return approved
-  const next: TemplateAgreement =
-    template.status === 'proposed'
-      ? { status: 'proposed', proposal: approved.value }
-      : { ...template, pendingChange: approved.value }
-  return ok(resolveTemplate(next, people))
-}
-
-/**
- * Any party proposes a new score for an agreed template. Needs a giver + a taker again; the
- * old score stays in force until then (spec §5.1). One change at a time.
- */
-export function proposeTemplateScoreChange(
-  template: TemplateAgreement,
-  people: readonly Person[],
-  proposerId: PersonId,
-  score: number,
-): Result<TemplateAgreement, AgreementError> {
-  if (template.status !== 'agreed') return fail('not_agreed')
-  if (template.pendingChange) return fail('change_pending')
-  if (score === template.score) return fail('same_score')
-  const proposal = proposeScore(people, proposerId, score)
-  if (!proposal.ok) return proposal
-  return ok(resolveTemplate({ ...template, pendingChange: proposal.value }, people))
+  return ok(resolveTemplate({ status: 'proposed', proposal: approved.value }, people))
 }
 
 /** Instances can only come from an agreed template (spec §5.1). */
@@ -178,8 +161,8 @@ export function canCreateInstances(template: TemplateAgreement): boolean {
 
 /**
  * The score a new instance gets: the template's agreed score at the moment of creation.
- * [call] A later score change applies only to instances created after it is agreed; existing
- * instances keep the score they were created with (spec §4, §5.1).
+ * A later score change applies only to instances created after it is agreed; existing
+ * instances keep the score they were created with (spec §4, §5.1; Jakub 2026-11-17).
  */
 export function scoreForNewInstance(template: TemplateAgreement): Result<number, AgreementError> {
   return template.status === 'agreed' ? ok(template.score) : fail('not_agreed')
