@@ -1,6 +1,6 @@
 ---
 name: pr-brief
-description: Use when a Taskmaster pull request is about to be marked ready for review, or when its review rounds finish and the PR brief for Jakub needs its review summary
+description: Use when a Taskmaster pull request is about to be marked ready for review, when its review rounds finish, or when anything the brief states changes later (Jakub answers a question, a push changes behaviour); the PR brief for Jakub must match the PR
 ---
 
 # PR brief for Jakub
@@ -36,6 +36,15 @@ Playwright against the dev server, viewport 390×844, light theme, `deviceScaleF
 ## Publishing
 
 Load the `artifact-design` skill, write the page to the scratchpad, and publish it with the Artifact tool (icon `code`). After the rounds, update it at the same path so the link stays the same.
+
+## Keep it current
+
+The brief must always match the PR. Republish it (same path, same link) in the same turn as any of these:
+- Jakub answers an open question or decision card: turn "Your call" into "Decided" (his answer, date) and drop it from the lede and review summary.
+- A push changes behaviour, scope, dependencies or schema that the brief describes.
+- The review rounds finish (review summary).
+
+Before telling Jakub a PR is ready, reread its brief against the PR body and the latest commit.
 
 ## Common mistakes
 
