@@ -9,8 +9,9 @@ import type { NewUser } from '~/server/users'
 // `TASKMASTER_ENV=preview`; to try it locally: `TASKMASTER_ENV=preview pnpm dev` on a fresh
 // `DATA_DIR`.
 //
-// Guards: never without the preview flag, and never on a database that already has people
-// (a real family's database always does). Both are tested.
+// Guards: never without the preview flag, never when ADMIN_PASSWORD is set (a real deploy
+// sets it), and never on a database that already has people (a real family's database always
+// does). All tested.
 //
 // Grows with features: each feature PR adds its sample data here (tasks in every state, a
 // template, an open period, a past settlement), in the same transaction.
@@ -24,7 +25,8 @@ export const DEMO_USERS: readonly NewUser[] = [
 ]
 
 export type DemoOutcome =
-  { kind: 'seeded'; usernames: string[] } | { kind: 'skipped'; reason: 'not_preview' | 'not_empty' }
+  | { kind: 'seeded'; usernames: string[] }
+  | { kind: 'skipped'; reason: 'not_preview' | 'admin_password_set' | 'not_empty' }
 
 export function seedDemo(
   db: Db,
@@ -32,6 +34,9 @@ export function seedDemo(
   now: Date = new Date(),
 ): DemoOutcome {
   if (env.TASKMASTER_ENV !== 'preview') return { kind: 'skipped', reason: 'not_preview' }
+  // A real deploy sets ADMIN_PASSWORD. If the preview flag ever leaks into one, the known
+  // demo password must still never create an account.
+  if ((env.ADMIN_PASSWORD ?? '') !== '') return { kind: 'skipped', reason: 'admin_password_set' }
   if (db.select({ id: users.id }).from(users).limit(1).get()) {
     return { kind: 'skipped', reason: 'not_empty' }
   }
@@ -52,7 +57,9 @@ export function seedDemo(
 
 export function describeDemo(outcome: DemoOutcome): string | null {
   if (outcome.kind === 'skipped') {
-    return outcome.reason === 'not_empty' ? '[demo] database has people already: not seeding' : null
+    if (outcome.reason === 'not_empty') return '[demo] database has people already: not seeding'
+    if (outcome.reason === 'admin_password_set') return '[demo] ADMIN_PASSWORD is set: not seeding'
+    return null
   }
   return `[demo] seeded ${outcome.usernames.join(', ')} (password "${DEMO_PASSWORD}")`
 }

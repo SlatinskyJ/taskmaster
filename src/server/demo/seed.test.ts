@@ -1,4 +1,5 @@
 import { verify } from '@node-rs/argon2'
+import { sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { login } from '~/server/auth'
 import { auditLog, users } from '~/server/db/schema'
@@ -65,6 +66,29 @@ describe('demo seed (#62)', () => {
         .map((u) => u.username),
     ).toEqual(['admin'])
     expect(db.select().from(auditLog).all()).toHaveLength(before)
+  })
+
+  it('refuses when ADMIN_PASSWORD is set, so a real deploy never gets the demo password', () => {
+    const db = createTestDb()
+    const env = { ...PREVIEW, ADMIN_PASSWORD: 'correct horse battery' }
+    expect(seedDemo(db, env, T0)).toEqual({ kind: 'skipped', reason: 'admin_password_set' })
+    expect(db.select().from(users).all()).toHaveLength(0)
+    expect(describeDemo({ kind: 'skipped', reason: 'admin_password_set' })).toContain(
+      'ADMIN_PASSWORD',
+    )
+  })
+
+  it('all or nothing: a failure partway leaves nobody, and the next boot seeds everyone', () => {
+    const db = createTestDb()
+    db.run(
+      sql`CREATE TRIGGER boom BEFORE INSERT ON users WHEN NEW.username = 'starsi' BEGIN SELECT RAISE(ABORT, 'boom'); END`,
+    )
+    expect(() => seedDemo(db, PREVIEW, T0)).toThrow('boom')
+    expect(db.select().from(users).all()).toHaveLength(0)
+    expect(db.select().from(auditLog).all()).toHaveLength(0)
+    db.run(sql`DROP TRIGGER boom`)
+    expect(seedDemo(db, PREVIEW, T0).kind).toBe('seeded')
+    expect(db.select().from(users).all()).toHaveLength(4)
   })
 
   it('a second boot seeds nothing more', () => {
