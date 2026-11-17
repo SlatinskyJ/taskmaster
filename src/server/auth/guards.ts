@@ -14,17 +14,19 @@ import type { CurrentUser } from './sessions'
 //     .handler(({ context }) => ... context.user ...)
 
 /**
- * Server functions anyone may call, signed in or not, all in ~/server/auth/functions.ts (the
- * guard scan checks the file too). Adding one needs a reason here.
+ * Server functions anyone may call, signed in or not → the one file (under src/server) that may
+ * declare each (the guard scan checks the file too). Adding one needs a reason here.
  */
-export const PUBLIC_SERVER_FNS = [
+export const PUBLIC_SERVER_FNS: Readonly<Record<string, string>> = {
   // The login form is the way in.
-  'loginFn',
+  loginFn: 'auth/functions.ts',
   // Ending a session needs no rights; without a session it does nothing.
-  'logoutFn',
+  logoutFn: 'auth/functions.ts',
   // Route guards ask it who is signed in; it answers null for nobody.
-  'getCurrentUserFn',
-] as const
+  getCurrentUserFn: 'auth/functions.ts',
+  // /dev/ui asks whether dev pages exist here; a yes/no about the deployment, no user data.
+  getDevPagesAllowed: 'env/functions.ts',
+}
 
 /** Thrown (with HTTP 403) when a signed-in user's role may not call a server function. */
 export class ForbiddenError extends Error {

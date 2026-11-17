@@ -37,7 +37,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Textarea } from '~/components/ui/textarea'
 import { cs, type ItemStateKey } from '~/lib/strings'
 import { THEME_PREFS, useThemePref, type ThemePref } from '~/lib/theme'
-import { getDevPagesAllowed } from '~/server/env/devPages'
+import { getDevPagesAllowed } from '~/server/env/functions'
 
 // Dev-only showcase of the theme and components (#30). Not a family screen, so its own
 // labels are English; Czech samples come from the strings module.

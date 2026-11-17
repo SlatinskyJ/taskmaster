@@ -14,7 +14,6 @@ const EXPECTED_ROLES: Record<string, string> = {
 }
 
 const SRC = join(import.meta.dirname, '..', 'src')
-const PUBLIC_FILE = join('server', 'auth', 'functions.ts')
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -48,9 +47,10 @@ function serverFns(): ServerFn[] {
       const list = /\.middleware\(\[([^\]]*)\]\)/.exec(body)?.[1] ?? ''
       const middleware = /\b(requireUser|requireRole\(([^)]*)\))/.exec(list)
       const roles = middleware?.[2]?.replace(/['"\s]/g, '')
-      // Public by name only in the auth module: a same-named function elsewhere is not public.
+      // Public by name only in its listed file: a same-named function elsewhere is not public.
+      const publicFile = PUBLIC_SERVER_FNS[name]
       const access =
-        (PUBLIC_SERVER_FNS as readonly string[]).includes(name) && rel === PUBLIC_FILE
+        publicFile !== undefined && rel === join('server', ...publicFile.split('/'))
           ? 'public'
           : middleware
             ? (roles ?? 'any')
@@ -77,7 +77,7 @@ describe('server function guards (#28)', () => {
 
   it('every name in PUBLIC_SERVER_FNS is a real server function', () => {
     const names = fns.map((f) => f.name)
-    for (const name of PUBLIC_SERVER_FNS) expect(names).toContain(name)
+    for (const name of Object.keys(PUBLIC_SERVER_FNS)) expect(names).toContain(name)
   })
 
   it('each guarded function allows exactly the roles pinned here', () => {

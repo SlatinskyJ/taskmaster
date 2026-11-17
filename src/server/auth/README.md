@@ -15,7 +15,7 @@ role guards (#28) build on this.
 
 ## Guarding a server function
 
-Every server function takes a guard, or is listed in `PUBLIC_SERVER_FNS` with a reason.
+Every server function takes a guard, or is listed in `PUBLIC_SERVER_FNS` with its file and a reason.
 `tests/server-fn-guards.test.ts` scans `src/` and fails otherwise; it also pins each function's
 roles, so add yours there.
 
