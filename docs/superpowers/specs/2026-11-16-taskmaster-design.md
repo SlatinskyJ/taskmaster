@@ -24,7 +24,7 @@ Success means the family uses it every week instead of the whiteboard bookkeepin
 
 ### Goals (v1)
 - One-time and recurring tasks with agreed point scores.
-- Score agreement rules: all-party approval, and a bidding flow for one-time tasks.
+- Score agreement rules: giver + taker approval, and a bidding flow for one-time tasks.
 - Optional reservation, completion, and giver approval of completed work.
 - Per-taker running total with **confirmed** and **pending** points shown separately against the period's levels.
 - Periods (settlement to settlement) with configurable length and levels, agreed before the period starts.
@@ -64,6 +64,7 @@ Role rules:
 - **Giver**: can create tasks, templates, and instances, approve scores, respond to bids, complete tasks (no points, no running total "for now"), approve or reject completions, and run the meeting/settlement. Can propose a change to the **default period settings**, which needs all-party agreement (5.8), and can flag a locked item as **disputed** (5.11).
 - **Admin**: manages users, global settings (default levels, default period length), and templates if needed; can correct a finalized settlement and make manual point adjustments; **settles disputes** (5.11). All admin actions are logged. The admin does not count as a "party" for any agreement.
 - **"All parties"** = all active givers + all active takers. When Mum is added, she becomes part of "all parties" automatically.
+- **Score agreement** (Jakub, 2026-11-17) = at least **one active giver and one active taker** approved the score. Proposing a score counts as approving it. Scores are whole numbers from 1. The admin never counts. This replaces all-party approval for task and template scores (5.1, 5.2); period settings (5.8) still need all parties.
 
 ## 4. Concepts
 
@@ -86,23 +87,31 @@ Role rules:
 ## 5. Rules
 
 ### 5.1 Score agreement — recurring templates
-- A template's score must be approved by **all parties**. Until then, the template is *proposed* and creates no instances.
-- Changing a template's score also needs all parties. The old score stays in force until the change is fully approved.
-- **[call]** A score change applies only to instances created after the change is approved. Existing instances keep their score, consistent with "score fixed at creation".
+- A template's score needs **score agreement** (one giver + one taker, section 3). Until then, the template is *proposed* and creates no instances.
+- After agreement, **any party** may propose a new score. It needs score agreement again; the old score stays in force until the change is agreed.
+- Only givers create templates. One score change may be in flight per template at a time; changes to different templates can run in parallel (Jakub, 2026-11-17).
+- A template score change runs **the same way as bidding on a one-time task** (5.2 path 2), with these differences (Jakub, 2026-11-17):
+  - Each party has at most one open bid in the change; bidding again replaces it. Every bid is kept in the history.
+  - When the giver side accepts, it accepts the lowest open bid. The template gets that score; nobody is reserved anything.
+- A score change applies only to instances created after the change is agreed. Existing instances keep their score, consistent with "score fixed at creation" (Jakub, 2026-11-17).
 
 ### 5.2 Score agreement — one-time tasks
 A giver creates a one-time task with an initial offer (score). From there, two paths run in parallel, and the first to complete wins:
 
-1. **All-party approval.** Every party approves the offered score. The task becomes **open** at that score and sits in the queue; any taker may reserve or do it later.
+1. **Score agreement.** One giver and one taker approve the offered score (the giver's offer counts as the giver's approval, so one taker's approval is enough). The task becomes **open** at that score and sits in the queue; any taker may reserve or do it later.
 2. **Bidding.** A taker counters with a different score. That taker and the giver side go back and forth (offer/counter/accept). When both sides accept the same number, the task becomes **reserved to that taker** at that score. Other takers do not need to agree.
 
 Details:
-- Several takers may bid on the same task at the same time. **[call]** The first bid to reach agreement wins; all other bids on that task close, and pending all-party approvals are discarded.
+- Several takers may bid on the same task at the same time (Jakub, 2026-11-17):
+  - Each taker has **at most one open bid** per task. Bidding again **replaces** his own open bid, as often as he likes (e.g. brother 1 goes from 25 to 23). Nobody waits for a turn.
+  - Every bid and counter is **kept in the history**. The giver side sees the task with all bids and their history; a taker sees the history when making a bid (task detail and feed).
+  - When the giver side accepts, it accepts the **lowest** open bid (the best one for the givers). If one taker holds the lowest bid, the task becomes reserved to him at that score; if several takers tie at the lowest, the task becomes **open** at that score and they sort out who takes it.
+  - On acceptance all other bids on that task close, and pending score approvals are discarded.
 - **[call]** On the giver side, any active giver may accept or counter a bid (so Mum or Dad can respond).
 - A taker may also simply accept the giver's current offer within a bid, which is agreement plus reservation in one step.
 - Changing the score of an agreed one-time task:
   - if reserved: needs that taker + a giver;
-  - if open (unreserved): needs all parties;
+  - if open (unreserved): any party may propose it; needs score agreement (a giver + a taker), and the old score stays until then;
   - once completed: the score is frozen (only the admin can correct, via adjustment).
 
 ### 5.3 Recurring instances
