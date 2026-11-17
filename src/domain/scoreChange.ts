@@ -1,5 +1,12 @@
 import type { AgreementError, ScoreProposal, TemplateAgreement } from './agreement'
-import { approveScore, isAgreed, isValidScore, liveTemplateBook, proposeScore } from './agreement'
+import {
+  approveScore,
+  isAgreed,
+  isValidScore,
+  liveTemplateBook,
+  proposeScore,
+  pruneApprovals,
+} from './agreement'
 import { EMPTY_BOOK, bidOf, lowestBid, placeBid } from './bids'
 import type { Item } from './lifecycle'
 import type { Person, PersonId } from './parties'
@@ -62,7 +69,10 @@ export function acceptLowestTemplateBid(
   return ok({ status: 'agreed', score: lowest.score, change: null })
 }
 
-/** A taker accepts a giver's open bid in the change: agreed at that score. */
+/**
+ * A taker accepts a giver's open bid: agreed at that score. Only when that bid is the lowest
+ * open bid (the change always ends at the lowest, spec §5.1); used when only givers hold it.
+ */
 export function acceptTemplateBid(
   template: TemplateAgreement,
   people: readonly Person[],
@@ -72,8 +82,10 @@ export function acceptTemplateBid(
   if (template.status !== 'agreed') return fail('not_agreed')
   if (!template.change) return fail('no_bids')
   if (!isTaker(people, takerId)) return fail('not_a_taker')
-  const bid = isGiver(people, giverId) ? bidOf(template.change, giverId) : undefined
+  const book = liveTemplateBook(template.change, people)
+  const bid = isGiver(people, giverId) ? bidOf(book, giverId) : undefined
   if (!bid) return fail('no_bid')
+  if (bid.score !== lowestBid(book)?.score) return fail('not_lowest')
   return ok({ status: 'agreed', score: bid.score, change: null })
 }
 
@@ -83,7 +95,7 @@ export function acceptTemplateBid(
 function changeRule(
   item: Item,
 ): Result<{ kind: 'open' } | { kind: 'reserved'; takerId: PersonId }, AgreementError> {
-  if (item.origin !== 'one_time') return fail('wrong_state')
+  if (item.origin !== 'one_time') return fail('not_changeable')
   switch (item.status) {
     case 'open':
       return ok({ kind: 'open' })
@@ -95,7 +107,7 @@ function changeRule(
     case 'confirmed':
       return fail('score_frozen')
     default:
-      return fail('wrong_state')
+      return fail('not_changeable')
   }
 }
 
@@ -114,6 +126,21 @@ export function isOneTimeChangeAgreed(
     change.approvedBy.includes(takerId) &&
     change.approvedBy.some((id) => isGiver(people, id))
   )
+}
+
+/**
+ * Keeps a pending one-time change in step with the task. Returns the change with approvals of
+ * people who left dropped, or `null` when the task can no longer change score (completed,
+ * cancelled, expired, or back in negotiation after a release): the change is discarded.
+ * Caller duty: run it on the pending change after every lifecycle step and people change, in
+ * the same transaction, so a stale change never blocks a new one (`change_pending`).
+ */
+export function resolveOneTimeChange(
+  item: Item,
+  change: ScoreProposal,
+  people: readonly Person[],
+): ScoreProposal | null {
+  return changeRule(item).ok ? pruneApprovals(change, people) : null
 }
 
 /**

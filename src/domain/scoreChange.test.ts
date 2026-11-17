@@ -15,6 +15,7 @@ import {
   createInstance,
   createOneTimeItem,
   markAgreed,
+  releaseReservation,
   reserveItem,
 } from './lifecycle'
 import type { Person } from './parties'
@@ -26,6 +27,7 @@ import {
   bidTemplateScore,
   isOneTimeChangeAgreed,
   proposeOneTimeScoreChange,
+  resolveOneTimeChange,
 } from './scoreChange'
 
 const DAD = 1
@@ -119,6 +121,17 @@ describe('template score change runs like bidding (spec §5.1)', () => {
     })
   })
 
+  it("a taker may only accept a giver's bid if it is the lowest", () => {
+    const t = tbid(tbid(dishwasher(), DAD, 9), YOUNGER, 6)
+    expect(error(acceptTemplateBid(t, family, OLDER, DAD))).toBe('not_lowest')
+  })
+
+  it('a new bid drops bids of people who left', () => {
+    const t = tbid(dishwasher(), OLDER, 8)
+    const noOlder = deactivate(family, OLDER)
+    expect(bids(tbid(t, YOUNGER, 9, noOlder))).toEqual([{ by: YOUNGER, score: 9 }])
+  })
+
   it('a tie between a giver and a taker at the lowest is agreed by the giver side', () => {
     const t = tbid(tbid(dishwasher(), OLDER, 4), DAD, 4)
     expect(value(acceptLowestTemplateBid(t, family, DAD))).toMatchObject({ score: 4 })
@@ -203,12 +216,14 @@ describe('changing a reserved one-time task (spec §5.2): that taker + a giver',
   it('the reserving taker proposes, a giver approves: agreed', () => {
     const item = reservedTo(OLDER)
     const change = value(propose(item, OLDER, 25))
+    expect(isOneTimeChangeAgreed(item, change, family)).toBe(false)
     expect(value(approve(item, change, DAD)).agreed).toBe(true)
   })
 
   it('a giver proposes; the other taker cannot approve, the reserving one can', () => {
     const item = reservedTo(OLDER)
     const change = value(propose(item, DAD, 15))
+    expect(isOneTimeChangeAgreed(item, change, family)).toBe(false)
     expect(error(approve(item, change, YOUNGER))).toBe('not_involved')
     expect(value(approve(item, change, OLDER)).agreed).toBe(true)
   })
@@ -255,7 +270,7 @@ describe('when a one-time score cannot change (spec §5.2)', () => {
 
   it('instances follow their template, not this rule', () => {
     const instance = value(createInstance(person(DAD), 'on_demand', true, null))
-    expect(error(propose(instance, DAD, 25))).toBe('wrong_state')
+    expect(error(propose(instance, DAD, 25))).toBe('not_changeable')
   })
 
   it('one change at a time, and only to a new score', () => {
@@ -265,6 +280,25 @@ describe('when a one-time score cannot change (spec §5.2)', () => {
     )
     expect(error(propose(open(), DAD, SCORE))).toBe('same_score')
     expect(error(propose(open(), DAD, 0))).toBe('invalid_score')
+  })
+
+  it('a pending change is dropped once the task leaves open/reserved, so a new one can start', () => {
+    const item = value(markAgreed(negotiating(), { takerId: OLDER, giverId: DAD }))
+    const change = value(propose(item, OLDER, 25))
+    const released = value(releaseReservation(item, person(OLDER)))
+    expect(resolveOneTimeChange(released, change, family)).toBeNull()
+    const done = value(completeItem(open(), person(OLDER), T0))
+    expect(resolveOneTimeChange(done, change, family)).toBeNull()
+    const again = value(markAgreed(released, null))
+    expect(value(proposeOneTimeScoreChange(again, SCORE, null, family, DAD, 18)).score).toBe(18)
+  })
+
+  it('resolving a still valid change drops approvals of people who left', () => {
+    const change = value(propose(open(), YOUNGER, 25))
+    expect(resolveOneTimeChange(open(), change, family)).toEqual(change)
+    expect(resolveOneTimeChange(open(), change, deactivate(family, YOUNGER))?.approvedBy).toEqual(
+      [],
+    )
   })
 
   it('a proposer approving again is refused', () => {

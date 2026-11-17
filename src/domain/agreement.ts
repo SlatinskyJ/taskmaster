@@ -32,7 +32,8 @@ export type AgreementError =
   | 'needs_taker'
   | 'not_involved'
   | 'score_frozen'
-  | 'wrong_state'
+  | 'not_changeable'
+  | 'not_lowest'
 
 /** Points must be a positive whole number. */
 export function isValidScore(score: number): boolean {
