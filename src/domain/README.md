@@ -17,3 +17,13 @@ ESLint enforces this. Server functions are thin wrappers that call into this fol
   `markAgreed(item, null)`; when it returns `reserved`, call `markAgreed(item, { takerId, giverId })`.
   `bids.ts` holds the raw bid book; it is internal (not exported from `index.ts`), so callers go
   through the checked actions.
+- Periods (`periods.ts`) build the chain of periods and say which period an instant falls in
+  (`periodAt`, half-open: exactly at the cutoff is the next period). A scheduler job calls
+  `periodsToStart` at each cutoff, then `lapsePeriodSettings` on proposals for the period that
+  just started. Settlement (`settlement.ts`) takes the period's levels.
+- Disputes (`disputes.ts`) flag a locked record and hold the admin's outcome. A correction is
+  written with `correctSettlement` / `adjustPoints` (`settlement.ts`) in the same transaction as
+  `correctDispute`.
+  `CompletionOutcome` (pending / confirmed / rejected) describes a stored completion record; a
+  rejected completion of a normal item leaves no trace on the item itself (`lifecycle.ts`), so
+  the record lives in its own table.

@@ -10,7 +10,7 @@ import { bootstrapAdmin, describeBootstrap, MIN_ADMIN_PASSWORD } from './bootstr
 import type { NewUser } from './manage'
 import { createUser, setPasswordHash, updateUser } from './manage'
 import type { PeopleChangeHook } from './people'
-import { listPeople } from './people'
+import { listPeople, listUsers } from './people'
 
 const HASH = '$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHQ$aGFzaGhhc2hoYXNo'
 const T0 = new Date('2026-11-17T10:00:00.000Z')
@@ -288,7 +288,7 @@ describe('first admin from ADMIN_PASSWORD (spec §6)', () => {
   it('creates the admin on an empty DB with a real argon2id hash', async () => {
     const db = createTestDb()
     const outcome = bootstrapAdmin(db, { ADMIN_PASSWORD: PASSWORD, ADMIN_USERNAME: 'jakub' }, T0)
-    expect(outcome).toEqual({ kind: 'created', username: 'jakub', testUsers: [] })
+    expect(outcome).toEqual({ kind: 'created', username: 'jakub' })
     const [row] = db.select().from(users).all()
     expect(row).toMatchObject({ username: 'jakub', role: 'admin', active: true })
     expect(row?.passwordHash?.startsWith('$argon2id$')).toBe(true)
@@ -302,7 +302,6 @@ describe('first admin from ADMIN_PASSWORD (spec §6)', () => {
     expect(bootstrapAdmin(db, { ADMIN_PASSWORD: PASSWORD }, T0)).toEqual({
       kind: 'created',
       username: 'admin',
-      testUsers: [],
     })
   })
 
@@ -345,58 +344,42 @@ describe('first admin from ADMIN_PASSWORD (spec §6)', () => {
     )
   })
 
-  it('TEST_USERS=1 adds Táta, Starší and Mladší with the same password, in dev or preview', async () => {
+  it('TEST_USERS no longer adds anyone (the demo seed does that)', () => {
     const db = createTestDb()
-    const outcome = bootstrapAdmin(db, { ADMIN_PASSWORD: PASSWORD, TEST_USERS: '1' }, T0)
-    expect(outcome).toEqual({
-      kind: 'created',
-      username: 'admin',
-      testUsers: ['tata', 'starsi', 'mladsi'],
-    })
-    const rows = db.select().from(users).all()
-    expect(rows.map((u) => [u.username, u.role])).toEqual([
-      ['admin', 'admin'],
-      ['tata', 'giver'],
-      ['starsi', 'taker'],
-      ['mladsi', 'taker'],
-    ])
-    expect(await verify(rows[3]?.passwordHash ?? '', PASSWORD)).toBe(true)
-    expect(describeBootstrap(outcome)).toContain('mladsi')
-    const preview = createTestDb()
-    const env = {
-      ADMIN_PASSWORD: PASSWORD,
-      TEST_USERS: '1',
-      NODE_ENV: 'production',
-      TASKMASTER_ENV: 'preview',
-    }
-    expect(bootstrapAdmin(preview, env, T0)).toMatchObject({
-      testUsers: ['tata', 'starsi', 'mladsi'],
-    })
-  })
-
-  it('TEST_USERS other than "1" adds nobody', () => {
-    const db = createTestDb()
-    const env = { ADMIN_PASSWORD: PASSWORD, TEST_USERS: '0' }
-    expect(bootstrapAdmin(db, env, T0)).toMatchObject({ testUsers: [] })
+    const env = { ADMIN_PASSWORD: PASSWORD, TEST_USERS: '1', TASKMASTER_ENV: 'preview' }
+    expect(bootstrapAdmin(db, env, T0)).toEqual({ kind: 'created', username: 'admin' })
     expect(db.select().from(users).all()).toHaveLength(1)
   })
+})
 
-  it('TEST_USERS is ignored in production', () => {
-    const db = createTestDb()
-    const env = { ADMIN_PASSWORD: PASSWORD, TEST_USERS: '1', NODE_ENV: 'production' }
-    expect(bootstrapAdmin(db, env, T0)).toEqual({
-      kind: 'created',
+describe('people list for the admin console', () => {
+  it('returns exactly the shown fields, never the password hash', () => {
+    const { db, admin } = family()
+    const [first] = listUsers(db)
+    expect(first).toEqual({
+      id: admin.id,
       username: 'admin',
-      testUsers: [],
+      displayName: 'Admin',
+      role: 'admin',
+      active: true,
     })
-    expect(db.select().from(users).all()).toHaveLength(1)
+    expect(JSON.stringify(listUsers(db))).not.toContain('argon2')
+    expect(listUsers(db).map((u) => u.username)).toEqual(['admin', 'tata', 'starsi', 'mladsi'])
   })
+})
 
-  it('a failing test user rolls the admin back too', () => {
-    const db = createTestDb()
-    const env = { ADMIN_PASSWORD: PASSWORD, ADMIN_USERNAME: 'tata', TEST_USERS: '1' }
-    expect(() => bootstrapAdmin(db, env, T0)).toThrow('username_taken')
-    expect(db.select().from(users).all()).toHaveLength(0)
-    expect(auditRows(db)).toHaveLength(0)
+describe('people list for the admin console', () => {
+  it('returns exactly the shown fields, never the password hash', () => {
+    const { db, admin } = family()
+    const [first] = listUsers(db)
+    expect(first).toEqual({
+      id: admin.id,
+      username: 'admin',
+      displayName: 'Admin',
+      role: 'admin',
+      active: true,
+    })
+    expect(JSON.stringify(listUsers(db))).not.toContain('argon2')
+    expect(listUsers(db).map((u) => u.username)).toEqual(['admin', 'tata', 'starsi', 'mladsi'])
   })
 })

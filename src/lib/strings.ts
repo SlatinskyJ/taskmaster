@@ -12,6 +12,30 @@ export const cs = {
   notFound: {
     message: 'Tahle stránka neexistuje.',
   },
+  /** Login screen (UI doc §7.4). Bare form until the app shell (#31) styles it. */
+  login: {
+    title: 'Přihlášení',
+    username: 'Jméno',
+    password: 'Heslo',
+    submit: 'Přihlásit',
+    invalid: 'Špatné jméno nebo heslo.',
+    rateLimited: 'Moc pokusů. Zkus to za 15 minut.',
+    failed: 'Něco se pokazilo. Zkus to znovu.',
+    logout: 'Odhlásit',
+  },
+  home: {
+    /** Followed by the user's name: "Ahoj, Táta". */
+    greeting: 'Ahoj',
+  },
+  admin: {
+    title: 'Správa',
+    people: 'Lidé',
+  },
+  roles: {
+    taker: 'Bere úkoly',
+    giver: 'Zadává úkoly',
+    admin: 'Správce',
+  },
   /** Item states (spec §5.6 + rejected/disputed for display), UI design doc §2.2. */
   state: {
     proposed: 'Návrh',
@@ -31,6 +55,14 @@ export const cs = {
     pending: 'čeká',
     lowerLevel: 'spodní hranice',
     upperLevel: 'horní',
+    /** Tick labels under the points bar, UI doc §3: `spodní 50`, `horní 100`. */
+    lowerTick: 'spodní',
+    upperTick: 'horní',
+  },
+  /** Effects, UI doc §4. */
+  effects: {
+    lowerReached: 'Spodní hranice!',
+    upperReached: 'Horní hranice!',
   },
 } as const
 
