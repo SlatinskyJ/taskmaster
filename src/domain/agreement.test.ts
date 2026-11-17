@@ -6,6 +6,7 @@ import {
   approveTemplate,
   canCreateInstances,
   createOneTimeTask,
+  reopenOneTimeOffer,
   isAgreed,
   isValidScore,
   missingRoles,
@@ -329,5 +330,20 @@ describe('one-time tasks, path 1: score agreement (spec §5.2)', () => {
   it('resolving is a no-op when nothing changed', () => {
     const t = proposed()
     expect(resolveOneTime(t, family)).toBe(t)
+  })
+
+  it('a released bid-won task: the agreed score is the offer again, a taker must approve', () => {
+    const t = reopenOneTimeOffer(family, DAD, 23)
+    expect(t).toEqual({
+      status: 'proposed',
+      offer: { score: 23, proposedBy: DAD, approvedBy: [DAD] },
+    })
+    expect(value(approveOneTimeOffer(t, family, YOUNGER))).toEqual({ status: 'open', score: 23 })
+  })
+
+  it('reopened by a giver who has left: needs another giver too', () => {
+    const withMumNoDad = withMum.map((p) => (p.id === DAD ? { ...p, active: false } : p))
+    const t = reopenOneTimeOffer(withMumNoDad, DAD, 23)
+    expect(t.status === 'proposed' && t.offer.approvedBy).toEqual([])
   })
 })
