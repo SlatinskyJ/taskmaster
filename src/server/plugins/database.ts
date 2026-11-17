@@ -10,4 +10,14 @@ export default definePlugin(() => {
   console.info(`[db] ready at ${databasePath()}`)
   const message = describeBootstrap(bootstrapAdmin(db))
   if (message) console.warn(message)
+  if (
+    process.env.NODE_ENV === 'production' &&
+    process.env.TASKMASTER_ENV !== 'preview' &&
+    process.env.TRUST_PROXY !== '1'
+  ) {
+    // Behind a reverse proxy every login would share the proxy's IP in the rate limit.
+    console.warn(
+      '[auth] TRUST_PROXY is not 1: the per-IP login limit sees the proxy, not the client',
+    )
+  }
 })
