@@ -39,7 +39,7 @@ Success means the family uses it every week instead of the whiteboard bookkeepin
 - No in-app notifications beyond what is visible when a user opens the app (badges/counts are fine).
 - No money amounts in the app. The app reports the level reached; money is handled outside.
 - No per-person levels. Both takers share the same levels.
-- No user-management UI. Users are added or changed by the admin via config/seed/admin tooling.
+- User management is admin-only, in the admin console (section 6). No self-signup.
 - No UI for the audit log.
 - Single household only.
 
@@ -56,13 +56,13 @@ Success means the family uses it every week instead of the whiteboard bookkeepin
 | Brother (18) | **Taker** | Has a running score |
 | Brother (13) | **Taker** | Has a running score. UI must be simple enough for a 13-year-old on a phone |
 | Dad (Milan) | **Giver** | Leads the weekly meeting. Owns SLNAS and the `slatinsky.cz` domain |
-| Mum | **Giver** (future) | Not created in v1. Must be addable later via config, without code changes beyond config/seed |
+| Mum | **Giver** (future) | Not created in v1. The admin adds her later in the admin console, with no code change |
 | Jakub | **Admin** | Looks after the system. **Not a party** to any task or agreement |
 
 Role rules:
 - **Taker**: can approve scores, bid, reserve, complete, and log unprompted chores. Has a running total. Can flag a locked item as **disputed** (5.11).
 - **Giver**: can create tasks, templates, and instances, approve scores, respond to bids, complete tasks (no points, no running total "for now"), approve or reject completions, and run the meeting/settlement. Can propose a change to the **default period settings**, which needs period agreement (5.8), and can flag a locked item as **disputed** (5.11).
-- **Admin**: manages users, global settings (default levels, default period length), and templates if needed; can correct a finalized settlement and make manual point adjustments; **settles disputes** (5.11). All admin actions are logged. The admin does not count as a "party" for any agreement.
+- **Admin**: manages users in the admin console (section 6), global settings (default levels, default period length), and templates if needed; can correct a finalized settlement and make manual point adjustments; **settles disputes** (5.11). All admin actions are logged. The admin does not count as a "party" for any agreement.
 - **"All parties"** = all active givers + all active takers. When Mum is added, she becomes part of "all parties" automatically.
 - **Score agreement** (Jakub, 2026-11-17) = at least **one active giver and one active taker** approved the score. Proposing a score counts as approving it. Scores are whole numbers from 1. The admin never counts. This replaces all-party approval for task and template scores (5.1, 5.2).
 - **Period agreement** (Jakub, 2026-11-17) = **every active taker and at least one active giver** approved the change. Proposing counts as approving. The admin never counts. Used for period settings and their defaults (5.8).
@@ -214,8 +214,11 @@ A giver (normally Dad) runs a guided **meeting screen**:
 
 ## 6. Authentication and accounts
 - Every user logs in. The app is on the public internet, so: HTTPS only, hashed passwords, rate limiting on login, secure session cookies.
-- Accounts are created by the admin through config/seed or admin tooling. No self-signup, no user-management UI.
-- Adding Mum later = an admin config/seed change creating a giver account. No code change.
+- **Accounts live in the database only** (Jakub, 2026-11-17). No config or seed file holds people or password hashes. No self-signup.
+- **Admin console** (Jakub, 2026-11-17): a small screen where the admin adds a user (name, role, starting password), renames them, changes their role, deactivates or reactivates them, and resets their password. Every change is audit-logged. Adding Mum later = the admin adds a giver there. No code change.
+- Users are never deleted, only deactivated, so their history and audit entries stay readable **[call]**.
+- A password reset sets a new password chosen by the admin, who passes it on; the user's sessions end **[call]**.
+- **First admin:** created once on an empty database (bootstrap method decided in the users PR).
 - The v1 auth design must leave room for the **tablet stretch goal**: a shared, logged-in-as-device kiosk where a person taps their name, enters a short PIN, and is logged out after a short idle time.
 
 ## 7. User interface
@@ -229,7 +232,7 @@ A giver (normally Dad) runs a guided **meeting screen**:
   - **Meeting**: the three-step flow from 5.9 (givers).
   - **Period settings**: propose length/levels for an upcoming period, propose a change to the defaults (givers), approve proposals.
   - **Dispute**: mark a locked item as disputed, with a reason (takers and givers).
-  - **Admin**: settings, open disputes, corrections, adjustments.
+  - **Admin**: settings, open disputes, corrections, adjustments, people (admin console).
 - The UI design (theme, tokens, effects, screen inventory) is in `2026-11-16-taskmaster-ui-design.md`.
 
 Rough home screen sketch (taker):

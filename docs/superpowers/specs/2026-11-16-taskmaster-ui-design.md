@@ -140,7 +140,7 @@ The screens mockup has one row per role. Names are the artboard names.
 ### 7.5 Admin
 | Screen | What it does | Spec |
 |---|---|---|
-| ASettings | Open disputes, default week, people (read-only), CSV export of the change log | 3, 5.8, 5.10 |
+| ASettings | Open disputes, default week, people (add, rename, role, deactivate, reset password), CSV export of the change log | 3, 5.8, 5.10, 6 |
 | ADisputes | Each open dispute: who, what, current value, reason; keep or correct | 5.11 |
 | AFix | Settlement correction or point adjustment; reason required | 5.9 |
 
