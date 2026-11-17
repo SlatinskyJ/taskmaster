@@ -1,5 +1,5 @@
 import { hashSync } from '@node-rs/argon2'
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import type { Actor } from '~/server/audit'
 import type { Db } from '~/server/db'
@@ -9,7 +9,12 @@ import { createUser, setPasswordHash, updateUser } from '~/server/users'
 import { pickClientIp } from './clientIp'
 import { login, logout } from './login'
 import { MAX_PASSWORD_LENGTH } from './password'
-import { FAILURE_WINDOW_MS, MAX_FAILURES_PER_IP, MAX_FAILURES_PER_USER } from './rateLimit'
+import {
+  FAILURE_WINDOW_MS,
+  limitKeys,
+  MAX_FAILURES_PER_IP,
+  MAX_FAILURES_PER_USER,
+} from './rateLimit'
 import { hashToken, RENEW_AFTER_MS, resolveSession, SESSION_DAYS } from './sessions'
 
 const PASSWORD = 'správné heslo 42'
@@ -95,6 +100,23 @@ describe('password login (spec §6, §11 Auth)', () => {
     must(updateUser(db, by, tata, { active: false }, T0))
     expect(await attempt(db, PASSWORD)).toEqual({ ok: false, error: 'invalid_credentials' })
     expect(db.select().from(sessions).all()).toHaveLength(0)
+    expect(JSON.parse(audit(db).at(-1)?.after ?? '{}')).toMatchObject({ reason: 'inactive' })
+  })
+
+  it('a password reset while the password is being checked opens no session (spec §6)', async () => {
+    const { db, by, tata } = family()
+    const pending = attempt(db, PASSWORD) // runs up to the argon2 await
+    must(setPasswordHash(db, by, tata, hashSync('nové heslo 12'), T0))
+    expect(await pending).toEqual({ ok: false, error: 'invalid_credentials' })
+    expect(db.select().from(sessions).all()).toHaveLength(0)
+  })
+
+  it('a deactivation while the password is being checked opens no session', async () => {
+    const { db, by, tata } = family()
+    const pending = attempt(db, PASSWORD)
+    must(updateUser(db, by, tata, { active: false }, T0))
+    expect((await pending).ok).toBe(false)
+    expect(db.select().from(sessions).all()).toHaveLength(0)
   })
 
   it('a user without a password cannot log in', async () => {
@@ -141,10 +163,32 @@ describe('rate limit (spec §6, §11 Auth)', () => {
     // Refusals while limited are neither logged nor counted.
     expect(audit(db)).toHaveLength(before)
     expect(
-      db.select().from(loginFailures).where(eq(loginFailures.key, 'user:tata')).all(),
+      db
+        .select()
+        .from(loginFailures)
+        .where(eq(loginFailures.key, limitKeys('tata', IP).user))
+        .all(),
     ).toHaveLength(MAX_FAILURES_PER_USER)
     // Other users are not affected.
     expect((await attempt(db, PASSWORD, at(60_000), 'admin', '10.0.1.1')).ok).toBe(true)
+  })
+
+  it('parallel tries cannot slip past the limit', async () => {
+    const { db } = family()
+    const tries = Array.from({ length: MAX_FAILURES_PER_USER + 5 }, (_, i) =>
+      attempt(db, 'nope', T0, 'tata', `10.0.2.${String(i)}`),
+    )
+    const results = await Promise.all(tries)
+    expect(results.filter((r) => !r.ok && r.error === 'invalid_credentials')).toHaveLength(
+      MAX_FAILURES_PER_USER,
+    )
+    expect(results.filter((r) => !r.ok && r.error === 'rate_limited')).toHaveLength(5)
+  })
+
+  it('the typed name is stored only as a hash', async () => {
+    const { db } = family()
+    await attempt(db, 'nope', T0, 'heslo-omylem-v-jmenu')
+    expect(JSON.stringify(db.select().from(loginFailures).all())).not.toContain('heslo')
   })
 
   it('the lock lifts once the oldest failures leave the window', async () => {
@@ -157,7 +201,12 @@ describe('rate limit (spec §6, §11 Auth)', () => {
 
   it(`locks an IP after ${String(MAX_FAILURES_PER_IP)} failures across usernames`, async () => {
     const { db } = family()
-    for (let i = 0; i < MAX_FAILURES_PER_IP; i++) await attempt(db, 'nope', T0, `host${String(i)}`)
+    for (let i = 0; i < MAX_FAILURES_PER_IP - 1; i++) {
+      await attempt(db, 'nope', T0, `host${String(i)}`)
+    }
+    // One under the limit still lets a right password in (that clears only the user's count).
+    expect((await attempt(db, PASSWORD, T0, 'admin')).ok).toBe(true)
+    await attempt(db, 'nope', T0, 'last')
     expect(await attempt(db, PASSWORD)).toEqual({ ok: false, error: 'rate_limited' })
     expect((await attempt(db, PASSWORD, T0, 'tata', '198.51.100.1')).ok).toBe(true)
   })
@@ -171,7 +220,7 @@ describe('rate limit (spec §6, §11 Auth)', () => {
       .from(loginFailures)
       .all()
       .map((f) => f.key)
-    expect(keys).not.toContain('user:tata')
+    expect(keys).not.toContain(limitKeys('tata', IP).user)
     expect(keys.filter((k) => k === `ip:${IP}`)).toHaveLength(MAX_FAILURES_PER_USER - 1)
   })
 
@@ -202,6 +251,7 @@ describe('sessions (spec §11 Sessions [call])', () => {
     const { db } = family()
     const { token } = must(await attempt(db, PASSWORD))
     expect(resolveSession(db, token, at(RENEW_AFTER_MS - 1))?.renewed).toBe(false)
+    expect(resolveSession(db, token, at(RENEW_AFTER_MS))?.renewed).toBe(true)
     const later = at(30 * DAY)
     const r = resolveSession(db, token, later)
     expect(r?.renewed).toBe(true)
@@ -283,5 +333,36 @@ describe('client IP for the rate limit', () => {
     expect(pickClientIp(undefined, '127.0.0.1')).toBe('127.0.0.1')
     expect(pickClientIp('', '127.0.0.1')).toBe('127.0.0.1')
     expect(pickClientIp(undefined, undefined)).toBe('unknown')
+  })
+})
+
+describe('audit failure rolls the change back (spec §5.10)', () => {
+  const breakAudit = (db: Db) =>
+    db.run(
+      sql`CREATE TRIGGER no_audit BEFORE INSERT ON audit_log BEGIN SELECT RAISE(ABORT, 'audit down'); END`,
+    )
+
+  it('login success: no session', async () => {
+    const { db } = family()
+    breakAudit(db)
+    await expect(attempt(db, PASSWORD)).rejects.toThrow('audit down')
+    expect(db.select().from(sessions).all()).toHaveLength(0)
+  })
+
+  it('login failure: throws; the attempt still counts toward the limit', async () => {
+    const { db } = family()
+    breakAudit(db)
+    await expect(attempt(db, 'nope')).rejects.toThrow('audit down')
+    expect(db.select().from(loginFailures).all()).toHaveLength(2)
+  })
+
+  it('logout: the session stays', async () => {
+    const { db } = family()
+    const { token } = must(await attempt(db, PASSWORD))
+    breakAudit(db)
+    expect(() => {
+      logout(db, token, T0)
+    }).toThrow('audit down')
+    expect(resolveSession(db, token, T0)).not.toBeNull()
   })
 })

@@ -17,6 +17,12 @@ role guards (#28) build on this.
   entry. Without it every request looks like it comes from the proxy, and the per-IP limit
   then counts the whole family's failures together. Set it wherever the app sits behind a proxy.
 
+## CSRF
+
+Server functions are protected by the session cookie's `SameSite=Lax` plus TanStack Start's
+default CSRF middleware (checks `Origin` / `Sec-Fetch-Site`). That default applies only while
+the app has no `src/start.ts`: whoever adds one must add `createCsrfMiddleware()` there.
+
 ## Adding a login method
 
 The tablet name+PIN mode and passkeys open sessions on the same table: add the method to

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { and, count, eq, gt, lte } from 'drizzle-orm'
 import { toIsoUtc } from '~/domain/dates'
 import type { Tx } from '~/server/audit'
@@ -7,7 +8,7 @@ import { loginFailures } from '~/server/db/schema'
 // Login rate limit (spec §6, §11 Auth) [call]: failed logins in the last 15 minutes, counted
 // per username and per client IP. Over either limit, the login is refused without checking the
 // password, and the refusal itself doesn't count (so waiting always helps). A success clears
-// that username's failures, not the IP's.
+// that username's failures, not the IP's (except its own attempt).
 
 export const FAILURE_WINDOW_MS = 15 * 60 * 1000
 /** A child mistyping gets 10 tries per 15 minutes. */
@@ -20,33 +21,58 @@ export interface LimitKeys {
   ip: string
 }
 
+/**
+ * The name is stored hashed: people type their password into the name field, and the table
+ * would keep it for 15 minutes.
+ */
 export function limitKeys(username: string, ip: string): LimitKeys {
-  return { user: `user:${username}`, ip: `ip:${ip}` }
+  return { user: `user:${createHash('sha256').update(username).digest('hex')}`, ip: `ip:${ip}` }
 }
 
-/** True when either key is over its limit. Prunes failures older than the window first. */
-export function isRateLimited(db: Db | Tx, keys: LimitKeys, now: Date): boolean {
-  const since = toIsoUtc(new Date(now.getTime() - FAILURE_WINDOW_MS))
-  db.delete(loginFailures).where(lte(loginFailures.at, since)).run()
-  const failures = (key: string) =>
+const windowStart = (now: Date) => toIsoUtc(new Date(now.getTime() - FAILURE_WINDOW_MS))
+
+function failures(db: Db | Tx, key: string, now: Date): number {
+  return (
     db
       .select({ n: count() })
       .from(loginFailures)
-      .where(and(eq(loginFailures.key, key), gt(loginFailures.at, since)))
+      .where(and(eq(loginFailures.key, key), gt(loginFailures.at, windowStart(now))))
       .get()?.n ?? 0
-  return failures(keys.user) >= MAX_FAILURES_PER_USER || failures(keys.ip) >= MAX_FAILURES_PER_IP
+  )
 }
 
-export function recordFailure(tx: Db | Tx, keys: LimitKeys, now: Date): void {
-  const at = toIsoUtc(now)
-  tx.insert(loginFailures)
-    .values([
-      { key: keys.user, at },
-      { key: keys.ip, at },
-    ])
-    .run()
+/** One attempt counted in advance, so it can be taken back if the password turns out right. */
+export interface Attempt {
+  keys: LimitKeys
+  ipRowId: number
 }
 
-export function clearUserFailures(tx: Db | Tx, keys: LimitKeys): void {
-  tx.delete(loginFailures).where(eq(loginFailures.key, keys.user)).run()
+/**
+ * Counts this attempt as a failure up front, in one synchronous transaction, or returns null
+ * when either key is already at its limit. Counting before the (async) password check means a
+ * burst of parallel tries can't all slip past the check. Also prunes failures older than the
+ * window. A refusal is not counted, so waiting always helps.
+ */
+export function reserveAttempt(db: Db, keys: LimitKeys, now: Date): Attempt | null {
+  return db.transaction((tx) => {
+    tx.delete(loginFailures)
+      .where(lte(loginFailures.at, windowStart(now)))
+      .run()
+    if (
+      failures(tx, keys.user, now) >= MAX_FAILURES_PER_USER ||
+      failures(tx, keys.ip, now) >= MAX_FAILURES_PER_IP
+    ) {
+      return null
+    }
+    const at = toIsoUtc(now)
+    tx.insert(loginFailures).values({ key: keys.user, at }).run()
+    const ip = tx.insert(loginFailures).values({ key: keys.ip, at }).returning().get()
+    return { keys, ipRowId: ip.id }
+  })
+}
+
+/** A right password: clears the name's failures and takes back this attempt's IP count. */
+export function releaseAttempt(tx: Db | Tx, attempt: Attempt): void {
+  tx.delete(loginFailures).where(eq(loginFailures.key, attempt.keys.user)).run()
+  tx.delete(loginFailures).where(eq(loginFailures.id, attempt.ipRowId)).run()
 }

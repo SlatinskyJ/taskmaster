@@ -5,9 +5,15 @@ import { writeAudit } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { users } from '~/server/db/schema'
 import { dummyHash, MAX_PASSWORD_LENGTH, verifyPassword } from './password'
-import { clearUserFailures, isRateLimited, limitKeys, recordFailure } from './rateLimit'
+import { limitKeys, releaseAttempt, reserveAttempt } from './rateLimit'
 import type { CurrentUser } from './sessions'
-import { createSession, deleteSession, findSession, pruneExpiredSessions } from './sessions'
+import {
+  createSession,
+  deleteSession,
+  findSession,
+  pruneExpiredSessions,
+  toCurrentUser,
+} from './sessions'
 
 // Password login and logout (spec §6, §11 Auth). Framework-free apart from the DB, so tests
 // call these directly; ./http wires them to cookies and the request.
@@ -43,8 +49,10 @@ export async function login(
   now: Date = new Date(),
 ): Promise<Result<LoginSuccess, LoginError>> {
   const username = input.username.trim().toLowerCase().slice(0, MAX_USERNAME_LENGTH)
-  const keys = limitKeys(username, input.ip)
-  if (isRateLimited(db, keys, now)) return fail('rate_limited')
+  // Counted as a failure now, taken back on success (see reserveAttempt). A refusal here is not
+  // logged: past the limit the log would grow at the attacker's pace.
+  const attempt = reserveAttempt(db, limitKeys(username, input.ip), now)
+  if (!attempt) return fail('rate_limited')
 
   const user = db.select().from(users).where(eq(users.username, username)).get()
   const tooLong = input.password.length > MAX_PASSWORD_LENGTH
@@ -61,7 +69,6 @@ export async function login(
 
   if (reason !== null || !user) {
     db.transaction((tx) => {
-      recordFailure(tx, keys, now)
       writeAudit(tx, {
         actor: { kind: 'anonymous' },
         action: 'auth.login_failed',
@@ -75,24 +82,31 @@ export async function login(
     return fail('invalid_credentials')
   }
 
-  const { token, session } = db.transaction((tx) => {
-    clearUserFailures(tx, keys)
+  const verifiedHash = user.passwordHash
+  const opened = db.transaction((tx) => {
+    // The password was checked outside this transaction (argon2 is async). If the admin reset
+    // the password or deactivated the user meanwhile, the reset already ended every session
+    // (spec §6): don't open a new one for the old password.
+    const current = tx.select().from(users).where(eq(users.id, user.id)).get()
+    if (current?.passwordHash !== verifiedHash || !current.active) return null
+    releaseAttempt(tx, attempt)
     pruneExpiredSessions(tx, now)
-    const opened = createSession(tx, user.id, 'password', now)
+    const created = createSession(tx, user.id, 'password', now)
     writeAudit(tx, {
       actor: { kind: 'user', userId: user.id },
       action: 'auth.login_succeeded',
       entityType: 'session',
-      entityId: opened.session.id,
-      after: { method: opened.session.method, ip: input.ip },
+      entityId: created.session.id,
+      after: { method: created.session.method, ip: input.ip },
       at: now,
     })
-    return opened
+    return { ...created, user: toCurrentUser(current) }
   })
+  if (!opened) return fail('invalid_credentials')
   return ok({
-    token,
-    expiresAt: new Date(session.expiresAt),
-    user: { id: user.id, username: user.username, displayName: user.displayName, role: user.role },
+    token: opened.token,
+    expiresAt: new Date(opened.session.expiresAt),
+    user: opened.user,
   })
 }
 

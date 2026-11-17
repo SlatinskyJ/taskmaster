@@ -4,7 +4,7 @@ import { parseIsoUtc, toIsoUtc } from '~/domain/dates'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { sessions, users } from '~/server/db/schema'
-import type { SessionMethod, SessionRow, UserRole } from '~/server/db/schema'
+import type { SessionMethod, SessionRow, UserRole, UserRow } from '~/server/db/schema'
 
 // Sessions (spec §11 Auth, Sessions [call]): a random 256-bit token in the cookie, its SHA-256
 // in the DB. Sliding expiry: about 90 days after the last use. To keep writes rare, use moves
@@ -25,6 +25,11 @@ export interface CurrentUser {
   username: string
   displayName: string
   role: UserRole
+}
+
+/** The one mapping from a user row to what server code and screens may see. */
+export function toCurrentUser(u: UserRow): CurrentUser {
+  return { id: u.id, username: u.username, displayName: u.displayName, role: u.role }
 }
 
 export function hashToken(token: string): string {
@@ -84,12 +89,7 @@ export function resolveSession(db: Db, token: string, now: Date): ResolvedSessio
     return null
   }
   if (!row.user.active) return null
-  const user: CurrentUser = {
-    id: row.user.id,
-    username: row.user.username,
-    displayName: row.user.displayName,
-    role: row.user.role,
-  }
+  const user = toCurrentUser(row.user)
   if (now.getTime() - parseIsoUtc(row.session.lastSeenAt).getTime() < RENEW_AFTER_MS) {
     return { session: row.session, user, renewed: false }
   }

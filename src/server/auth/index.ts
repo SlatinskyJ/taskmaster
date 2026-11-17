@@ -8,5 +8,6 @@ export {
   resolveSession,
   RENEW_AFTER_MS,
   SESSION_DAYS,
+  toCurrentUser,
 } from './sessions'
 export type { CurrentUser, ResolvedSession } from './sessions'
