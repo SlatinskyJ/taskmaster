@@ -90,7 +90,10 @@ Role rules:
 - A template's score needs **score agreement** (one giver + one taker, section 3). Until then, the template is *proposed* and creates no instances.
 - After agreement, **any party** may propose a new score. It needs score agreement again; the old score stays in force until the change is agreed.
 - Only givers create templates. One score change may be in flight per template at a time; changes to different templates can run in parallel (Jakub, 2026-11-17).
-- **[call]** A score change applies only to instances created after the change is approved. Existing instances keep their score, consistent with "score fixed at creation".
+- A template score change runs **the same way as bidding on a one-time task** (5.2 path 2), with these differences (Jakub, 2026-11-17):
+  - Each party has at most one open bid in the change; bidding again replaces it. Every bid is kept in the history.
+  - When the giver side accepts, it accepts the lowest open bid. The template gets that score; nobody is reserved anything.
+- A score change applies only to instances created after the change is agreed. Existing instances keep their score, consistent with "score fixed at creation" (Jakub, 2026-11-17).
 
 ### 5.2 Score agreement — one-time tasks
 A giver creates a one-time task with an initial offer (score). From there, two paths run in parallel, and the first to complete wins:
