@@ -5,16 +5,30 @@
 export const cs = {
   app: {
     name: 'Taskmaster',
+    /** Under the name on the login screen. */
+    tagline: 'Body za domácí práce',
   },
+  /** Bottom bars (UI doc §6). */
   nav: {
+    label: 'Hlavní menu',
     home: 'Domů',
+    log: 'Zapsat',
+    week: 'Týden',
+    tasks: 'Úkoly',
+    meeting: 'Schůzka',
+  },
+  /** One friendly line on pages whose content lands in later issues (UI doc §8 [call]). */
+  placeholder: {
+    soon: 'Tady brzy něco bude.',
   },
   notFound: {
     message: 'Tahle stránka neexistuje.',
   },
-  /** Login screen (UI doc §7.4). Bare form until the app shell (#31) styles it. */
+  /** Login screen (UI doc §7.4). The passkey button comes with #29. */
   login: {
     title: 'Přihlášení',
+    /** Accounts come from the admin only (spec §6). */
+    help: 'Účty zakládá správce. Zapomenuté heslo? Řekni správci.',
     username: 'Jméno',
     password: 'Heslo',
     submit: 'Přihlásit',
@@ -26,6 +40,19 @@ export const cs = {
   home: {
     /** Followed by the user's name: "Ahoj, Táta". */
     greeting: 'Ahoj',
+  },
+  /** Profile (UI doc §7.4): theme, effects, log out. */
+  profile: {
+    title: 'Profil',
+    open: 'Otevřít profil',
+    back: 'Zpět',
+    appearance: 'Vzhled',
+    themeLight: 'Světlý',
+    themeDark: 'Tmavý',
+    themeAuto: 'Podle telefonu',
+    effects: 'Efekty',
+    effectsLabel: 'Konfety a animace',
+    effectsHint: 'Když dokončíš úkol nebo dosáhneš hranice',
   },
   admin: {
     title: 'Správa',

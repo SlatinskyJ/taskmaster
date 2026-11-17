@@ -1,7 +1,10 @@
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
+import { Button } from '~/components/ui/button'
+import { Input } from '~/components/ui/input'
 import { safeRedirect } from '~/lib/redirect'
 import { cs } from '~/lib/strings'
+import { cn } from '~/lib/utils'
 import { landingPath } from '~/lib/landing'
 import { getCurrentUserFn, loginFn } from '~/server/auth/functions'
 
@@ -23,7 +26,18 @@ export const Route = createFileRoute('/login')({
   component: Login,
 })
 
-// Bare password form; the app shell (#31) styles it and #29 adds the passkey button.
+// Password login (UI doc §7.4). #29 adds the passkey button above the form.
+/** The five Pastelky dots above the name (login mockup). */
+const LOGO_DOTS = [
+  'bg-accent',
+  'bg-state-pending',
+  'bg-state-confirmed',
+  'bg-state-open',
+  'bg-accent2',
+] as const
+
+const LABEL_TEXT = 'text-xs font-extrabold tracking-[.07em] text-muted uppercase'
+
 function Login() {
   const search = Route.useSearch()
   const router = useRouter()
@@ -56,49 +70,62 @@ function Login() {
   }
 
   return (
-    <main className="mx-auto grid max-w-xs gap-4 p-4 pt-16">
-      <h1 className="text-3xl font-bold">{cs.login.title}</h1>
+    <main className="mx-auto flex min-h-dvh w-full max-w-sm flex-col gap-6 px-5 pt-14 pb-7">
+      <div className="flex flex-col items-center gap-2.5">
+        <div aria-hidden="true" className="flex gap-1.5">
+          {LOGO_DOTS.map((dot) => (
+            <span key={dot} className={cn('size-3.5 rounded-full', dot)} />
+          ))}
+        </div>
+        <span className="font-display text-[40px] leading-none font-bold">{cs.app.name}</span>
+        <span className="text-meta font-bold text-muted">{cs.app.tagline}</span>
+      </div>
+      <h1 className="sr-only">{cs.login.title}</h1>
+      {/* The passkey button (#29) goes here, above the password form (UI doc §7.4). */}
       <form
         method="post"
-        className="grid gap-3"
+        className="grid gap-4"
         onSubmit={(e) => {
           e.preventDefault()
           void submit(new FormData(e.currentTarget))
         }}
       >
-        <label className="grid gap-1">
-          {cs.login.username}
-          <input
+        <label className="grid gap-2">
+          <span className={LABEL_TEXT}>{cs.login.username}</span>
+          <Input
             name="username"
             autoComplete="username"
             autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
             required
             aria-invalid={error !== null}
             aria-describedby={error ? 'login-error' : undefined}
-            className="rounded border p-3"
+            className="min-h-13 text-lg font-bold"
           />
         </label>
-        <label className="grid gap-1">
-          {cs.login.password}
-          <input
+        <label className="grid gap-2">
+          <span className={LABEL_TEXT}>{cs.login.password}</span>
+          <Input
             name="password"
             type="password"
             autoComplete="current-password"
             required
             aria-invalid={error !== null}
             aria-describedby={error ? 'login-error' : undefined}
-            className="rounded border p-3"
+            className="min-h-13 text-lg font-bold"
           />
         </label>
         {error && (
-          <p id="login-error" role="alert">
+          <p id="login-error" role="alert" className="font-bold text-state-rejected-text">
             {error}
           </p>
         )}
-        <button type="submit" disabled={busy} className="rounded border p-3 font-semibold">
+        <Button type="submit" size="lg" disabled={busy} className="w-full">
           {cs.login.submit}
-        </button>
+        </Button>
       </form>
+      <p className="mt-auto text-center text-meta font-bold text-muted">{cs.login.help}</p>
     </main>
   )
 }

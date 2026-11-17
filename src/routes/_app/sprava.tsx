@@ -1,34 +1,42 @@
-import { createFileRoute, redirect } from '@tanstack/react-router'
-import { LogoutButton } from '~/components/LogoutButton'
+import { createFileRoute } from '@tanstack/react-router'
+import { Avatar } from '~/components/shell/Avatar'
+import { Screen } from '~/components/shell/Screen'
+import { Card } from '~/components/ui/card'
+import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
-import { landingPath } from '~/lib/landing'
 import { listUsersFn } from '~/server/users/functions'
 
-// Správa, the admin's only screen (UI doc §6, §7.5). Others go back to their landing.
+// Správa, the admin's only screen, no bottom bar (UI doc §6, §7.5). Others go to their landing.
 export const Route = createFileRoute('/_app/sprava')({
   beforeLoad: ({ context }) => {
-    // eslint-disable-next-line @typescript-eslint/only-throw-error -- the router's redirect
-    if (context.user.role !== 'admin') throw redirect({ to: landingPath(context.user.role) })
+    guardScreen(context.user.role, '/sprava')
   },
   loader: () => listUsersFn(),
   component: Sprava,
 })
 
-// Placeholder until the admin console (#47).
+// People list only, until the admin console (#47).
 function Sprava() {
+  const { user } = Route.useRouteContext()
   const people = Route.useLoaderData()
   return (
-    <main className="mx-auto grid max-w-md gap-4 p-4">
-      <h1 className="text-3xl font-bold">{cs.admin.title}</h1>
-      <h2 className="text-xl font-semibold">{cs.admin.people}</h2>
-      <ul className="grid gap-1">
-        {people.map((p) => (
-          <li key={p.id}>
-            {p.displayName} · {cs.roles[p.role]}
-          </li>
-        ))}
-      </ul>
-      <LogoutButton />
-    </main>
+    <Screen title={cs.admin.title} user={user}>
+      <h2 className="text-xs font-extrabold tracking-[.07em] text-muted uppercase">
+        {cs.admin.people}
+      </h2>
+      <Card>
+        <ul className="grid gap-1">
+          {people.map((p) => (
+            <li key={p.id} className="flex min-h-11 items-center gap-2.5">
+              <Avatar userId={p.id} name={p.displayName} />
+              <b className="font-extrabold">{p.displayName}</b>
+              <span className="ml-auto rounded-full bg-track px-2 py-0.5 text-xs font-extrabold text-muted">
+                {cs.roles[p.role]}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </Screen>
   )
 }

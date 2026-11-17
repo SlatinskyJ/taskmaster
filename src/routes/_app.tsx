@@ -1,4 +1,7 @@
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
+import { BottomNav } from '~/components/shell/BottomNav'
+import { navItems } from '~/lib/nav'
+import { cn } from '~/lib/utils'
 import { getCurrentUserFn } from '~/server/auth/functions'
 
 // Every screen behind login lives under this pathless layout (spec §6). Nobody signed in →
@@ -12,5 +15,17 @@ export const Route = createFileRoute('/_app')({
     }
     return { user }
   },
-  component: Outlet,
+  component: AppLayout,
 })
+
+/** The app shell: the screen, then the role's bottom bar (UI doc §6). */
+function AppLayout() {
+  const { user } = Route.useRouteContext()
+  const hasBar = navItems(user.role).length > 0
+  return (
+    <div className={cn('min-h-dvh', hasBar && 'pb-[calc(4.5rem+env(safe-area-inset-bottom))]')}>
+      <Outlet />
+      <BottomNav role={user.role} />
+    </div>
+  )
+}
