@@ -72,32 +72,42 @@ export function counterTemplateScore(
   if (!isValidScore(score)) return fail('invalid_score')
   const change = template.change ?? NO_CHANGE
   if (score === template.score || score === change.offer?.score) return fail('same_score')
-  return ok({ ...template, change: { ...change, offer: { score, by: giverId } } })
+  return ok({ ...template, change: { ...change, offer: { score, proposedBy: giverId } } })
 }
 
-/** A giver accepts the lowest taker bid: the template gets that score and the change closes. */
+/**
+ * A giver accepts the lowest taker bid: the template gets that score and the change closes.
+ * `score` is the lowest bid the giver saw; if it moved meanwhile, it is refused.
+ */
 export function acceptLowestTemplateBid(
   template: TemplateAgreement,
   people: readonly Person[],
   giverId: PersonId,
+  score: number,
 ): Result<TemplateAgreement, AgreementError> {
   if (template.status !== 'agreed') return fail('not_agreed')
   if (!isGiver(people, giverId)) return fail('not_a_giver')
   const lowest = template.change ? lowestBid(liveTemplateBook(template.change, people)) : null
   if (!lowest) return fail('no_bids')
+  if (lowest.score !== score) return fail('offer_changed')
   return ok({ status: 'agreed', score: lowest.score, change: null })
 }
 
-/** A taker accepts the giver side's offer: the template gets that score and the change closes. */
+/**
+ * A taker accepts the giver side's offer: the template gets that score and the change closes.
+ * `score` is the offer he saw; if it changed meanwhile, it is refused.
+ */
 export function acceptTemplateOffer(
   template: TemplateAgreement,
   people: readonly Person[],
   takerId: PersonId,
+  score: number,
 ): Result<TemplateAgreement, AgreementError> {
   if (template.status !== 'agreed') return fail('not_agreed')
   if (!isTaker(people, takerId)) return fail('not_a_taker')
   const offer = template.change?.offer
   if (!offer) return fail('no_offer')
+  if (offer.score !== score) return fail('offer_changed')
   return ok({ status: 'agreed', score: offer.score, change: null })
 }
 

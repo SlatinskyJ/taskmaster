@@ -109,7 +109,7 @@ export type TemplateAgreement =
 
 /** A template score change in flight: takers' open bids, and the giver side's offer (if any). */
 export interface TemplateChange extends BidBook {
-  offer: { score: number; by: PersonId } | null
+  offer: { score: number; proposedBy: PersonId } | null
 }
 
 /** A giver proposes a new template's score (only givers create templates, spec §3). */
