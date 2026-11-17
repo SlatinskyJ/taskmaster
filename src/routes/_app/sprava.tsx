@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { Avatar } from '~/components/shell/Avatar'
 import { Screen } from '~/components/shell/Screen'
+import { SectionLabel } from '~/components/shell/SectionLabel'
 import { Card } from '~/components/ui/card'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
@@ -21,9 +22,7 @@ function Sprava() {
   const people = Route.useLoaderData()
   return (
     <Screen title={cs.admin.title} user={user}>
-      <h2 className="text-xs font-extrabold tracking-[.07em] text-muted uppercase">
-        {cs.admin.people}
-      </h2>
+      <SectionLabel>{cs.admin.people}</SectionLabel>
       <Card>
         <ul className="grid gap-1">
           {people.map((p) => (

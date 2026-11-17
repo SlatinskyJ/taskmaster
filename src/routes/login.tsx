@@ -1,5 +1,6 @@
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
+import { sectionLabelClass } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
 import { safeRedirect } from '~/lib/redirect'
@@ -35,8 +36,6 @@ const LOGO_DOTS = [
   'bg-state-open',
   'bg-accent2',
 ] as const
-
-const LABEL_TEXT = 'text-xs font-extrabold tracking-[.07em] text-muted uppercase'
 
 function Login() {
   const search = Route.useSearch()
@@ -91,7 +90,7 @@ function Login() {
         }}
       >
         <label className="grid gap-2">
-          <span className={LABEL_TEXT}>{cs.login.username}</span>
+          <span className={sectionLabelClass}>{cs.login.username}</span>
           <Input
             name="username"
             autoComplete="username"
@@ -105,7 +104,7 @@ function Login() {
           />
         </label>
         <label className="grid gap-2">
-          <span className={LABEL_TEXT}>{cs.login.password}</span>
+          <span className={sectionLabelClass}>{cs.login.password}</span>
           <Input
             name="password"
             type="password"

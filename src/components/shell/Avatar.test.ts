@@ -18,8 +18,7 @@ describe('avatarColour', () => {
     expect(avatarColour(1)).not.toBe(avatarColour(2))
   })
 
-  it('only uses tokens that flip with the theme', () => {
-    for (let id = 0; id < 10; id++)
-      expect(avatarColour(id)).toMatch(/^bg-(state-\w+-text|accent-strong)$/)
+  it('only uses state text tokens, which theme.test.ts checks against the background', () => {
+    for (let id = 0; id < 10; id++) expect(avatarColour(id)).toMatch(/^bg-state-\w+-text$/)
   })
 })

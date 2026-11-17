@@ -1,7 +1,9 @@
 import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { ChevronLeft } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { Avatar } from '~/components/shell/Avatar'
+import { SectionLabel } from '~/components/shell/SectionLabel'
 import { Button, buttonVariants } from '~/components/ui/button'
 import { Card } from '~/components/ui/card'
 import { useEffectsSwitch } from '~/lib/effects'
@@ -28,8 +30,6 @@ const THEME_LABELS: Record<ThemePref, string> = {
   auto: cs.profile.themeAuto,
 }
 
-const SECTION = 'text-xs font-extrabold tracking-[.07em] text-muted uppercase'
-
 function Profile() {
   const { user } = Route.useRouteContext()
   const router = useRouter()
@@ -43,6 +43,9 @@ function Profile() {
       await logoutFn()
       await router.invalidate()
       await router.navigate({ to: '/login' })
+    } catch {
+      // Offline or server error: still signed in, so say so instead of doing nothing.
+      toast.error(cs.login.failed)
     } finally {
       setLeaving(false)
     }
@@ -69,9 +72,7 @@ function Profile() {
           </div>
         </Card>
 
-        <h2 id="theme-label" className={SECTION}>
-          {cs.profile.appearance}
-        </h2>
+        <SectionLabel id="theme-label">{cs.profile.appearance}</SectionLabel>
         <div
           role="group"
           aria-labelledby="theme-label"
@@ -95,16 +96,9 @@ function Profile() {
           ))}
         </div>
 
-        <h2 className={SECTION}>{cs.profile.effects}</h2>
-        <Card className="flex items-center gap-3 py-2">
-          <span className="grid flex-1">
-            <b id="effects-label" className="text-row font-extrabold">
-              {cs.profile.effectsLabel}
-            </b>
-            <span id="effects-hint" className="text-meta font-bold text-muted">
-              {cs.profile.effectsHint}
-            </span>
-          </span>
+        <SectionLabel>{cs.profile.effects}</SectionLabel>
+        {/* The whole row is the switch, so the tap target is the row, not just the knob. */}
+        <Card className="p-0">
           <button
             type="button"
             role="switch"
@@ -114,18 +108,30 @@ function Profile() {
             onClick={() => {
               setEffects(!effects)
             }}
-            className={cn(
-              'relative h-8 w-13 shrink-0 cursor-pointer rounded-full transition-colors',
-              effects ? 'bg-ok' : 'bg-muted',
-            )}
+            className="flex min-h-tap w-full cursor-pointer items-center gap-3 rounded-card p-card text-left"
           >
+            <span className="grid flex-1">
+              <b id="effects-label" className="text-row font-extrabold">
+                {cs.profile.effectsLabel}
+              </b>
+              <span id="effects-hint" className="text-meta font-bold text-muted">
+                {cs.profile.effectsHint}
+              </span>
+            </span>
             <span
               aria-hidden="true"
               className={cn(
-                'absolute top-[3px] size-[26px] rounded-full bg-surface shadow-sticker transition-[left]',
-                effects ? 'left-[23px]' : 'left-[3px]',
+                'relative h-8 w-13 shrink-0 rounded-full transition-colors motion-reduce:transition-none',
+                effects ? 'bg-ok' : 'bg-muted',
               )}
-            />
+            >
+              <span
+                className={cn(
+                  'absolute top-[3px] size-[26px] rounded-full bg-surface shadow-sticker transition-[left] motion-reduce:transition-none',
+                  effects ? 'left-[23px]' : 'left-[3px]',
+                )}
+              />
+            </span>
           </button>
         </Card>
 

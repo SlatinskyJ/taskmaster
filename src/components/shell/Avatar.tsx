@@ -1,12 +1,13 @@
 import { cn } from '~/lib/utils'
 
-// Round initial in a colour of its own per person (UI doc §2.1: avatars). The state text
-// tokens are dark in light mode and light in dark mode, and the page background is the
-// opposite, so the initial keeps its contrast in both themes.
+// Round initial in a colour of its own per person (UI doc §2.1: avatars). Only state *text*
+// tokens: they are dark in light mode and light in dark mode, the initial uses the page
+// background (the opposite), and src/styles/theme.test.ts checks every state text token
+// against that background at 4.5:1 in both themes.
 const AVATAR_COLOURS = [
   'bg-state-open-text',
   'bg-state-proposed-text',
-  'bg-accent-strong',
+  'bg-state-confirmed-text',
   'bg-state-reserved-text',
   'bg-state-negotiating-text',
 ] as const

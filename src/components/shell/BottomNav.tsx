@@ -29,7 +29,7 @@ export function BottomNav({ role }: { role: Role }) {
               <Link
                 to={to}
                 activeOptions={{ exact: true }}
-                className="flex min-h-12 min-w-16 flex-col items-center justify-center gap-0.5 text-[11px] font-extrabold text-muted data-[status=active]:text-accent-strong"
+                className="relative flex min-h-12 min-w-16 flex-col items-center justify-center gap-0.5 text-chip font-extrabold text-muted before:absolute before:top-0 before:h-1 before:w-8 before:rounded-full data-[status=active]:text-accent-strong data-[status=active]:before:bg-accent-strong"
               >
                 <Icon aria-hidden="true" className="size-6" strokeWidth={2} />
                 {cs.nav[key]}
