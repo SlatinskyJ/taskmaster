@@ -99,7 +99,11 @@ A giver creates a one-time task with an initial offer (score). From there, two p
 2. **Bidding.** A taker counters with a different score. That taker and the giver side go back and forth (offer/counter/accept). When both sides accept the same number, the task becomes **reserved to that taker** at that score. Other takers do not need to agree.
 
 Details:
-- Several takers may bid on the same task at the same time. **[call]** The first bid to reach agreement wins; all other bids on that task close, and pending score approvals are discarded.
+- Several takers may bid on the same task at the same time (Jakub, 2026-11-17):
+  - Each taker has **at most one open bid** per task. Bidding again **replaces** his own open bid, as often as he likes (e.g. brother 1 goes from 25 to 23). Nobody waits for a turn.
+  - Every bid and counter is **kept in the history**. The giver side sees the task with all bids and their history; a taker sees the history when making a bid (task detail and feed).
+  - When the giver side accepts, it accepts the **lowest** open bid (the best one for the givers). **[call]** If one taker holds the lowest bid, the task becomes reserved to him at that score; if several takers tie at the lowest, the task becomes **open** at that score and they sort out who takes it.
+  - On acceptance all other bids on that task close, and pending score approvals are discarded.
 - **[call]** On the giver side, any active giver may accept or counter a bid (so Mum or Dad can respond).
 - A taker may also simply accept the giver's current offer within a bid, which is agreement plus reservation in one step.
 - Changing the score of an agreed one-time task:
