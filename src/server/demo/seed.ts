@@ -1,11 +1,12 @@
 import { hashSync } from '@node-rs/argon2'
 import type { Db } from '~/server/db'
 import { users } from '~/server/db/schema'
-import { createUser, TEST_USERS } from '~/server/users'
+import { createUser } from '~/server/users'
 import type { NewUser } from '~/server/users'
 
 // Demo data for previews, dev and E2E (#62): an empty database gets the family with known
-// passwords, so a preview is clickable right away. Runs at boot (src/server/plugins) only when
+// passwords, so a preview is clickable right away. This is the only source of test users
+// (Jakub 2026-11-17); production gets its one admin from ADMIN_PASSWORD (../users/bootstrap). Runs at boot (src/server/plugins) only when
 // `TASKMASTER_ENV=preview`; to try it locally: `TASKMASTER_ENV=preview pnpm dev` on a fresh
 // `DATA_DIR`.
 //
@@ -21,7 +22,9 @@ export const DEMO_PASSWORD = 'demo1234'
 
 export const DEMO_USERS: readonly NewUser[] = [
   { username: 'admin', displayName: 'Admin', role: 'admin' },
-  ...TEST_USERS,
+  { username: 'tata', displayName: 'Táta', role: 'giver' },
+  { username: 'starsi', displayName: 'Starší', role: 'taker' },
+  { username: 'mladsi', displayName: 'Mladší', role: 'taker' },
 ]
 
 export type DemoOutcome =
