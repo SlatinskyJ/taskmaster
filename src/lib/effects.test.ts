@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { EFFECTS_STORAGE_KEY, effectsEnabled, setEffectsSwitch } from './effects'
+import { EFFECTS_STORAGE_KEY, effectsEnabled, setEffectsSwitch, subscribeEffects } from './effects'
 
 // Node test env: stub localStorage and the reduced-motion media query.
 let store: Map<string, string>
 let reducedMotion: boolean
+let mediaListeners: Set<() => void>
 
 function stubStorage(throws = false) {
   const fail = () => {
@@ -19,12 +20,13 @@ function stubStorage(throws = false) {
 beforeEach(() => {
   store = new Map()
   reducedMotion = false
+  mediaListeners = new Set()
   stubStorage()
   vi.stubGlobal('window', {
     matchMedia: (q: string) => ({
       matches: q === '(prefers-reduced-motion: reduce)' && reducedMotion,
-      addEventListener: () => undefined,
-      removeEventListener: () => undefined,
+      addEventListener: (_: string, l: () => void) => mediaListeners.add(l),
+      removeEventListener: (_: string, l: () => void) => mediaListeners.delete(l),
     }),
   })
 })
@@ -62,5 +64,20 @@ describe('effects switch', () => {
     expect(() => {
       setEffectsSwitch(false)
     }).not.toThrow()
+  })
+})
+
+describe('subscribeEffects', () => {
+  it('notifies on a switch change and on a reduced-motion change, until unsubscribed', () => {
+    const listener = vi.fn()
+    const off = subscribeEffects(listener)
+    setEffectsSwitch(false)
+    reducedMotion = true
+    for (const l of mediaListeners) l()
+    expect(listener).toHaveBeenCalledTimes(2)
+    off()
+    setEffectsSwitch(true)
+    expect(mediaListeners.size).toBe(0)
+    expect(listener).toHaveBeenCalledTimes(2)
   })
 })

@@ -7,8 +7,8 @@ import { STATE_CHIP_BG, STATE_DOT, STATE_TEXT } from './stateStyles'
 export function StateChip({ state, className }: { state: ItemStateKey; className?: string }) {
   return (
     <Badge data-state={state} className={cn(STATE_CHIP_BG[state], STATE_TEXT[state], className)}>
-      <span aria-hidden className={cn('size-2 rounded-full', STATE_DOT[state])} />
-      {cs.state[state]}
+      <span aria-hidden className={cn('size-2 shrink-0 rounded-full', STATE_DOT[state])} />
+      <span className="truncate">{cs.state[state]}</span>
     </Badge>
   )
 }

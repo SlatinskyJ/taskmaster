@@ -91,7 +91,17 @@ function EffectsDemo() {
   return (
     <div className="grid gap-3">
       <Card>
-        <PointsBar confirmed={score.confirmed} pending={score.pending} lower={50} upper={100} />
+        <PointsBar
+          celebrate
+          subject="demo"
+          confirmed={score.confirmed}
+          pending={score.pending}
+          lower={50}
+          upper={100}
+        />
+      </Card>
+      <Card>
+        <PointsBar confirmed={70} pending={10} lower={85} upper={100} />
       </Card>
       <TaskRow
         name={SAMPLE.title}

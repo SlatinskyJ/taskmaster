@@ -4,41 +4,55 @@ import { burstConfetti } from '~/components/effects/confetti'
 import { useEffectsEnabled } from '~/lib/effects'
 import { cs, plural, pointWords } from '~/lib/strings'
 import { cn } from '~/lib/utils'
-import { levelCrossed, pointsBarLayout } from './pointsBarScale'
+import { createLevelWatcher, pointsBarLayout, type LabelAlign } from './pointsBarScale'
+
+const LABEL_SHIFT: Record<LabelAlign, string> = {
+  start: 'pl-1',
+  center: '-translate-x-1/2',
+  end: '-translate-x-full pr-1',
+}
 
 /**
  * Points bar (spec §5.7, UI doc §3): confirmed points solid, pending points striped after them,
  * ticks for the lower and upper levels, and the `45 ✔ + 15 ⏳` caption.
  *
- * When confirmed points cross a level between renders, it shows the level toast and, with
- * effects on, glows and bursts confetti (UI doc §4). The first render never celebrates.
+ * With `celebrate` on (only the taker's own bar on Domů), confirmed points crossing a level
+ * while the bar is on screen show the level toast and, with effects on, a glow and confetti
+ * (UI doc §4). The first render and a change of `subject` never celebrate, so a bar that is
+ * reused for another taker or period stays quiet. Keep the bar mounted when points change.
  */
 export function PointsBar({
   confirmed,
   pending,
   lower,
   upper,
+  celebrate = false,
+  subject = '',
   className,
 }: {
   confirmed: number
   pending: number
   lower: number
   upper: number
+  /** Toast, glow and confetti on a level crossing. Off by default (giver overviews, history). */
+  celebrate?: boolean
+  /** Whose points in which period, e.g. `${userId}/${periodId}`; a change resets the watcher. */
+  subject?: string
   className?: string
 }) {
   const layout = pointsBarLayout({ confirmed, pending, lower, upper })
   const effects = useEffectsEnabled()
   const [glow, setGlow] = useState(0)
-  const previous = useRef(confirmed)
+  const watcher = useRef<ReturnType<typeof createLevelWatcher>>(null)
+  watcher.current ??= createLevelWatcher(confirmed, subject)
 
   useEffect(() => {
-    const crossed = levelCrossed(previous.current, confirmed, { lower, upper })
-    previous.current = confirmed
-    if (!crossed) return
+    const crossed = watcher.current?.next(confirmed, { lower, upper }, subject) ?? null
+    if (!crossed || !celebrate) return
     toast(crossed === 'upper' ? cs.effects.upperReached : cs.effects.lowerReached)
     setGlow((g) => g + 1)
     burstConfetti(null, 'big')
-  }, [confirmed, lower, upper])
+  }, [confirmed, lower, upper, subject, celebrate])
 
   const label = [
     `${String(confirmed)} ${plural(confirmed, pointWords)} ${cs.points.confirmed}`,
@@ -87,13 +101,13 @@ export function PointsBar({
       </div>
       <div aria-hidden className="relative h-4 text-chip font-bold text-muted">
         <span
-          className="absolute -translate-x-1/2 whitespace-nowrap"
+          className={cn('absolute whitespace-nowrap', LABEL_SHIFT[layout.lowerLabel])}
           style={{ left: `${String(layout.lowerPct)}%` }}
         >
           {cs.points.lowerTick} {lower}
         </span>
         <span
-          className="absolute -translate-x-1/2 whitespace-nowrap"
+          className={cn('absolute whitespace-nowrap', LABEL_SHIFT[layout.upperLabel])}
           style={{ left: `${String(layout.upperPct)}%` }}
         >
           {cs.points.upperTick} {upper}

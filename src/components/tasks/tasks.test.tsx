@@ -37,6 +37,21 @@ describe('TaskRow', () => {
   })
 })
 
+describe('TaskRow points colour', () => {
+  it.each([
+    ['pending', 'text-state-pending-text'],
+    ['confirmed', 'text-state-confirmed-text'],
+  ] as const)('%s points use the state text colour', (state, cls) => {
+    const html = renderToStaticMarkup(<TaskRow name="Vynést koš" state={state} points={5} />)
+    expect(html).toMatch(new RegExp(`class="[^"]*num[^"]*${cls}[^"]*">5<`))
+  })
+
+  it('open points stay ink', () => {
+    const html = renderToStaticMarkup(<TaskRow name="Vynést koš" state="open" points={5} />)
+    expect(html).toMatch(/class="num text-base font-bold whitespace-nowrap">5</)
+  })
+})
+
 describe('PointsBar', () => {
   it('reads out confirmed, pending and both levels in Czech', () => {
     const html = renderToStaticMarkup(

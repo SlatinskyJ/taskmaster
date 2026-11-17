@@ -28,7 +28,8 @@ export function setEffectsSwitch(on: boolean): void {
   for (const listener of listeners) listener()
 }
 
-function subscribe(listener: () => void): () => void {
+/** Calls `listener` when the switch or the system's reduced-motion setting changes. */
+export function subscribeEffects(listener: () => void): () => void {
   listeners.add(listener)
   const media = window.matchMedia(REDUCED_MOTION_QUERY)
   media.addEventListener('change', listener)
@@ -45,7 +46,7 @@ export function effectsEnabled(): boolean {
 
 /** The profile switch: its state and a setter. Server render reads "on". */
 export function useEffectsSwitch(): [boolean, (on: boolean) => void] {
-  const on = useSyncExternalStore(subscribe, readSwitch, () => true)
+  const on = useSyncExternalStore(subscribeEffects, readSwitch, () => true)
   const set = useCallback((next: boolean) => {
     setEffectsSwitch(next)
   }, [])
@@ -54,5 +55,5 @@ export function useEffectsSwitch(): [boolean, (on: boolean) => void] {
 
 /** Whether components should animate. Server render reads "off", so nothing animates on load. */
 export function useEffectsEnabled(): boolean {
-  return useSyncExternalStore(subscribe, effectsEnabled, () => false)
+  return useSyncExternalStore(subscribeEffects, effectsEnabled, () => false)
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { levelCrossed, pointsBarLayout } from './pointsBarScale'
+import { createLevelWatcher, levelCrossed, pointsBarLayout } from './pointsBarScale'
 
 describe('pointsBarLayout', () => {
   it('scales to 120 % of the upper level: 45 + 15 with levels 50 / 100', () => {
@@ -35,6 +35,23 @@ describe('pointsBarLayout', () => {
   })
 })
 
+describe('pointsBarLayout tick labels', () => {
+  it('centres both labels when the levels are far apart (50 / 100)', () => {
+    const l = pointsBarLayout({ confirmed: 0, pending: 0, lower: 50, upper: 100 })
+    expect([l.lowerLabel, l.upperLabel]).toEqual(['center', 'center'])
+  })
+
+  it('pushes the labels apart when the levels are close (85 / 100)', () => {
+    const l = pointsBarLayout({ confirmed: 0, pending: 0, lower: 85, upper: 100 })
+    expect([l.lowerLabel, l.upperLabel]).toEqual(['end', 'start'])
+  })
+
+  it('keeps a very low lower level label inside the bar (5 / 100)', () => {
+    const l = pointsBarLayout({ confirmed: 0, pending: 0, lower: 5, upper: 100 })
+    expect(l.lowerLabel).toBe('start')
+  })
+})
+
 describe('levelCrossed', () => {
   const levels = { lower: 50, upper: 100 }
 
@@ -49,5 +66,29 @@ describe('levelCrossed', () => {
     [45, 45, null],
   ] as const)('%i → %i gives %s', (before, after, expected) => {
     expect(levelCrossed(before, after, levels)).toBe(expected)
+  })
+})
+
+describe('createLevelWatcher', () => {
+  const levels = { lower: 50, upper: 100 }
+
+  it('never celebrates the value it starts with, however high', () => {
+    const w = createLevelWatcher(120, 'ondra/w46')
+    expect(w.next(120, levels, 'ondra/w46')).toBeNull()
+  })
+
+  it('celebrates one crossing once, not again on an unchanged re-render', () => {
+    const w = createLevelWatcher(45, 'ondra/w46')
+    expect(w.next(55, levels, 'ondra/w46')).toBe('lower')
+    expect(w.next(55, levels, 'ondra/w46')).toBeNull()
+    expect(w.next(100, levels, 'ondra/w46')).toBe('upper')
+  })
+
+  it('does not celebrate when the bar switches to another taker or period', () => {
+    const w = createLevelWatcher(40, 'ondra/w45')
+    expect(w.next(60, levels, 'ondra/w46')).toBeNull()
+    expect(w.next(60, levels, 'tomas/w46')).toBeNull()
+    // …but a real rise after the switch still counts.
+    expect(w.next(100, levels, 'tomas/w46')).toBe('upper')
   })
 })
