@@ -58,7 +58,13 @@ Next round only when some `blocker` or `should-fix` thread is still open, or you
 
 ## 5. Exit
 
-**Done** = CI green, every judge on the panel last said `APPROVE`, no open threads except resolved ones.
+**Done** = CI green, every judge on the panel last said `APPROVE`, and **zero unresolved threads**. Check, don't assume:
+
+```bash
+gh api repos/SlatinskyJ/taskmaster/pulls/<n>/ccr/review_threads --jq '[.[]|select(.resolved==false)]|length'
+```
+
+Must print `0`. A thread whose last reply is the judge's `Fixed in …` / `Accepted` but still open (judge forgot): resolve it yourself (`POST .../pulls/<n>/ccr/comments/<first comment id>/resolve`). Never tell Jakub a PR is ready while this is above 0.
 
 Then:
 - Update the PR brief's review summary (rounds used, fixed, deferred issue links).
