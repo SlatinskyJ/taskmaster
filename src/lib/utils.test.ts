@@ -12,4 +12,11 @@ describe('cn', () => {
     expect(cn('shadow-sticker', 'shadow-none')).toBe('shadow-none')
     expect(cn('font-body', 'font-display')).toBe('font-display')
   })
+
+  it('lets a later size or padding win over a theme spacing token', () => {
+    expect(cn('size-tap', 'size-8')).toBe('size-8')
+    expect(cn('min-h-tap', 'min-h-12')).toBe('min-h-12')
+    expect(cn('p-card', 'p-0')).toBe('p-0')
+    expect(cn('px-gutter', 'px-2')).toBe('px-2')
+  })
 })

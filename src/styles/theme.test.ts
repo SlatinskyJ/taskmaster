@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { cs, type ItemStateKey } from '~/lib/strings'
 
 // Checks the real stylesheet: WCAG AA (4.5:1) for every text token, in light and dark
 // (issue #30, UI doc §2.2 "text colours ... reach 4.5:1").
@@ -55,18 +56,8 @@ function chipBackground(dot: string, surface: string): string {
     .join('')}`
 }
 
-const STATES = [
-  'proposed',
-  'negotiating',
-  'open',
-  'reserved',
-  'pending',
-  'confirmed',
-  'expired',
-  'cancelled',
-  'rejected',
-  'disputed',
-] as const
+/** Every state the app can show, from the strings module the chips use. */
+const STATES = Object.keys(cs.state) as ItemStateKey[]
 
 function tok(t: Tokens, name: string): string {
   const v = t[name]

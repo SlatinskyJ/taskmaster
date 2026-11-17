@@ -18,7 +18,7 @@ export function Progress({
     >
       <ProgressPrimitive.Indicator
         data-slot="progress-indicator"
-        className="h-full w-full flex-1 rounded-full bg-state-confirmed transition-transform duration-700"
+        className="h-full w-full flex-1 rounded-full bg-state-confirmed transition-transform duration-700 motion-reduce:transition-none"
         style={{ transform: `translateX(-${String(100 - clamped)}%)` }}
       />
     </ProgressPrimitive.Root>

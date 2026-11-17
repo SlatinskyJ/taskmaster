@@ -2,7 +2,7 @@ import { clsx, type ClassValue } from 'clsx'
 import { extendTailwindMerge } from 'tailwind-merge'
 
 // Our font sizes (theme.css) must be known here, or `text-row` would be taken for a colour
-// and silently drop a `text-ink` next to it. Same for radius, shadow and font names.
+// and silently drop a `text-ink` next to it. Same for radius, shadow, font and spacing names.
 const twMerge = extendTailwindMerge({
   extend: {
     theme: {
@@ -10,6 +10,7 @@ const twMerge = extendTailwindMerge({
       radius: ['card', 'button'],
       shadow: ['sticker'],
       font: ['display', 'body'],
+      spacing: ['tap', 'card', 'gutter'],
     },
   },
 })

@@ -22,7 +22,7 @@ export function TabsTrigger({ className, ...props }: ComponentProps<typeof TabsP
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        'min-h-10 flex-1 cursor-pointer rounded-full px-3 font-display font-semibold text-muted transition-colors data-[state=active]:bg-surface data-[state=active]:text-ink data-[state=active]:shadow-sticker',
+        'min-h-tap flex-1 cursor-pointer rounded-full px-3 font-display font-semibold text-muted transition-colors data-[state=active]:bg-surface data-[state=active]:text-ink data-[state=active]:shadow-sticker',
         className,
       )}
       {...props}
