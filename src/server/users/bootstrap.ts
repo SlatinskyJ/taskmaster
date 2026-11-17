@@ -6,9 +6,10 @@ import { createUser } from './manage'
 import type { NewUser } from './manage'
 
 // First admin (spec §6, Jakub 2026-11-17): on a database with no admin, boot creates one from
-// `ADMIN_PASSWORD` (login `ADMIN_USERNAME`, default "admin"). After that the variable does
-// nothing but earn a warning, so the admin removes it; everyone else is added in the admin
-// console. The password is never logged.
+// `ADMIN_PASSWORD` (login `ADMIN_USERNAME`, default "admin"). Once an admin exists the
+// variable is ignored, so it may stay set (a deploy secret reused for every fresh preview DB);
+// it never changes an existing password. Everyone else is added in the admin console. The
+// password is never logged.
 //
 // `TEST_USERS=1` (dev and previews only, Jakub 2026-11-17) also creates Táta, Starší and
 // Mladší with the same password, in the same step. Ignored in production unless
@@ -26,8 +27,6 @@ export type BootstrapOutcome =
   | { kind: 'created'; username: string; testUsers: string[] }
   /** No admin yet and no `ADMIN_PASSWORD`: nobody can manage people until it is set. */
   | { kind: 'no_admin' }
-  /** An admin exists and `ADMIN_PASSWORD` is still set: remove it. */
-  | { kind: 'remove_env' }
   | { kind: 'nothing' }
 
 // Sync on purpose: boot plugins are not awaited, so a throw here must stop boot synchronously.
@@ -38,7 +37,7 @@ export function bootstrapAdmin(
 ): BootstrapOutcome {
   const password = env.ADMIN_PASSWORD ?? ''
   const hasAdmin = db.select().from(users).where(eq(users.role, 'admin')).get() !== undefined
-  if (hasAdmin) return password === '' ? { kind: 'nothing' } : { kind: 'remove_env' }
+  if (hasAdmin) return { kind: 'nothing' }
   if (password === '') return { kind: 'no_admin' }
   if (password.length < MIN_ADMIN_PASSWORD) {
     throw new Error(`ADMIN_PASSWORD must be at least ${String(MIN_ADMIN_PASSWORD)} characters`)
@@ -73,12 +72,10 @@ export function describeBootstrap(outcome: BootstrapOutcome): string | null {
   switch (outcome.kind) {
     case 'created':
       return outcome.testUsers.length > 0
-        ? `[users] admin "${outcome.username}" and test users ${outcome.testUsers.join(', ')} created; remove ADMIN_PASSWORD now`
-        : `[users] first admin "${outcome.username}" created from ADMIN_PASSWORD; remove the variable now`
+        ? `[users] admin "${outcome.username}" and test users ${outcome.testUsers.join(', ')} created`
+        : `[users] first admin "${outcome.username}" created from ADMIN_PASSWORD`
     case 'no_admin':
       return '[users] no admin yet: set ADMIN_PASSWORD and restart to create one'
-    case 'remove_env':
-      return '[users] ADMIN_PASSWORD is still set but an admin exists; remove it'
     case 'nothing':
       return null
   }

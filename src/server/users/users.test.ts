@@ -306,10 +306,12 @@ describe('first admin from ADMIN_PASSWORD (spec §6)', () => {
     })
   })
 
-  it('does nothing once an admin exists, and asks to remove a leftover variable', () => {
+  it('once an admin exists, a still-set variable is ignored and changes nothing', () => {
     const { db } = family()
     const before = auditRows(db).length
-    expect(bootstrapAdmin(db, { ADMIN_PASSWORD: PASSWORD }, T1)).toEqual({ kind: 'remove_env' })
+    const hash = db.select().from(users).all()[0]?.passwordHash
+    expect(bootstrapAdmin(db, { ADMIN_PASSWORD: PASSWORD }, T1)).toEqual({ kind: 'nothing' })
+    expect(db.select().from(users).all()[0]?.passwordHash).toBe(hash)
     expect(bootstrapAdmin(db, {}, T1)).toEqual({ kind: 'nothing' })
     expect(
       db
@@ -319,7 +321,6 @@ describe('first admin from ADMIN_PASSWORD (spec §6)', () => {
         .filter((u) => u.role === 'admin'),
     ).toHaveLength(1)
     expect(auditRows(db)).toHaveLength(before)
-    expect(describeBootstrap({ kind: 'remove_env' })).toContain('remove')
     expect(describeBootstrap({ kind: 'nothing' })).toBeNull()
   })
 
