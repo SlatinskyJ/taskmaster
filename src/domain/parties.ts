@@ -16,6 +16,10 @@ export function isParty(person: Person): boolean {
   return person.active && (person.role === 'giver' || person.role === 'taker')
 }
 
+export function isActiveTaker(person: Person): boolean {
+  return person.active && person.role === 'taker'
+}
+
 export function isActiveGiver(person: Person): boolean {
   return person.active && person.role === 'giver'
 }
@@ -33,4 +37,9 @@ export function allParties(people: readonly Person[]): PersonId[] {
 
 export function findPerson(people: readonly Person[], id: PersonId): Person | undefined {
   return people.find((p) => p.id === id)
+}
+
+/** The admin, while active. Never a party (spec §3). */
+export function isActiveAdmin(person: Person): boolean {
+  return person.active && person.role === 'admin'
 }
