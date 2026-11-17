@@ -1,0 +1,256 @@
+/*
+ * Hřiště theme, Pastelky palette: UI design doc §2.
+ * Light tokens on :root; dark tokens when the system is dark (unless the user forced light)
+ * or when the user forced dark. `data-theme` on <html> is set by src/lib/theme.ts.
+ * Contrast of every text token is checked by src/styles/theme.test.ts.
+ */
+
+@custom-variant dark {
+  &:where([data-theme='dark'], [data-theme='dark'] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme='light']), :root:not([data-theme='light']) *) {
+      @slot;
+    }
+  }
+}
+
+/* Light (UI doc §2.1, §2.2). `--s-*` = state dot, `--s-*-text` = state text. */
+:root {
+  --bg: #fff5ee;
+  --surface: #ffffff;
+  --ink: #2b1f2e;
+  --muted: #6e6270;
+  --accent: #f2545b;
+  --accent-strong: #d93a42;
+  --on-accent-strong: #ffffff;
+  --accent2: #9b5de5;
+  --ok: #23813d;
+  --on-ok: #ffffff;
+  --track: #f7e3d7;
+  --shadow: #f2ddd0;
+  --tint: #feeeef;
+
+  --s-proposed: #9b5de5;
+  --s-proposed-text: #7a3fc4;
+  --s-negotiating: #e84fa8;
+  --s-negotiating-text: #b8287a;
+  --s-open: #1e9be0;
+  --s-open-text: #0b6fa6;
+  --s-reserved: #0fae9e;
+  --s-reserved-text: #08786d;
+  --s-pending: #f2a900;
+  --s-pending-text: #8a5e00;
+  --s-confirmed: #36a853;
+  --s-confirmed-text: #21793a;
+  --s-expired: #a39a92;
+  --s-expired-text: #6e655e;
+  --s-cancelled: #c9c0b8;
+  /* [call] doc says #7A716A; darkened so the chip (15 % tint on white) reaches 4.5:1. */
+  --s-cancelled-text: #736a63;
+  --s-rejected: #d93a42;
+  --s-rejected-text: #b8323a;
+  --s-disputed: #f26b1d;
+  --s-disputed-text: #a3410f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #1d1524;
+    --surface: #2a1f33;
+    --ink: #fff1e8;
+    --muted: #b8aab8;
+    --accent: #ff6a70;
+    --accent-strong: #ff6a70;
+    --on-accent-strong: #1d1524;
+    --accent2: #b282f5;
+    --ok: #57d277;
+    --on-ok: #1d1524;
+    --track: #3a2d45;
+    --shadow: #130d19;
+    --tint: #33203a;
+
+    --s-proposed: #b98af7;
+    --s-proposed-text: #b98af7;
+    --s-negotiating: #ff74c0;
+    --s-negotiating-text: #ff74c0;
+    --s-open: #4db8f5;
+    --s-open-text: #4db8f5;
+    --s-reserved: #33cdbb;
+    --s-reserved-text: #33cdbb;
+    --s-pending: #ffc53d;
+    --s-pending-text: #ffc53d;
+    --s-confirmed: #57d277;
+    --s-confirmed-text: #57d277;
+    --s-expired: #8a8193;
+    /* [call] the doc gives dark dots only; these three are lightened to reach 4.5:1. */
+    --s-expired-text: #b3aabb;
+    --s-cancelled: #5f5668;
+    --s-cancelled-text: #a39aab;
+    --s-rejected: #ff6a70;
+    --s-rejected-text: #ff7f84;
+    --s-disputed: #ff8a47;
+    --s-disputed-text: #ff8a47;
+  }
+}
+
+/* Same dark block, for a user who forced dark on a light system. Keep in sync (the test checks). */
+:root[data-theme='dark'] {
+  --bg: #1d1524;
+  --surface: #2a1f33;
+  --ink: #fff1e8;
+  --muted: #b8aab8;
+  --accent: #ff6a70;
+  --accent-strong: #ff6a70;
+  --on-accent-strong: #1d1524;
+  --accent2: #b282f5;
+  --ok: #57d277;
+  --on-ok: #1d1524;
+  --track: #3a2d45;
+  --shadow: #130d19;
+  --tint: #33203a;
+
+  --s-proposed: #b98af7;
+  --s-proposed-text: #b98af7;
+  --s-negotiating: #ff74c0;
+  --s-negotiating-text: #ff74c0;
+  --s-open: #4db8f5;
+  --s-open-text: #4db8f5;
+  --s-reserved: #33cdbb;
+  --s-reserved-text: #33cdbb;
+  --s-pending: #ffc53d;
+  --s-pending-text: #ffc53d;
+  --s-confirmed: #57d277;
+  --s-confirmed-text: #57d277;
+  --s-expired: #8a8193;
+  --s-expired-text: #b3aabb;
+  --s-cancelled: #5f5668;
+  --s-cancelled-text: #a39aab;
+  --s-rejected: #ff6a70;
+  --s-rejected-text: #ff7f84;
+  --s-disputed: #ff8a47;
+  --s-disputed-text: #ff8a47;
+}
+
+/*
+ * Tailwind utilities. Design names first (bg-surface, text-ink, text-muted, bg-accent = coral),
+ * then the shadcn/ui names that don't clash, so copied shadcn code picks up the palette.
+ * shadcn's `muted` and `accent` mean something else there: see src/components/ui/README.md.
+ */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-on-accent-strong: var(--on-accent-strong);
+  --color-accent2: var(--accent2);
+  --color-ok: var(--ok);
+  --color-on-ok: var(--on-ok);
+  --color-track: var(--track);
+  --color-shadow: var(--shadow);
+  --color-tint: var(--tint);
+
+  --color-background: var(--bg);
+  --color-foreground: var(--ink);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--surface);
+  --color-popover-foreground: var(--ink);
+  --color-primary: var(--accent-strong);
+  --color-primary-foreground: var(--on-accent-strong);
+  --color-secondary: var(--track);
+  --color-secondary-foreground: var(--ink);
+  --color-muted-foreground: var(--muted);
+  --color-destructive: var(--s-rejected-text);
+  --color-border: var(--track);
+  --color-input: var(--track);
+  --color-ring: var(--accent2);
+
+  --color-state-proposed: var(--s-proposed);
+  --color-state-proposed-text: var(--s-proposed-text);
+  --color-state-negotiating: var(--s-negotiating);
+  --color-state-negotiating-text: var(--s-negotiating-text);
+  --color-state-open: var(--s-open);
+  --color-state-open-text: var(--s-open-text);
+  --color-state-reserved: var(--s-reserved);
+  --color-state-reserved-text: var(--s-reserved-text);
+  --color-state-pending: var(--s-pending);
+  --color-state-pending-text: var(--s-pending-text);
+  --color-state-confirmed: var(--s-confirmed);
+  --color-state-confirmed-text: var(--s-confirmed-text);
+  --color-state-expired: var(--s-expired);
+  --color-state-expired-text: var(--s-expired-text);
+  --color-state-cancelled: var(--s-cancelled);
+  --color-state-cancelled-text: var(--s-cancelled-text);
+  --color-state-rejected: var(--s-rejected);
+  --color-state-rejected-text: var(--s-rejected-text);
+  --color-state-disputed: var(--s-disputed);
+  --color-state-disputed-text: var(--s-disputed-text);
+}
+
+/* Type, shape, spacing: UI doc §2.3. */
+@theme {
+  --font-display: 'Fredoka Variable', 'Fredoka', ui-rounded, system-ui, sans-serif;
+  --font-body: 'Nunito Variable', 'Nunito', ui-rounded, system-ui, sans-serif;
+  --font-sans: var(--font-body);
+
+  --text-title: 26px;
+  --text-title--line-height: 1.2;
+  --text-row: 15px;
+  --text-row--line-height: 1.35;
+  --text-meta: 13px;
+  --text-meta--line-height: 1.35;
+  --text-chip: 11px;
+  --text-chip--line-height: 1.2;
+  --text-points: 40px;
+  --text-points--line-height: 1;
+
+  --radius-card: 16px;
+  --radius-button: 12px;
+
+  --shadow-sticker: 0 2px 0 var(--shadow);
+
+  --spacing-gutter: 16px;
+  --spacing-card: 14px;
+  --spacing-tap: 44px;
+}
+
+/* Fredoka with tabular figures, for every number (UI doc §2.3). */
+@utility num {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    html:not([data-theme='light']) {
+      color-scheme: dark;
+    }
+  }
+  html[data-theme='dark'] {
+    color-scheme: dark;
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-tap-highlight-color: transparent;
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent2);
+    outline-offset: 2px;
+  }
+}

@@ -1,5 +1,7 @@
 import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
+import { Toaster } from '~/components/ui/sonner'
+import { themeBootScript } from '~/lib/theme'
 import appCss from '~/styles/app.css?url'
 
 export const Route = createRootRoute({
@@ -16,12 +18,15 @@ export const Route = createRootRoute({
 
 function RootDocument({ children }: { children: ReactNode }) {
   return (
-    <html lang="cs">
+    // data-theme is set before hydration by the boot script, so React must not fight it.
+    <html lang="cs" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         <HeadContent />
       </head>
       <body>
         {children}
+        <Toaster />
         <Scripts />
       </body>
     </html>
