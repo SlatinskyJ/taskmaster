@@ -28,7 +28,7 @@ He needs the change from several angles: the family using it, the data, infra, s
 Same order and look in every brief, so Jakub knows where to look:
 
 1. **Header.** Title in plain words (family terms when a person will notice the change), one sentence on what the PR does, a verdict badge (`Ready to accept` or `Needs your call`) and a risk badge (low / medium / high) with one reason. If the PR has the `preview` label, link the preview URL here (from the PR's preview comment).
-2. **Needs you.** Amber callout: what Jakub must decide, or must know to accept the PR: open decisions, assumptions you made where the spec was silent, spec or decision drift you found (with the issue that tracks it, if any). Verdict is `Needs your call` only if one of these must be settled before merge. Things you can fix yourself (a wrong title, a missing test) are fixed before the brief, not listed. If there is nothing, one line: "Nothing needs you."
+2. **Needs you.** Amber callout: what Jakub must decide, or must know to accept the PR: open decisions, assumptions you made where the spec was silent, spec or decision drift you found (with the issue that tracks it, if any). Verdict is `Needs your call` only if one of these must be settled before merge. Things you can fix yourself (a wrong title, a missing test) are fixed before the brief, not listed. If there is nothing, a quiet green line "Nothing needs you" instead of the amber box.
 3. **The explanation.** Your points, in the order Jakub needs them, each under a heading that states the point ("Approvals reset when people change", not "Scenes"). The first one teaches how the changed part works now. Each point shows its main tool openly; extra depth (a second example, the full table, a snippet) goes in a `<details>` under it.
 4. **What could go wrong.** Realistic failure modes only, each a `<details>` item. Summary line: failure + who or what is hit + how you'd notice. Inside: the mechanism, why tests do or don't catch it, the mitigation or owner (issue link). Depth scales with severity. Leave the section out when there is no realistic failure.
 5. **Closing notes**, each only when it has content: Jakub's past decisions this PR implements (with date), the stack (stacked PRs only, this PR highlighted), the review summary after the rounds (rounds, judges, what was fixed, deferred issues as links, anything escalated).
@@ -65,7 +65,8 @@ Screenshots: Playwright against the dev server, viewport 390×844, light theme, 
 
 Load the `artifact-design` skill. Keep one visual vocabulary across briefs so things are easy to spot:
 - verdict and risk badges in the header (green / amber / red);
-- "Needs you" as an amber callout right under the header;
+- "Needs you" as an amber callout right under the header (a quiet green line when empty);
+- verdict badge green for `Ready to accept`, amber for `Needs your call`;
 - before/after and if/if pairs as two panels (grey before, green after, red for an outcome where a rule bites), one column on a phone;
 - light and dark tokens for every colour.
 
