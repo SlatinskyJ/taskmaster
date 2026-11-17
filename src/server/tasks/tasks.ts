@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray } from 'drizzle-orm'
 import {
   approveOneTimeOffer,
   createOneTimeItem,
@@ -219,6 +219,13 @@ export interface TaskView {
   createdByName: string
   /** Proposed only: display names of who approved the current offer, oldest first. */
   approvedBy: string[]
+  /** The reserving taker (also kept through completion, spec §5.5), or null. */
+  reservedBy: { id: number; name: string } | null
+  /** Who marked it done, and when (UTC ISO), or null. */
+  completedBy: { id: number; name: string } | null
+  completedAt: string | null
+  /** The taker who gets the points, or null (open, or done by a giver). */
+  earnerId: number | null
 }
 
 function views(db: Db | Tx, rows: TaskRow[]): TaskView[] {
@@ -239,7 +246,48 @@ function views(db: Db | Tx, rows: TaskRow[]): TaskView[] {
     createdByName: names.get(t.createdBy) ?? '',
     approvedBy:
       t.status === 'proposed' ? currentApprovers(db, t).map((id) => names.get(id) ?? '') : [],
+    reservedBy:
+      t.reservedBy === null ? null : { id: t.reservedBy, name: names.get(t.reservedBy) ?? '' },
+    completedBy:
+      t.completedBy === null ? null : { id: t.completedBy, name: names.get(t.completedBy) ?? '' },
+    completedAt: t.completedAt,
+    earnerId: t.earnerId,
   }))
+}
+
+/** One task for its detail screen, or null. */
+export function getTask(db: Db | Tx, id: number): TaskView | null {
+  const row = db.select().from(tasks).where(eq(tasks.id, id)).get()
+  return row ? (views(db, [row])[0] ?? null) : null
+}
+
+/**
+ * The work board (taker's Domů until #40): open tasks, and reserved or pending ones, oldest
+ * first. The screen splits them into "Moje" and "Volné".
+ */
+export function listBoard(db: Db | Tx): TaskView[] {
+  return views(
+    db,
+    db
+      .select()
+      .from(tasks)
+      .where(inArray(tasks.status, ['open', 'reserved', 'done_unconfirmed']))
+      .orderBy(asc(tasks.id))
+      .all(),
+  )
+}
+
+/** Completions waiting for a giver ("Ke schválení", spec §5.5), oldest done first. */
+export function listPendingCompletions(db: Db | Tx): TaskView[] {
+  return views(
+    db,
+    db
+      .select()
+      .from(tasks)
+      .where(eq(tasks.status, 'done_unconfirmed'))
+      .orderBy(asc(tasks.completedAt))
+      .all(),
+  )
 }
 
 /** Every one-time task, newest first (the giver's Úkoly list). */

@@ -15,6 +15,14 @@ const EXPECTED_ROLES: Record<string, string> = {
   approveTaskOfferFn: 'giver,taker',
   listPendingApprovalsFn: 'giver,taker',
   listTasksFn: 'giver',
+  getTaskFn: 'giver,taker',
+  listBoardFn: 'taker',
+  listPendingCompletionsFn: 'giver',
+  reserveTaskFn: 'taker',
+  releaseTaskFn: 'giver,taker',
+  completeTaskFn: 'giver,taker',
+  approveTaskFn: 'giver',
+  rejectTaskFn: 'giver',
 }
 
 const SRC = join(import.meta.dirname, '..', 'src')

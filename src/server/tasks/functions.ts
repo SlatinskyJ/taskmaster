@@ -4,7 +4,17 @@ import { getDb } from '~/server/db'
 import type { TaskError, TaskView } from './tasks'
 
 export type { TaskError, TaskView }
-import { approveTaskOffer, createTask, listTasks, pendingApprovals } from './tasks'
+import type { LifecycleActionError } from './lifecycle'
+import { approveTask, completeTask, rejectTask, releaseTask, reserveTask } from './lifecycle'
+import {
+  approveTaskOffer,
+  createTask,
+  getTask,
+  listBoard,
+  listPendingCompletions,
+  listTasks,
+  pendingApprovals,
+} from './tasks'
 
 // Server functions for one-time tasks (#33). Roles are checked here (guards) and again by the
 // domain rules inside (`not_a_giver`, `not_a_party`).
@@ -61,3 +71,68 @@ export const listPendingApprovalsFn = createServerFn({ method: 'GET' })
 export const listTasksFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver')])
   .handler((): TaskView[] => listTasks(getDb()))
+
+// ── Work flow (#35, spec §5.4–§5.6) ─────────────────────────────────────────────────────
+
+export type LifecycleActionResult =
+  { ok: true; id: number; status: TaskView['status'] } | { ok: false; error: LifecycleActionError }
+
+export type { LifecycleActionError }
+
+function parseTaskId(data: unknown): { taskId: number } {
+  return { taskId: int(record(data).taskId) }
+}
+
+function parseReject(data: unknown): { taskId: number; reason?: string } {
+  const { taskId, reason } = record(data)
+  if (reason !== undefined && typeof reason !== 'string') throw new Error('Invalid input')
+  return { taskId: int(taskId), reason }
+}
+
+function done(result: ReturnType<typeof reserveTask>): LifecycleActionResult {
+  return result.ok ? { ok: true, id: result.value.id, status: result.value.status } : result
+}
+
+/** One task for its detail screen; null if there is none. */
+export const getTaskFn = createServerFn({ method: 'GET' })
+  .middleware([requireRole('giver', 'taker')])
+  .validator(parseTaskId)
+  .handler(({ data }): TaskView | null => getTask(getDb(), data.taskId))
+
+/** Open, reserved and pending tasks (taker's Domů until #40). */
+export const listBoardFn = createServerFn({ method: 'GET' })
+  .middleware([requireRole('taker')])
+  .handler((): TaskView[] => listBoard(getDb()))
+
+/** Completions waiting for a giver (giver's Domů until #41). */
+export const listPendingCompletionsFn = createServerFn({ method: 'GET' })
+  .middleware([requireRole('giver')])
+  .handler((): TaskView[] => listPendingCompletions(getDb()))
+
+export const reserveTaskFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('taker')])
+  .validator(parseTaskId)
+  .handler(({ data, context }) => done(reserveTask(getDb(), context.user.id, data.taskId)))
+
+export const releaseTaskFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('giver', 'taker')])
+  .validator(parseTaskId)
+  .handler(({ data, context }) => done(releaseTask(getDb(), context.user.id, data.taskId)))
+
+/** "Hotovo" for a taker, "Udělal jsem sám" for a giver. */
+export const completeTaskFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('giver', 'taker')])
+  .validator(parseTaskId)
+  .handler(({ data, context }) => done(completeTask(getDb(), context.user.id, data.taskId)))
+
+export const approveTaskFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('giver')])
+  .validator(parseTaskId)
+  .handler(({ data, context }) => done(approveTask(getDb(), context.user.id, data.taskId)))
+
+export const rejectTaskFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('giver')])
+  .validator(parseReject)
+  .handler(({ data, context }) =>
+    done(rejectTask(getDb(), context.user.id, data.taskId, data.reason)),
+  )
