@@ -10,7 +10,7 @@ import { bootstrapAdmin, describeBootstrap, MIN_ADMIN_PASSWORD } from './bootstr
 import type { NewUser } from './manage'
 import { createUser, setPasswordHash, updateUser } from './manage'
 import type { PeopleChangeHook } from './people'
-import { listPeople } from './people'
+import { listPeople, listUsers } from './people'
 
 const HASH = '$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHQ$aGFzaGhhc2hoYXNo'
 const T0 = new Date('2026-11-17T10:00:00.000Z')
@@ -398,5 +398,21 @@ describe('first admin from ADMIN_PASSWORD (spec §6)', () => {
     expect(() => bootstrapAdmin(db, env, T0)).toThrow('username_taken')
     expect(db.select().from(users).all()).toHaveLength(0)
     expect(auditRows(db)).toHaveLength(0)
+  })
+})
+
+describe('people list for the admin console', () => {
+  it('returns exactly the shown fields, never the password hash', () => {
+    const { db, admin } = family()
+    const [first] = listUsers(db)
+    expect(first).toEqual({
+      id: admin.id,
+      username: 'admin',
+      displayName: 'Admin',
+      role: 'admin',
+      active: true,
+    })
+    expect(JSON.stringify(listUsers(db))).not.toContain('argon2')
+    expect(listUsers(db).map((u) => u.username)).toEqual(['admin', 'tata', 'starsi', 'mladsi'])
   })
 })

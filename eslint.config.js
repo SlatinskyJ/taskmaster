@@ -68,6 +68,24 @@ export default defineConfig(
     },
   },
   {
+    // Screens reach the server only through server functions; any other server import would
+    // pull server code (and the DB driver) into the browser bundle.
+    files: ['src/routes/**/*.{ts,tsx}', 'src/components/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^~/server/(?![\\w-]+/functions$)',
+              message: 'Screens import only server functions (~/server/<module>/functions).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.js'],
     extends: [tseslint.configs.disableTypeChecked],
   },

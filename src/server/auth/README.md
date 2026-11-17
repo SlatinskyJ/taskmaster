@@ -10,6 +10,24 @@ role guards (#28) build on this.
 - `http.ts`: the cookie (`__Host-tm_session`, HttpOnly, Secure, SameSite=Lax) and the client IP.
   `currentUser()` is the one way server code learns who is signed in.
 - `functions.ts`: server functions `loginFn`, `logoutFn`, `getCurrentUserFn`.
+- `authorize.ts`: the one role check (`authorize`) and each role's landing page.
+- `guards.ts`: `requireUser` / `requireRole(...)` middlewares for server functions.
+
+## Guarding a server function
+
+Every server function takes a guard, or is listed in `PUBLIC_SERVER_FNS` with its file and a reason.
+`tests/server-fn-guards.test.ts` scans `src/` and fails otherwise; it also pins each function's
+roles, so add yours there.
+
+```ts
+export const listUsersFn = createServerFn({ method: 'GET' })
+  .middleware([requireRole('admin')])
+  .handler(({ context }) => /* context.user is the caller */)
+```
+
+Screens behind login live under `src/routes/_app/`: its `beforeLoad` sends anyone not signed
+in to `/login?redirect=…`. A route guard only hides a screen; the server function's guard is
+what protects the data.
 
 ## Config
 
