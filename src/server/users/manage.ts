@@ -3,6 +3,7 @@ import { toIsoUtc } from '~/domain/dates'
 import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
 import type { Actor, Tx } from '~/server/audit'
+import { endUserSessions } from '~/server/auth/sessions'
 import { writeAudit } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { USER_ROLES, users } from '~/server/db/schema'
@@ -122,10 +123,7 @@ export function updateUser(
   })
 }
 
-/**
- * Sets a new password hash (an admin reset). Ending the user's sessions on
- * a reset (spec §6) is #27's job: sessions don't exist yet.
- */
+/** Sets a new password hash (an admin reset) and ends the user's sessions (spec §6). */
 export function setPasswordHash(
   db: Db | Tx,
   by: Actor,
@@ -144,9 +142,10 @@ export function setPasswordHash(
       .where(eq(users.id, row.id))
       .returning()
       .get()
+    const sessionsEnded = endUserSessions(tx, row.id)
     // hashSet alone reads true → true on a reset; say so, or the log can't show it.
     // Not "passwordReset": keys with "password" are redacted by the audit module.
-    const after = { ...auditView(updated), hashChanged: true }
+    const after = { ...auditView(updated), hashChanged: true, sessionsEnded }
     audit(tx, by, 'user.updated', row.id, auditView(row), after, now)
     return ok(updated)
   })
