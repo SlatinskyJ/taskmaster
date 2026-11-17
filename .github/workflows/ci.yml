@@ -11,7 +11,8 @@ permissions:
 env:
   IMAGE: ghcr.io/slatinskyj/taskmaster
 
-# preview-cleanup.yml joins this group on PR close to cancel a running deploy; rename both together.
+# preview-cleanup.yml joins this group on PR close (as ci-refs/pull/<n>/merge) to cancel a
+# running deploy; rename both together.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
