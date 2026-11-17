@@ -32,6 +32,7 @@ export type SettlementError =
   | 'reason_required'
   | 'no_change'
   | 'would_go_negative'
+  | 'wrong_settlement'
 
 /** The two thresholds of a period (spec §4). Both takers share them. */
 export interface Levels {
@@ -119,7 +120,7 @@ export interface Adjustment {
   reason: string
 }
 
-function admin(people: readonly Person[], id: PersonId): boolean {
+function isAdminActor(people: readonly Person[], id: PersonId): boolean {
   const p = findPerson(people, id)
   return p !== undefined && isActiveAdmin(p)
 }
@@ -141,7 +142,7 @@ export function adjustPoints(
   reason: string,
   currentTotal: number,
 ): Result<Adjustment, SettlementError> {
-  if (!admin(people, adminId)) return fail('not_admin')
+  if (!isAdminActor(people, adminId)) return fail('not_admin')
   const taker = findPerson(people, takerId)
   if (taker?.role !== 'taker') return fail('not_a_taker')
   if (!Number.isInteger(points) || points === 0) return fail('invalid_points')
@@ -192,7 +193,10 @@ export function correctSettlement(
   reason: string,
   currentTotal: number,
 ): Result<{ correction: SettlementCorrection; adjustment: Adjustment | null }, SettlementError> {
-  if (!admin(people, adminId)) return fail('not_admin')
+  if (!isAdminActor(people, adminId)) return fail('not_admin')
+  if (latest && (latest.periodId !== original.periodId || latest.takerId !== original.takerId)) {
+    return fail('wrong_settlement')
+  }
   if (!isPoints(corrected.deducted)) return fail('invalid_points')
   if ((corrected.level === 'none') !== (corrected.deducted === 0)) return fail('invalid_points')
   const why = checkReason(reason)

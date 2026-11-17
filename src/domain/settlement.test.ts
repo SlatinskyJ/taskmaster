@@ -336,6 +336,19 @@ describe('settlement correction (spec §5.9) [call] difference goes to the curre
     expect(back.correction).toMatchObject({ originalDeducted: 100, correctedDeducted: 100 })
     expect(settled.deducted).toBe(100)
   })
+
+  it("refuses a 'latest' correction that belongs to another settlement", () => {
+    const settled = value(settle(family, DAD, WEEK, OLDER, 130, LEVELS))
+    const toLower = { level: 'lower' as const, deducted: 50 }
+    const first = value(correctSettlement(family, JAKUB, settled, null, toLower, 'x', 0))
+    const otherWeek = value(settle(family, DAD, WEEK + 1, OLDER, 130, LEVELS))
+    const otherTaker = value(settle(family, DAD, WEEK, YOUNGER, 130, LEVELS))
+    for (const original of [otherWeek, otherTaker]) {
+      expect(
+        error(correctSettlement(family, JAKUB, original, first.correction, toLower, 'x', 0)),
+      ).toBe('wrong_settlement')
+    }
+  })
 })
 
 describe('who settles (spec §5.9)', () => {
