@@ -1,0 +1,9 @@
+{
+  "users": [
+    { "username": "admin", "displayName": "Admin", "role": "admin" },
+    { "username": "giver", "displayName": "Táta", "role": "giver" },
+    { "username": "taker1", "displayName": "Starší", "role": "taker" },
+    { "username": "taker2", "displayName": "Mladší", "role": "taker" },
+    { "username": "giver2", "displayName": "Máma", "role": "giver", "active": false }
+  ]
+}

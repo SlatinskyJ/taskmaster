@@ -2,3 +2,4 @@
 // drizzle-kit reads this folder (drizzle.config.ts); the app reads this module.
 export * from './audit'
 export * from './meta'
+export * from './users'
