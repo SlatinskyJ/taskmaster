@@ -20,7 +20,8 @@ import { isValidLevels } from './settlement'
 //
 // Period agreement (spec §3, Jakub 2026-11-17) = every active taker and at least one active
 // giver approved. Proposing counts as approving. The admin never counts. Approvals are checked
-// live against the current people list, as in `agreement.ts`.
+// live against the current people list when counting. Per Jakub's 2026-11-17 rule (no special
+// handling for people becoming inactive), approvals are not pruned on deactivation.
 //
 // Caller duty: when people change, run `resolvePeriodProposal` on every pending proposal (it
 // promotes a proposal that is now agreed). When a period starts, run `lapsePeriodSettings` on
@@ -33,6 +34,7 @@ export type PeriodError =
   | 'invalid_settings'
   | 'already_started'
   | 'proposal_pending'
+  | 'already_agreed'
   | 'not_pending'
   | 'already_approved'
   | 'not_proposer'
@@ -71,11 +73,15 @@ export interface PeriodSettings {
 const isWholeIn = (n: number, min: number, max: number) =>
   Number.isInteger(n) && n >= min && n <= max
 
-/** Whole days from 1; a real weekday and wall time; valid levels. */
+/**
+ * [call] Length in whole weeks (7, 14, …), since the cutoff is a weekday and time; a real
+ * weekday and wall time; valid levels.
+ */
 export function isValidDefaults(defaults: PeriodDefaults): boolean {
   const { lengthDays, cutoff, levels } = defaults
   return (
-    isWholeIn(lengthDays, 1, 366) &&
+    isWholeIn(lengthDays, 7, 364) &&
+    lengthDays % 7 === 0 &&
     isWholeIn(cutoff.weekday, 0, 6) &&
     isWholeIn(cutoff.hour, 0, 23) &&
     isWholeIn(cutoff.minute, 0, 59) &&
@@ -179,21 +185,21 @@ export function periodAt<P extends PeriodSpan>(
 
 // ── Proposals (period agreement) ─────────────────────────────────────────────────────────
 
-export type ProposalStatus = 'pending' | 'agreed' | 'rejected' | 'withdrawn' | 'lapsed'
+export type PeriodProposalStatus = 'pending' | 'agreed' | 'rejected' | 'withdrawn' | 'lapsed'
 
-export interface Proposal<S> {
+export interface PeriodProposal<S> {
   settings: S
   proposedBy: PersonId
   /** In order of approval; the proposer approves by proposing. */
   approvedBy: readonly PersonId[]
-  status: ProposalStatus
+  status: PeriodProposalStatus
   /** Who rejected or withdrew it; `null` otherwise. */
   closedBy: PersonId | null
 }
 
 /** A change of one period's cutoff/levels; the period is the one starting at `periodStartsAt`. */
-export type PeriodSettingsProposal = Proposal<PeriodSettings> & { periodStartsAt: Date }
-export type DefaultsProposal = Proposal<PeriodDefaults>
+export type PeriodSettingsProposal = PeriodProposal<PeriodSettings> & { periodStartsAt: Date }
+export type DefaultsProposal = PeriodProposal<PeriodDefaults>
 
 /** Every active taker and at least one active giver approved (spec §3), checked now. */
 export function isPeriodAgreed(
@@ -206,7 +212,7 @@ export function isPeriodAgreed(
 }
 
 /** Promotes a pending proposal that has period agreement now. Call after people change. */
-export function resolvePeriodProposal<P extends Proposal<unknown>>(
+export function resolvePeriodProposal<P extends PeriodProposal<unknown>>(
   proposal: P,
   people: readonly Person[],
 ): P {
@@ -214,8 +220,10 @@ export function resolvePeriodProposal<P extends Proposal<unknown>>(
   return { ...proposal, status: 'agreed' }
 }
 
-const hasPending = (proposals: readonly Proposal<unknown>[]) =>
+const hasPending = (proposals: readonly PeriodProposal<unknown>[]) =>
   proposals.some((p) => p.status === 'pending')
+const hasAgreed = (proposals: readonly PeriodProposal<unknown>[]) =>
+  proposals.some((p) => p.status === 'agreed')
 
 function isPartyId(people: readonly Person[], id: PersonId): boolean {
   const person = findPerson(people, id)
@@ -223,22 +231,24 @@ function isPartyId(people: readonly Person[], id: PersonId): boolean {
 }
 
 /**
- * [call] Any party proposes a different cutoff/levels for the period that starts at
- * `periodStartsAt`, before it starts. `existing` = earlier proposals for that period;
- * [call] at most one may be pending.
+ * [call] Any party proposes a different cutoff/levels for the period after `current` (the
+ * running period), so it starts at `current.cutoffAt`. `existing` = earlier proposals for that
+ * period; [call] refused while one is pending, or once one is agreed (that one stands).
  */
 export function proposePeriodSettings(
   people: readonly Person[],
   proposerId: PersonId,
-  periodStartsAt: Date,
+  current: PeriodSpan,
   settings: PeriodSettings,
   existing: readonly PeriodSettingsProposal[],
   now: Date,
 ): Result<PeriodSettingsProposal, PeriodError> {
+  const periodStartsAt = current.cutoffAt
   if (!isPartyId(people, proposerId)) return fail('not_a_party')
   if (now.getTime() >= periodStartsAt.getTime()) return fail('already_started')
   if (!isValidPeriodSettings(settings, periodStartsAt)) return fail('invalid_settings')
   if (hasPending(existing)) return fail('proposal_pending')
+  if (hasAgreed(existing)) return fail('already_agreed')
   const proposal: PeriodSettingsProposal = {
     periodStartsAt,
     settings,
@@ -286,7 +296,7 @@ export function setDefaults(
   return ok(defaults)
 }
 
-function approve<P extends Proposal<unknown>>(
+function approve<P extends PeriodProposal<unknown>>(
   proposal: P,
   people: readonly Person[],
   approverId: PersonId,
@@ -324,7 +334,7 @@ export function approveDefaults(
  * [call] Any party rejects a pending proposal and it closes. Every taker's approval is needed,
  * so one taker's no ends it; a giver's no ends it too.
  */
-export function rejectPeriodProposal<P extends Proposal<unknown>>(
+export function rejectPeriodProposal<P extends PeriodProposal<unknown>>(
   proposal: P,
   people: readonly Person[],
   rejecterId: PersonId,
@@ -335,7 +345,7 @@ export function rejectPeriodProposal<P extends Proposal<unknown>>(
 }
 
 /** The proposer withdraws a pending proposal. */
-export function withdrawPeriodProposal<P extends Proposal<unknown>>(
+export function withdrawPeriodProposal<P extends PeriodProposal<unknown>>(
   proposal: P,
   withdrawerId: PersonId,
 ): Result<P, PeriodError> {

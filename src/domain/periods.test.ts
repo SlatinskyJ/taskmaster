@@ -103,17 +103,18 @@ describe('default cutoff (spec §5.8)', () => {
     expect(defaultCutoff(prague(2026, 11, 18, 18), two)).toEqual(prague(2026, 11, 29, 18))
   })
 
-  it('a length below a week still ends at the next default cutoff', () => {
-    const short = { ...DEFAULTS, lengthDays: 3 }
-    expect(defaultCutoff(WEEK.startsAt, short)).toEqual(WEEK.cutoffAt)
+  it('[call] a tie goes to the later Sunday', () => {
+    // Thu 06:00 + 7 days is 3.5 days from both Sundays.
+    expect(defaultCutoff(prague(2026, 11, 19, 6), DEFAULTS)).toEqual(prague(2026, 11, 29, 18))
   })
 
-  it('a cutoff never equals the start', () => {
-    for (const lengthDays of [1, 3, 7, 8, 13, 14, 30]) {
-      const cutoff = defaultCutoff(WEEK.startsAt, { ...DEFAULTS, lengthDays })
-      expect(cutoff.getTime()).toBeGreaterThan(WEEK.startsAt.getTime())
-      // Within half a week of the length (or the next Sunday for short lengths).
-      expect(hours(WEEK.startsAt, cutoff)).toBeLessThanOrEqual(Math.max(lengthDays + 3.5, 7) * 24)
+  it('a cutoff is after the start and within half a week of the length', () => {
+    for (const lengthDays of [7, 14, 21, 28]) {
+      for (const start of [WEEK.startsAt, prague(2026, 11, 18, 9), prague(2026, 11, 21, 23)]) {
+        const cutoff = defaultCutoff(start, { ...DEFAULTS, lengthDays })
+        expect(cutoff.getTime()).toBeGreaterThan(start.getTime())
+        expect(Math.abs(hours(start, cutoff) - lengthDays * 24)).toBeLessThanOrEqual(3.5 * 24)
+      }
     }
   })
 
@@ -133,7 +134,11 @@ describe('default cutoff (spec §5.8)', () => {
 
   it('validates defaults', () => {
     expect(isValidDefaults(DEFAULTS)).toBe(true)
+    expect(isValidDefaults({ ...DEFAULTS, lengthDays: 14 })).toBe(true)
     expect(isValidDefaults({ ...DEFAULTS, lengthDays: 0 })).toBe(false)
+    // [call] whole weeks only: the cutoff is a weekday.
+    expect(isValidDefaults({ ...DEFAULTS, lengthDays: 3 })).toBe(false)
+    expect(isValidDefaults({ ...DEFAULTS, lengthDays: 10 })).toBe(false)
     expect(isValidDefaults({ ...DEFAULTS, lengthDays: 2.5 })).toBe(false)
     expect(isValidDefaults({ ...DEFAULTS, cutoff: { weekday: 0, hour: 24, minute: 0 } })).toBe(
       false,
@@ -264,6 +269,22 @@ describe('attribution by completedAt (spec §5.5, §5.8)', () => {
   })
 })
 
+describe('attribution across spring DST', () => {
+  it('18:00 on the cutoff Sunday is the boundary in summer time', () => {
+    const start = prague(2026, 3, 22, 18)
+    const week = {
+      startsAt: start,
+      cutoffAt: defaultCutoff(start, DEFAULTS),
+      levels: DEFAULTS.levels,
+    }
+    const next = nextPeriod(week, DEFAULTS, null)
+    expect(periodAt([week, next], prague(2026, 3, 29, 17, 59))).toBe(week)
+    expect(periodAt([week, next], prague(2026, 3, 29, 18, 0))).toBe(next)
+    // 03:30 CEST right after the skipped hour is still the old period.
+    expect(periodAt([week, next], new Date('2026-03-29T01:30:00.000Z'))).toBe(week)
+  })
+})
+
 function agreedProposal(
   periodStartsAt: Date,
   settings: PeriodSettingsProposal['settings'],
@@ -300,8 +321,14 @@ describe('per-period proposals (spec §5.8)', () => {
   const FOLLOWING_START = prague(2026, 11, 29, 18)
   const settings = { cutoffAt: prague(2026, 12, 5, 12), levels: { lower: 40, upper: 80 } }
 
-  const propose = (by = DAD, startsAt = FOLLOWING_START, existing: PeriodSettingsProposal[] = []) =>
-    proposePeriodSettings(family, by, startsAt, settings, existing, NOW)
+  // The running period at the meeting: WEEK has ended, its successor runs until FOLLOWING_START.
+  const CURRENT: PeriodSpan = {
+    startsAt: NEXT_START,
+    cutoffAt: FOLLOWING_START,
+    levels: DEFAULTS.levels,
+  }
+  const propose = (by = DAD, existing: PeriodSettingsProposal[] = []) =>
+    proposePeriodSettings(family, by, CURRENT, settings, existing, NOW)
 
   it('a giver proposes at the meeting; proposing counts as approving', () => {
     expect(value(propose())).toEqual({
@@ -322,29 +349,39 @@ describe('per-period proposals (spec §5.8)', () => {
     expect(error(propose(JAKUB))).toBe('not_a_party')
   })
 
+  it('targets the period after the running one', () => {
+    expect(value(propose()).periodStartsAt).toEqual(CURRENT.cutoffAt)
+  })
+
   it('refused for a period that has already started (locked)', () => {
-    expect(error(propose(DAD, NEXT_START))).toBe('already_started')
-    expect(
-      error(proposePeriodSettings(family, DAD, FOLLOWING_START, settings, [], FOLLOWING_START)),
-    ).toBe('already_started')
+    // WEEK passed as "current" at the meeting: its successor already started at 18:00.
+    expect(error(proposePeriodSettings(family, DAD, WEEK, settings, [], NOW))).toBe(
+      'already_started',
+    )
+    expect(error(proposePeriodSettings(family, DAD, CURRENT, settings, [], FOLLOWING_START))).toBe(
+      'already_started',
+    )
   })
 
   it('refuses a cutoff at or before the start, or bad levels', () => {
     const at = { ...settings, cutoffAt: FOLLOWING_START }
-    expect(error(proposePeriodSettings(family, DAD, FOLLOWING_START, at, [], NOW))).toBe(
-      'invalid_settings',
-    )
+    expect(error(proposePeriodSettings(family, DAD, CURRENT, at, [], NOW))).toBe('invalid_settings')
     const bad = { ...settings, levels: { lower: 0, upper: 80 } }
-    expect(error(proposePeriodSettings(family, DAD, FOLLOWING_START, bad, [], NOW))).toBe(
+    expect(error(proposePeriodSettings(family, DAD, CURRENT, bad, [], NOW))).toBe(
       'invalid_settings',
     )
   })
 
   it('[call] one pending proposal per period', () => {
     const first = value(propose())
-    expect(error(propose(OLDER, FOLLOWING_START, [first]))).toBe('proposal_pending')
+    expect(error(propose(OLDER, [first]))).toBe('proposal_pending')
     const rejected = value(rejectPeriodProposal(first, family, YOUNGER))
-    expect(propose(OLDER, FOLLOWING_START, [rejected]).ok).toBe(true)
+    expect(propose(OLDER, [rejected]).ok).toBe(true)
+  })
+
+  it('[call] once one is agreed for that period, no new proposal', () => {
+    const agreed = agreedProposal(FOLLOWING_START, settings)
+    expect(error(propose(OLDER, [agreed]))).toBe('already_agreed')
   })
 
   it('agreed once both takers approve', () => {
