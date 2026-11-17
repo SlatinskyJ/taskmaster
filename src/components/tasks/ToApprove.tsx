@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
@@ -17,6 +17,14 @@ export function ToApprove({ items }: { items: readonly TaskView[] }) {
   const { busy, run } = useTaskAction()
   const [rejecting, setRejecting] = useState<number | null>(null)
   const [reason, setReason] = useState('')
+  // Zamítnout swaps the buttons for the form; Zpět brings focus back to that row's Zamítnout.
+  const rejectButtons = useRef(new Map<number, HTMLButtonElement>())
+  function closeForm(id: number) {
+    setRejecting(null)
+    requestAnimationFrame(() => {
+      rejectButtons.current.get(id)?.focus()
+    })
+  }
   if (items.length === 0) return null
 
   return (
@@ -36,6 +44,10 @@ export function ToApprove({ items }: { items: readonly TaskView[] }) {
                 rejecting === t.id ? undefined : (
                   <div className="flex gap-1.5">
                     <Button
+                      ref={(el) => {
+                        if (el) rejectButtons.current.set(t.id, el)
+                        else rejectButtons.current.delete(t.id)
+                      }}
                       variant="no"
                       disabled={busy !== null}
                       onClick={() => {
@@ -85,6 +97,7 @@ export function ToApprove({ items }: { items: readonly TaskView[] }) {
                   <span className="text-meta font-bold text-muted">{cs.work.rejectReason}</span>
                   <Input
                     name="reason"
+                    autoFocus
                     maxLength={REASON_MAX}
                     value={reason}
                     onChange={(e) => {
@@ -98,7 +111,7 @@ export function ToApprove({ items }: { items: readonly TaskView[] }) {
                     variant="ghost"
                     className="flex-1"
                     onClick={() => {
-                      setRejecting(null)
+                      closeForm(t.id)
                     }}
                   >
                     {cs.work.back}

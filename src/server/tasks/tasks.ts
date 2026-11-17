@@ -8,6 +8,7 @@ import {
   findPerson,
   isValidScore,
   missingRoles,
+  reopenOneTimeOffer,
   resolveOneTime,
 } from '~/domain'
 import type { AgreementError, LifecycleError, OneTimeAgreement, Person } from '~/domain'
@@ -185,6 +186,43 @@ function openTask(tx: Tx, task: TaskRow, now: Date): TaskRow {
 }
 
 /**
+ * A bid-won task was released back to negotiation (spec §5.4 [call]). Reopening starts a new
+ * offer round: approvals from the bidding don't carry over, and the giver who accepted the bid
+ * offers the agreed score again. Runs inside the release's transaction and logs the giver's
+ * renewed approval as the system. Returns the task as saved.
+ */
+export function reopenOffer(
+  tx: Tx,
+  task: TaskRow,
+  giverId: number,
+  people: Person[],
+  now: Date,
+): TaskRow {
+  const offer = reopenOneTimeOffer(people, giverId, task.score)
+  if (offer.status !== 'proposed') return task
+  const at = toIsoUtc(now)
+  const offerRound = task.offerRound + 1
+  const reopened = tx
+    .update(tasks)
+    .set({ offerRound, agreedAt: null, updatedAt: at })
+    .where(eq(tasks.id, task.id))
+    .returning()
+    .get()
+  tx.insert(taskScoreApprovals)
+    .values({ taskId: task.id, userId: giverId, offerRound, score: task.score, approvedAt: at })
+    .run()
+  writeAudit(tx, {
+    actor: { kind: 'system' },
+    action: 'task.score_approved',
+    entityType: 'task',
+    entityId: task.id,
+    after: { userId: giverId, score: task.score, offerRound },
+    at: now,
+  })
+  return reopened
+}
+
+/**
  * People changed (spec §3 caller duty): approvals are counted live, so a proposed task may now
  * be agreed (e.g. a new taker). Opens those, logged as the system. Runs inside the change's
  * transaction (src/server/users/hooks.ts).
@@ -253,12 +291,6 @@ function views(db: Db | Tx, rows: TaskRow[]): TaskView[] {
     completedAt: t.completedAt,
     earnerId: t.earnerId,
   }))
-}
-
-/** One task for its detail screen, or null. */
-export function getTask(db: Db | Tx, id: number): TaskView | null {
-  const row = db.select().from(tasks).where(eq(tasks.id, id)).get()
-  return row ? (views(db, [row])[0] ?? null) : null
 }
 
 /**

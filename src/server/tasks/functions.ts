@@ -9,7 +9,6 @@ import { approveTask, completeTask, rejectTask, releaseTask, reserveTask } from 
 import {
   approveTaskOffer,
   createTask,
-  getTask,
   listBoard,
   listPendingCompletions,
   listTasks,
@@ -93,12 +92,6 @@ function done(result: ReturnType<typeof reserveTask>): LifecycleActionResult {
   return result.ok ? { ok: true, id: result.value.id, status: result.value.status } : result
 }
 
-/** One task for its detail screen; null if there is none. */
-export const getTaskFn = createServerFn({ method: 'GET' })
-  .middleware([requireRole('giver', 'taker')])
-  .validator(parseTaskId)
-  .handler(({ data }): TaskView | null => getTask(getDb(), data.taskId))
-
 /** Open, reserved and pending tasks (taker's Domů until #40). */
 export const listBoardFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('taker')])
@@ -119,7 +112,7 @@ export const releaseTaskFn = createServerFn({ method: 'POST' })
   .validator(parseTaskId)
   .handler(({ data, context }) => done(releaseTask(getDb(), context.user.id, data.taskId)))
 
-/** "Hotovo" for a taker, "Udělal jsem sám" for a giver. */
+/** "Hotovo" for a taker, "Hotovo bez bodů" for a giver. */
 export const completeTaskFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver', 'taker')])
   .validator(parseTaskId)

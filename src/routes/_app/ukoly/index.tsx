@@ -1,9 +1,19 @@
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { useState } from 'react'
 import { EmptyState } from '~/components/EmptyState'
 import { Screen } from '~/components/shell/Screen'
 import { TaskRow } from '~/components/tasks/TaskRow'
 import { useTaskAction } from '~/components/tasks/useTaskAction'
 import { Button, buttonVariants } from '~/components/ui/button'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '~/components/ui/dialog'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs, type ItemStateKey } from '~/lib/strings'
 import { completeTaskFn, listTasksFn, releaseTaskFn, type TaskView } from '~/server/tasks/functions'
@@ -33,6 +43,8 @@ function Tasks() {
   const { user } = Route.useRouteContext()
   const list = Route.useLoaderData()
   const { busy, run } = useTaskAction()
+  // "Hotovo bez bodů" can't be undone, so it asks first (UI doc §5).
+  const [closing, setClosing] = useState<TaskView | null>(null)
 
   function meta(t: TaskView) {
     if (t.status === 'proposed') return cs.tasks.waitingForTaker
@@ -62,15 +74,10 @@ function Tasks() {
     if (t.status === 'open') {
       return (
         <Button
-          variant="ok"
+          variant="ghost"
           disabled={busy !== null}
-          onClick={(e) => {
-            void run(
-              `done-${String(t.id)}`,
-              () => completeTaskFn({ data: { taskId: t.id } }),
-              () => cs.work.toast.done,
-              { confetti: e.currentTarget },
-            )
+          onClick={() => {
+            setClosing(t)
           }}
         >
           {cs.work.doneSelf}
@@ -103,6 +110,43 @@ function Tasks() {
           ))}
         </ul>
       )}
+      <Dialog
+        open={closing !== null}
+        onOpenChange={(open) => {
+          if (!open) setClosing(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{cs.work.doneSelfConfirm.title}</DialogTitle>
+            <DialogDescription>
+              {closing?.title}: {cs.work.doneSelfConfirm.body}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="ghost">{cs.work.back}</Button>
+            </DialogClose>
+            <Button
+              variant="primary"
+              disabled={busy !== null}
+              onClick={() => {
+                if (!closing) return
+                const id = closing.id
+                void run(
+                  `done-${String(id)}`,
+                  () => completeTaskFn({ data: { taskId: id } }),
+                  () => cs.work.toast.done,
+                ).then(() => {
+                  setClosing(null)
+                })
+              }}
+            >
+              {cs.work.doneSelfConfirm.confirm}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Screen>
   )
 }

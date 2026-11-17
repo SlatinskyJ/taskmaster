@@ -94,7 +94,13 @@ export const cs = {
     reserve: 'Rezervovat',
     release: 'Uvolnit',
     done: 'Hotovo',
-    doneSelf: 'Udělal jsem sám',
+    /** A giver did it themselves: closed with no points (spec §5.5). Gender-neutral on purpose. */
+    doneSelf: 'Hotovo bez bodů',
+    doneSelfConfirm: {
+      title: 'Hotovo bez bodů?',
+      body: 'Úkol se uzavře a nikdo za něj body nedostane. Vrátit to nejde.',
+      confirm: 'Uzavřít',
+    },
     approve: 'Schválit',
     reject: 'Zamítnout',
     rejectReason: 'Proč? (nepovinné)',

@@ -6,7 +6,6 @@ import {
   findPerson,
   rejectCompletion,
   releaseReservation,
-  reopenOneTimeOffer,
   reserveItem,
 } from '~/domain'
 import type { Item, LifecycleError, Person, Reservation } from '~/domain'
@@ -17,9 +16,10 @@ import type { AuditAction, Tx } from '~/server/audit'
 import { REASON_MAX as REASON_LIMIT } from '~/lib/taskLimits'
 import { writeAudit } from '~/server/audit'
 import type { Db } from '~/server/db'
-import { taskScoreApprovals, tasks } from '~/server/db/schema'
+import { tasks } from '~/server/db/schema'
 import type { TaskRow } from '~/server/db/schema'
 import { listPeople } from '~/server/users/people'
+import { reopenOffer } from './tasks'
 
 // The work flow of a one-time task (spec §5.4–§5.6): reserve, release, mark done, approve,
 // reject. The lifecycle rules live in src/domain/lifecycle.ts; this module maps a task row to
@@ -118,8 +118,9 @@ type Step = (
 
 /**
  * Loads the task, runs one lifecycle step as `userId`, saves the new state and writes `action`
- * to the audit log, all in one transaction. `extra` runs inside the same transaction after the
- * save (e.g. reopening the offer of a released bid-won task).
+ * to the audit log, all in one transaction. `extra` runs after the save and before the audit
+ * entry (e.g. reopening the offer of a released bid-won task), so the entry and the returned row
+ * show the final state.
  */
 function runStep(
   db: Db,
@@ -130,7 +131,8 @@ function runStep(
   now: Date,
   opts: {
     reason?: string
-    extra?: (tx: Tx, before: TaskRow, after: TaskRow, people: Person[]) => void
+    /** Further writes that belong to the step, before its audit entry; returns the final row. */
+    extra?: (tx: Tx, before: TaskRow, after: TaskRow, people: Person[]) => TaskRow
   } = {},
 ): Result<TaskRow, LifecycleActionError> {
   return db.transaction((tx) => {
@@ -141,12 +143,13 @@ function runStep(
     if (!person) return fail('not_allowed')
     const next = step(toItem(row), byPerson(person), now)
     if (!next.ok) return next
-    const saved = tx
+    const stepped = tx
       .update(tasks)
       .set({ ...columnsOf(next.value), updatedAt: toIsoUtc(now) })
       .where(eq(tasks.id, taskId))
       .returning()
       .get()
+    const saved = opts.extra ? opts.extra(tx, row, stepped, people) : stepped
     writeAudit(tx, {
       actor: { kind: 'user', userId },
       action,
@@ -157,7 +160,6 @@ function runStep(
       reason: opts.reason,
       at: now,
     })
-    opts.extra?.(tx, row, saved, people)
     return ok(saved)
   })
 }
@@ -166,8 +168,11 @@ function auditView(row: TaskRow) {
   return {
     status: row.status,
     score: row.score,
+    offerRound: row.offerRound,
+    agreedAt: row.agreedAt,
     reservedBy: row.reservedBy,
     reservedVia: row.reservedVia,
+    reservedGiverId: row.reservedGiverId,
     completedBy: row.completedBy,
     completedAt: row.completedAt,
     earnerId: row.earnerId,
@@ -193,31 +198,17 @@ export function releaseTask(db: Db, userId: number, taskId: number, now: Date = 
     (item, actor) => releaseReservation(item, actor),
     now,
     {
-      extra: (tx, before, after, people) => {
-        if (after.status !== 'proposed' || before.reservedGiverId === null) return
-        const offer = reopenOneTimeOffer(people, before.reservedGiverId, before.score)
-        if (offer.status !== 'proposed') return
-        // Reopening is a new offer round: approvals from the bidding don't carry over, the
-        // giver who accepted the bid offers the same score again (spec §5.4).
-        const offerRound = before.offerRound + 1
-        tx.update(tasks).set({ offerRound, agreedAt: null }).where(eq(tasks.id, before.id)).run()
-        tx.insert(taskScoreApprovals)
-          .values({
-            taskId: before.id,
-            userId: before.reservedGiverId,
-            offerRound,
-            score: before.score,
-            approvedAt: toIsoUtc(now),
-          })
-          .run()
-      },
+      extra: (tx, before, after, people) =>
+        after.status === 'proposed' && before.reservedGiverId !== null
+          ? reopenOffer(tx, after, before.reservedGiverId, people, now)
+          : after,
     },
   )
 }
 
 /**
  * Someone marks the task done ("Hotovo", spec §5.5). A taker: pending if approval is required,
- * else confirmed. A giver ("Udělal jsem sám"): closed with no points and no approval step.
+ * else confirmed. A giver ("Hotovo bez bodů"): closed with no points and no approval step.
  */
 export function completeTask(db: Db, userId: number, taskId: number, now: Date = new Date()) {
   return runStep(db, userId, taskId, 'task.completed', completeItem, now)
