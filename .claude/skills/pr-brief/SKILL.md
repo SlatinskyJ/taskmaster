@@ -5,50 +5,78 @@ description: Use when a Taskmaster pull request is about to be marked ready for 
 
 # PR brief for Jakub
 
-Jakub reads briefs, not diffs. Before a PR is marked ready, build one Artifact page that tells him what the PR does for the family and what it changes in the app's shape. Link it as the first line of the PR body: `Brief: <artifact URL>`.
+Before a PR is marked ready, build one Artifact page and link it as the first line of the PR body: `Brief: <artifact URL>`.
 
-## Goal
+## Why the brief exists
 
-Explain the PR to Jakub, the code owner, so he understands what changed, how it behaves for the family, how far its effects reach, and what could break, technically. Sections are tools, not a checklist: skip or shrink any that does no work for this PR, but always think about blast radius.
+Jakub owns this code. He maintains it long term, decides what it does to the family and the product, and defines the work. He reads briefs, not diffs. The brief is his way of understanding the code change without opening the code, so that he can:
 
-Shape:
-1. **Title + one-line verdict**: the change in family terms + overall risk (low / medium / high) with one reason.
-2. **Scenes as cards** (2–5): tiny stories with real family roles/names and Czech task names (Táta, Máma, the brothers, Jakub as admin; "Vyndat myčku", "Umýt auto"). Each card: situation → what happens now. Use before/after only where a "before" exists; otherwise "now possible" or "if X vs if Y". Include one edge-case card where the new rule bites. Skip scenes entirely for PRs with no behaviour a person could notice (pure CI/infra) and say so in one line.
-   - Visual design: a muted "Cast (spec §3)" line first, then each scene stacked full width as a numbered h3 ("1. …", the edge case ends "(the rule bites)") over a two-column pair of panels (one column under 560px): left panel on a grey `--before` fill, right panel on a light-green `--after` fill with a 3px green left border, the edge case's outcome panel on a light-red `--crit` fill with a 3px red left border; each panel opens with a tiny uppercase muted tag (Before/After, Situation/Now, or If X/If Y), 8px radius, 10–12px padding, Czech task names in bold, light and dark tokens for every fill.
-3. **Impact grid**: table, one row per area — Family (behaviour/screens), Data & DB, Domain rules (spec §), Infrastructure (CI, Docker, deploy), Security & privacy, Dependencies, Future code (contracts/duties later PRs must keep). Columns: Touched (no / indirect / yes), Severity if wrong (low/med/high), Why (one line). Fill every row honestly; be skeptical about hidden reach (shared modules, implicit contracts, things callers must remember).
-4. **What could go wrong**: the realistic failure modes, each as an expandable item (`<details>`): summary line = failure + who/what is hit + how you'd notice. Inside, the **technical explanation**: the mechanism (which function/module/table/job, the code path or condition that triggers it), why tests do or don't catch it, and the mitigation or owner (issue link). Add a trimmed real code snippet only when it makes the mechanism clear. Depth scales with severity: a low-risk item can be two sentences, a high-risk one a short paragraph plus snippet.
-5. **Decisions & assumptions**: spec gaps the agent filled (mark as assumption) vs Jakub's decisions (with date). Keep current: when Jakub decides, move it here.
-6. **Under the hood** (optional, 3–5 bullets): modules, new dependency/schema/CI change, if not already obvious from the grid.
+1. **decide** whether to accept the PR as it is or ask for changes;
+2. **make good later decisions** about this code (what to build next, what to change, what it costs);
+3. **learn** how this part of the app works now. The brief is knowledge transfer from you to the owner.
 
-Style: scannable, cards and table up top, technical depth in the expandables. ~500 words visible, details may add more. Mention issues/PRs as title + GitHub link.
+He needs the change from several angles: the family using it, the data, infra, security, and the code that comes after. Every sentence must help one of the three jobs above. If a section would say nothing new ("not touched", "n/a", "no risk"), leave it out.
 
-7. **Stack** (stacked PRs only): the whole stack, this PR highlighted.
-8. **Review summary**, filled in at exit: rounds used, judges, what was fixed, deferred issues (links), anything escalated.
+## Form: fixed frame, sections only when they earn it
 
-## Code in the brief
+Every brief looks the same, so Jakub knows where to look: same order, same badges, same callout colours. But only the frame is fixed. Sections appear when they carry something for this PR and are left out otherwise. Never pad a section to fill the template.
 
-Code lives only inside "What could go wrong" details (and "Under the hood"). Show it only where it decides behaviour Jakub cares about: a §5 rule, a role or auth check, an audit write, a migration that changes or drops data. Real code trimmed with `// …`, at most 3 snippets of ≤ 20 lines, file path under each, wrapped or scrolled inside the block at phone width.
+### Always
+
+- **Header.** Title in family terms, one sentence on what the PR does, a verdict (`Ready to accept` or `Needs your call`) and a risk badge (low / medium / high) with one reason. If the PR has the `preview` label, link the preview URL here (from the PR's preview comment).
+- **How it works now.** The mental model of the changed code after this PR, in plain words: the concepts it adds or changes, where they live, how data or control flows, which rule or contract it relies on. Write it so Jakub could explain the part to someone else. A small diagram (skill `artifact-diagramming`) when the flow has more than two steps. When the PR changes shared or library code, say where it is used and where the change leads for long-term maintenance.
+- **Needs you.** Open decisions for Jakub, and assumptions you made where the spec was silent (marked as such). Bright callout, always in the same spot right under the header. If there is nothing, one line: "Nothing needs you."
+
+### When it earns its place
+
+- **Scenes**: when a person could notice the change. 2–5 short cards with real family roles and Czech task names (Táta, Máma, the brothers, Jakub as admin; "Vyndat myčku"): situation → what happens now. Before/after only where a "before" exists. Include the edge case where the new rule bites. If the PR has a preview, say what to try there. Phone screenshots in the cards when screens changed (see Screenshots).
+- **Blast radius**: what the change touches directly, and what it can affect downstream that the diff doesn't show (a shared component changed in one place that a user meets on another screen; a helper whose callers now behave differently; a duty later PRs must keep). One row per area that is touched or affected, with Directly/Downstream, severity if wrong (low/med/high) and why. Don't list areas that are not touched. Be skeptical about hidden reach: shared modules, implicit contracts, things callers must remember.
+- **What could go wrong**: realistic failure modes only, each a `<details>` item. Summary line: failure + who or what is hit + how you'd notice. Inside: the mechanism (module, function, table, job, the condition that triggers it), why tests do or don't catch it, and the mitigation or owner (issue link). Depth scales with severity.
+- **Decisions**: Jakub's past decisions this PR implements (with date), when they shape the code.
+- **Stack**: stacked PRs only. The whole stack, this PR highlighted.
+- **Review summary**: filled in when the review rounds end. Rounds used, judges, what was fixed, deferred issues (links), anything escalated.
+
+## Code and diffs
+
+Code is never there by default. Show it only when it serves a point:
+- a crucial change that affects many places (a shared helper, a contract, a migration that changes or drops data);
+- it delivers an idea faster than prose (a §5 rule, a role or auth check, an audit write).
+
+Real code trimmed with `// …`, a few short snippets at most, file path under each, scrolled inside the block at phone width. If you need many snippets, the prose is missing something.
 
 ## Screenshots
 
-When a PR changes screens, put phone screenshots in the scene cards. Playwright against the dev server, viewport 390×844, light theme, `deviceScaleFactor: 2`. Dark theme too only when the PR changes the theme or tokens. Seed data with realistic Czech task names.
+When a PR changes screens: Playwright against the dev server, viewport 390×844, light theme, `deviceScaleFactor: 2`. Dark theme too only when the PR changes the theme or tokens. Seed realistic Czech task names.
+
+## Look
+
+Load the `artifact-design` skill. Keep one visual vocabulary across briefs so things are easy to spot:
+- verdict and risk badges in the header (green / amber / red);
+- "Needs you" as an amber callout;
+- scene cards as before/after panels (grey before, green after, red for the edge case outcome), stacked to one column on a phone;
+- light and dark tokens for every colour.
+
+Scannable first, depth inside expandables. Jakub should get the verdict, the "Needs you" items and the shape of the change in about 2 minutes.
 
 ## Publishing
 
-Load the `artifact-design` skill, write the page to the scratchpad, and publish it with the Artifact tool (icon `code`). After the rounds, update it at the same path so the link stays the same. Reference look: [Brief D](https://claude.ai/artifact/6mLR6vpdVM89kefECeWFZG).
+Write the page to the scratchpad and publish it with the Artifact tool (icon `code`). Mention issues and PRs as title + GitHub link. After the rounds, republish at the same path so the link stays the same.
 
 ## Keep it current
 
 The brief must always match the PR. Republish it (same path, same link) in the same turn as any of these:
-- Jakub answers an open question or decision card: move it from open questions to "Decisions & assumptions" (his answer, date) and drop it from the verdict and review summary.
+- Jakub answers an open question: move it from "Needs you" to "Decisions" (his answer, date) and update the verdict.
 - A push changes behaviour, scope, dependencies or schema that the brief describes.
+- The `preview` label is added or removed.
 - The review rounds finish (review summary).
 
 Before telling Jakub a PR is ready, reread its brief against the PR body and the latest commit.
 
 ## Common mistakes
 
-- Describing code ("added `completeTask()`") in the prose sections instead of behaviour ("a taker can tap Hotovo on a reserved task").
-- Leaving impact grid rows empty or all "no" without thinking about hidden reach (shared modules, duties for later code).
-- Pasting a big chunk of the diff. If it needs more than 3 short snippets, the prose is missing something.
-- Writing a long page. Jakub skims it in 2 minutes.
+- Filling every section because it exists. An empty or "n/a" section costs Jakub attention and teaches nothing.
+- Describing code ("added `completeTask()`") instead of behaviour and the model ("a taker can tap Hotovo on a reserved task; the state change goes through the lifecycle in `src/domain/`").
+- Skipping "How it works now" because the scenes look complete. Scenes show behaviour; Jakub also needs to understand the code he owns.
+- Listing only what the diff touches and missing downstream reach.
+- Pasting a diff to look thorough.
+- Writing a long page.
