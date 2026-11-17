@@ -1,0 +1,33 @@
+# Dependabot (#68): keeps the digest-pinned Node base image and the SHA-pinned GitHub Actions
+# current (security fixes included). npm updates are a separate decision.
+# Its PRs touch protected areas (Docker, CI): treat them like any PR (CLAUDE.md, Dependabot).
+version: 2
+updates:
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Prague
+    # Stay on Node 22 (package.json engines, .nvmrc); a major bump is a deliberate change.
+    ignore:
+      - dependency-name: node
+        update-types: ['version-update:semver-major']
+    labels: [chore]
+    commit-message:
+      prefix: 'chore(docker)'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Prague
+    groups:
+      actions:
+        patterns: ['*']
+    labels: [chore]
+    commit-message:
+      prefix: 'chore(ci)'
