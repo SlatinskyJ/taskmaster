@@ -11,6 +11,6 @@ export default defineConfig({
     tailwindcss(),
     tanstackStart({ srcDirectory: 'src' }),
     viteReact(),
-    nitro({ preset: 'node-server' }),
+    nitro({ preset: 'node-server', plugins: ['./src/server/plugins/database.ts'] }),
   ],
 })
