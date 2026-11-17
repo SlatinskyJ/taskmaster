@@ -21,6 +21,7 @@
     "db:check": "drizzle-kit check && node scripts/check-migrations.ts"
   },
   "dependencies": {
+    "@date-fns/tz": "^1.5.0",
     "@tanstack/react-router": "^1.170.46",
     "@tanstack/react-start": "^1.169.5",
     "better-sqlite3": "^13.2.0",
