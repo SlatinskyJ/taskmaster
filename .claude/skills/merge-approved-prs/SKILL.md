@@ -9,6 +9,8 @@ Jakub reviews PRs and puts the `merge-me` label on the ones he accepts. That lab
 
 You run unattended; he may be asleep. Anything outside this skill's allowed changes stops that PR, not the run.
 
+**The label comes off when you are done with a PR:** after it merges, and whenever it needs Jakub (stopped or out). So a `merge-me` label still on a PR always means "approved, waiting to land". Only PRs you never reached keep it. He re-adds it to approve again.
+
 ## Rules
 
 - Only Jakub decides `merge-me`. Add it yourself only when his own message names that PR ("merge #131 too"); that PR then goes through the same checks as any other, and you say so in the report. Never merge a PR without it, even one every judge approved.
@@ -22,18 +24,18 @@ List open PRs with the `merge-me` label. A PR is **in** only if all hold:
 | Check | How |
 | --- | --- |
 | not a draft | `draft == false` |
-| no `needs-jakub` label | a stopped PR stays out until he removes it |
+| no open question | no `needs-jakub` label added after the latest `merge-me` label (re-adding `merge-me` is his answer; then remove the stale `needs-jakub`) |
 | no new code after the label | no commit with a committer date after the label (`GET repos/SlatinskyJ/taskmaster/issues/<n>/events`, last `labeled` with `merge-me`), except merges of `main` and commits whose subject starts with `merge-approved-prs:` (yours, section 3) |
 | CI green on the head commit | check runs of the head SHA |
 | 0 unresolved threads | `gh api repos/SlatinskyJ/taskmaster/pulls/<n>/ccr/review_threads --jq '[.[]\|select(.resolved==false)]\|length'` prints `0` |
 
-Every other PR is **out**: don't touch it, don't fix it, list it in the final report with the reason. A labelled draft or a PR whose own CI is red is out; fixing it would be code he didn't see.
+Every other labelled PR is **out**: don't touch its code, remove `merge-me`, list it in the final report with the reason. A labelled draft or a PR whose own CI is red is out; fixing it would be code he didn't see.
 
-A PR coming back from a stop (section 4): read Jakub's answer on it first. If he picked an option, implementing it is a section 3 fix with a judge round. If the answer is unclear, the PR is out.
+A PR coming back from a stop (section 4, he re-added the label): read Jakub's answer on it first. If he picked an option, implementing it is a section 3 fix with a judge round. If the answer is unclear, the PR is out.
 
-A PR that got new code after the label is out; the report asks him to re-add the label if he accepts it.
+A PR that got new code after the label is out; the report asks him to re-add the label if he accepts the new code.
 
-Order: stacks first, bottom-up (`gh api 'repos/SlatinskyJ/taskmaster/stacks?pull_request=<n>'`), then the rest by PR number. A PR stacked on an out or stopped PR is out too.
+Order: stacks first, bottom-up (`gh api 'repos/SlatinskyJ/taskmaster/stacks?pull_request=<n>'`), then the rest by PR number. A PR stacked on an out or stopped PR is out too (label off as well).
 
 ## 2. Land one PR
 
@@ -48,7 +50,7 @@ Strictly one at a time: start the next PR only when this one is merged or stoppe
 7. **CI red after the update:** read the failed job log.
    - A failure in a test file that neither the PR nor `main` changed since the PR's last green run (flaky timeout): re-run the failed jobs once; that is not a fix attempt. Green → continue, and open a `follow-up` issue for the flaky test. Red again → stop the PR.
    - Otherwise fix only if section 3 allows it, else stop the PR (section 4). Two failed fix attempts on one PR → stop it.
-8. When it is merged, go to the next PR in the queue.
+8. When it is merged, remove `merge-me` from it, then go to the next PR in the queue.
 
 ## 3. Allowed changes (still under his label)
 
@@ -70,7 +72,7 @@ Anything else stops the PR: a choice between behaviours (who may see what, which
 1. Don't push a guess. Leave the branch as it is (merge commit included, if the merge was clean).
 2. Turn off auto-merge if you set it (`DELETE .../ccr/auto_merge`).
 3. Add `needs-jakub`. Post one PR comment mentioning `@SlatinskyJ`: what happened, the options, your recommendation. Comment the same on its issue, if it has one.
-4. Keep `merge-me`. He removes `needs-jakub` once decided; the next run picks the PR up again.
+4. Remove `merge-me`. Once decided, he re-adds it and removes `needs-jakub`; the next run picks the PR up again.
 5. Carry on with the rest of the queue. PRs stacked on it are out.
 
 ## 5. Report
@@ -88,3 +90,4 @@ One message in the project thread when the queue is empty, nothing in between. E
 | Judge round for a regenerated route tree or a keep-both README | Not needed |
 | Polling in a sleep loop | Auto-merge + event or background check |
 | Messaging Jakub after each PR | One report at the end |
+| Leaving `merge-me` on a merged, stopped or out PR | Remove it; a label means "waiting to land" |
