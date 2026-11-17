@@ -103,6 +103,19 @@ jobs:
       - *install
       - run: pnpm format:check
 
+  # Schema and committed migrations agree, and the migrations apply to an empty DB (#16).
+  migrations:
+    name: migrations
+    needs: [changes]
+    if: needs.changes.outputs.code != 'false'
+    runs-on: ubuntu-24.04
+    steps:
+      - *checkout
+      - *pnpm
+      - *node
+      - *install
+      - run: pnpm db:check
+
   test:
     name: test
     needs: [typecheck, lint, format]
@@ -141,7 +154,7 @@ jobs:
   # are ever made required. Every step in this job must carry `if: env.CODE != 'false'`.
   image:
     name: image (${{ matrix.arch }})
-    needs: [changes, typecheck, lint, format, test, build]
+    needs: [changes, typecheck, lint, format, migrations, test, build]
     if: ${{ !cancelled() && !failure() }}
     env:
       CODE: ${{ needs.changes.outputs.code }}
