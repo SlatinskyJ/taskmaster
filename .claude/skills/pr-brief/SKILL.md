@@ -19,7 +19,7 @@ He needs the change from several angles: the family using it, the data, infra, s
 
 ## How to build it
 
-1. **Find the points.** Read the diff, the issue, the spec sections it implements and the code around it. Write down the 3–5 things Jakub must walk away knowing: what the PR does, how the changed part works now, how far it reaches, what could break, what needs him. Be critical: look for downstream reach, duties left for later code, and places where the code drifts from the spec or his decisions.
+1. **Find the points.** Read the diff, the issue, the spec sections it implements and the code around it. Write down the things Jakub must walk away knowing, as many as this PR needs: a one-line fix may need one point, a new subsystem many. Cover what the PR does, how the changed part works now, how far it reaches, what could break, what needs him, where they apply. Be critical: look for downstream reach, duties left for later code, and places where the code drifts from the spec or his decisions.
 2. **Pick a tool per point.** For each point, choose from the toolbox below the explanation that lands it fastest for someone who hasn't read the code. Different PRs need different tools: a scheduler change wants a timeline, a rule wants a worked example, a shared helper wants a usage map. One tool per point by default; add a second only when the first doesn't land the point. A tool not in the list is fine if it explains better. Each fact appears once, where it fits best (a drift in "Needs you" is not repeated in a spec trace; a risk caused by a missed duty links to the duty card instead of re-explaining it).
 3. **Lay it out in the frame** (next section). The frame is the same every time; what's inside it is whatever your points need.
 
@@ -69,7 +69,7 @@ Load the `artifact-design` skill. Keep one visual vocabulary across briefs so th
 - before/after and if/if pairs as two panels (grey before, green after, red for an outcome where a rule bites), one column on a phone;
 - light and dark tokens for every colour.
 
-Scannable first, depth inside expandables. Jakub should get the verdict, the "Needs you" items and the shape of the change in about 2 minutes (roughly 600 visible words of prose; diagram and table labels don't count); the rest waits in expandables for when he wants to learn more.
+Scannable first, depth inside expandables. Jakub should get the verdict, the "Needs you" items and the shape of the change at a glance, however big the PR; the visible length follows the PR's size and the rest waits in expandables for when he wants to learn more.
 
 ## Publishing
 
@@ -95,4 +95,4 @@ Before telling Jakub a PR is ready, reread its brief against the PR body and the
 | Blast radius lists only the diff | Add downstream: callers, screens that use the changed component, later PRs |
 | Describing code ("added `completeTask()`") | Behaviour plus the model ("a taker can tap Hotovo on a reserved task; the lifecycle in `src/domain/` checks it") |
 | Repeating the PR body or the judges' threads | Link them; say only what Jakub needs |
-| Stacking three tools on one point, page grows past 2 minutes | Main tool open, the rest in `<details>` |
+| Stacking three tools on one point, the page buries the verdict | Main tool open, the rest in `<details>` |
