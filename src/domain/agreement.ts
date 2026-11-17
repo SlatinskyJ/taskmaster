@@ -212,17 +212,13 @@ export function createOneTimeTask(
   return ok(resolveOneTime({ status: 'proposed', offer: offer.value, book: EMPTY_BOOK }, people))
 }
 
-/** The bid book without bids or counters of people who no longer take part (spec §3, live). */
+/** The bid book without bids of people who no longer take part (spec §3, live). */
 export function liveBook(book: BidBook, people: readonly Person[]): BidBook {
-  return pruneBook(
-    book,
-    (id) => isActiveAs(people, id, 'taker'),
-    (id) => isActiveAs(people, id, 'giver'),
-  )
+  return pruneBook(book, (id) => isActiveAs(people, id, 'taker'))
 }
 
 /**
- * Drops approvals, bids and counters of people who no longer count, and opens a fully approved
+ * Drops approvals and bids of people who no longer count, and opens a fully approved
  * offer. Call whenever people change.
  */
 export function resolveOneTime(
