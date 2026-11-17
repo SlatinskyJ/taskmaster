@@ -61,10 +61,11 @@ Success means the family uses it every week instead of the whiteboard bookkeepin
 
 Role rules:
 - **Taker**: can approve scores, bid, reserve, complete, and log unprompted chores. Has a running total. Can flag a locked item as **disputed** (5.11).
-- **Giver**: can create tasks, templates, and instances, approve scores, respond to bids, complete tasks (no points, no running total "for now"), approve or reject completions, and run the meeting/settlement. Can propose a change to the **default period settings**, which needs all-party agreement (5.8), and can flag a locked item as **disputed** (5.11).
+- **Giver**: can create tasks, templates, and instances, approve scores, respond to bids, complete tasks (no points, no running total "for now"), approve or reject completions, and run the meeting/settlement. Can propose a change to the **default period settings**, which needs period agreement (5.8), and can flag a locked item as **disputed** (5.11).
 - **Admin**: manages users, global settings (default levels, default period length), and templates if needed; can correct a finalized settlement and make manual point adjustments; **settles disputes** (5.11). All admin actions are logged. The admin does not count as a "party" for any agreement.
 - **"All parties"** = all active givers + all active takers. When Mum is added, she becomes part of "all parties" automatically.
-- **Score agreement** (Jakub, 2026-11-17) = at least **one active giver and one active taker** approved the score. Proposing a score counts as approving it. Scores are whole numbers from 1. The admin never counts. This replaces all-party approval for task and template scores (5.1, 5.2); period settings (5.8) still need all parties.
+- **Score agreement** (Jakub, 2026-11-17) = at least **one active giver and one active taker** approved the score. Proposing a score counts as approving it. Scores are whole numbers from 1. The admin never counts. This replaces all-party approval for task and template scores (5.1, 5.2).
+- **Period agreement** (Jakub, 2026-11-17) = **every active taker and at least one active giver** approved the change. Proposing counts as approving. The admin never counts. Used for period settings and their defaults (5.8).
 
 ## 4. Concepts
 
@@ -173,8 +174,8 @@ Givers see the same for every taker.
 ### 5.8 Periods
 - A period runs from the previous settlement's cutoff to its own **cutoff** (date + time). It is not tied to calendar weeks.
 - Defaults (global settings): length 7 days, cutoff Sunday evening (**[call]** 18:00 Europe/Prague), default lower/upper levels.
-- **Changing the defaults (Jakub, 2026-11-16):** the admin can change them directly. A **giver** can also propose a change; it takes effect only after **all-party agreement**, the same way as a per-period change. Either way, a new default applies only to periods that have not started yet; the running period never changes. **[call]** A proposal that has not been agreed by the time the next period starts stays open for the period after it, until it is agreed, rejected, or withdrawn.
-- The next period is created automatically with defaults. A different **length/cutoff** or different **levels** for a period need **all-party agreement before that period starts**. Once a period has started, its cutoff and levels are locked.
+- **Changing the defaults (Jakub, 2026-11-16):** the admin can change them directly. A **giver** can also propose a change; it takes effect only after **period agreement** (section 3), the same way as a per-period change. Either way, a new default applies only to periods that have not started yet; the running period never changes. **[call]** A proposal that has not been agreed by the time the next period starts stays open for the period after it, until it is agreed, rejected, or withdrawn.
+- The next period is created automatically with defaults. A different **length/cutoff** or different **levels** for a period need **period agreement (section 3) before that period starts**. Once a period has started, its cutoff and levels are locked.
 - **[call]** If no settlement has happened by the cutoff, the next period still starts at the cutoff. Completions after the cutoff belong to the next period even if the meeting hasn't been held yet.
 - Settlement of a period is allowed any time after its cutoff.
 
