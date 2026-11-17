@@ -218,7 +218,7 @@ A giver (normally Dad) runs a guided **meeting screen**:
 - **Admin console** (Jakub, 2026-11-17): a small screen where the admin adds a user (name, role, starting password), renames them, changes their role, deactivates or reactivates them, and resets their password. Every change is audit-logged. Adding Mum later = the admin adds a giver there. No code change.
 - Users are never deleted, only deactivated, so their history and audit entries stay readable **[call]**.
 - A password reset sets a new password chosen by the admin, who passes it on; the user's sessions end **[call]**.
-- **First admin** (Jakub, 2026-11-17): on a database with no admin, the server creates one at boot from the `ADMIN_PASSWORD` environment variable; the admin then removes it. `TEST_USERS=1` also creates test givers and takers with the same password, for dev and previews only, never production.
+- **First admin** (Jakub, 2026-11-17): on a database with no admin, the server creates one at boot from the `ADMIN_PASSWORD` environment variable (kept as a deploy secret, never committed). Once an admin exists it is ignored and never changes a password. `TEST_USERS=1` also creates test givers and takers with the same password, for dev and previews only, never production.
 - The v1 auth design must leave room for the **tablet stretch goal**: a shared, logged-in-as-device kiosk where a person taps their name, enters a short PIN, and is logged out after a short idle time.
 
 ## 7. User interface
