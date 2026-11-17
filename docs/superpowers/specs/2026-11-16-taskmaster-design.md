@@ -64,7 +64,7 @@ Role rules:
 - **Giver**: can create tasks, templates, and instances, approve scores, respond to bids, complete tasks (no points, no running total "for now"), approve or reject completions, and run the meeting/settlement. Can propose a change to the **default period settings**, which needs all-party agreement (5.8), and can flag a locked item as **disputed** (5.11).
 - **Admin**: manages users, global settings (default levels, default period length), and templates if needed; can correct a finalized settlement and make manual point adjustments; **settles disputes** (5.11). All admin actions are logged. The admin does not count as a "party" for any agreement.
 - **"All parties"** = all active givers + all active takers. When Mum is added, she becomes part of "all parties" automatically.
-- **Score agreement** (Jakub, 2026-11-17) = at least **one active giver and one active taker** approved the score. Proposing a score counts as approving it. The admin never counts. This replaces all-party approval for task and template scores (5.1, 5.2); period settings (5.8) still need all parties.
+- **Score agreement** (Jakub, 2026-11-17) = at least **one active giver and one active taker** approved the score. Proposing a score counts as approving it. Scores are whole numbers from 1. The admin never counts. This replaces all-party approval for task and template scores (5.1, 5.2); period settings (5.8) still need all parties.
 
 ## 4. Concepts
 
@@ -89,6 +89,7 @@ Role rules:
 ### 5.1 Score agreement — recurring templates
 - A template's score needs **score agreement** (one giver + one taker, section 3). Until then, the template is *proposed* and creates no instances.
 - After agreement, **any party** may propose a new score. It needs score agreement again; the old score stays in force until the change is agreed.
+- Only givers create templates. One score change may be in flight per template at a time; changes to different templates can run in parallel (Jakub, 2026-11-17).
 - **[call]** A score change applies only to instances created after the change is approved. Existing instances keep their score, consistent with "score fixed at creation".
 
 ### 5.2 Score agreement — one-time tasks
