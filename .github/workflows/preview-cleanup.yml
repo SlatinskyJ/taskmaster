@@ -23,8 +23,10 @@ jobs:
     # Same group as this PR's CI run (see `concurrency` in ci.yml; rename both together):
     # closing the PR cancels its CI run. preview-host.yml also queues this behind any deploy
     # for the PR, and the controller's lock makes `remove` wait on the host, so it comes last.
+    # Built from the PR number, not `github.ref`: on a merged PR's `closed` event `github.ref`
+    # is the base branch, so `ci-${{ github.ref }}` would cancel CI on main (#98).
     concurrency:
-      group: ci-${{ github.ref }}
+      group: ci-refs/pull/${{ github.event.pull_request.number }}/merge
       cancel-in-progress: true
     permissions:
       contents: read
