@@ -1,6 +1,13 @@
 import { createFileRoute, notFound } from '@tanstack/react-router'
+import { useState } from 'react'
 import { Moon, Plus, Sun, SunMoon } from 'lucide-react'
 import { toast } from 'sonner'
+import { EmptyState } from '~/components/EmptyState'
+import { burstConfetti } from '~/components/effects/confetti'
+import { FloatingPoints } from '~/components/effects/FloatingPoints'
+import { PointsBar } from '~/components/points/PointsBar'
+import { StateChip } from '~/components/tasks/StateChip'
+import { TaskRow } from '~/components/tasks/TaskRow'
 import { Badge } from '~/components/ui/badge'
 import { Button } from '~/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card'
@@ -36,6 +43,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { Textarea } from '~/components/ui/textarea'
 import { cs, type ItemStateKey } from '~/lib/strings'
+import { useEffectsSwitch } from '~/lib/effects'
 import { THEME_PREFS, useThemePref, type ThemePref } from '~/lib/theme'
 import { getDevPagesAllowed } from '~/server/env/devPages'
 
@@ -69,6 +77,81 @@ const SAMPLE = {
   title: 'Vyndat myčku',
   row: 'Vysát obývák a předsíň',
   meta: 'do neděle 18:00 · Příliš žluťoučký kůň',
+  rows: ['Vyndat myčku', 'Vysát obývák a předsíň', 'Vynést koš', 'Zalít kytky', 'Uklidit pokoj'],
+}
+
+/** Simulates the Hotovo → approve flow on one task: +N floats, confetti, level toast. */
+function EffectsDemo() {
+  const [effectsOn, setEffectsOn] = useEffectsSwitch()
+  const [score, setScore] = useState({ confirmed: 40, pending: 0 })
+  const [rowState, setRowState] = useState<'reserved' | 'pending'>('reserved')
+  const [float, setFloat] = useState<{ id: number; tone: 'pending' | 'confirmed' } | null>(null)
+  const POINTS = 15
+
+  return (
+    <div className="grid gap-3">
+      <Card>
+        <PointsBar confirmed={score.confirmed} pending={score.pending} lower={50} upper={100} />
+      </Card>
+      <TaskRow
+        name={SAMPLE.title}
+        state={rowState}
+        points={POINTS}
+        action={
+          <>
+            {float ? <FloatingPoints key={float.id} points={POINTS} tone={float.tone} /> : null}
+            {rowState === 'reserved' ? (
+              <Button
+                variant="ok"
+                onClick={(e) => {
+                  burstConfetti(e.currentTarget)
+                  setFloat({ id: Date.now(), tone: 'pending' })
+                  setRowState('pending')
+                  setScore((s) => ({ ...s, pending: s.pending + POINTS }))
+                }}
+              >
+                done
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setFloat({ id: Date.now(), tone: 'confirmed' })
+                  setRowState('reserved')
+                  setScore((s) => ({
+                    confirmed: s.confirmed + POINTS,
+                    pending: s.pending - POINTS,
+                  }))
+                }}
+              >
+                approve
+              </Button>
+            )}
+          </>
+        }
+      />
+      <div className="flex flex-wrap gap-3">
+        <Button
+          variant="ghost"
+          onClick={() => {
+            setScore({ confirmed: 40, pending: 0 })
+            setRowState('reserved')
+          }}
+        >
+          reset
+        </Button>
+        <Button
+          variant={effectsOn ? 'primary' : 'ghost'}
+          aria-pressed={effectsOn}
+          onClick={() => {
+            setEffectsOn(!effectsOn)
+          }}
+        >
+          effects {effectsOn ? 'on' : 'off'}
+        </Button>
+      </div>
+    </div>
+  )
 }
 
 const STATES = Object.keys(cs.state) as ItemStateKey[]
@@ -127,27 +210,35 @@ function UiShowcase() {
         </div>
       </Section>
 
-      <Section title="States">
-        <Card className="grid gap-2">
+      <Section title="State chips and task rows (#32)">
+        <Card className="flex flex-wrap gap-2">
           {STATES.map((s) => (
-            <div key={s} className="flex items-center justify-between gap-2">
-              <span
-                className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-chip font-bold"
-                style={{
-                  color: `var(--s-${s}-text)`,
-                  background: `color-mix(in srgb, var(--s-${s}) 15%, var(--surface))`,
-                }}
-              >
-                <span className="size-2 rounded-full" style={{ background: `var(--s-${s})` }} />
-                {cs.state[s]}
-              </span>
-              <code className="text-meta text-muted">{s}</code>
-            </div>
+            <StateChip key={s} state={s} />
           ))}
         </Card>
-        <p className="text-meta text-muted">
-          Chip preview only; the real state chip and task row come in #32.
-        </p>
+        <div className="grid gap-3">
+          {STATES.map((s, i) => (
+            <TaskRow
+              key={s}
+              name={SAMPLE.rows[i % SAMPLE.rows.length]}
+              state={s}
+              points={(i + 1) * 5}
+              meta={i % 2 === 0 ? SAMPLE.meta : undefined}
+            />
+          ))}
+        </div>
+      </Section>
+
+      <Section title="Points bar and effects (#32)">
+        <EffectsDemo />
+      </Section>
+
+      <Section title="Empty state (#32)">
+        <Card>
+          <EmptyState action={<Button variant="ghost">action</Button>}>
+            Nothing here yet. One friendly line.
+          </EmptyState>
+        </Card>
       </Section>
 
       <Section title="Type">
