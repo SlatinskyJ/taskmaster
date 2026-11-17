@@ -3,20 +3,17 @@ import { allParties, findPerson, isActiveGiver, isParty } from './parties'
 import type { Result } from './result'
 import { fail, ok } from './result'
 
-// All-party score agreement (spec §3, §5.1, §5.2 path 1).
+// Score agreement (spec §3, §5.1, §5.2 path 1; Jakub 2026-11-17): a score is agreed once at
+// least one active giver and one active taker have approved it. Proposing counts as approving.
 //
-// "All parties" is evaluated **live**, at every check, from the current people list:
-// - a party added while a proposal is in flight must approve it too;
-// - a party deactivated while a proposal is in flight is no longer needed, and their earlier
-//   approval is dropped: if they are reactivated later they must approve again.
+// Approvals are checked **live** against the current people list (Jakub 2026-11-17): an
+// approval only counts while its author is an active giver or taker. A deactivated person's
+// approval is dropped; if they are reactivated later they must approve again.
 //
-// Caller duty: whenever people change (added, deactivated, reactivated; #26), run
-// `resolveTemplate` / `resolveOneTime` on every proposal still in flight. That drops approvals
-// of people who are no longer parties and promotes anything everyone left has approved;
-// without it a proposal could wait forever for someone who is gone.
+// Caller duty: whenever people change (added, deactivated, reactivated, role changed; #26),
+// run `resolveTemplate` / `resolveOneTime` on every proposal still in flight. That drops
+// approvals that no longer count and promotes anything that is now agreed.
 // ("Resolve" here, not "settle": settlement is the end-of-period accounting, spec §4.)
-// The spec doesn't say what happens to in-flight proposals when the parties change; this is
-// the default proposed to Jakub on #19.
 
 export type AgreementError =
   | 'invalid_score'
@@ -34,7 +31,7 @@ export function isValidScore(score: number): boolean {
   return Number.isInteger(score) && score > 0
 }
 
-/** One round of all-party approval of a score. */
+/** One round of approval of a score. */
 export interface ScoreProposal {
   score: number
   proposedBy: PersonId
@@ -73,14 +70,20 @@ export function pruneApprovals(proposal: ScoreProposal, people: readonly Person[
   return approvedBy.length === proposal.approvedBy.length ? proposal : { ...proposal, approvedBy }
 }
 
-/** Current parties who have not approved yet. */
-export function missingApprovals(proposal: ScoreProposal, people: readonly Person[]): PersonId[] {
-  return allParties(people).filter((id) => !proposal.approvedBy.includes(id))
+export type PartyRole = 'giver' | 'taker'
+
+/** The sides that still need an approval: no current giver / no current taker approved yet. */
+export function missingRoles(proposal: ScoreProposal, people: readonly Person[]): PartyRole[] {
+  const approvers = proposal.approvedBy
+    .map((id) => findPerson(people, id))
+    .filter((p): p is Person => p !== undefined && isParty(p))
+  const roles: PartyRole[] = ['giver', 'taker']
+  return roles.filter((role) => !approvers.some((p) => p.role === role))
 }
 
-/** Agreed = every current party approved. With no parties at all, nothing is ever agreed. */
+/** Agreed = at least one current giver and one current taker approved (spec §3). */
 export function isAgreed(proposal: ScoreProposal, people: readonly Person[]): boolean {
-  return allParties(people).length > 0 && missingApprovals(proposal, people).length === 0
+  return missingRoles(proposal, people).length === 0
 }
 
 // ── Recurring templates (spec §5.1) ──────────────────────────────────────────────────────
@@ -146,8 +149,8 @@ export function approveTemplate(
 }
 
 /**
- * Proposes a new score for an agreed template. Needs all parties again; the old score stays
- * in force until then (spec §5.1). One change at a time.
+ * Any party proposes a new score for an agreed template. Needs a giver + a taker again; the
+ * old score stays in force until then (spec §5.1). One change at a time.
  */
 export function proposeTemplateScoreChange(
   template: TemplateAgreement,
@@ -177,13 +180,13 @@ export function scoreForNewInstance(template: TemplateAgreement): Result<number,
   return template.status === 'agreed' ? ok(template.score) : fail('not_agreed')
 }
 
-// ── One-time tasks, path 1: all-party approval (spec §5.2) ───────────────────────────────
+// ── One-time tasks, path 1: score agreement (spec §5.2) ───────────────────────────────
 // Path 2 (bidding) and the race between the two paths arrive with #20.
 
 export type OneTimeAgreement =
-  /** The giver's offer, waiting for every party. */
+  /** The giver's offer, waiting for a taker's approval. */
   | { status: 'proposed'; offer: ScoreProposal }
-  /** All parties approved: in the queue at `score`, anyone may reserve or do it. */
+  /** A giver and a taker approved: in the queue at `score`, any taker may reserve or do it. */
   | { status: 'open'; score: number }
 
 /** A giver creates a one-time task with an initial offer. */
@@ -210,7 +213,7 @@ export function resolveOneTime(
   return offer === task.offer ? task : { status: 'proposed', offer }
 }
 
-/** A party approves the offered score; once every party has, the task is open. */
+/** A party approves the offered score; once a giver and a taker have, the task is open. */
 export function approveOneTimeOffer(
   task: OneTimeAgreement,
   people: readonly Person[],

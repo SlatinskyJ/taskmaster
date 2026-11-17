@@ -8,7 +8,7 @@ import {
   createOneTimeTask,
   isAgreed,
   isValidScore,
-  missingApprovals,
+  missingRoles,
   proposeScore,
   proposeTemplate,
   proposeTemplateScoreChange,
@@ -35,6 +35,8 @@ const family: Person[] = [
 ]
 const withMum: Person[] = [...family, { id: MUM, role: 'giver', active: true }]
 const withoutYounger: Person[] = family.map((p) => (p.id === YOUNGER ? { ...p, active: false } : p))
+const withoutOlder: Person[] = family.map((p) => (p.id === OLDER ? { ...p, active: false } : p))
+const olderNowAdmin: Person[] = family.map((p) => (p.id === OLDER ? { ...p, role: 'admin' } : p))
 
 function value<T>(result: Result<T, string>): T {
   if (!result.ok) throw new Error(`expected ok, got ${result.error}`)
@@ -51,7 +53,7 @@ function approveAll<T>(
 }
 
 describe('parties (spec §3)', () => {
-  it('all parties = active givers + active takers; the admin never counts', () => {
+  it('parties = active givers + active takers; the admin never counts', () => {
     expect(allParties(family)).toEqual([DAD, OLDER, YOUNGER])
     expect(isParty({ id: JAKUB, role: 'admin', active: true })).toBe(false)
   })
@@ -80,60 +82,68 @@ describe('scores', () => {
   })
 })
 
-describe('score proposals', () => {
-  const offer = (): ScoreProposal => value(proposeScore(family, DAD, 10))
+describe('score agreement: one giver + one taker (spec §3)', () => {
+  const dadOffer = (): ScoreProposal => value(proposeScore(family, DAD, 10))
+  const olderAsk = (): ScoreProposal => value(proposeScore(family, OLDER, 10))
 
-  it('the proposer approves by proposing', () => {
-    expect(offer().approvedBy).toEqual([DAD])
-    expect(missingApprovals(offer(), family)).toEqual([OLDER, YOUNGER])
-    expect(isAgreed(offer(), family)).toBe(false)
+  it('the proposer approves by proposing; a giver proposal waits for a taker', () => {
+    expect(dadOffer().approvedBy).toEqual([DAD])
+    expect(missingRoles(dadOffer(), family)).toEqual(['taker'])
+    expect(isAgreed(dadOffer(), family)).toBe(false)
   })
 
-  it('is agreed once every party approved, in any order', () => {
-    const p = approveAll(offer(), [YOUNGER, OLDER], (t, id) => approveScore(t, family, id))
+  it('one taker approving a giver proposal is enough; the other taker is not needed', () => {
+    const p = value(approveScore(dadOffer(), family, YOUNGER))
     expect(isAgreed(p, family)).toBe(true)
   })
 
+  it('a taker proposal waits for a giver; more takers do not replace the giver', () => {
+    expect(missingRoles(olderAsk(), family)).toEqual(['giver'])
+    const bothTakers = value(approveScore(olderAsk(), family, YOUNGER))
+    expect(isAgreed(bothTakers, family)).toBe(false)
+    expect(isAgreed(value(approveScore(bothTakers, family, DAD)), family)).toBe(true)
+  })
+
   it('refuses the admin, inactive people and unknown ids', () => {
-    expect(approveScore(offer(), family, JAKUB)).toEqual({ ok: false, error: 'not_a_party' })
-    expect(approveScore(offer(), withoutYounger, YOUNGER)).toEqual({
+    expect(approveScore(dadOffer(), family, JAKUB)).toEqual({ ok: false, error: 'not_a_party' })
+    expect(approveScore(dadOffer(), withoutYounger, YOUNGER)).toEqual({
       ok: false,
       error: 'not_a_party',
     })
-    expect(approveScore(offer(), family, 99)).toEqual({ ok: false, error: 'not_a_party' })
+    expect(approveScore(dadOffer(), family, 99)).toEqual({ ok: false, error: 'not_a_party' })
     expect(proposeScore(family, JAKUB, 10)).toEqual({ ok: false, error: 'not_a_party' })
   })
 
   it('refuses a second approval by the same person', () => {
-    expect(approveScore(offer(), family, DAD)).toEqual({ ok: false, error: 'already_approved' })
+    expect(approveScore(dadOffer(), family, DAD)).toEqual({ ok: false, error: 'already_approved' })
   })
 
   it('refuses an invalid score', () => {
     expect(proposeScore(family, DAD, 0)).toEqual({ ok: false, error: 'invalid_score' })
   })
 
-  it('never counts as agreed with no parties at all', () => {
+  it('is never agreed without an active taker or without an active giver', () => {
+    const dadAlone: Person[] = [{ id: DAD, role: 'giver', active: true }]
+    expect(isAgreed({ score: 5, proposedBy: DAD, approvedBy: [DAD] }, dadAlone)).toBe(false)
     const nobody: Person[] = [{ id: JAKUB, role: 'admin', active: true }]
     expect(isAgreed({ score: 5, proposedBy: DAD, approvedBy: [DAD] }, nobody)).toBe(false)
   })
 
-  describe('when the parties change mid-proposal (live evaluation)', () => {
-    it('a newly added party must approve too', () => {
-      const p = approveAll(offer(), [OLDER, YOUNGER], (t, id) => approveScore(t, family, id))
-      expect(isAgreed(p, family)).toBe(true)
-      expect(isAgreed(p, withMum)).toBe(false)
-      expect(missingApprovals(p, withMum)).toEqual([MUM])
+  describe('approvals are checked live against the current people', () => {
+    it("a deactivated taker's approval no longer counts", () => {
+      const p = value(approveScore(dadOffer(), family, OLDER))
+      expect(isAgreed(p, withoutOlder)).toBe(false)
+      expect(missingRoles(p, withoutOlder)).toEqual(['taker'])
     })
 
-    it('a deactivated party is no longer needed', () => {
-      const p = value(approveScore(offer(), family, OLDER))
-      expect(isAgreed(p, family)).toBe(false)
-      expect(isAgreed(p, withoutYounger)).toBe(true)
+    it('a taker who became admin no longer counts', () => {
+      const p = value(approveScore(dadOffer(), family, OLDER))
+      expect(isAgreed(p, olderNowAdmin)).toBe(false)
     })
 
-    it("a deactivated party's earlier approval no longer counts", () => {
-      const p = value(approveScore(offer(), family, YOUNGER))
-      expect(missingApprovals(p, withoutYounger)).toEqual([OLDER])
+    it('Mum, as a second giver, can be the giver who approves', () => {
+      const p = value(proposeScore(withMum, OLDER, 10))
+      expect(isAgreed(value(approveScore(p, withMum, MUM)), withMum)).toBe(true)
     })
   })
 })
@@ -142,7 +152,7 @@ describe('recurring templates (spec §5.1)', () => {
   const proposed = (): TemplateAgreement => value(proposeTemplate(family, DAD, 5))
   const approve = (people: Person[]) => (t: TemplateAgreement, id: number) =>
     approveTemplate(t, people, id)
-  const agreed = (): TemplateAgreement => approveAll(proposed(), [OLDER, YOUNGER], approve(family))
+  const agreed = (): TemplateAgreement => value(approveTemplate(proposed(), family, OLDER))
 
   it('only an active giver creates a template', () => {
     expect(proposeTemplate(family, OLDER, 5)).toEqual({ ok: false, error: 'not_a_giver' })
@@ -151,14 +161,14 @@ describe('recurring templates (spec §5.1)', () => {
     expect(proposeTemplate(inactiveDad, DAD, 5)).toEqual({ ok: false, error: 'not_a_giver' })
   })
 
-  it('stays proposed and creates no instances until every party approves', () => {
-    const t = value(approveTemplate(proposed(), family, OLDER))
+  it('stays proposed and creates no instances until a taker approves', () => {
+    const t = proposed()
     expect(t.status).toBe('proposed')
     expect(canCreateInstances(t)).toBe(false)
     expect(scoreForNewInstance(t)).toEqual({ ok: false, error: 'not_agreed' })
   })
 
-  it('becomes agreed when the last party approves', () => {
+  it('becomes agreed when one taker approves', () => {
     const t = agreed()
     expect(t).toEqual({ status: 'agreed', score: 5, pendingChange: null })
     expect(canCreateInstances(t)).toBe(true)
@@ -173,18 +183,18 @@ describe('recurring templates (spec §5.1)', () => {
   })
 
   it('approving an agreed template with no change pending is refused', () => {
-    expect(approveTemplate(agreed(), family, OLDER)).toEqual({
+    expect(approveTemplate(agreed(), family, YOUNGER)).toEqual({
       ok: false,
       error: 'no_change_pending',
     })
   })
 
-  describe('score change', () => {
+  describe('score change (any party may propose)', () => {
     const changing = (): TemplateAgreement =>
       value(proposeTemplateScoreChange(agreed(), family, OLDER, 8))
 
-    it('keeps the old score in force until all parties approve the new one', () => {
-      const t = value(approveTemplate(changing(), family, DAD))
+    it('keeps the old score in force until a giver and a taker agree on the new one', () => {
+      const t = value(approveTemplate(changing(), family, YOUNGER))
       expect(t.status === 'agreed' && t.score).toBe(5)
       expect(scoreForNewInstance(t)).toEqual({ ok: true, value: 5 })
       expect(canCreateInstances(t)).toBe(true)
@@ -192,10 +202,20 @@ describe('recurring templates (spec §5.1)', () => {
 
     it('[call] new instances get the new score only once it is agreed (existing instances keep theirs: tested with instance storage)', () => {
       const before = value(scoreForNewInstance(changing()))
-      const t = approveAll(changing(), [DAD, YOUNGER], approve(family))
+      const t = value(approveTemplate(changing(), family, DAD))
       expect(t).toEqual({ status: 'agreed', score: 8, pendingChange: null })
       expect(before).toBe(5) // an instance created earlier stored 5 and keeps it
       expect(value(scoreForNewInstance(t))).toBe(8)
+    })
+
+    it('a giver may propose too; then one taker agrees it', () => {
+      const t = value(proposeTemplateScoreChange(agreed(), family, DAD, 3))
+      expect(t.status === 'agreed' && t.score).toBe(5)
+      expect(value(approveTemplate(t, family, YOUNGER))).toEqual({
+        status: 'agreed',
+        score: 3,
+        pendingChange: null,
+      })
     })
 
     it('only one change at a time, only on an agreed template, only to a new value', () => {
@@ -229,50 +249,41 @@ describe('recurring templates (spec §5.1)', () => {
     })
   })
 
-  describe('when the parties change', () => {
-    it('Mum added mid-proposal: the template waits for her too', () => {
-      const t = value(approveTemplate(proposed(), withMum, OLDER))
-      const afterYounger = value(approveTemplate(t, withMum, YOUNGER))
-      expect(afterYounger.status).toBe('proposed')
-      expect(value(approveTemplate(afterYounger, withMum, MUM)).status).toBe('agreed')
+  describe('when people change', () => {
+    it("resolving drops a deactivated taker's approval of a pending change", () => {
+      const t = value(proposeTemplateScoreChange(agreed(), family, OLDER, 8))
+      const resolved = resolveTemplate(t, withoutOlder)
+      expect(resolved.status === 'agreed' && resolved.pendingChange?.approvedBy).toEqual([])
+      expect(value(approveTemplate(resolved, withoutOlder, DAD))).toMatchObject({ score: 5 })
     })
 
-    it('a deactivated party: resolving promotes a proposal everyone left has approved', () => {
-      const t = value(approveTemplate(proposed(), family, OLDER))
-      expect(t.status).toBe('proposed')
-      expect(resolveTemplate(t, withoutYounger)).toEqual({
-        status: 'agreed',
-        score: 5,
-        pendingChange: null,
-      })
-    })
-
-    it('a party deactivated and later reactivated must approve again', () => {
-      const t = value(approveTemplate(proposed(), family, YOUNGER))
-      const whileInactive = resolveTemplate(t, withoutYounger)
-      expect(whileInactive.status === 'proposed' && whileInactive.proposal.approvedBy).toEqual([
-        DAD,
-      ])
-      const back = resolveTemplate(whileInactive, family)
-      expect(back.status).toBe('proposed')
-      expect(value(approveTemplate(back, family, YOUNGER)).status).toBe('proposed')
-    })
-
-    it('resolving also applies a score change that is now fully approved', () => {
-      const t = value(
-        approveTemplate(value(proposeTemplateScoreChange(agreed(), family, DAD, 8)), family, OLDER),
-      )
-      expect(resolveTemplate(t, family)).toBe(t)
-      expect(resolveTemplate(t, withoutYounger)).toEqual({
+    it('a taker deactivated and later reactivated must approve again', () => {
+      const t = value(proposeTemplateScoreChange(agreed(), family, OLDER, 8))
+      const back = resolveTemplate(resolveTemplate(t, withoutOlder), family)
+      expect(back.status === 'agreed' && back.pendingChange?.approvedBy).toEqual([])
+      const afterDad = value(approveTemplate(back, family, DAD))
+      expect(afterDad).toMatchObject({ score: 5 })
+      expect(value(approveTemplate(afterDad, family, OLDER))).toEqual({
         status: 'agreed',
         score: 8,
         pendingChange: null,
       })
     })
+
+    it('resolving is a no-op when nothing changed', () => {
+      const t = proposed()
+      expect(resolveTemplate(t, family)).toBe(t)
+      const c = value(proposeTemplateScoreChange(agreed(), family, OLDER, 8))
+      expect(resolveTemplate(c, family)).toBe(c)
+    })
+
+    it('approve helper works across several approvals', () => {
+      expect(approveAll(proposed(), [YOUNGER], approve(family)).status).toBe('agreed')
+    })
   })
 })
 
-describe('one-time tasks, path 1: all-party approval (spec §5.2)', () => {
+describe('one-time tasks, path 1: score agreement (spec §5.2)', () => {
   const proposed = (): OneTimeAgreement => value(createOneTimeTask(family, DAD, 20))
   const approve = (t: OneTimeAgreement, id: number) => approveOneTimeOffer(t, family, id)
 
@@ -280,22 +291,20 @@ describe('one-time tasks, path 1: all-party approval (spec §5.2)', () => {
     expect(createOneTimeTask(family, YOUNGER, 20)).toEqual({ ok: false, error: 'not_a_giver' })
     expect(createOneTimeTask(family, JAKUB, 20)).toEqual({ ok: false, error: 'not_a_giver' })
     expect(createOneTimeTask(family, DAD, -1)).toEqual({ ok: false, error: 'invalid_score' })
+    const inactiveDad = family.map((p) => (p.id === DAD ? { ...p, active: false } : p))
+    expect(createOneTimeTask(inactiveDad, DAD, 20)).toEqual({ ok: false, error: 'not_a_giver' })
   })
 
-  it('stays proposed until every party approves the offer', () => {
+  it("stays proposed until a taker approves the giver's offer", () => {
     expect(proposed().status).toBe('proposed')
-    expect(value(approve(proposed(), OLDER)).status).toBe('proposed')
   })
 
-  it('becomes open at the offered score when the last party approves', () => {
-    expect(approveAll(proposed(), [YOUNGER, OLDER], approve)).toEqual({
-      status: 'open',
-      score: 20,
-    })
+  it('becomes open at the offered score when one taker approves', () => {
+    expect(value(approve(proposed(), YOUNGER))).toEqual({ status: 'open', score: 20 })
   })
 
   it('cannot be approved again once open', () => {
-    const open = approveAll(proposed(), [YOUNGER, OLDER], approve)
+    const open = value(approve(proposed(), YOUNGER))
     expect(approve(open, OLDER)).toEqual({ ok: false, error: 'not_proposed' })
   })
 
@@ -304,36 +313,31 @@ describe('one-time tasks, path 1: all-party approval (spec §5.2)', () => {
     expect(approve(proposed(), DAD)).toEqual({ ok: false, error: 'already_approved' })
   })
 
-  it('a second giver (Mum) must approve the offer too', () => {
+  it('a second giver (Mum) is not needed', () => {
     const t = value(createOneTimeTask(withMum, DAD, 20))
-    const allTakers = approveAll(t, [OLDER, YOUNGER], (x, id) =>
-      approveOneTimeOffer(x, withMum, id),
-    )
-    expect(allTakers.status).toBe('proposed')
-    expect(value(approveOneTimeOffer(allTakers, withMum, MUM))).toEqual({
+    expect(value(approveOneTimeOffer(t, withMum, OLDER))).toEqual({ status: 'open', score: 20 })
+  })
+
+  it('never opens while there is no active taker', () => {
+    const dadAlone: Person[] = [{ id: DAD, role: 'giver', active: true }]
+    expect(value(createOneTimeTask(dadAlone, DAD, 20)).status).toBe('proposed')
+    expect(value(proposeTemplate(dadAlone, DAD, 5)).status).toBe('proposed')
+  })
+
+  it("if the giver who offered is deactivated, the offer waits for another giver's approval", () => {
+    const withMumNoDad = withMum.map((p) => (p.id === DAD ? { ...p, active: false } : p))
+    const t = resolveOneTime(value(createOneTimeTask(withMum, DAD, 20)), withMumNoDad)
+    expect(t.status === 'proposed' && t.offer.approvedBy).toEqual([])
+    const afterTaker = value(approveOneTimeOffer(t, withMumNoDad, OLDER))
+    expect(afterTaker.status).toBe('proposed')
+    expect(value(approveOneTimeOffer(afterTaker, withMumNoDad, MUM))).toEqual({
       status: 'open',
       score: 20,
     })
   })
 
-  it('an inactive giver cannot create a task', () => {
-    const inactiveDad = family.map((p) => (p.id === DAD ? { ...p, active: false } : p))
-    expect(createOneTimeTask(inactiveDad, DAD, 20)).toEqual({ ok: false, error: 'not_a_giver' })
-  })
-
-  it('is open at once when the giver is the only party', () => {
-    const dadAlone: Person[] = [{ id: DAD, role: 'giver', active: true }]
-    expect(value(createOneTimeTask(dadAlone, DAD, 20))).toEqual({ status: 'open', score: 20 })
-    expect(value(proposeTemplate(dadAlone, DAD, 5))).toEqual({
-      status: 'agreed',
-      score: 5,
-      pendingChange: null,
-    })
-  })
-
-  it('a deactivated party is no longer waited for, once resolved', () => {
-    const t = value(approve(proposed(), OLDER))
+  it('resolving is a no-op when nothing changed', () => {
+    const t = proposed()
     expect(resolveOneTime(t, family)).toBe(t)
-    expect(resolveOneTime(t, withoutYounger)).toEqual({ status: 'open', score: 20 })
   })
 })
