@@ -1,5 +1,7 @@
 import type { Person, PersonId } from './parties'
-import { allParties, findPerson, isActiveGiver, isParty } from './parties'
+import type { BidBook } from './bids'
+import { EMPTY_BOOK, pruneBook } from './bids'
+import { allParties, findPerson, isActiveAs, isActiveGiver, isParty } from './parties'
 import type { Result } from './result'
 import { fail, ok } from './result'
 
@@ -21,10 +23,14 @@ export type AgreementError =
   | 'not_a_giver'
   | 'already_approved'
   | 'not_proposed'
+  | 'offer_changed'
   | 'not_agreed'
   | 'change_pending'
   | 'no_change_pending'
   | 'same_score'
+  | 'not_a_taker'
+  | 'no_bid'
+  | 'no_bids'
 
 /** Points must be a positive whole number. */
 export function isValidScore(score: number): boolean {
@@ -180,14 +186,19 @@ export function scoreForNewInstance(template: TemplateAgreement): Result<number,
   return template.status === 'agreed' ? ok(template.score) : fail('not_agreed')
 }
 
-// ── One-time tasks, path 1: score agreement (spec §5.2) ───────────────────────────────
-// Path 2 (bidding) and the race between the two paths arrive with #20.
+// ── One-time tasks (spec §5.2) ──────────────────────────────────────────────────────────
+// Two paths run in parallel; the first to finish wins:
+//   1. score agreement: a taker approves the giver's offer → open (any taker may do it);
+//   2. bidding (`bidding.ts`): a taker and the giver side agree on a number → reserved to that taker.
+// Once a task is open or reserved, every action of either path is refused (`not_proposed`).
 
 export type OneTimeAgreement =
-  /** The giver's offer, waiting for a taker's approval. */
-  | { status: 'proposed'; offer: ScoreProposal }
+  /** Negotiating: the giver's offer waiting for a taker's approval, and any open bids. */
+  | { status: 'proposed'; offer: ScoreProposal; book: BidBook }
   /** A giver and a taker approved: in the queue at `score`, any taker may reserve or do it. */
   | { status: 'open'; score: number }
+  /** Agreed by bidding between `takerId` and `giverId`: reserved to that taker (spec §5.2 path 2). */
+  | { status: 'reserved'; score: number; takerId: PersonId; giverId: PersonId }
 
 /** A giver creates a one-time task with an initial offer. */
 export function createOneTimeTask(
@@ -199,10 +210,18 @@ export function createOneTimeTask(
   if (!giver || !isActiveGiver(giver)) return fail('not_a_giver')
   const offer = proposeScore(people, giverId, score)
   if (!offer.ok) return offer
-  return ok(resolveOneTime({ status: 'proposed', offer: offer.value }, people))
+  return ok(resolveOneTime({ status: 'proposed', offer: offer.value, book: EMPTY_BOOK }, people))
 }
 
-/** Drops non-party approvals and opens a fully approved offer. Call whenever people change. */
+/** The bid book without bids of people who no longer take part (spec §3, live). */
+export function liveBook(book: BidBook, people: readonly Person[]): BidBook {
+  return pruneBook(book, (id) => isActiveAs(people, id, 'taker'))
+}
+
+/**
+ * Drops approvals and bids of people who no longer count, and opens a fully approved
+ * offer. Call whenever people change.
+ */
 export function resolveOneTime(
   task: OneTimeAgreement,
   people: readonly Person[],
@@ -210,7 +229,8 @@ export function resolveOneTime(
   if (task.status !== 'proposed') return task
   const offer = pruneApprovals(task.offer, people)
   if (isAgreed(offer, people)) return { status: 'open', score: offer.score }
-  return offer === task.offer ? task : { status: 'proposed', offer }
+  const book = liveBook(task.book, people)
+  return offer === task.offer && book === task.book ? task : { ...task, offer, book }
 }
 
 /** A party approves the offered score; once a giver and a taker have, the task is open. */
@@ -222,7 +242,7 @@ export function approveOneTimeOffer(
   if (task.status !== 'proposed') return fail('not_proposed')
   const approved = approveScore(task.offer, people, approverId)
   if (!approved.ok) return approved
-  return ok(resolveOneTime({ status: 'proposed', offer: approved.value }, people))
+  return ok(resolveOneTime({ ...task, offer: approved.value }, people))
 }
 
 /**
@@ -237,5 +257,5 @@ export function reopenOneTimeOffer(
   score: number,
 ): OneTimeAgreement {
   const offer: ScoreProposal = { score, proposedBy: giverId, approvedBy: [giverId] }
-  return resolveOneTime({ status: 'proposed', offer }, people)
+  return resolveOneTime({ status: 'proposed', offer, book: EMPTY_BOOK }, people)
 }
