@@ -2,6 +2,34 @@
 // Built at build time from the Czech strings and baked into sw.js, so it needs no network.
 // Self-contained: inline styles with the Pastelky tokens (UI doc §2.1), no scripts.
 
+/**
+ * The Pastelky tokens the page uses, named as in src/styles/theme.css (light `:root` and the
+ * system-dark block). A copy, because the page must work without the app's stylesheet;
+ * offline.test.ts keeps it equal to theme.css.
+ */
+export const OFFLINE_TOKENS = {
+  light: {
+    bg: '#fff5ee',
+    ink: '#2b1f2e',
+    muted: '#6e6270',
+    'accent-strong': '#d93a42',
+    'on-accent-strong': '#ffffff',
+  },
+  dark: {
+    bg: '#1d1524',
+    ink: '#fff1e8',
+    muted: '#b8aab8',
+    'accent-strong': '#ff6a70',
+    'on-accent-strong': '#1d1524',
+  },
+} as const
+
+function cssVars(tokens: Record<string, string>): string {
+  return Object.entries(tokens)
+    .map(([name, value]) => `--${name}:${value}`)
+    .join(';')
+}
+
 export interface OfflineText {
   title: string
   message: string
@@ -25,13 +53,13 @@ export function offlinePage(appName: string, text: OfflineText): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(appName)}</title>
 <style>
-:root{--bg:#FFF5EE;--ink:#2B1F2E;--muted:#6E6270;--accent:#D93A42;--on-accent:#FFFFFF}
-@media (prefers-color-scheme: dark){:root{--bg:#1D1524;--ink:#FFF1E8;--muted:#B8AAB8;--accent:#FF6A70;--on-accent:#1D1524}}
-body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--ink);font-family:system-ui,sans-serif;text-align:center}
+:root{${cssVars(OFFLINE_TOKENS.light)}}
+@media (prefers-color-scheme: dark){:root{${cssVars(OFFLINE_TOKENS.dark)}}}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--ink);font-family:ui-rounded,system-ui,sans-serif;text-align:center}
 main{padding:16px;max-width:360px}
 h1{font-size:26px;margin:0 0 8px}
 p{color:var(--muted);font-size:15px;margin:0 0 20px}
-a{display:inline-block;padding:12px 20px;border-radius:12px;background:var(--accent);color:var(--on-accent);font-weight:700;text-decoration:none}
+a{display:inline-block;box-sizing:border-box;min-height:44px;padding:12px 20px;line-height:20px;border-radius:12px;background:var(--accent-strong);color:var(--on-accent-strong);font-weight:700;text-decoration:none}
 </style>
 </head>
 <body>

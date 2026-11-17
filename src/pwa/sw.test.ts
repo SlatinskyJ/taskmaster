@@ -1,7 +1,8 @@
+import { fileURLToPath } from 'node:url'
 import { runInNewContext } from 'node:vm'
-import { beforeAll, describe, expect, it } from 'vitest'
-import { offlinePage } from './offline'
-import { bundleWorker, PLACEHOLDER, shellBuild } from './vite-plugin'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { cs } from '~/lib/strings'
+import { bundleWorker, PLACEHOLDER, serviceWorkerPlugin, shellBuild, SW_FILE } from './vite-plugin'
 
 // Runs the real bundled sw.js against fake worker globals: install, activate and fetch.
 
@@ -39,20 +40,30 @@ class FakeCaches {
 
 const ORIGIN = 'https://tm.example'
 let online = true
+/** Status the fake server answers per path; 200 when not listed. */
+const statusOf = new Map<string, number>()
 const fetched: string[] = []
 function fakeFetch(input: Request | string): Promise<Response> {
   const url = typeof input === 'string' ? input : input.url
-  fetched.push(new URL(url, ORIGIN).pathname)
+  const path = new URL(url, ORIGIN).pathname
+  fetched.push(path)
   if (!online) return Promise.reject(new TypeError('Failed to fetch'))
-  return Promise.resolve(new Response(`body of ${url}`, { status: 200 }))
+  return Promise.resolve(new Response(`body of ${url}`, { status: statusOf.get(path) ?? 200 }))
 }
+
+afterEach(() => {
+  online = true
+  statusOf.clear()
+  fetched.length = 0
+})
 
 let workerCode = ''
 beforeAll(async () => {
   workerCode = await bundleWorker()
 }, 30_000)
 
-function startWorker(version: string, caches: FakeCaches) {
+/** Runs a worker built with the given data, or the given finished sw.js source. */
+function startWorker(version: string, caches: FakeCaches, source?: string) {
   const listeners = new Map<string, Listener>()
   const calls = { skipWaiting: 0, claim: 0 }
   const self = {
@@ -74,7 +85,7 @@ function startWorker(version: string, caches: FakeCaches) {
     precache: ['/manifest.webmanifest', '/assets/index-abc.js'],
     offlineHtml: '<p>offline</p>',
   }
-  const code = workerCode.replaceAll(PLACEHOLDER, () => JSON.stringify(build))
+  const code = source ?? workerCode.replaceAll(PLACEHOLDER, () => JSON.stringify(build))
   // In a worker, relative URLs resolve against the worker's origin.
   class WorkerRequest extends Request {
     constructor(input: string | Request, init?: RequestInit) {
@@ -136,14 +147,36 @@ describe('service worker', () => {
   })
 
   it('serves cached assets without the network', async () => {
-    online = true
     const caches = new FakeCaches()
     const { dispatch } = startWorker('v1', caches)
     await dispatch('install')
     online = false
     const response = await dispatch('fetch', get('/assets/index-abc.js'))
     expect(await response?.text()).toBe(`body of ${ORIGIN}/assets/index-abc.js`)
-    online = true
+  })
+
+  it('stores a cache miss only when the server answers ok', async () => {
+    const caches = new FakeCaches()
+    const { dispatch } = startWorker('v1', caches)
+    await dispatch('install')
+    const font = `${ORIGIN}/assets/font-x.woff2`
+    const store = () => caches.stores.get('tm-shell-v1')
+
+    statusOf.set('/assets/font-x.woff2', 500)
+    const failed = await dispatch('fetch', get('/assets/font-x.woff2'))
+    expect(failed?.status).toBe(500)
+    expect(store()?.has(font)).toBe(false)
+
+    statusOf.delete('/assets/font-x.woff2')
+    const ok = await dispatch('fetch', get('/assets/font-x.woff2'))
+    expect(ok?.status).toBe(200)
+    expect(store()?.has(font)).toBe(true)
+
+    fetched.length = 0
+    online = false
+    const cached = await dispatch('fetch', get('/assets/font-x.woff2'))
+    expect(await cached?.text()).toBe(`body of ${font}`)
+    expect(fetched).toEqual([])
   })
 
   it('does not intercept API or server-function requests', async () => {
@@ -155,7 +188,6 @@ describe('service worker', () => {
   })
 
   it('loads pages from the network and never stores them', async () => {
-    online = true
     const caches = new FakeCaches()
     const { dispatch } = startWorker('v1', caches)
     const response = await dispatch('fetch', navigate('/'))
@@ -169,7 +201,6 @@ describe('service worker', () => {
     const response = await dispatch('fetch', navigate('/'))
     expect(response?.status).toBe(503)
     expect(await response?.text()).toBe('<p>offline</p>')
-    online = true
   })
 })
 
@@ -198,16 +229,59 @@ describe('shellBuild', () => {
   })
 })
 
-describe('offlinePage', () => {
-  it('is a Czech page with the given text, escaped', () => {
-    const html = offlinePage('Taskmaster', {
-      title: 'Jsi <offline>',
-      message: 'a & b',
-      retry: 'Znovu',
-    })
-    expect(html).toContain('<html lang="cs">')
-    expect(html).toContain('Jsi &lt;offline&gt;')
-    expect(html).toContain('a &amp; b')
-    expect(html).not.toContain('<script')
+describe('serviceWorkerPlugin', () => {
+  const publicDir = fileURLToPath(new URL('../../public', import.meta.url))
+
+  async function emit(bundleFiles: string[]) {
+    const plugin = serviceWorkerPlugin()
+    const emitted: { type: string; fileName: string; source: string }[] = []
+    const configResolved = plugin.configResolved as (config: { publicDir: string }) => void
+    configResolved({ publicDir })
+    const generateBundle = plugin.generateBundle as (
+      this: { emitFile(file: { type: string; fileName: string; source: string }): string },
+      options: unknown,
+      bundle: Record<string, unknown>,
+    ) => Promise<void>
+    const bundle = Object.fromEntries(bundleFiles.map((file) => [file, {}]))
+    await generateBundle.call(
+      {
+        emitFile: (file) => {
+          emitted.push(file)
+          return file.fileName
+        },
+      },
+      {},
+      bundle,
+    )
+    return { plugin, emitted }
+  }
+
+  it('runs only in the client build', () => {
+    const plugin = serviceWorkerPlugin()
+    const applies = plugin.applyToEnvironment as (environment: { name: string }) => boolean
+    expect(plugin.apply).toBe('build')
+    expect(applies({ name: 'client' })).toBe(true)
+    expect(applies({ name: 'ssr' })).toBe(false)
   })
+
+  it('emits a sw.js filled with this build, which precaches the bundle', async () => {
+    const { emitted } = await emit(['assets/main-1.js', 'assets/app-2.css', 'assets/f-3.woff2'])
+    expect(emitted.map((file) => [file.type, file.fileName])).toEqual([['asset', SW_FILE]])
+    const source = emitted[0]?.source ?? ''
+    expect(source).not.toContain(PLACEHOLDER)
+    expect(source).toContain(cs.offline.title)
+
+    const caches = new FakeCaches()
+    const { dispatch } = startWorker('unused', caches, source)
+    await dispatch('install')
+    const [name] = [...caches.stores.keys()]
+    expect(name).toMatch(/^tm-shell-[0-9a-f]{16}$/)
+    expect([...(caches.stores.get(name ?? '')?.keys() ?? [])]).toEqual(
+      expect.arrayContaining([
+        `${ORIGIN}/manifest.webmanifest`,
+        `${ORIGIN}/assets/main-1.js`,
+        `${ORIGIN}/assets/app-2.css`,
+      ]),
+    )
+  }, 30_000)
 })

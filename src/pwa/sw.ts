@@ -2,8 +2,9 @@
 // classic script with no imports; the plugin replaces __TM_SW_BUILD__ with this build's data.
 //
 // - Install: precache this build's hashed assets and shell files into `tm-shell-<version>`.
-// - Activate: delete older shell caches and take over open pages at once. The page reloads on
-//   the takeover (src/pwa/register.ts), so it never runs an old shell against a new server.
+// - Activate: delete older shell caches and take over open pages at once. After the takeover,
+//   the page's next navigation is a full page load (src/pwa/register.ts), so it does not keep
+//   running an old shell against a new server.
 // - Fetch: see strategyFor(). HTML, /api and server functions are never cached.
 
 import { cacheName, staleCaches, strategyFor } from './policy'

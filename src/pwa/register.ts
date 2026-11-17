@@ -1,19 +1,34 @@
 // Registers the service worker (src/pwa/sw.ts) in production builds only; dev has no sw.js.
 // Keep this module free of imports from ./policy, so the worker's code stays in sw.js alone.
 
-export function registerServiceWorker(): void {
+/** The part of the TanStack router this module needs (router.subscribe). */
+export interface NavigationEvents {
+  subscribe(
+    type: 'onBeforeNavigate',
+    listener: (event: { hrefChanged: boolean; toLocation: { href: string } }) => void,
+  ): () => void
+}
+
+export function registerServiceWorker(router: NavigationEvents): void {
   if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return
   const container = navigator.serviceWorker
 
   // A new deploy installs a new worker, which takes over at once (skipWaiting + claim) and
-  // deletes the old shell cache. Reload then, so the page never runs the old shell against
-  // the new server. The first install also fires this event, but with no page to replace.
+  // deletes the old shell cache. The page must not keep running the old shell against the new
+  // server, but reloading on the spot could throw away a half-filled form. So the next
+  // navigation inside the app becomes a full page load instead. The first install also fires
+  // this event, but then there is no old shell to replace.
   const hadController = container.controller !== null
-  let reloading = false
+  let updated = false
   container.addEventListener('controllerchange', () => {
-    if (!hadController || reloading) return
-    reloading = true
-    window.location.reload()
+    if (hadController) updated = true
+  })
+  let leaving = false
+  router.subscribe('onBeforeNavigate', (event) => {
+    if (!updated || leaving || !event.hrefChanged) return
+    leaving = true
+    // The router has already put the new URL into history, so replace it, not push it.
+    window.location.replace(event.toLocation.href)
   })
 
   container
