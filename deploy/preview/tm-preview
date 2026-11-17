@@ -14,7 +14,7 @@
 #   refused up front   exit 1, nothing changed (egress block or network missing, bad image)
 #   failed after that  exit 1, this PR's preview is removed; details on stderr
 #
-# TASKMASTER_ENV=preview is reserved for the app (#62 demo seed); nothing reads it yet.
+# TASKMASTER_ENV=preview makes the app seed demo users on its empty DB (src/server/demo, #62).
 # Each preview: one container, fresh /data volume, memory cap, bound to localhost and published
 # on the tailnet with `tailscale serve` on HTTPS port BASE_PORT+PR. No host names live here.
 set -euo pipefail
