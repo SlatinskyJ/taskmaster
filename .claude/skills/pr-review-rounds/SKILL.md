@@ -31,6 +31,13 @@ Sections 2, 3, 4 and 7 are the same in both phases. A PR with no issue (ad-hoc) 
     - each action is tried by a wrong actor;
     - each new module, hook, plugin or route runs once through its real entry point;
     - whatever a server function returns has its shape pinned (no secret fields).
+- **UX pre-flight** (plans that touch screens). The UX judge asks for these on every screen, so the plan has a step for each one that applies:
+    - everything a finger taps is at least 44 px high and wide (`min-h-tap`, `size-tap`);
+    - every animation and transition has a `motion-reduce:` opt-out;
+    - every request shows a busy state, and when it fails a Czech message and a way to try again;
+    - every loader has its empty state and its error state;
+    - an action that cannot be undone asks first (Dialog);
+    - every row is laid out for a long Czech task name at 360 px: the plan says what wraps, what is cut and what stays whole.
 - The PR is a draft. Its body has `Closes #<issue>`, `Plan: <path>` and `Plan round: 0/5`.
 
 **Code phase**
@@ -46,6 +53,13 @@ Sections 2, 3, 4 and 7 are the same in both phases. A PR with no issue (ad-hoc) 
     The PR body line becomes `Plan: removed in <sha>`. To read the plan again later: `git show <sha>~1:<path>`.
 - The PR brief exists (skill `pr-brief`) and its link is at the top of the PR body. Every ruling you made while building (a place where you left the plan) is in the brief.
 - The PR body has the line `Review round: 0/5`.
+- **Screenshots for the UX judge** (UX on the panel). The UX judge does not run the app; it judges your screenshots. Take them in the same Playwright run as the brief's (skill `pr-brief`), with the viewport 360 px wide, light theme:
+    - one for every screen and every state this PR adds or changes: each kind of row, each set of buttons on a row, each form and dialog, each empty and error state;
+    - logged in as the role that sees it, on the demo data (`TASKMASTER_ENV=preview`);
+    - a long Czech task name (about 30 letters, like "Vyluxovat celý obývák a chodbu") in every row that shows one;
+    - named `<screen>-<role>-<state>.png`, in one folder outside the repo.
+
+    Look at each one before round 1. Whatever a person needs to read or tap is whole. Retake the ones a fix changes before the next round. An ad-hoc PR with screens has no plan, so also go through the UX pre-flight list above.
 - The `preview` label is set if the PR changes something a user sees (screens, flows, styles, Czech text) and off otherwise (`CLAUDE.md`, PR flow step 4). With the label, the brief links the preview.
 - Mark the PR ready for review.
 
@@ -73,6 +87,7 @@ Phase: <plan | code>, round <N>.
 Panel: <judges>.
 [Plan phase] Plan: <path of the plan file>. Issue: #<issue>.
 [Code phase] PR brief: <artifact URL>.
+[Code phase, UX judge only] Screenshots: <folder>.
 [Round 2+] Your open findings and my replies: <links to your threads>. Last commit you reviewed: <sha>.
 [Judge added after round 1] First review: review the whole diff.
 ```
@@ -151,6 +166,7 @@ How: add the label `needs-jakub` to the PR, post one PR comment that mentions `@
 | Deleting the plan once it is approved | It stays on the branch until the build is done (section 1, code phase) |
 | Building from what you remember of the plan | Reread the plan file and the ledger, above all after a compaction |
 | Telling a code-phase judge what the plan said | Judges read the code cold |
+| Screenshots only of the screens that look good, or with short task names | Every changed screen and state, at 360 px, with a long task name |
 | Fixing `pre-existing` findings inside the PR | Issue + link |
 | Pinging Jakub after each round | Only at exit or escalation |
 | Merging a non-trivial PR because all judges approved | Jakub merges |

@@ -7,7 +7,7 @@ Every judge follows this file. Your own judge skill only defines your **lane**.
 - PR number, branch, base branch, the **phase** (`plan` or `code`) and the **round number** (1 to 5)
 - **Panel**: the list of judges on this PR
 - Plan phase: the path of the plan file and the issue number
-- Code phase: link to the PR brief (artifact)
+- Code phase: link to the PR brief (artifact); the UX judge also gets a folder of 360 px screenshots
 - The spec: `docs/superpowers/specs/2026-11-16-taskmaster-design.md`
 - Round 2+: your own earlier findings, the builder's replies, and the commit SHA you last reviewed
 
