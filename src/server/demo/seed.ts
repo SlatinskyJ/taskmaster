@@ -5,6 +5,7 @@ import { createTask, placeBid } from '~/server/tasks'
 import type { Tx } from '~/server/audit'
 import { approveTemplateScoreIn, createTemplateIn } from '~/server/templates/templates'
 import type { NewTemplate } from '~/server/templates/templates'
+import { bidOnTemplateIn, counterOnTemplateIn } from '~/server/templates/scoreChange'
 import { createUser } from '~/server/users'
 import type { NewUser } from '~/server/users'
 
@@ -87,7 +88,10 @@ export function seedDemo(
   })
 }
 
-/** Two templates (#37): the bins wait for a boy's yes, the dishwasher is agreed. */
+/**
+ * Two templates (#37): the bins wait for a boy's yes, the dishwasher is agreed, with a score
+ * change in flight (#138).
+ */
 const DEMO_TEMPLATES: readonly NewTemplate[] = [
   {
     title: 'Vynést koše',
@@ -112,6 +116,13 @@ function seedTemplates(tx: Tx, ids: Map<string, number>, now: Date): void {
   if (!dishes) return
   const agreed = approveTemplateScoreIn(tx, starsi, dishes.id, dishes.score, now)
   if (!agreed.ok) throw new Error(`Demo seed: approve "${dishes.title}": ${agreed.error}`)
+  // A score change in flight (#138): Mladší bids 5, Táta offers 4.
+  const mladsi = ids.get('mladsi')
+  if (mladsi === undefined) throw new Error('Demo seed: family incomplete')
+  const bid = bidOnTemplateIn(tx, mladsi, dishes.id, 5, now)
+  if (!bid.ok) throw new Error(`Demo seed: bid on "${dishes.title}": ${bid.error}`)
+  const offer = counterOnTemplateIn(tx, tata, dishes.id, 4, now)
+  if (!offer.ok) throw new Error(`Demo seed: offer on "${dishes.title}": ${offer.error}`)
 }
 
 export function describeDemo(outcome: DemoOutcome): string | null {

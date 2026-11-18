@@ -2,7 +2,7 @@ import { verify } from '@node-rs/argon2'
 import { eq, sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { login } from '~/server/auth'
-import { auditLog, tasks, templates, users } from '~/server/db/schema'
+import { auditLog, tasks, templates, templateThread, users } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { listTasks } from '~/server/tasks'
 import { bootstrapAdmin } from '~/server/users'
@@ -156,7 +156,31 @@ describe('demo seed (#62)', () => {
       'template.created',
       'template.score_approved',
       'template.agreed',
+      'template.bid_placed',
+      'template.score_countered',
     ])
+  })
+
+  it('leaves a score change in flight on the dishwasher (#138): Mladší bids 5, Táta offers 4', () => {
+    const db = createTestDb()
+    seedDemo(db, PREVIEW, T0)
+    const name = (id: number) => db.select().from(users).where(eq(users.id, id)).get()?.username
+    const rows = db
+      .select()
+      .from(templateThread)
+      .all()
+      .map((r) => [name(r.userId), r.side, r.score, r.closedAs])
+    expect(rows).toEqual([
+      ['mladsi', 'taker', 5, null],
+      ['tata', 'giver', 4, null],
+    ])
+    expect(
+      db
+        .select()
+        .from(templates)
+        .all()
+        .map((t) => t.score),
+    ).toEqual([4, 3])
   })
 
   it('all or nothing: a failing template leaves no people either', () => {
