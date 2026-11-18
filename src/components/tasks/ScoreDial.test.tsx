@@ -28,6 +28,10 @@ describe('dialKey', () => {
   it('arrows step by one, page keys by five, Home/End jump to the ends', () => {
     expect(dialKey('ArrowRight', 3, 1, 999)).toBe(4)
     expect(dialKey('ArrowDown', 3, 1, 999)).toBe(2)
+    expect(dialKey('ArrowLeft', 3, 1, 999)).toBe(2)
+    expect(dialKey('ArrowUp', 3, 1, 999)).toBe(4)
+    expect(dialKey('ArrowRight', 999, 1, 999)).toBe(999)
+    expect(dialKey('ArrowLeft', 1, 1, 999)).toBe(1)
     expect(dialKey('PageUp', 3, 1, 999)).toBe(8)
     expect(dialKey('PageDown', 3, 1, 999)).toBe(1)
     expect(dialKey('Home', 3, 1, 999)).toBe(1)
