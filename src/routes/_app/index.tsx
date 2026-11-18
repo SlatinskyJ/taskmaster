@@ -11,6 +11,7 @@ import {
   listPendingApprovalsFn,
   listPendingCompletionsFn,
 } from '~/server/tasks/functions'
+import { listPendingTemplateApprovalsFn } from '~/server/templates/functions'
 
 // Domů for takers and givers (UI doc §6). The admin has no Domů and lands on Správa.
 export const Route = createFileRoute('/_app/')({
@@ -19,10 +20,11 @@ export const Route = createFileRoute('/_app/')({
   },
   loader: async ({ context }) => {
     const waiting = await listPendingApprovalsFn()
+    const waitingTemplates = await listPendingTemplateApprovalsFn()
     if (context.user.role === 'taker') {
-      return { waiting, board: await listBoardFn(), toApprove: [] }
+      return { waiting, waitingTemplates, board: await listBoardFn(), toApprove: [] }
     }
-    return { waiting, board: [], toApprove: await listPendingCompletionsFn() }
+    return { waiting, waitingTemplates, board: [], toApprove: await listPendingCompletionsFn() }
   },
   component: Home,
 })
@@ -30,10 +32,10 @@ export const Route = createFileRoute('/_app/')({
 // "Čeká na tebe" first, then the work lists; the rest of the home screens comes with #40, #41.
 function Home() {
   const { user } = Route.useRouteContext()
-  const { waiting, board, toApprove } = Route.useLoaderData()
+  const { waiting, waitingTemplates, board, toApprove } = Route.useLoaderData()
   return (
     <Screen title={`${cs.home.greeting}, ${user.displayName}!`} user={user}>
-      <WaitingForYou items={waiting} />
+      <WaitingForYou items={waiting} templates={waitingTemplates} />
       {user.role === 'taker' ? (
         <TakerBoard items={board} me={user.id} />
       ) : (

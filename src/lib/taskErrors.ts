@@ -20,6 +20,12 @@ export function taskErrorMessage(error: string): string {
     case 'not_a_giver':
     case 'not_a_taker':
       return cs.tasks.errors.notAllowed
+    case 'invalid_schedule':
+      return cs.templates.errors.invalidSchedule
+    case 'invalid_deadline':
+      return cs.templates.errors.invalidDeadline
+    case 'already_approved':
+      return cs.templates.errors.alreadyApproved
     case 'reason_too_long':
       return cs.tasks.errors.reasonTooLong(REASON_MAX)
     default:
