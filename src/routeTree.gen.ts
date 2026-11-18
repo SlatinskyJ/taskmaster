@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppKlicRouteImport } from './routes/_app/klic'
 import { Route as AppProfilRouteImport } from './routes/_app/profil'
 import { Route as AppSchuzkaRouteImport } from './routes/_app/schuzka'
 import { Route as AppSpravaRouteImport } from './routes/_app/sprava'
@@ -34,6 +35,11 @@ const LoginRoute = LoginRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppKlicRoute = AppKlicRouteImport.update({
+  id: '/klic',
+  path: '/klic',
   getParentRoute: () => AppRoute,
 } as any)
 const AppProfilRoute = AppProfilRouteImport.update({
@@ -85,6 +91,7 @@ const AppUkolyNovyRoute = AppUkolyNovyRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
+  '/klic': typeof AppKlicRoute
   '/profil': typeof AppProfilRoute
   '/schuzka': typeof AppSchuzkaRoute
   '/sprava': typeof AppSpravaRoute
@@ -97,6 +104,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/klic': typeof AppKlicRoute
   '/profil': typeof AppProfilRoute
   '/schuzka': typeof AppSchuzkaRoute
   '/sprava': typeof AppSpravaRoute
@@ -112,6 +120,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/_app/klic': typeof AppKlicRoute
   '/_app/profil': typeof AppProfilRoute
   '/_app/schuzka': typeof AppSchuzkaRoute
   '/_app/sprava': typeof AppSpravaRoute
@@ -128,6 +137,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/klic'
     | '/profil'
     | '/schuzka'
     | '/sprava'
@@ -140,6 +150,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/klic'
     | '/profil'
     | '/schuzka'
     | '/sprava'
@@ -154,6 +165,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_app'
     | '/login'
+    | '/_app/klic'
     | '/_app/profil'
     | '/_app/schuzka'
     | '/_app/sprava'
@@ -194,6 +206,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/klic': {
+      id: '/_app/klic'
+      path: '/klic'
+      fullPath: '/klic'
+      preLoaderRoute: typeof AppKlicRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/profil': {
@@ -263,6 +282,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppKlicRoute: typeof AppKlicRoute
   AppProfilRoute: typeof AppProfilRoute
   AppSchuzkaRoute: typeof AppSchuzkaRoute
   AppSpravaRoute: typeof AppSpravaRoute
@@ -274,6 +294,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppKlicRoute: AppKlicRoute,
   AppProfilRoute: AppProfilRoute,
   AppSchuzkaRoute: AppSchuzkaRoute,
   AppSpravaRoute: AppSpravaRoute,

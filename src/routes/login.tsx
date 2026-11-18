@@ -16,7 +16,7 @@ import {
   type PasskeyLoginOutcome,
 } from '~/lib/passkeys'
 import { getCurrentUserFn, loginFn } from '~/server/auth/functions'
-import { getPasskeysEnabledFn } from '~/server/passkeys/functions'
+import { getPasskeysEnabledFn, listMyPasskeysFn } from '~/server/passkeys/functions'
 
 interface LoginSearch {
   /** Where to go after login: a path inside the app (see `safeRedirect`). */
@@ -59,9 +59,21 @@ function Login() {
   const [passkeyBusy, setPasskeyBusy] = useState(false)
   const flow = useRef<ReturnType<typeof createLoginFlow> | null>(null)
 
-  async function finish(user: { role: Parameters<typeof landingPath>[0] }) {
+  /** After a password login: offer a passkey when this device can use one and none exists. */
+  async function offerPasskey(): Promise<boolean> {
+    if (!canPasskey) return false
+    try {
+      return (await listMyPasskeysFn()).length === 0
+    } catch {
+      return false
+    }
+  }
+
+  async function finish(user: { role: Parameters<typeof landingPath>[0] }, offer = false) {
+    const target = search.redirect ?? landingPath(user.role)
     await router.invalidate()
-    await router.navigate({ href: search.redirect ?? landingPath(user.role) })
+    if (offer) await router.navigate({ to: '/klic', search: { redirect: target } })
+    else await router.navigate({ href: target })
   }
 
   function onPasskey(outcome: PasskeyLoginOutcome) {
@@ -122,7 +134,7 @@ function Login() {
         setError(result.error === 'rate_limited' ? cs.login.rateLimited : cs.login.invalid)
         return
       }
-      await finish(result.user)
+      await finish(result.user, await offerPasskey())
     } catch {
       // Network down or server error: say so and let them try again.
       setError(cs.login.failed)
