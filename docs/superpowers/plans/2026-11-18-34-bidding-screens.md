@@ -54,7 +54,7 @@ About 480 changed lines outside tests and generated files: `taskView.ts` 140, `w
 **Files:**
 - Modify: `src/lib/strings.ts`, `src/lib/taskErrors.ts`, `src/components/tasks/useTaskAction.ts`, `src/routes/_app/ukoly/novy.tsx`, `src/server/tasks/functions.ts` (export `answered`), `src/server/tasks/tasks.ts` (`waitingFor`)
 - Create: `src/components/tasks/taskView.ts`, `src/components/tasks/bidCalls.ts`, `src/components/tasks/ScoreStepper.tsx`, `src/components/tasks/BidThread.tsx`
-- Test: `src/components/tasks/taskView.test.ts`, `src/components/tasks/bids.test.tsx`, `src/lib/taskErrors.test.ts`, `src/server/tasks/functions.test.ts`, `src/server/tasks/bidding.test.ts` (`waitingFor`)
+- Test: `src/components/tasks/taskView.test.ts`, `src/components/tasks/bidCalls.test.ts` (`callBid`, `BID_CALLS`), `src/components/tasks/bids.test.tsx`, `src/lib/taskErrors.test.ts`, `src/server/tasks/functions.test.ts`, `src/server/tasks/bidding.test.ts` (`waitingFor`)
 
 **Interfaces:**
 - Consumes: `TaskView`, `ThreadEntry`, `TaskActionResult` (from `~/server/tasks/functions`).
@@ -82,6 +82,8 @@ About 480 changed lines outside tests and generated files: `taskView.ts` 140, `w
       /** Who the offer still waits for: "Čeká se na: Starší nebo Mladší" (any one of them is enough). */
       waitingFor: 'Čeká se na',
       or: 'nebo',
+      /** Me after "na": "Čeká se na: tebe nebo Mladší". */
+      youAcc: 'tebe',
       approveHint: 'Úkol bude volný pro všechny.',
       take: (score: number) => `Beru za ${String(score)}`,
       takeHint: 'Úkol bude tvůj.',
@@ -115,7 +117,7 @@ About 480 changed lines outside tests and generated files: `taskView.ts` 140, `w
     - `type BidButton = BidCall & { key: string; label: string; hint: string; variant: 'ok' | 'ghost' }`
     - `bidButtons(task: TaskView, me: Me): BidButton[]`: the yes buttons, top to bottom. Not proposed, or the admin → `[]`. Brother in `approverIds` → `[]` (decision 2: neither shows). Otherwise, with his own open bid, `take` (`acceptOffer`, score = offer, `ok`) first; then `approve` (`approveOffer`, score = offer; `ok` without a bid, `ghost` under "Beru"). Parent: `acceptLowestTaskBid` when `task.lowest` is set, label `acceptBid(score, name)` + `acceptBidHint(name)` for one bidder or `acceptTie` + `tieHint` for several, `data.bidders` = `lowest.bidders` ids.
     - `myBid(task: TaskView, me: Me): number | null`: his own entry in `task.bids` (by `takerId`), never another brother's or the lowest.
-    - `waitingText(task: TaskView, me: Me): string | null`: proposed only; `Čeká se na: Starší nebo Mladší` from `task.waitingFor`, my own name shown as `ty`; null when empty or not proposed.
+    - `waitingText(task: TaskView, me: Me): string | null`: proposed only; `Čeká se na: Starší nebo Mladší` from `task.waitingFor`, my own name shown as `tebe` (`cs.bids.youAcc`); null when empty or not proposed.
     - `sendButton(task: TaskView, me: Me, value: number): (BidCall & { label: string; hint: string; disabled: boolean }) | null`: null unless proposed and a brother or parent. Brother: `placeBid`, label `send`, no hint (empty string), disabled when `value` is the offer or his own bid. Parent: `counterOffer` with `bidders` = the brothers whose bid in `task.bids` is `value`; none → `send` + `sendHint`; one → `acceptBid(value, name)` + `acceptBidHint(name)`; several → `acceptTie(value)` + `tieHint`; disabled when `value` is the offer.
     - `waitingMeta(task, me): string`: without my bid `Nabízí <offeredByName ?? createdByName>`; with it `<offeredByName> <score> · ty <myBid>`.
     - `lowestText(lowest: NonNullable<TaskView['lowest']>): string`: `Mladší chce 22` / `Starší, Mladší chtějí 22`.
@@ -167,7 +169,7 @@ it('myBid is his own bid, never the other brother\'s or the lowest', () => {
 it('who the offer still waits for', () => {
   const brothers = [{ id: 3, name: 'Starší' }, { id: 4, name: 'Mladší' }]
   expect(waitingText(view({ waitingFor: brothers }), TATA)).toBe('Čeká se na: Starší nebo Mladší')
-  expect(waitingText(view({ waitingFor: brothers }), STARSI)).toBe('Čeká se na: ty nebo Mladší')
+  expect(waitingText(view({ waitingFor: brothers }), STARSI)).toBe('Čeká se na: tebe nebo Mladší')
   expect(waitingText(view({ waitingFor: [] }), TATA)).toBeNull()
   expect(waitingText(view({ status: 'open', waitingFor: brothers }), TATA)).toBeNull()
 })
@@ -223,6 +225,21 @@ it('toasts: mine, agreed, approved, sent', () => {
     toastFor('counterOffer', 'proposed', TATA), toastFor('counterOffer', 'open', TATA),
   ]).toEqual(['Domluveno, úkol je tvůj', 'Domluveno', 'Domluveno', 'Schváleno', 'Nabídka odeslána', 'Nabídka odeslána', 'Domluveno'])
 })
+// bidCalls.test.ts: the five server functions vi.mock'ed (each a vi.fn resolving { ok: true, id: 1, status: 'proposed' }).
+it.each([
+  { action: 'approveOffer', data: { taskId: 1, score: 18 } },
+  { action: 'acceptOffer', data: { taskId: 1, score: 18 } },
+  { action: 'placeBid', data: { taskId: 1, score: 24 } },
+  { action: 'acceptLowestTaskBid', data: { taskId: 1, score: 22, bidders: [4] } },
+  { action: 'counterOffer', data: { taskId: 1, score: 21, bidders: [] } },
+] as const)('callBid sends $action to its own server function only, with its data as is', async (call) => {
+  await callBid(call)
+  const fns = { approveOffer: approveTaskOfferFn, acceptOffer: acceptOfferFn, placeBid: placeBidFn, acceptLowestTaskBid: acceptLowestTaskBidFn, counterOffer: counterOfferFn }
+  for (const [action, fn] of Object.entries(fns)) {
+    if (action === call.action) expect(fn).toHaveBeenCalledExactlyOnceWith({ data: call.data })
+    else expect(fn).not.toHaveBeenCalled()
+  }
+})
 it('every action calls its own server function', () => {
   expect(BID_CALLS).toEqual({ approveOffer: approveTaskOfferFn, acceptOffer: acceptOfferFn, placeBid: placeBidFn, acceptLowestTaskBid: acceptLowestTaskBidFn, counterOffer: counterOfferFn })
 })
@@ -257,7 +274,7 @@ it('ScoreStepper: each button is disabled exactly at its end', () => {
 
 `taskErrors.test.ts`: rows `['same_score', sameScore]`, `['no_bids', noBids]`, `['no_bid', noBid]`, `['already_approved', alreadyApproved]`.
 
-`bidding.test.ts`: `listTasks` gives `waitingFor` = `[Starší, Mladší]` (ids and names) for Táta's fresh offer and still after Starší bids (a bid is no yes); `[]` once the task is reserved.
+`bidding.test.ts`: `listTasks` gives `waitingFor` = `[Starší, Mladší]` (ids and names) for Táta's fresh offer and still after Starší bids (a bid is no yes); `[]` once Starší says yes (open) and once a task is reserved. Only givers create tasks (`createTaskFn` is giver-only), so no task waits for the parents.
 
 `functions.test.ts`: `answered` maps `ok(row)` to `{ ok: true, id: row.id, status: row.status }` for `proposed`, `open` and `reserved` rows, and passes `fail('offer_changed')` through unchanged.
 
@@ -293,5 +310,5 @@ it('ScoreStepper: each button is disabled exactly at its end', () => {
 - [ ] **Step 2: Run**: `pnpm vitest run src/lib/nav.test.ts src/components/tasks/bidPanel.test.tsx`. Expected: FAIL.
 - [ ] **Step 3: Implement** the route, `BidPanel`, `BidsToAnswer` and the edits above.
 - [ ] **Step 4: Build and check**: `pnpm build` (regenerates `src/routeTree.gen.ts`), then `pnpm vitest run && pnpm typecheck && pnpm lint && pnpm format:check`. Expected: PASS; `tests/screen-guards.test.ts` finds the new route's guard.
-- [ ] **Step 5: Walk it in the real app at 360 px** (`TASKMASTER_ENV=preview DATA_DIR=$(mktemp -d) pnpm dev`; the demo has "Umýt auto" 18 with Starší 25 and Mladší 22, and "Uklidit sklep" 10). Create "Vyluxovat celý obývák a chodbu" for 12 as `tata`. As `starsi`: Domů row shows "Jiná cena" and the long name on two lines; on the page bid 14, then see "Beru za 12" over "Souhlasím", each with its hint, and "Čeká se na: ty nebo Mladší". Úkoly: the row has "Otevřít". As `tata`: Domů → "Vyjednávání" lists both tasks with "Mladší chce 22" in full; on "Umýt auto" move the stepper to 25: button reads "Přijmout 25 (Starší)"; back to 22 and tap "Přijmout 22 (Mladší)". As `mladsi`: "Umýt auto" under "Moje", page says "Je to tvoje". As `starsi`: page shows "Rezervoval Mladší", his bid "uzavřeno", no buttons. Then tap a stale yes: open a page as `starsi`, as `tata` counter it in another tab, tap "Beru" as `starsi`: Czech "Cena se mezitím změnila" and the fresh page. No horizontal scroll anywhere. If a row cuts the name or the meta, stack its action under the text (`TaskRow` `className`) before committing.
+- [ ] **Step 5: Walk it in the real app at 360 px** (`TASKMASTER_ENV=preview DATA_DIR=$(mktemp -d) pnpm dev`; the demo has "Umýt auto" 18 with Starší 25 and Mladší 22, and "Uklidit sklep" 10). Create "Vyluxovat celý obývák a chodbu" for 12 as `tata`. As `starsi`: Domů row shows "Jiná cena" and the long name on two lines; on the page bid 14, then see "Beru za 12" over "Souhlasím", each with its hint, and "Čeká se na: tebe nebo Mladší". Úkoly: the row has "Otevřít". As `tata`: Domů → "Vyjednávání" lists both tasks with "Mladší chce 22" in full; on "Umýt auto" move the stepper to 25: button reads "Přijmout 25 (Starší)"; back to 22 and tap "Přijmout 22 (Mladší)". As `mladsi`: "Umýt auto" under "Moje", page says "Je to tvoje". As `starsi`: page shows "Rezervoval Mladší", his bid "uzavřeno", no buttons. Then tap a stale yes: open a page as `starsi`, as `tata` counter it in another tab, tap "Beru" as `starsi`: Czech "Cena se mezitím změnila" and the fresh page. No horizontal scroll anywhere. If a row cuts the name or the meta, stack its action under the text (`TaskRow` `className`) before committing.
 - [ ] **Step 6: Commit**: `git commit -m "Task page with the bid thread, and the ways into it"`
