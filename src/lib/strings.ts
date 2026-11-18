@@ -2,8 +2,6 @@
 // Keys are English; add new ones under the screen or concept they belong to.
 // Item states: UI design doc §2.2.
 
-import type { PasskeySummary } from '~/server/passkeys/functions'
-
 export const cs = {
   app: {
     name: 'Taskmaster',
@@ -186,6 +184,8 @@ export const cs = {
     offerTitle: 'Přihlásit otiskem / obličejem',
     offerText:
       'Příště se přihlásíš jedním dotykem, bez hesla. Funguje s Face ID, otiskem prstu nebo zámkem telefonu.',
+    /** Passkey mockup: the reassurance under the offer. */
+    offerSafe: 'Obličej ani otisk neopustí tvůj telefon. Heslo zadáš jen na novém telefonu.',
     offerSet: 'Nastavit',
     offerLater: 'Teď ne',
     added: 'Hotovo. Příště stačí otisk nebo obličej.',
@@ -195,6 +195,8 @@ export const cs = {
     addedOn: (date: string) => `Přidáno ${date}`,
     lastUsed: (date: string) => `Naposledy ${date}`,
     neverUsed: 'Zatím nepoužito',
+    /** The passkey this browser added (Profile mockup: "Zapnuto na tomto telefonu"). */
+    thisDevice: 'Toto zařízení',
     remove: 'Odebrat',
     cancel: 'Zrušit',
     removeConfirmTitle: (device: string, date: string) =>
@@ -211,7 +213,7 @@ export const cs = {
       windows: 'Windows',
       linux: 'Linux',
       other: 'Jiné zařízení',
-    } satisfies Record<PasskeySummary['deviceKind'], string>,
+    },
     admin: {
       removeAll: 'Odebrat klíče',
       confirmTitle: (name: string) => `Odebrat klíče: ${name}?`,

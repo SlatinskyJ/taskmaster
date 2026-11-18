@@ -44,6 +44,44 @@ export function usePasskeysUsable(): boolean {
 /** Whether this browser offers passkeys in the username field's autofill. */
 export const autofillUsable = (): Promise<boolean> => browserSupportsWebAuthnAutofill()
 
+const HERE_KEY = 'tm-passkey-here'
+const hereListeners = new Set<() => void>()
+
+/**
+ * The id of the passkey this browser added, remembered locally so Profil can say which row is
+ * this device (a per-device convenience: lost with site data, then Profil just doesn't mark it).
+ */
+export function thisDevicePasskey(): number | null {
+  try {
+    const n = Number(localStorage.getItem(HERE_KEY))
+    return Number.isInteger(n) && n > 0 ? n : null
+  } catch {
+    return null
+  }
+}
+
+export function setThisDevicePasskey(id: number | null) {
+  try {
+    if (id === null) localStorage.removeItem(HERE_KEY)
+    else localStorage.setItem(HERE_KEY, String(id))
+  } catch {
+    // Storage blocked: nothing to remember.
+  }
+  for (const l of hereListeners) l()
+}
+
+function subscribeHere(onChange: () => void) {
+  hereListeners.add(onChange)
+  return () => {
+    hereListeners.delete(onChange)
+  }
+}
+
+/** `thisDevicePasskey()` for a component: null in the server render. */
+export function useThisDevicePasskey(): number | null {
+  return useSyncExternalStore(subscribeHere, thisDevicePasskey, () => null)
+}
+
 /** The user closed the sheet, or a newer ceremony replaced this one. */
 function isCancel(e: unknown): boolean {
   return e instanceof Error && (e.name === 'NotAllowedError' || e.name === 'AbortError')
@@ -102,7 +140,10 @@ export async function addPasskey(): Promise<PasskeyAddOutcome> {
       return { ok: false, reason: isCancel(e) ? 'cancelled' : 'failed' }
     }
     const result = await passkeyRegisterFn({ data: response })
-    if (result.ok) return { ok: true }
+    if (result.ok) {
+      setThisDevicePasskey(result.passkey.id)
+      return { ok: true }
+    }
     return { ok: false, reason: result.error === 'already_registered' ? 'already' : 'failed' }
   } catch {
     return { ok: false, reason: 'failed' }

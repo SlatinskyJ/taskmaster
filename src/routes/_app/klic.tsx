@@ -71,6 +71,7 @@ function Offer() {
         {cs.passkeys.offerTitle}
       </h1>
       <p className="font-bold text-muted">{cs.passkeys.offerText}</p>
+      <p className="text-meta font-bold text-muted">{cs.passkeys.offerSafe}</p>
       {error && (
         <p role="alert" className="font-bold text-state-rejected-text">
           {error}

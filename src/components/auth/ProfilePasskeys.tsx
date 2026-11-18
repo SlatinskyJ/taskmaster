@@ -5,7 +5,12 @@ import { SectionLabel } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
 import { Card } from '~/components/ui/card'
 import { formatPragueDate } from '~/lib/formatDate'
-import { addPasskey, usePasskeysUsable } from '~/lib/passkeys'
+import {
+  addPasskey,
+  setThisDevicePasskey,
+  usePasskeysUsable,
+  useThisDevicePasskey,
+} from '~/lib/passkeys'
 import { cs } from '~/lib/strings'
 import { removeMyPasskeyFn, type PasskeySummary } from '~/server/passkeys/functions'
 import { ConfirmRemove } from './ConfirmRemove'
@@ -23,6 +28,8 @@ export function ProfilePasskeys({
   items: readonly PasskeySummary[]
 }) {
   const router = useRouter()
+  const hereId = useThisDevicePasskey()
+  const hereListed = items.some((p) => p.id === hereId)
   const canAdd = usePasskeysUsable() && enabled
   const [adding, setAdding] = useState(false)
   const [removing, setRemoving] = useState<PasskeySummary | null>(null)
@@ -47,8 +54,10 @@ export function ProfilePasskeys({
     setBusy(true)
     try {
       const result = await removeMyPasskeyFn({ data: { passkeyId: item.id } })
-      if (result.ok) toast.success(cs.passkeys.removed)
-      else toast.error(cs.login.failed)
+      if (result.ok) {
+        if (item.id === hereId) setThisDevicePasskey(null)
+        toast.success(cs.passkeys.removed)
+      } else toast.error(cs.login.failed)
     } catch {
       toast.error(cs.login.failed)
     } finally {
@@ -64,10 +73,11 @@ export function ProfilePasskeys({
       <Card className="grid gap-3">
         <PasskeyList
           items={items}
+          hereId={hereId}
           busyId={busy ? (removing?.id ?? null) : null}
           onRemove={setRemoving}
         />
-        {canAdd && (
+        {canAdd && !hereListed && (
           <Button variant="ghost" disabled={adding} onClick={() => void add()} className="w-full">
             {cs.passkeys.addHere}
           </Button>

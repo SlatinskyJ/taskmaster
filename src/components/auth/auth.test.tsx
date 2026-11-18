@@ -7,14 +7,27 @@ import { PasskeyLoginButton } from './PasskeyLoginButton'
 
 describe('PasskeyLoginButton', () => {
   it('shows the Czech label and the first-login hint', () => {
-    const html = renderToStaticMarkup(<PasskeyLoginButton busy={false} onClick={() => undefined} />)
+    const html = renderToStaticMarkup(
+      <PasskeyLoginButton busy={false} error={null} onClick={() => undefined} />,
+    )
     expect(html).toContain(cs.passkeys.loginButton)
     expect(html).toContain(cs.passkeys.hint)
     expect(html).not.toMatch(/<button[^>]*disabled=/)
   })
 
+  it('shows its own error under the button in place of the hint', () => {
+    const html = renderToStaticMarkup(
+      <PasskeyLoginButton busy={false} error={cs.passkeys.unknown} onClick={() => undefined} />,
+    )
+    expect(html).toContain(`role="alert"`)
+    expect(html).toContain(cs.passkeys.unknown)
+    expect(html).not.toContain(cs.passkeys.hint)
+  })
+
   it('is disabled while its ceremony runs', () => {
-    const html = renderToStaticMarkup(<PasskeyLoginButton busy onClick={() => undefined} />)
+    const html = renderToStaticMarkup(
+      <PasskeyLoginButton busy error={null} onClick={() => undefined} />,
+    )
     expect(html).toMatch(/<button[^>]*disabled=/)
   })
 })
@@ -39,7 +52,7 @@ describe('PasskeyList', () => {
 
   it('renders device label, Prague dates and a remove button per item', () => {
     const html = renderToStaticMarkup(
-      <PasskeyList items={ITEMS} busyId={null} onRemove={() => undefined} />,
+      <PasskeyList items={ITEMS} hereId={null} busyId={null} onRemove={() => undefined} />,
     )
     expect(html).toContain('iPhone')
     expect(html).toContain(cs.passkeys.device.other)
@@ -48,11 +61,22 @@ describe('PasskeyList', () => {
     expect(html).toContain(cs.passkeys.addedOn('1. 7. 2026'))
     expect(html).toContain(cs.passkeys.lastUsed('17. 11. 2026'))
     expect(html.match(new RegExp(`>${cs.passkeys.remove}<`, 'g'))).toHaveLength(2)
+    expect(html).not.toContain(cs.passkeys.thisDevice)
+  })
+
+  it('marks only the passkey this browser added', () => {
+    const html = renderToStaticMarkup(
+      <PasskeyList items={ITEMS} hereId={3} busyId={null} onRemove={() => undefined} />,
+    )
+    expect(html.match(new RegExp(cs.passkeys.thisDevice, 'g'))).toHaveLength(1)
+    expect(html.indexOf(cs.passkeys.thisDevice)).toBeGreaterThan(
+      html.indexOf(cs.passkeys.device.other),
+    )
   })
 
   it('an empty list says so', () => {
     const html = renderToStaticMarkup(
-      <PasskeyList items={[]} busyId={null} onRemove={() => undefined} />,
+      <PasskeyList items={[]} hereId={null} busyId={null} onRemove={() => undefined} />,
     )
     expect(html).toContain(cs.passkeys.empty)
   })

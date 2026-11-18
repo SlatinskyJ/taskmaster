@@ -15,10 +15,18 @@ const fns = vi.hoisted(() => ({
   passkeyRegisterOptionsFn: vi.fn(),
   passkeyRegisterFn: vi.fn(),
 }))
+// The node test environment has no localStorage; a Map stands in for it.
+const store = new Map<string, string>()
+vi.stubGlobal('localStorage', {
+  getItem: (k: string) => store.get(k) ?? null,
+  setItem: (k: string, v: string) => store.set(k, v),
+  removeItem: (k: string) => store.delete(k),
+})
 vi.mock('@simplewebauthn/browser', () => lib)
 vi.mock('~/server/passkeys/functions', () => fns)
 
-const { addPasskey, createLoginFlow, loginWithPasskey } = await import('./passkeys')
+const { addPasskey, createLoginFlow, loginWithPasskey, setThisDevicePasskey, thisDevicePasskey } =
+  await import('./passkeys')
 
 const USER = { id: 2, username: 'tata', displayName: 'Táta', role: 'giver' as const }
 const LOGIN_OPTIONS = { challenge: 'abc', rpId: 'tm.test', allowCredentials: [] }
@@ -122,11 +130,20 @@ describe('loginWithPasskey', () => {
 })
 
 describe('addPasskey', () => {
-  it('ok', async () => {
+  it('ok, and this browser remembers the new passkey as its own', async () => {
+    setThisDevicePasskey(null)
     fns.passkeyRegisterFn.mockResolvedValue({ ok: true, passkey: { id: 1 } })
     expect(await addPasskey()).toEqual({ ok: true })
+    expect(thisDevicePasskey()).toBe(1)
     expect(lib.startRegistration).toHaveBeenCalledWith({ optionsJSON: REGISTER_OPTIONS })
     expect(fns.passkeyRegisterFn).toHaveBeenCalledWith({ data: ANSWER })
+  })
+
+  it('a failed add leaves the remembered passkey alone', async () => {
+    setThisDevicePasskey(5)
+    fns.passkeyRegisterFn.mockResolvedValue({ ok: false, error: 'not_verified' })
+    expect(await addPasskey()).toEqual({ ok: false, reason: 'failed' })
+    expect(thisDevicePasskey()).toBe(5)
   })
 
   it('already_registered → already', async () => {
@@ -153,6 +170,17 @@ describe('addPasskey', () => {
   it('a server function that throws → failed', async () => {
     fns.passkeyRegisterOptionsFn.mockRejectedValue(new Error('offline'))
     expect(await addPasskey()).toEqual({ ok: false, reason: 'failed' })
+  })
+})
+
+describe('thisDevicePasskey', () => {
+  it('reads back what was set, and null once cleared or junk', () => {
+    setThisDevicePasskey(9)
+    expect(thisDevicePasskey()).toBe(9)
+    setThisDevicePasskey(null)
+    expect(thisDevicePasskey()).toBeNull()
+    localStorage.setItem('tm-passkey-here', 'x')
+    expect(thisDevicePasskey()).toBeNull()
   })
 })
 
@@ -223,14 +251,15 @@ describe('createLoginFlow (one ceremony at a time)', () => {
     expect(login).toHaveBeenCalledTimes(1)
   })
 
-  it("a pending autofill aborted by the button doesn't restart itself", async () => {
+  it('a pending autofill answered after the button pressed is ignored, not shown or restarted', async () => {
     const { login, onDone, f } = flow()
     let abortAutofill: (o: Outcome) => void = () => undefined
     login.mockImplementationOnce(() => new Promise((r) => (abortAutofill = r)))
     login.mockResolvedValueOnce(OK)
     f.startAutofill()
     const click = f.clickButton()
-    abortAutofill(fail('cancelled'))
+    // A stale answer that would be shown if it still counted.
+    abortAutofill(fail('unknown'))
     await click
     await tick()
     expect(login.mock.calls).toEqual([[{ autofill: true }], []])

@@ -37,7 +37,7 @@ async function enrolFromOffer(page: Page) {
   await expect(page.getByText(cs.passkeys.added)).toBeVisible()
 }
 
-test('passkey story', async ({ page }) => {
+test('passkey story', async ({ page, browser, baseURL }) => {
   await addAuthenticator(page)
 
   // 1. The button and its hint; a first password login offers a passkey, with no bottom bar.
@@ -60,6 +60,9 @@ test('passkey story', async ({ page }) => {
   await page.goto('/profil')
   await expect(page.getByText(cs.passkeys.section)).toBeVisible()
   await expect(page.getByRole('listitem').filter({ hasText: cs.passkeys.neverUsed })).toHaveCount(1)
+  // This browser added it: the row says so and there is nothing more to add here.
+  await expect(page.getByText(cs.passkeys.thisDevice)).toBeVisible()
+  await expect(page.getByRole('button', { name: cs.passkeys.addHere })).toHaveCount(0)
 
   // 3. Someone with a passkey is not offered another one.
   await logout(page)
@@ -72,6 +75,37 @@ test('passkey story', async ({ page }) => {
   await pressPasskeyButton(page)
   await expect(page).toHaveURL(/\/profil$/)
   await expect(page.getByText(/Naposledy /)).toBeVisible()
+
+  // 4b. A second device (a Mac; the first is Desktop Chrome on Windows) adds itself in
+  // Profil, then removes the other row; only the chosen one goes. The Mac's passkey stays
+  // until the admin removes all of Táta's in step 7.
+  const mac = await browser.newContext({
+    baseURL,
+    locale: 'cs-CZ',
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/140.0',
+  })
+  const pc = await mac.newPage()
+  await addAuthenticator(pc)
+  await passwordLogin(pc, 'tata')
+  await expect(pc).toHaveURL(/\/$/)
+  await pc.goto('/profil')
+  await pc.getByRole('button', { name: cs.passkeys.addHere }).click()
+  await expect(pc.getByText(cs.passkeys.added)).toBeVisible()
+  const rows = pc
+    .getByRole('listitem')
+    .filter({ has: pc.getByRole('button', { name: cs.passkeys.remove, exact: true }) })
+  await expect(rows).toHaveCount(2)
+  const here = rows.filter({ hasText: cs.passkeys.thisDevice })
+  await expect(here).toContainText(cs.passkeys.device.mac)
+  await expect(pc.getByRole('button', { name: cs.passkeys.addHere })).toHaveCount(0)
+  const windows = rows.filter({ hasText: cs.passkeys.device.windows })
+  await windows.getByRole('button', { name: cs.passkeys.remove, exact: true }).click()
+  await expect(pc.getByRole('dialog')).toContainText(cs.passkeys.device.windows)
+  await pc.getByRole('dialog').getByRole('button', { name: cs.passkeys.remove }).click()
+  await expect(pc.getByText(cs.passkeys.removed)).toBeVisible()
+  await expect(rows).toHaveCount(1)
+  await expect(rows).toContainText(cs.passkeys.thisDevice)
+  await mac.close()
 
   // 5. A malformed answer is refused by the validator (an error, not a result) and shown.
   await logout(page)

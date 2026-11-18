@@ -57,6 +57,7 @@ function Login() {
   // Decided after mount: the server render has no WebAuthn to ask.
   const [canPasskey, setCanPasskey] = useState(false)
   const [passkeyBusy, setPasskeyBusy] = useState(false)
+  const [passkeyError, setPasskeyError] = useState<string | null>(null)
   const flow = useRef<ReturnType<typeof createLoginFlow> | null>(null)
 
   /** After a password login: offer a passkey when this device can use one and none exists. */
@@ -88,7 +89,7 @@ function Login() {
       busy: cs.login.failed,
       failed: cs.login.failed,
     }
-    setError(messages[outcome.reason])
+    setPasskeyError(messages[outcome.reason])
   }
 
   useEffect(() => {
@@ -111,6 +112,7 @@ function Login() {
   async function passkeyClick() {
     if (!flow.current) return
     setPasskeyBusy(true)
+    setPasskeyError(null)
     setError(null)
     try {
       await flow.current.clickButton()
@@ -126,6 +128,7 @@ function Login() {
     }
     setBusy(true)
     setError(null)
+    setPasskeyError(null)
     try {
       const result = await loginFn({
         data: { username: field('username'), password: field('password') },
@@ -157,7 +160,11 @@ function Login() {
       <h1 className="sr-only">{cs.login.title}</h1>
       {canPasskey && (
         <>
-          <PasskeyLoginButton busy={passkeyBusy} onClick={() => void passkeyClick()} />
+          <PasskeyLoginButton
+            busy={passkeyBusy}
+            error={passkeyError}
+            onClick={() => void passkeyClick()}
+          />
           <div
             aria-hidden="true"
             className="flex items-center gap-3 text-meta font-bold text-muted"

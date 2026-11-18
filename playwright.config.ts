@@ -11,6 +11,10 @@ import { defineConfig, devices } from '@playwright/test'
 const ON = 3100
 const OFF = 3101
 
+// The off server's data folder, shared with its spec (which adds a passkey row directly).
+// Playwright loads this file again in each worker; the env var keeps the folder the same.
+process.env.TM_E2E_OFF_DATA_DIR ??= mkdtempSync(join(tmpdir(), 'tm-e2e-'))
+
 function server(port: number, env: Record<string, string>) {
   return {
     command: 'node .output/server/index.mjs',
@@ -39,7 +43,7 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   retries: 0,
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
+  reporter: 'list',
   use: { trace: 'retain-on-failure', locale: 'cs-CZ' },
   projects: [
     {
@@ -58,6 +62,6 @@ export default defineConfig({
       WEBAUTHN_RP_ID: 'localhost',
       WEBAUTHN_ORIGIN: `http://localhost:${String(ON)}`,
     }),
-    server(OFF, {}),
+    server(OFF, { DATA_DIR: process.env.TM_E2E_OFF_DATA_DIR }),
   ],
 })
