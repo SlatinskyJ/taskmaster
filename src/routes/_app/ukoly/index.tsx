@@ -96,23 +96,26 @@ function Tasks() {
   )
   return (
     <Screen title={cs.nav.tasks} user={user} action={newButton}>
-      {list.length === 0 ? (
-        <EmptyState>{cs.tasks.empty}</EmptyState>
-      ) : (
-        <ul className="grid gap-2">
-          {list.map((t) => (
-            <li key={t.id}>
-              <TaskRow
-                name={t.title}
-                state={STATE[t.status]}
-                points={t.score}
-                meta={meta(t)}
-                action={action(t)}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
+      <section className="grid gap-2" aria-labelledby="one-time-label">
+        <SectionLabel id="one-time-label">{cs.templates.oneTimeSection}</SectionLabel>
+        {list.length === 0 ? (
+          <EmptyState>{cs.tasks.empty}</EmptyState>
+        ) : (
+          <ul className="grid gap-2">
+            {list.map((t) => (
+              <li key={t.id}>
+                <TaskRow
+                  name={t.title}
+                  state={STATE[t.status]}
+                  points={t.score}
+                  meta={meta(t)}
+                  action={action(t)}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       <section className="grid gap-2" aria-labelledby="templates-label">
         <SectionLabel id="templates-label">{cs.templates.section}</SectionLabel>
         {templates.length === 0 ? (

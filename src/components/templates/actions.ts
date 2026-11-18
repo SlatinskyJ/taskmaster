@@ -1,3 +1,4 @@
+import { MAX_GRACE_MINUTES } from '~/domain'
 import type { ClockTime } from '~/domain'
 import type { Weekday } from '~/domain/dates'
 import { cs } from '~/lib/strings'
@@ -32,7 +33,7 @@ export const DEFAULT_RECURRING: RecurringValue = {
   graceHours: 2,
 }
 
-export const MAX_GRACE_HOURS = 48
+export const MAX_GRACE_HOURS = MAX_GRACE_MINUTES / 60
 
 /** `"18:30"` → `{ hour: 18, minute: 30 }`. A malformed value gives NaN; the server refuses it. */
 function parseClock(hhmm: string): ClockTime {

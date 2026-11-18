@@ -52,8 +52,10 @@ export const templates = sqliteTable(
       'templates_deadline_check',
       sql`(${t.dueDayOffset} IS NULL) = (${t.dueTime} IS NULL) AND (${t.dueTime} IS NULL) = (${t.graceMinutes} IS NULL)`,
     ),
-    check('templates_offset_check', sql`${t.dueDayOffset} BETWEEN 0 AND 6`),
-    check('templates_grace_check', sql`${t.graceMinutes} BETWEEN 0 AND 2880`),
+    // Upper limits (MAX_DUE_DAY_OFFSET, MAX_GRACE_MINUTES) are [call]s and live in the domain only,
+    // so changing one needs no table rebuild.
+    check('templates_offset_check', sql`${t.dueDayOffset} >= 0`),
+    check('templates_grace_check', sql`${t.graceMinutes} >= 0`),
     index('templates_status_idx').on(t.status),
   ],
 )

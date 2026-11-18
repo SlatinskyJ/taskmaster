@@ -210,7 +210,9 @@ export function approveTemplateScoreIn(
   })
   if (result.value.status !== 'agreed') return ok(row)
   const active = activate(tx, row, now)
-  if (!active) return fail('not_proposed')
+  // Unreachable: the status check above runs in this same synchronous transaction. Throwing rolls
+  // back the approval row and its audit entry, so a failure never leaves half a write.
+  if (!active) throw new Error(`template ${String(templateId)} left proposed mid-transaction`)
   logAgreed(tx, actor, active, now)
   return ok(active)
 }

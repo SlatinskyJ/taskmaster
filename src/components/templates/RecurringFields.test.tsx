@@ -16,6 +16,11 @@ const button = (html: string, label: string) =>
     .map((m) => m[0])
     .find((b) => b.endsWith(`>${label}</button>`))
 
+const labelled = (html: string, label: string) =>
+  [...html.matchAll(/<button[^>]*>.*?<\/button>/g)]
+    .map((m) => m[0])
+    .find((b) => /^<button[^>]*>/.exec(b)?.[0].includes(`aria-label="${label}"`))
+
 describe('RecurringFields', () => {
   it('Út picked: pressed; the other days not', () => {
     const html = render({ days: [2] })
@@ -52,13 +57,17 @@ describe('RecurringFields', () => {
     expect(html).toContain(cs.templates.dueDay)
   })
 
-  it('grace stepper: − disabled at 0, + disabled at 48', () => {
+  it('grace stepper: − disabled at 0, + disabled at 48, with the same icons as the score', () => {
+    const less = cs.tasks.less
+    const more = cs.tasks.more
     const at0 = render({ hasDeadline: true, graceHours: 0 })
-    expect(button(at0, '−')).toContain('disabled=""')
-    expect(button(at0, '+')).not.toContain('disabled=""')
+    expect(labelled(at0, less)).toContain('disabled=""')
+    expect(labelled(at0, less)).toContain('lucide-minus')
+    expect(labelled(at0, more)).not.toContain('disabled=""')
+    expect(labelled(at0, more)).toContain('lucide-plus')
     const at48 = render({ hasDeadline: true, graceHours: 48 })
-    expect(button(at48, '+')).toContain('disabled=""')
-    expect(button(at48, '−')).not.toContain('disabled=""')
+    expect(labelled(at48, more)).toContain('disabled=""')
+    expect(labelled(at48, less)).not.toContain('disabled=""')
   })
 
   it('day buttons are full tap size in one seven-column row', () => {

@@ -1,3 +1,4 @@
+import { Minus, Plus } from 'lucide-react'
 import type { Weekday } from '~/domain/dates'
 import { sectionLabelClass } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
@@ -186,7 +187,7 @@ export function RecurringFields({
                     set({ graceHours: Math.max(0, value.graceHours - 1) })
                   }}
                 >
-                  −
+                  <Minus aria-hidden="true" />
                 </Button>
                 <span className="flex-1 text-center num text-2xl">{t.hours(value.graceHours)}</span>
                 <Button
@@ -199,7 +200,7 @@ export function RecurringFields({
                     set({ graceHours: Math.min(MAX_GRACE_HOURS, value.graceHours + 1) })
                   }}
                 >
-                  +
+                  <Plus aria-hidden="true" />
                 </Button>
               </div>
             </div>

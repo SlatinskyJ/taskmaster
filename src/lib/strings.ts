@@ -98,6 +98,8 @@ export const cs = {
     kindRecurring: 'Opakovaný',
     /** Section on Úkoly. */
     section: 'Opakované',
+    /** Section above the one-time tasks on Úkoly, so its empty line can't read as "no tasks". */
+    oneTimeSection: 'Jednorázové',
     empty: 'Zatím žádné opakované úkoly.',
     when: 'Kdy vzniká',
     /** Index = weekday, 0 = Sunday (src/domain/dates.ts). */

@@ -1,10 +1,22 @@
-import type { TemplateView } from '~/server/templates/functions'
+import type { Weekday } from '~/domain/dates'
 import { cs } from './strings'
 
 // One-line Czech summary of a template's schedule and deadline (spec §5.3), for rows on Úkoly
 // and in "Čeká na tebe": "Út, Pá v 18:00 · do dalšího dne 7:00 (+2 h)".
 
 const t = cs.templates
+
+/** The parts of a template these summaries read (the server's TemplateView fits it). */
+export interface TemplateSummary {
+  status: 'proposed' | 'active'
+  approvalRequired: boolean
+  /** Proposed only: display names of who approved, oldest first. */
+  approvedBy: string[]
+  /** `time` is Prague `HH:MM`, or null = start of the day. Null = on demand only. */
+  schedule: { days: Weekday[]; time: string | null } | null
+  /** `due` is Prague `HH:MM`. */
+  deadline: { dayOffset: number; due: string; graceMinutes: number } | null
+}
 
 /** Monday first, Sunday last, as Czech calendars show a week. */
 const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0] as const
@@ -17,7 +29,7 @@ function clock(hhmm: string): string {
 export function describeTemplate({
   schedule,
   deadline,
-}: Pick<TemplateView, 'schedule' | 'deadline'>): string {
+}: Pick<TemplateSummary, 'schedule' | 'deadline'>): string {
   let text: string = t.onDemand
   if (schedule) {
     const days = WEEK_ORDER.filter((d) => schedule.days.includes(d)).map((d) => t.days[d])
@@ -38,7 +50,10 @@ export function describeTemplate({
 
 /** Summary + approval flag, and for a proposed template who agreed so far. */
 export function templateDetail(
-  view: Pick<TemplateView, 'schedule' | 'deadline' | 'approvalRequired' | 'approvedBy' | 'status'>,
+  view: Pick<
+    TemplateSummary,
+    'schedule' | 'deadline' | 'approvalRequired' | 'approvedBy' | 'status'
+  >,
 ): string {
   const parts = [describeTemplate(view), view.approvalRequired ? t.approvalOn : t.approvalOff]
   if (view.status === 'proposed' && view.approvedBy.length > 0) {
