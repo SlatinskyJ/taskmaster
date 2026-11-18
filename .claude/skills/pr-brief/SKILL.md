@@ -61,6 +61,15 @@ Diagrams: load the `artifact-diagramming` skill. Code snippets: real code trimme
 
 Screenshots: Playwright against the dev server, viewport 390×844, light theme, `deviceScaleFactor: 2`. Dark theme too only when the PR changes the theme or tokens. Seed realistic Czech task names.
 
+Screenshots on the page keep their natural aspect ratio, big enough to read. Put every screenshot `<figure>` inside one grid; give each `<img>` its real `width`/`height` attributes and this CSS:
+
+```css
+.shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:16px}
+.shots img{width:100%;height:auto;display:block}
+```
+
+`height:auto` is the must: with `width`/`height` attributes and only `max-width:100%`, the browser shrinks the width and keeps the height, so the screen looks squashed. Never set a fixed height on a screenshot. One column on a phone, two on a laptop.
+
 ## Look
 
 Load the `artifact-design` skill. Keep one visual vocabulary across briefs so things are easy to spot:
@@ -68,7 +77,8 @@ Load the `artifact-design` skill. Keep one visual vocabulary across briefs so th
 - "Needs you" as an amber callout right under the header (a quiet green line when empty);
 - verdict badge green for `Ready to accept`, amber for `Needs your call`;
 - before/after and if/if pairs as two panels (grey before, green after, red for an outcome where a rule bites), one column on a phone;
-- light and dark tokens for every colour.
+- light and dark tokens for every colour;
+- screenshots at their natural aspect ratio, one or two per row (see Screenshots above).
 
 Scannable first, depth inside expandables. Jakub should get the verdict, the "Needs you" items and the shape of the change at a glance, however big the PR; the visible length follows the PR's size and the rest waits in expandables for when he wants to learn more.
 
