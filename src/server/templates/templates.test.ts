@@ -10,7 +10,9 @@ import {
   createTemplate,
   listTemplates,
   pendingTemplateApprovals,
+  templateHistory,
 } from './templates'
+import { acceptOfferOnTemplate, bidOnTemplate, counterOnTemplate } from './scoreChange'
 
 const T0 = new Date('2026-11-18T10:00:00.000Z')
 const T1 = new Date('2026-11-18T11:00:00.000Z')
@@ -113,7 +115,7 @@ describe('createTemplate (spec §5.1, §5.3)', () => {
         T0,
       ),
     )
-    const [flowers, dishes, bins] = listTemplates(db)
+    const [flowers, dishes, bins] = listTemplates(db, tata)
     expect(bins).toMatchObject({
       schedule: { days: [0, 3, 6], time: '18:30' },
       deadline: { dayOffset: 1, due: '07:45', graceMinutes: 90 },
@@ -246,7 +248,8 @@ describe('reads', () => {
   it('pins the TemplateView shape (no ids of people, nothing else)', () => {
     const { db, tata } = family()
     const { id } = must(createTemplate(db, tata, BINS, T0))
-    expect(listTemplates(db)).toEqual([
+    const list = listTemplates(db, tata)
+    expect(list).toEqual([
       {
         id,
         title: 'Vynést koše',
@@ -257,8 +260,23 @@ describe('reads', () => {
         approvedBy: ['Táta'],
         schedule: { days: [2], time: '18:00' },
         deadline: { dayOffset: 1, due: '07:00', graceMinutes: 120 },
+        change: null,
       },
     ])
+    expect(Object.keys(list[0] ?? {}).sort()).toEqual(
+      [
+        'approvalRequired',
+        'approvedBy',
+        'change',
+        'createdByName',
+        'deadline',
+        'id',
+        'schedule',
+        'score',
+        'status',
+        'title',
+      ].sort(),
+    )
   })
 
   it('pending approvals: takers until they approve, givers only when no current giver has', () => {
@@ -279,5 +297,54 @@ describe('reads', () => {
     expect(must(approveTemplateScore(db, starsi, id, 4, T1)).status).toBe('proposed')
     expect(pendingTemplateApprovals(db, starsi)).toEqual([])
     expect(pendingTemplateApprovals(db, mama).map((t) => t.id)).toEqual([id])
+  })
+
+  it('a giver sees every template, a taker only agreed ones', () => {
+    const { db, tata, starsi } = family()
+    const bins = must(createTemplate(db, tata, BINS, T0)).id
+    const dishes = must(createTemplate(db, tata, DISHES, T0)).id
+    must(approveTemplateScore(db, starsi, dishes, DISHES.score, T0))
+    expect(listTemplates(db, tata).map((t) => t.id)).toEqual([dishes, bins])
+    expect(listTemplates(db, starsi).map((t) => t.id)).toEqual([dishes])
+  })
+
+  it('shows the change in flight: live bids lowest first, the offer, the lowest bid', () => {
+    const { db, admin, tata, mama, starsi, mladsi } = family()
+    const id = must(createTemplate(db, tata, DISHES, T0)).id
+    must(approveTemplateScore(db, starsi, id, DISHES.score, T0))
+    expect(listTemplates(db, tata)[0]?.change).toBeNull()
+    must(bidOnTemplate(db, mladsi, id, 7, T1))
+    must(bidOnTemplate(db, starsi, id, 5, T1))
+    must(counterOnTemplate(db, mama, id, 6, T1))
+    expect(listTemplates(db, starsi)[0]?.change).toEqual({
+      offer: { score: 6, byName: 'Máma' },
+      bids: [
+        { takerId: starsi, name: 'Starší', score: 5 },
+        { takerId: mladsi, name: 'Mladší', score: 7 },
+      ],
+      lowest: 5,
+    })
+    must(updateUser(db, { kind: 'user', userId: admin }, starsi, { active: false }, T2))
+    expect(listTemplates(db, tata)[0]?.change).toEqual({
+      offer: { score: 6, byName: 'Máma' },
+      bids: [{ takerId: mladsi, name: 'Mladší', score: 7 }],
+      lowest: 7,
+    })
+  })
+
+  it('the history keeps every offer and bid with names and closings', () => {
+    const { db, tata, starsi, mladsi } = family()
+    const id = must(createTemplate(db, tata, DISHES, T0)).id
+    must(approveTemplateScore(db, starsi, id, DISHES.score, T0))
+    must(bidOnTemplate(db, mladsi, id, 7, T1))
+    must(bidOnTemplate(db, mladsi, id, 6, T1))
+    must(counterOnTemplate(db, tata, id, 5, T1))
+    must(acceptOfferOnTemplate(db, starsi, id, 5, T2))
+    expect(templateHistory(db, id)).toEqual([
+      { side: 'taker', name: 'Mladší', score: 7, at: T1.toISOString(), closedAs: 'replaced' },
+      { side: 'taker', name: 'Mladší', score: 6, at: T1.toISOString(), closedAs: 'closed' },
+      { side: 'giver', name: 'Táta', score: 5, at: T1.toISOString(), closedAs: 'accepted' },
+    ])
+    expect(listTemplates(db, tata)[0]?.change).toBeNull()
   })
 })

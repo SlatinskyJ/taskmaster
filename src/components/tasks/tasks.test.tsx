@@ -155,6 +155,7 @@ describe('WaitingForYou with templates (#37)', () => {
     approvedBy: ['Táta'],
     schedule: { days: [0, 1, 2, 3, 4, 5, 6] as (0 | 1 | 2 | 3 | 4 | 5 | 6)[], time: '18:00' },
     deadline: { dayOffset: 1, due: '07:00', graceMinutes: 120 },
+    change: null,
   }
 
   it('counts tasks and templates and shows the full template detail', () => {
