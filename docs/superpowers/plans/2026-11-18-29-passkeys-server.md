@@ -139,7 +139,7 @@ Removal of an expired challenge writes no audit entry: challenges are not state 
   - global login cap: 499 live (over many IPs) → the 500th succeeds; 500 live → `null`; 500 expired rows → issue succeeds and the expired rows are gone
   - register is outside the login caps: with 500 live login rows, a register challenge for tata still succeeds; tata's 6th live register challenge → `null`, starsi still gets one
   - the IP is not stored: no row holds the IP string
-  - `ipPrefix`: `'10.0.0.2'` → `'10.0.0.2'`; `'2001:db8:1:2:aaaa::1'` and `'2001:db8:1:2:bbbb::9'` → the same value; `'2001:db8:1:3::1'` → a different one; `'::ffff:10.0.0.2'` → `'10.0.0.2'`; two IPv6 addresses in one /64 share the per-IP cap
+  - `ipPrefix`: `'10.0.0.2'` → `'10.0.0.2'`; `'2001:db8:1:2:aaaa::1'` and `'2001:db8:1:2:bbbb::9'` → the same value; `'2001:db8:1:3::1'` → a different one; `'::ffff:10.0.0.2'` → `'10.0.0.2'`; `'2001:db8::1'` and `'2001:db8::2'` → the same value (`::` expanded); `'2001:DB8::1'` → the same as `'2001:db8::1'`; two IPv6 addresses in one /64 share the per-IP cap
   - the token is not stored: no row's `tokenHash` equals the token
   - `http.test.ts` (fake request as in `src/server/auth/http.test.ts`, recording the cookie options): `setChallengeCookie('t')` sets `__Host-tm_pk_challenge` with exactly `{ httpOnly: true, secure: true, sameSite: 'strict', path: '/', maxAge: 300 }`; `challengeToken()` reads it; `clearChallengeCookie()` deletes that name with `path: '/'`, `secure: true`
 - [ ] **Step 2:** Run → FAIL.
