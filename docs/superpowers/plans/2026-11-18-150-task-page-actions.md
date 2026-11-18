@@ -27,31 +27,31 @@
 1. **Same behaviour as Domů, no dialog.** Domů's Hotovo and Uvolnit have no confirm today; the page copies them exactly (issue: "using the same actions as his Domů row"). If a judge wants a confirm on Uvolnit (a bid-won task goes back to negotiation, spec §5.4), it is a `follow-up` for both places, not this PR.
 2. **Scope = the reserver only.** Rezervovat for an open task, "done without reserving" (§5.5) and the parent's GTask buttons are not in #150. Domů keeps Rezervovat; #40 builds the rest.
 3. **Placement:** directly under the state card, before the bid thread, so the buttons are visible without scrolling past a long thread. BidPanel (proposed tasks only) stays at the bottom; the two never show together (BidPanel renders nothing unless `status === 'proposed'`).
-4. **Layout on the page:** two equal columns, full width, Uvolnit (ghost) left, Hotovo (ok) right, same order as the row. On the row: unchanged (`flex gap-1.5`).
+4. **Layout on the page:** Hotovo is the main action, as the TTask mockup draws it: full width (`ok`, `w-full`), with Uvolnit full width under it (`ghost`, `w-full`), in `grid gap-2`. On the row: unchanged, Uvolnit then Hotovo in `flex gap-1.5`.
 5. **Busy state:** the page has its own `useTaskAction()`; the row keeps sharing the board's one `useTaskAction()` so tapping one row still disables every button on the board (today's behaviour). Hence `WorkButtons` takes `busy` and `run` as props instead of calling the hook.
 
 ## UX pre-flight
 
-- Taps: `Button` has `min-h-tap`; page buttons `w-full` in `grid grid-cols-2 gap-2`. ✓
+- Taps: `Button` has `min-h-tap`; page buttons `w-full`, stacked in `grid gap-2`. ✓
 - Motion: confetti already respects reduced motion (`burstConfetti`); no new animation.
 - Busy/error: `run` disables both buttons and sets `aria-busy` on the tapped one; failure → Czech toast from `taskErrorMessage` + `router.invalidate()` (buttons come back, tap again). Uvolnit gains `aria-busy` too (row and page).
 - Loader states: unchanged (page loader already throws notFound).
 - Irreversible: see Decision 1.
-- 360 px with a long name: the name is the page title (Screen header, already wraps). Buttons hold only "Uvolnit"/"Hotovo", each half of ~328 px: whole, nothing cut.
+- 360 px with a long name: the name is the page title (Screen header, already wraps). Buttons hold only "Hotovo"/"Uvolnit", each the full ~328 px: whole, nothing cut. Screenshot check: Hotovo reads as the main action.
 
 ## Tests pre-flight
 
 - Audit rollback: no new state change (server untouched; #35 tests cover it).
 - Wrong actor: `canWorkOn` is false for another brother, a parent, an admin; the page then renders no buttons. The server still refuses a wrong actor (existing `lifecycle.test.ts`).
 - Boundary: status `reserved` only; `open`, `proposed`, `done_unconfirmed`, `confirmed` → no buttons.
-- Real entry point: `TaskWorkPanel` is rendered by the route; tested by static render with the hook stubbed (same pattern as `bidPanel.test.tsx`). Screenshots from the real preview build cover the route.
+- Real entry point: the route component itself is rendered in a test (Task 3, `taskPage.test.tsx`), so leaving out `TaskWorkPanel` or ungating it fails. Screenshots from the real preview build cover the running app.
 - Return shape: no server function changes.
 
 ## Review Focus
 
 1. Brother B opens brother A's reserved task → sees "Rezervoval A", no buttons. (Task 1 test.)
 2. Parent opens a reserved task → no taker buttons. (Task 1 test.)
-3. Stale page: A released on Domů in another tab, then taps Hotovo on the page → server refuses, Czech toast, page reloads to the new state. (Covered by `run`; Task 2 test pins that a failed result does not throw.) — relies on existing `useTaskAction`, no new code.
+3. Stale page: A released on Domů in another tab, then taps Hotovo on the page → server refuses, Czech toast, page reloads to the new state. Relies on the existing `useTaskAction` failure path, unchanged here; covered by reading only, no test in this PR.
 4. Hotovo on a task that needs no approval → toast "Hotovo!", else the pending toast. (Task 2 test via the success callback.)
 5. Domů row unchanged after the refactor: same labels, order, disabled while busy. (Task 3 test.)
 
@@ -91,11 +91,11 @@
 **Interfaces:**
 - Consumes: `canWorkOn` (Task 1); `useTaskAction()` → `{ busy, run }`; `completeTaskFn`, `releaseTaskFn` from `~/server/tasks/functions`.
 - Produces:
-  - `export function WorkButtons(props: { task: Pick<TaskView, 'id'>; busy: string | null; run: ReturnType<typeof useTaskAction>['run']; wide?: boolean }): JSX.Element` — Uvolnit (`variant="ghost"`) then Hotovo (`variant="ok"`). Keys `release-<id>` / `done-<id>`. Uvolnit: `run(key, () => releaseTaskFn({ data: { taskId } }), () => cs.work.toast.released)`. Hotovo: `run(key, () => completeTaskFn({ data: { taskId } }), r => r.status === 'confirmed' ? cs.work.toast.done : cs.work.toast.pending, { confetti: e.currentTarget })`. Both `disabled={busy !== null}`, `aria-busy={busy === key}`. Wrapper `wide ? 'grid grid-cols-2 gap-2'` (buttons `w-full`) `: 'flex gap-1.5'`.
+  - `export function WorkButtons(props: { task: Pick<TaskView, 'id'>; busy: string | null; run: ReturnType<typeof useTaskAction>['run']; wide?: boolean }): JSX.Element` — Uvolnit (`variant="ghost"`) then Hotovo (`variant="ok"`). Keys `release-<id>` / `done-<id>`. Uvolnit: `run(key, () => releaseTaskFn({ data: { taskId } }), () => cs.work.toast.released)`. Hotovo: `run(key, () => completeTaskFn({ data: { taskId } }), r => r.status === 'confirmed' ? cs.work.toast.done : cs.work.toast.pending, { confetti: e.currentTarget })`. Both `disabled={busy !== null}`, `aria-busy={busy === key}`. `wide`: Hotovo first then Uvolnit, wrapper `grid gap-2`, both `w-full`; not wide: Uvolnit then Hotovo, wrapper `flex gap-1.5`.
   - `export function TaskWorkPanel(props: { task: TaskView; me: Me }): JSX.Element | null` — `null` unless `canWorkOn`; else its own `useTaskAction()` and `<WorkButtons wide …/>`.
 
 - [ ] **Step 1: failing tests** (stubs as in `bidPanel.test.tsx`: `useTaskAction` → `{ busy: action.busy, run: action.run }`, Button recorder, `~/server/tasks/functions` → `{ completeTaskFn: vi.fn(), releaseTaskFn: vi.fn() }`):
-  - `it('the reserver sees Uvolnit then Hotovo, full width')`: render `TaskWorkPanel` for reserved-by-3 with `STARSI` → markup has `Uvolnit` before `Hotovo`, `grid-cols-2`, two `w-full`.
+  - `it('the reserver sees Hotovo, then Uvolnit under it, both full width')`: render `TaskWorkPanel` for reserved-by-3 with `STARSI` → markup has `Hotovo` before `Uvolnit`, wrapper `grid gap-2`, two `w-full`.
   - `it('nobody else sees them')`: `MLADSI`, `TATA`, and `status: 'open'` → `renderToStaticMarkup` is `''`.
   - `it('Hotovo sends this task to completeTaskFn with confetti, toast by status')`: press Hotovo → `action.run` called with `('done-1', fn, success, { confetti: <el> })`; calling `fn()` → `completeTaskFn` called with `{ data: { taskId: 1 } }`; `success({ ok: true, status: 'confirmed' })` → `'Hotovo!'`, `success({ ok: true, status: 'done_unconfirmed' })` → `cs.work.toast.pending`.
   - `it('Uvolnit sends this task to releaseTaskFn')`: key `'release-1'`, `releaseTaskFn` with `{ data: { taskId: 1 } }`, success → `cs.work.toast.released`.
@@ -110,11 +110,12 @@
 **Files:**
 - Modify: `src/components/tasks/TakerBoard.tsx` (the reserved row's `action`, and drop the local `done` helper)
 - Modify: `src/routes/_app/ukol/$taskId.tsx` (render `<TaskWorkPanel task={task} me={me} />` right after the state `Card`; comment: "Reserve stays on Domů" instead of "Reserve, done and release stay on Domů")
-- Test: `src/components/tasks/workButtons.test.tsx`
+- Test: `src/components/tasks/workButtons.test.tsx`, Create: `src/routes/_app/ukol/taskPage.test.tsx`
 
-- [ ] **Step 1: failing test** `it('Domů Moje row keeps Uvolnit then Hotovo, compact, disabled while anything on the board runs')`: render `TakerBoard` with one reserved-by-3 task, `me=3`, `action.busy = 'reserve-9'` → markup has `Uvolnit` before `Hotovo` inside `flex gap-1.5`, both recorded `disabled: true`, and Uvolnit's onClick calls `run` with key `'release-1'`. (Fails until the row's Uvolnit gets `aria-busy`/the shared component: assert `aria-busy="false"` on both.)
+- [ ] **Step 1a: failing route test** in `taskPage.test.tsx`: mock `@tanstack/react-router` so `createFileRoute(path)(opts)` returns `{ ...opts, useRouteContext: () => ({ user }), useLoaderData: () => ({ task, thread: [] }) }` (`user`/`task` from module-level variables each test sets), plus `notFound`, `Link`, `useRouter` stubs; stub `useTaskAction`, `~/server/tasks/functions`, `~/lib/screenGuard`. Render `Route.component` with `renderToStaticMarkup`. `it('the task page shows Hotovo and Uvolnit to the brother who reserved it, nobody else')`: task reserved by 3 → user Starší (3, taker) markup contains `Hotovo` and `Uvolnit`; user Mladší (4, taker) and Táta (2, giver) → neither. (Fails while the route lacks `<TaskWorkPanel/>`.)
+- [ ] **Step 1b: failing test** `it('Domů Moje row keeps Uvolnit then Hotovo, compact, disabled while anything on the board runs')`: render `TakerBoard` with one reserved-by-3 task, `me=3`, `action.busy = 'reserve-9'` → markup has `Uvolnit` before `Hotovo` inside `flex gap-1.5`, both recorded `disabled: true`, and Uvolnit's onClick calls `run` with key `'release-1'`. (Fails until the row's Uvolnit gets `aria-busy`/the shared component: assert `aria-busy="false"` on both.)
 - [ ] **Step 2:** run → FAIL.
-- [ ] **Step 3:** replace the row's inline buttons with `<WorkButtons task={t} busy={busy} run={run} />`; add the page line.
+- [ ] **Step 3:** in `TakerBoard`, a `mine` row shows `<WorkButtons task={t} busy={busy} run={run} />` when `canWorkOn(t, { id: me, role: 'taker' })`, else the pending row (one rule for who may press, shared with the page); the `mine` filter itself stays. Add the page line.
 - [ ] **Step 4:** `pnpm test src/components/tasks` → PASS; `pnpm typecheck && pnpm lint`.
 - [ ] **Step 5:** commit `Task page: show Hotovo and Uvolnit to the brother who has the task`.
 
