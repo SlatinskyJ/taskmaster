@@ -24,6 +24,7 @@ Sections 2, 3, 4 and 7 are the same in both phases. A PR with no issue (ad-hoc) 
 **Plan phase**
 
 - The plan (skill `superpowers:writing-plans`) is the only change on the branch: `docs/superpowers/plans/<date>-<branch name>.md`. Its header names the issue and the spec sections it implements.
+- The plan states its size: the lines it expects to change, not counting tests, migrations and generated files. Over about 400, it also says why this is one PR and not a stack.
 - **Tests pre-flight.** The Tests judge asks for these on every PR, so the plan has a test step for each one that applies:
     - each state change rolls back when the audit write fails;
     - each level, limit, cutoff and window is tested exactly at its boundary;
@@ -56,10 +57,10 @@ Sections 2, 3, 4 and 7 are the same in both phases. A PR with no issue (ad-hoc) 
 | `src/domain/`, DB schema, migrations, server functions for tasks/points/periods | + Rules |
 | auth, sessions, passkeys, server functions, dependencies, Docker, CI | + Security |
 | screens, components, styles, Czech strings | + UX |
-| Dockerfile, CI workflows, migration runner, backup, tunnel config | + Ops |
+| Dockerfile, CI workflows, migration runner, backup, tunnel config, a new native dependency (it compiles or ships a binary, like `better-sqlite3`) | + Ops |
 | only docs or comments | none: skip to section 6 |
 
-Write the panel into the PR body: `Judges: Rules, Architecture, Tests`. If the code ends up touching more than the plan said, the code phase panel grows to match.
+Write the panel into the PR body: `Judges: Rules, Architecture, Tests`. If the code ends up touching more than the plan said, the code phase panel grows to match. The Architecture judge checks the panel against this table; when it asks for a missing judge, add that judge and run it in the next round with `first review` in place of the round-2 line, so it reads the whole diff.
 
 ## 3. Run a round
 
@@ -73,6 +74,7 @@ Panel: <judges>.
 [Plan phase] Plan: <path of the plan file>. Issue: #<issue>.
 [Code phase] PR brief: <artifact URL>.
 [Round 2+] Your open findings and my replies: <links to your threads>. Last commit you reviewed: <sha>.
+[Judge added after round 1] First review: review the whole diff.
 ```
 
 Never add your own reasoning, worries or explanations. Judges must read the plan or the code cold. In the code phase a judge gets no plan: not the file, not its path, not "as the plan says".

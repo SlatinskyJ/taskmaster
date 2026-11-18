@@ -57,7 +57,7 @@ Where a superpowers skill and this file differ, this file wins:
 | final whole-branch review by a fresh reviewer; `superpowers:requesting-code-review` | the judges' review rounds (step 6) |
 | `superpowers:finishing-a-development-branch` | steps 5 to 7 |
 
-PR size is a soft goal of about 400 changed lines (not counting tests, migrations and generated files). Parallel PRs are fine; `main` requires branches to be up to date, so update your branch after other merges.
+PR size is a soft goal of about 400 changed lines (not counting tests, migrations and generated files). A PR goes over it only for a good reason, which its plan states. Over about 800 the Architecture judge says so in the plan round, and asks for a split when the reason does not hold. Parallel PRs are fine; `main` requires branches to be up to date, so update your branch after other merges.
 
 ## Dependabot PRs
 
