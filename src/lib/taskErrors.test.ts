@@ -18,7 +18,9 @@ describe('taskErrorMessage', () => {
     ['same_score', 'Tohle číslo už platí. Zvol jiné.'],
     ['no_bids', 'Zatím nikdo nic nenabídl.'],
     ['no_bid', 'Nejdřív nabídni svou cenu.'],
-    ['already_approved', 'Už jsi souhlasil(a).'],
+    ['invalid_schedule', 'Vyber aspoň jeden den.'],
+    ['invalid_deadline', 'Termín nedává smysl. Zkontroluj ho.'],
+    ['already_approved', 'Souhlas už máš zapsaný.'],
   ])('%s → Czech message', (code, message) => {
     expect(taskErrorMessage(code)).toBe(message)
   })

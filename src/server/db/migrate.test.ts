@@ -193,17 +193,17 @@ export const unmigrated = sqliteTable('unmigrated', { id: text('id').primaryKey(
 })
 
 describe('data migrations', () => {
-  it('0010 gives every existing task its first offer in the thread', () => {
+  it('0011 gives every existing task its first offer in the thread', () => {
     const A = '2026-11-17T10:00:00.000Z'
     const B = '2026-11-17T11:00:00.000Z'
     const C = '2026-11-17T12:00:00.000Z'
     const dir = tempDir()
     const before = join(dir, 'm')
     cpSync('drizzle', before, { recursive: true })
-    // Keep migrations 0000–0008 only: the state of a database before this release.
+    // Keep migrations 0000–0009 only: the state of a database before this release.
     const path = join(before, 'meta', '_journal.json')
     const journal = JSON.parse(readFileSync(path, 'utf8')) as { entries: { idx: number }[] }
-    journal.entries = journal.entries.filter((e) => e.idx <= 8)
+    journal.entries = journal.entries.filter((e) => e.idx <= 9)
     writeFileSync(path, JSON.stringify(journal))
     const sqlite = new Database(join(dir, 'db.sqlite'))
     applyMigrations(sqlite, before)

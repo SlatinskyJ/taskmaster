@@ -2,6 +2,9 @@ import { hashSync } from '@node-rs/argon2'
 import type { Db } from '~/server/db'
 import { users } from '~/server/db/schema'
 import { createTask, placeBid } from '~/server/tasks'
+import type { Tx } from '~/server/audit'
+import { approveTemplateScoreIn, createTemplateIn } from '~/server/templates/templates'
+import type { NewTemplate } from '~/server/templates/templates'
 import { createUser } from '~/server/users'
 import type { NewUser } from '~/server/users'
 
@@ -79,8 +82,36 @@ export function seedDemo(
         now,
       ),
     )
+    seedTemplates(tx, ids, now)
     return { kind: 'seeded', usernames: DEMO_USERS.map((u) => u.username) } as const
   })
+}
+
+/** Two templates (#37): the bins wait for a boy's yes, the dishwasher is agreed. */
+const DEMO_TEMPLATES: readonly NewTemplate[] = [
+  {
+    title: 'Vynést koše',
+    score: 4,
+    approvalRequired: true,
+    schedule: { days: [2], time: { hour: 18, minute: 0 } },
+    deadline: { dayOffset: 1, due: { hour: 7, minute: 0 }, graceMinutes: 120 },
+  },
+  { title: 'Vyndat myčku', score: 3, approvalRequired: true, schedule: null, deadline: null },
+]
+
+function seedTemplates(tx: Tx, ids: Map<string, number>, now: Date): void {
+  const tata = ids.get('tata')
+  const starsi = ids.get('starsi')
+  if (tata === undefined || starsi === undefined) throw new Error('Demo seed: family incomplete')
+  const made = DEMO_TEMPLATES.map((input) => {
+    const created = createTemplateIn(tx, tata, input, now)
+    if (!created.ok) throw new Error(`Demo seed: template "${input.title}": ${created.error}`)
+    return created.value
+  })
+  const dishes = made[1]
+  if (!dishes) return
+  const agreed = approveTemplateScoreIn(tx, starsi, dishes.id, dishes.score, now)
+  if (!agreed.ok) throw new Error(`Demo seed: approve "${dishes.title}": ${agreed.error}`)
 }
 
 export function describeDemo(outcome: DemoOutcome): string | null {
