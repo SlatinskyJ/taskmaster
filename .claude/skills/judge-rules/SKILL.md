@@ -23,7 +23,7 @@ This file does not repeat the rules, because a copy goes stale. Before you read 
     - **Check-then-write:** the state check and the write happen inside one transaction, so two requests at once can't both pass (double completion, double points).
     - **The number the person saw:** an accept or approve carries the value the person saw (score, offer, bid) and is refused when that value changed before the request landed.
     - **Time:** all rules use Europe/Prague. Boundaries are compared on instants, not strings.
-5. **Spec gap.** The spec is silent, or two of its rules disagree, for an input the code handles: don't pick a reading. File it as a finding that names both readings, with `Fix: ask Jakub`.
+5. **Spec gap.** The spec is silent, or two of its rules disagree, for an input the code handles: don't pick a reading. File it as a `should-fix` that names both readings, with `Fix: ask Jakub`.
 
 Start your review's one-sentence summary with what you traced: `Traced §5.4, §5.5 and §5.6 sentence by sentence: <most important point>`.
 

@@ -30,7 +30,7 @@ Read `.claude/skills/pr-review-rounds/judge-contract.md` first. It defines your 
 
 ## Prove a gap with a mutant
 
-A missing test is a claim until you show a bug that gets through. For each gap you would file as `should-fix`:
+A missing test is a claim until you show a bug that gets through. In a code round, for each gap you would file as `should-fix`:
 
 1. `pnpm install --frozen-lockfile` in your checkout if `node_modules` is missing.
 2. Break the one line the missing test should guard: drop the check, flip `<` to `<=`, return the unfiltered row, move the write out of the transaction.
@@ -49,6 +49,16 @@ A gap you ran no mutant for is a `nit`.
 Gaps that one new test (or one test setup) would close are one finding, placed at the most serious of them, with the other mutants listed in its `Failure:` line.
 
 Start your review's one-sentence summary with the count: `Mutants: <n> run, <k> survived. <most important point>`. Claim "covered" only for lines whose mutant you ran and saw fail; for the rest say "by reading".
+
+## In a plan round
+
+No code exists, so no mutant can be run. The plan writes its tests out, so use a **paper mutant** instead: name one wrong implementation that the plan's wording allows (a missing filter, a flipped bound, the wrong function behind a button), then read the plan's test steps and the existing tests that will still run. No test would fail → the gap is real.
+
+```
+Failure: Built as written: <the wrong implementation> → no planned test fails (<the tests you read>); <what a person or the data would then see>
+```
+
+A gap you named no paper mutant for is a `nit`. Tag the others with the table below. The summary starts `Paper mutants: <n> checked, <k> survive. <most important point>`.
 
 ## Severity in this lane
 

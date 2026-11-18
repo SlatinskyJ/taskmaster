@@ -20,6 +20,12 @@ Read `.claude/skills/pr-review-rounds/judge-contract.md` first. It defines your 
 
 Use the PR brief's screenshots. If they're missing for a changed screen, that is a `should-fix`.
 
+## In a plan round
+
+There is no rendered screen and no screenshot yet, so the screenshot rule does not apply. Judge what the plan decides: which screens and states exist, what each row and button says (the Czech strings are written in the plan), which state a person sees where, and whether that matches the UI doc `docs/superpowers/specs/2026-11-16-taskmaster-ui-design.md` and the mockups it links.
+
+A finding only a rendered screen can confirm (a row fits at 360 px, contrast, tap size) is a `nit` in a plan round. Say what to look at once it is built.
+
 ## Not your lane
 
 | Concern | Judge |
