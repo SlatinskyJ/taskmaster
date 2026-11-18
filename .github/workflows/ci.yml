@@ -142,10 +142,16 @@ jobs:
         run: |
           PORT=3000 node .output/server/index.mjs > server.log 2>&1 &
           for i in $(seq 1 20); do
-            if curl -fsS http://127.0.0.1:3000/ > /dev/null; then echo "server up"; exit 0; fi
+            if curl -fsS http://127.0.0.1:3000/ > /dev/null; then echo "server up"; break; fi
+            if [ "$i" = 20 ]; then echo "server did not answer"; cat server.log; exit 1; fi
             sleep 1
           done
-          echo "server did not answer"; cat server.log; exit 1
+          # The service worker is built with this build's data and always revalidated.
+          curl -fsS -D sw.headers -o sw.js http://127.0.0.1:3000/sw.js
+          grep -q 'tm-shell-' sw.js || { echo "sw.js has no shell cache"; exit 1; }
+          if grep -q '__TM_SW_BUILD__' sw.js; then echo "sw.js build data missing"; exit 1; fi
+          grep -qi '^cache-control: no-cache' sw.headers || { echo "sw.js lacks no-cache"; cat sw.headers; exit 1; }
+          echo "sw.js ok"
 
   # Multi-arch image (spec §11, #50). Each arch builds natively and smoke-runs the container,
   # including the image's own HEALTHCHECK. Read-only token; nothing is pushed here.
@@ -192,6 +198,8 @@ jobs:
             status=$(docker inspect -f '{{.State.Health.Status}}' tm)
             if [ "$status" = healthy ]; then
               curl -fsS http://127.0.0.1:3000/api/health; echo
+              curl -fsSI http://127.0.0.1:3000/sw.js | grep -qi '^cache-control: no-cache' \
+                || { echo "sw.js lacks no-cache"; exit 1; }
               uid=$(docker exec tm id -u)
               if [ "$uid" = 0 ]; then echo "container runs as root"; exit 1; fi
               docker exec tm sh -c 'touch /data/.write-test && rm /data/.write-test'
