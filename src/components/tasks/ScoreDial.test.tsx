@@ -50,5 +50,6 @@ describe('ScoreDial', () => {
     expect(html).toContain('aria-valuenow="2"')
     expect(html).not.toMatch(/>0</)
     expect(html).toMatch(/>7</)
+    expect(html).toMatch(/<output aria-live="polite"[^>]*>2<\/output>/)
   })
 })
