@@ -3,6 +3,7 @@ import { Minus, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Screen } from '~/components/shell/Screen'
+import { ScoreDial } from '~/components/tasks/ScoreDial'
 import { sectionLabelClass } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
 import { Card } from '~/components/ui/card'
@@ -13,8 +14,9 @@ import { taskErrorMessage } from '~/lib/taskErrors'
 import { TASK_TITLE_MAX } from '~/lib/taskLimits'
 import { createTaskFn } from '~/server/tasks/functions'
 
-// Nový úkol, the one-time part of GCreate (UI doc §7.2): name, points with a − value +
-// stepper (UI doc §5: steppers instead of typing), approval flag (default on, spec §5.5).
+// Nový úkol, the one-time part of GCreate (UI doc §7.2): name, points with − / + around a
+// swipe dial (UI doc §5: no typing; dial per Jakub 2026-11-18), approval flag (default on,
+// spec §5.5).
 // Recurring templates join with #37.
 export const Route = createFileRoute('/_app/ukoly/novy')({
   beforeLoad: ({ context }) => {
@@ -23,10 +25,11 @@ export const Route = createFileRoute('/_app/ukoly/novy')({
   component: NewTask,
 })
 
-const START_SCORE = 10
+/** Everyday chores go for 2–5 points, weekly goals are 10–15 (Jakub 2026-11-18). */
+const START_SCORE = 3
 const MAX_SCORE = 999
-/** One tap to a common value, so a 50-point task isn't 40 taps on + (UI doc §5: no typing). */
-const QUICK_PICKS = [5, 10, 20, 50] as const
+/** One tap to a common value; the bigger ones are for one-off jobs. */
+const QUICK_PICKS = [2, 5, 10, 20] as const
 
 function NewTask() {
   const { user } = Route.useRouteContext()
@@ -98,12 +101,13 @@ function NewTask() {
               >
                 <Minus aria-hidden="true" />
               </Button>
-              <output
-                aria-live="polite"
-                className="flex-1 text-center num font-display text-points font-bold"
-              >
-                {score}
-              </output>
+              <ScoreDial
+                value={score}
+                min={1}
+                max={MAX_SCORE}
+                onChange={setScore}
+                label={cs.tasks.score}
+              />
               <Button
                 type="button"
                 variant="ghost"
