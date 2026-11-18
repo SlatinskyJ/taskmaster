@@ -2,8 +2,9 @@ import { verify } from '@node-rs/argon2'
 import { sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { login } from '~/server/auth'
-import { auditLog, users } from '~/server/db/schema'
+import { auditLog, tasks, users } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
+import { listTasks } from '~/server/tasks'
 import { bootstrapAdmin } from '~/server/users'
 import { DEMO_PASSWORD, describeDemo, seedDemo } from './seed'
 
@@ -26,9 +27,32 @@ describe('demo seed (#62)', () => {
     ])
     expect(await verify(rows[0]?.passwordHash ?? '', DEMO_PASSWORD)).toBe(true)
     const log = db.select().from(auditLog).all()
-    expect(log.map((r) => [r.action, r.actorKind])).toEqual(
-      Array(4).fill(['user.created', 'system']),
-    )
+    expect(log.map((r) => [r.action, r.actorKind])).toEqual([
+      ...Array.from({ length: 4 }, () => ['user.created', 'system']),
+      ['task.created', 'user'],
+      ['task.bid_placed', 'user'],
+      ['task.bid_placed', 'user'],
+      ['task.created', 'user'],
+    ])
+  })
+
+  it('seeds a task in negotiation and a plain offer, through the real actions', () => {
+    const db = createTestDb()
+    seedDemo(db, PREVIEW, T0)
+    expect(
+      listTasks(db).map((t) => [t.title, t.status, t.score, t.bids.map((b) => [b.name, b.score])]),
+    ).toEqual([
+      ['Uklidit sklep', 'proposed', 10, []],
+      [
+        'Umýt auto',
+        'proposed',
+        18,
+        [
+          ['Mladší', 22],
+          ['Starší', 25],
+        ],
+      ],
+    ])
   })
 
   it('demo login works for every role', async () => {
@@ -86,6 +110,7 @@ describe('demo seed (#62)', () => {
     expect(() => seedDemo(db, PREVIEW, T0)).toThrow('boom')
     expect(db.select().from(users).all()).toHaveLength(0)
     expect(db.select().from(auditLog).all()).toHaveLength(0)
+    expect(db.select().from(tasks).all()).toHaveLength(0)
     db.run(sql`DROP TRIGGER boom`)
     expect(seedDemo(db, PREVIEW, T0).kind).toBe('seeded')
     expect(db.select().from(users).all()).toHaveLength(4)
