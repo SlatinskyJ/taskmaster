@@ -41,7 +41,7 @@ function Tasks() {
   const [closing, setClosing] = useState<TaskView | null>(null)
 
   function meta(t: TaskView) {
-    if (t.status === 'proposed') return t.lowest ? lowestText(t.lowest) : cs.tasks.waitingForTaker
+    if (t.status === 'proposed') return t.lowest ? undefined : cs.tasks.waitingForTaker
     if (t.status === 'reserved' && t.reservedBy) return `${cs.work.reservedBy} ${t.reservedBy.name}`
     if (t.completedBy) return `${cs.work.doneBy} ${t.completedBy.name}`
     return undefined
@@ -112,6 +112,7 @@ function Tasks() {
                   state={taskChipState(t)}
                   points={t.score}
                   meta={meta(t)}
+                  detail={t.lowest ? lowestText(t.lowest) : undefined}
                   action={action(t)}
                 />
               </li>

@@ -75,7 +75,7 @@ export function BidPanel({ task, me }: { task: TaskView; me: Me }) {
           >
             {busy === 'send' ? cs.tasks.approving : send.label}
           </Button>
-          {send.hint && <p className="text-meta text-muted">{send.hint}</p>}
+          <p className="text-meta text-muted">{send.hint}</p>
         </section>
       )}
     </div>

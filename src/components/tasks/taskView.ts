@@ -107,7 +107,7 @@ export function sendButton(task: TaskView, me: Me, value: number): SendButton | 
       action: 'placeBid',
       data,
       label: cs.bids.send,
-      hint: '',
+      hint: cs.bids.bidHint,
       disabled: value === task.score || value === myBid(task, me),
     }
   }

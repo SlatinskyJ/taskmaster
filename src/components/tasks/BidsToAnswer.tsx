@@ -24,7 +24,7 @@ export function BidsToAnswer({ items }: { items: readonly TaskView[] }) {
               name={task.title}
               state="negotiating"
               points={task.score}
-              meta={task.lowest ? lowestText(task.lowest) : undefined}
+              detail={task.lowest ? lowestText(task.lowest) : undefined}
               action={
                 <Link
                   to="/ukol/$taskId"

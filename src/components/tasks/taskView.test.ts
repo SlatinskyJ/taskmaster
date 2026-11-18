@@ -167,6 +167,7 @@ describe('taskView', () => {
       action: 'placeBid',
       data: { taskId: 1, score: 24 },
       label: 'Nabídnout',
+      hint: 'Nabídka půjde rodičům.',
     })
   })
   it('nothing to do once agreed, or for the admin', () => {

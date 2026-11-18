@@ -1,18 +1,41 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ButtonModule from '~/components/ui/button'
 import type { TaskView } from '~/server/tasks/functions'
+import { callBid } from './bidCalls'
 import { BidPanel } from './BidPanel'
 import { BidsToAnswer } from './BidsToAnswer'
 import { WaitingForYou } from './WaitingForYou'
 
 // What the bidding screens show (#34), rendered statically. The router, the action hook and the
 // server functions don't run in a static render, so they are stubbed as tasks.test.tsx does.
-const action = vi.hoisted(() => ({ busy: null as string | null }))
+// To check what a tap sends, Button records each button's label and click handler, and `run`
+// records the action it was given; calling that action reaches the `callBid` mock.
+const action = vi.hoisted(() => ({
+  busy: null as string | null,
+  run: vi.fn(),
+  pressed: new Map<string, { onClick?: () => void; disabled?: boolean }>(),
+}))
 vi.mock('./useTaskAction', () => ({
-  useTaskAction: () => ({ busy: action.busy, run: vi.fn() }),
+  useTaskAction: () => ({ busy: action.busy, run: action.run }),
 }))
 vi.mock('./bidCalls', () => ({ callBid: vi.fn(), BID_CALLS: {} }))
+vi.mock('~/components/ui/button', async (original) => {
+  const real = await original<typeof ButtonModule>()
+  return {
+    ...real,
+    Button: (props: Parameters<typeof real.Button>[0]) => {
+      if (typeof props.children === 'string') {
+        action.pressed.set(props.children, {
+          onClick: props.onClick as (() => void) | undefined,
+          disabled: props.disabled,
+        })
+      }
+      return real.Button(props)
+    },
+  }
+})
 vi.mock('~/server/tasks/functions', () => ({}))
 vi.mock('~/server/templates/functions', () => ({}))
 vi.mock('@tanstack/react-router', () => ({
@@ -112,8 +135,56 @@ describe('BidsToAnswer', () => {
   it('lists bids for a parent with the lowest bid and "Odpovědět"; nothing when empty', () => {
     const html = renderToStaticMarkup(<BidsToAnswer items={[bids]} />)
     expect(html).toContain('Vyjednávání (1)')
-    expect(html).toContain('Mladší chce 22')
+    // The lowest-bid line wraps under the chip (a tie names several brothers), never cut.
+    expect(html).toMatch(/data-slot="task-detail"[^>]*>Mladší chce 22/)
     expect(html).toMatch(/<a href="\/ukol\/1"[^>]*>Odpovědět/)
     expect(renderToStaticMarkup(<BidsToAnswer items={[]} />)).toBe('')
+  })
+})
+
+describe('what a tap sends (#34)', () => {
+  beforeEach(() => {
+    action.busy = null
+    action.pressed.clear()
+    vi.clearAllMocks()
+  })
+  /** Taps the button with this label and returns what reached `callBid`. */
+  function tap(label: string) {
+    const button = action.pressed.get(label)
+    expect(button, label).toBeDefined()
+    button?.onClick?.()
+    const call = action.run.mock.calls.at(-1)?.[1] as (() => unknown) | undefined
+    call?.()
+    return vi.mocked(callBid).mock.calls.at(-1)?.[0]
+  }
+
+  it('a brother with a bid: Beru reserves, Souhlasím opens, Nabídnout sends the stepper number', () => {
+    renderToStaticMarkup(<BidPanel task={bids} me={STARSI} />)
+    expect(tap('Beru za 18')).toMatchObject({
+      action: 'acceptOffer',
+      data: { taskId: 1, score: 18 },
+    })
+    expect(tap('Souhlasím')).toMatchObject({
+      action: 'approveOffer',
+      data: { taskId: 1, score: 18 },
+    })
+    // The stepper starts on his own bid, 25, and the button sends that number, not the offer.
+    expect(action.pressed.get('Nabídnout')?.disabled).toBe(true)
+    expect(tap('Nabídnout')).toMatchObject({ action: 'placeBid', data: { taskId: 1, score: 25 } })
+  })
+  it('a parent accepts the lowest bid with its bidders', () => {
+    renderToStaticMarkup(<BidPanel task={bids} me={TATA} />)
+    expect(tap('Přijmout 22 (Mladší)')).toMatchObject({
+      action: 'acceptLowestTaskBid',
+      data: { taskId: 1, score: 22, bidders: [4] },
+    })
+    expect(action.pressed.get('Nabídnout')?.disabled).toBe(true)
+  })
+  it("a Domů row's Souhlasím approves the offer (open for both)", () => {
+    renderToStaticMarkup(<WaitingForYou items={[view({})]} me={STARSI} />)
+    expect(tap('Souhlasím')).toMatchObject({
+      action: 'approveOffer',
+      data: { taskId: 1, score: 18 },
+    })
   })
 })

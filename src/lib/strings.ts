@@ -182,6 +182,8 @@ export const cs = {
     newOffer: 'Nová nabídka',
     send: 'Nabídnout',
     sendHint: 'Nová nabídka pro všechny.',
+    /** Under a brother's send button. */
+    bidHint: 'Nabídka půjde rodičům.',
     acceptBid: (score: number, name: string) => `Přijmout ${String(score)} (${name})`,
     acceptBidHint: (name: string) => `Úkol bude rezervovaný pro ${name}.`,
     acceptTie: (score: number) => `Přijmout ${String(score)}`,
