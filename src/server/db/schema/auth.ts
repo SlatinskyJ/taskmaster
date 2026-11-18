@@ -5,8 +5,8 @@ import { users } from './users'
 // token; only its SHA-256 lands here, so a leaked DB or backup can't be replayed as a login.
 // Rows are deleted on logout, password reset and expiry: sessions are not domain data, and the
 // audit log keeps the history (auth.login_succeeded / auth.logout).
-/** How the session was opened. Passkeys (#29) and the tablet name+PIN (stretch) add values. */
-export const SESSION_METHODS = ['password'] as const
+/** How the session was opened. The tablet name+PIN (stretch) adds a value. */
+export const SESSION_METHODS = ['password', 'passkey'] as const
 export type SessionMethod = (typeof SESSION_METHODS)[number]
 
 export const sessions = sqliteTable(
