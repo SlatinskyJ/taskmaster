@@ -1,8 +1,8 @@
 {
-  "id": "f56b1cb1-bda4-4785-bc05-8d407b183beb",
-  "prevId": "89b636d8-a5e5-432a-bf08-da0c09a7858b",
   "version": "6",
   "dialect": "sqlite",
+  "id": "be7f234a-15b1-4709-92d8-edf10bfeb303",
+  "prevId": "818b42fe-a77b-476c-bf32-557a4802096e",
   "tables": {
     "audit_log": {
       "name": "audit_log",
@@ -226,15 +226,15 @@
         "sessions_user_id_users_id_fk": {
           "name": "sessions_user_id_users_id_fk",
           "tableFrom": "sessions",
+          "tableTo": "users",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -393,28 +393,28 @@
         "task_score_approvals_task_id_tasks_id_fk": {
           "name": "task_score_approvals_task_id_tasks_id_fk",
           "tableFrom": "task_score_approvals",
+          "tableTo": "tasks",
           "columnsFrom": [
             "task_id"
           ],
-          "tableTo": "tasks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "task_score_approvals_user_id_users_id_fk": {
           "name": "task_score_approvals_user_id_users_id_fk",
           "tableFrom": "task_score_approvals",
+          "tableTo": "users",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -496,8 +496,8 @@
           "columns": [
             "task_id"
           ],
-          "where": "closed_at IS NULL AND side = 'giver'",
-          "isUnique": true
+          "isUnique": true,
+          "where": "closed_at IS NULL AND side = 'giver'"
         },
         "task_thread_open_bid_idx": {
           "name": "task_thread_open_bid_idx",
@@ -505,8 +505,8 @@
             "task_id",
             "user_id"
           ],
-          "where": "closed_at IS NULL AND side = 'taker'",
-          "isUnique": true
+          "isUnique": true,
+          "where": "closed_at IS NULL AND side = 'taker'"
         },
         "task_thread_task_idx": {
           "name": "task_thread_task_idx",
@@ -520,28 +520,28 @@
         "task_thread_task_id_tasks_id_fk": {
           "name": "task_thread_task_id_tasks_id_fk",
           "tableFrom": "task_thread",
+          "tableTo": "tasks",
           "columnsFrom": [
             "task_id"
           ],
-          "tableTo": "tasks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "task_thread_user_id_users_id_fk": {
           "name": "task_thread_user_id_users_id_fk",
           "tableFrom": "task_thread",
+          "tableTo": "users",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -691,67 +691,67 @@
         "tasks_created_by_users_id_fk": {
           "name": "tasks_created_by_users_id_fk",
           "tableFrom": "tasks",
+          "tableTo": "users",
           "columnsFrom": [
             "created_by"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "tasks_reserved_by_users_id_fk": {
           "name": "tasks_reserved_by_users_id_fk",
           "tableFrom": "tasks",
+          "tableTo": "users",
           "columnsFrom": [
             "reserved_by"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "tasks_reserved_giver_id_users_id_fk": {
           "name": "tasks_reserved_giver_id_users_id_fk",
           "tableFrom": "tasks",
+          "tableTo": "users",
           "columnsFrom": [
             "reserved_giver_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "tasks_completed_by_users_id_fk": {
           "name": "tasks_completed_by_users_id_fk",
           "tableFrom": "tasks",
+          "tableTo": "users",
           "columnsFrom": [
             "completed_by"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "tasks_earner_id_users_id_fk": {
           "name": "tasks_earner_id_users_id_fk",
           "tableFrom": "tasks",
+          "tableTo": "users",
           "columnsFrom": [
             "earner_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -770,14 +770,239 @@
           "value": "length(trim(\"tasks\".\"title\")) > 0"
         }
       }
+    },
+    "passkey_challenges": {
+      "name": "passkey_challenges",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "challenge": {
+          "name": "challenge",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_handle": {
+          "name": "user_handle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ip_key": {
+          "name": "ip_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "passkey_challenges_token_hash_unique": {
+          "name": "passkey_challenges_token_hash_unique",
+          "columns": [
+            "token_hash"
+          ],
+          "isUnique": true
+        },
+        "passkey_challenges_expires_idx": {
+          "name": "passkey_challenges_expires_idx",
+          "columns": [
+            "expires_at"
+          ],
+          "isUnique": false
+        },
+        "passkey_challenges_ip_idx": {
+          "name": "passkey_challenges_ip_idx",
+          "columns": [
+            "ip_key"
+          ],
+          "isUnique": false
+        },
+        "passkey_challenges_user_idx": {
+          "name": "passkey_challenges_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "passkey_challenges_user_id_users_id_fk": {
+          "name": "passkey_challenges_user_id_users_id_fk",
+          "tableFrom": "passkey_challenges",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "passkeys": {
+      "name": "passkeys",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "credential_id": {
+          "name": "credential_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "public_key": {
+          "name": "public_key",
+          "type": "blob",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "counter": {
+          "name": "counter",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "transports": {
+          "name": "transports",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_handle": {
+          "name": "user_handle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "device_kind": {
+          "name": "device_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "backed_up": {
+          "name": "backed_up",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_used_at": {
+          "name": "last_used_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "passkeys_credential_id_unique": {
+          "name": "passkeys_credential_id_unique",
+          "columns": [
+            "credential_id"
+          ],
+          "isUnique": true
+        },
+        "passkeys_user_idx": {
+          "name": "passkeys_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "passkeys_user_id_users_id_fk": {
+          "name": "passkeys_user_id_users_id_fk",
+          "tableFrom": "passkeys",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
     }
   },
   "views": {},
   "enums": {},
   "_meta": {
-    "columns": {},
     "schemas": {},
-    "tables": {}
+    "tables": {},
+    "columns": {}
   },
   "internal": {
     "indexes": {}

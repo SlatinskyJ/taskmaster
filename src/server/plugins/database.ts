@@ -1,6 +1,7 @@
 import { definePlugin } from 'nitro'
 import { databasePath, getDb } from '~/server/db'
 import { describeDemo, seedDemo } from '~/server/demo'
+import { describePasskeys, passkeyConfig } from '~/server/passkeys/config'
 import { bootstrapAdmin, describeBootstrap } from '~/server/users'
 
 // Boot: open the database and apply pending migrations before the first request is served.
@@ -15,6 +16,8 @@ export default definePlugin(() => {
   if (demo) console.info(demo)
   const message = describeBootstrap(bootstrapAdmin(db))
   if (message) console.warn(message)
+  // An invalid WEBAUTHN_* config throws here: the server must not run with broken passkeys.
+  console.info(describePasskeys(passkeyConfig()))
   if (
     process.env.NODE_ENV === 'production' &&
     process.env.TASKMASTER_ENV !== 'preview' &&

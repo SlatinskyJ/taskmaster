@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "89b636d8-a5e5-432a-bf08-da0c09a7858b",
+  "id": "818b42fe-a77b-476c-bf32-557a4802096e",
   "prevId": "d31de7a3-4270-432c-aae4-c4dcc8d72b67",
   "tables": {
     "audit_log": {
@@ -430,137 +430,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "task_thread": {
-      "name": "task_thread",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "task_id": {
-          "name": "task_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "side": {
-          "name": "side",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "score": {
-          "name": "score",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "closed_at": {
-          "name": "closed_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "closed_as": {
-          "name": "closed_as",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "task_thread_open_offer_idx": {
-          "name": "task_thread_open_offer_idx",
-          "columns": [
-            "task_id"
-          ],
-          "isUnique": true,
-          "where": "closed_at IS NULL AND side = 'giver'"
-        },
-        "task_thread_open_bid_idx": {
-          "name": "task_thread_open_bid_idx",
-          "columns": [
-            "task_id",
-            "user_id"
-          ],
-          "isUnique": true,
-          "where": "closed_at IS NULL AND side = 'taker'"
-        },
-        "task_thread_task_idx": {
-          "name": "task_thread_task_idx",
-          "columns": [
-            "task_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "task_thread_task_id_tasks_id_fk": {
-          "name": "task_thread_task_id_tasks_id_fk",
-          "tableFrom": "task_thread",
-          "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "task_thread_user_id_users_id_fk": {
-          "name": "task_thread_user_id_users_id_fk",
-          "tableFrom": "task_thread",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "task_thread_side_check": {
-          "name": "task_thread_side_check",
-          "value": "\"task_thread\".\"side\" IN ('giver', 'taker')"
-        },
-        "task_thread_score_check": {
-          "name": "task_thread_score_check",
-          "value": "\"task_thread\".\"score\" >= 1"
-        },
-        "task_thread_closed_check": {
-          "name": "task_thread_closed_check",
-          "value": "(\"task_thread\".\"closed_at\" IS NULL AND \"task_thread\".\"closed_as\" IS NULL) OR (\"task_thread\".\"closed_at\" IS NOT NULL AND \"task_thread\".\"closed_as\" IS NOT NULL AND \"task_thread\".\"closed_as\" IN ('replaced', 'accepted', 'closed'))"
-        }
-      }
-    },
     "tasks": {
       "name": "tasks",
       "columns": {
@@ -770,6 +639,231 @@
           "value": "length(trim(\"tasks\".\"title\")) > 0"
         }
       }
+    },
+    "passkey_challenges": {
+      "name": "passkey_challenges",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "challenge": {
+          "name": "challenge",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_handle": {
+          "name": "user_handle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ip_key": {
+          "name": "ip_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "passkey_challenges_token_hash_unique": {
+          "name": "passkey_challenges_token_hash_unique",
+          "columns": [
+            "token_hash"
+          ],
+          "isUnique": true
+        },
+        "passkey_challenges_expires_idx": {
+          "name": "passkey_challenges_expires_idx",
+          "columns": [
+            "expires_at"
+          ],
+          "isUnique": false
+        },
+        "passkey_challenges_ip_idx": {
+          "name": "passkey_challenges_ip_idx",
+          "columns": [
+            "ip_key"
+          ],
+          "isUnique": false
+        },
+        "passkey_challenges_user_idx": {
+          "name": "passkey_challenges_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "passkey_challenges_user_id_users_id_fk": {
+          "name": "passkey_challenges_user_id_users_id_fk",
+          "tableFrom": "passkey_challenges",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "passkeys": {
+      "name": "passkeys",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "credential_id": {
+          "name": "credential_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "public_key": {
+          "name": "public_key",
+          "type": "blob",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "counter": {
+          "name": "counter",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "transports": {
+          "name": "transports",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_handle": {
+          "name": "user_handle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "device_kind": {
+          "name": "device_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "backed_up": {
+          "name": "backed_up",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_used_at": {
+          "name": "last_used_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "passkeys_credential_id_unique": {
+          "name": "passkeys_credential_id_unique",
+          "columns": [
+            "credential_id"
+          ],
+          "isUnique": true
+        },
+        "passkeys_user_idx": {
+          "name": "passkeys_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "passkeys_user_id_users_id_fk": {
+          "name": "passkeys_user_id_users_id_fk",
+          "tableFrom": "passkeys",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
     }
   },
   "views": {},
