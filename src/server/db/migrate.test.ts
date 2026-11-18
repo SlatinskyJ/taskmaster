@@ -191,3 +191,55 @@ export const unmigrated = sqliteTable('unmigrated', { id: text('id').primaryKey(
     db.$client.close()
   })
 })
+
+describe('data migrations', () => {
+  it('0009 gives every existing task its first offer in the thread', () => {
+    const A = '2026-11-17T10:00:00.000Z'
+    const B = '2026-11-17T11:00:00.000Z'
+    const C = '2026-11-17T12:00:00.000Z'
+    const dir = tempDir()
+    const before = join(dir, 'm')
+    cpSync('drizzle', before, { recursive: true })
+    // Keep migrations 0000–0007 only: the state of a database before this release.
+    const path = join(before, 'meta', '_journal.json')
+    const journal = JSON.parse(readFileSync(path, 'utf8')) as { entries: { idx: number }[] }
+    journal.entries = journal.entries.filter((e) => e.idx <= 7)
+    writeFileSync(path, JSON.stringify(journal))
+    const sqlite = new Database(join(dir, 'db.sqlite'))
+    applyMigrations(sqlite, before)
+    sqlite.exec(`
+      insert into users (id, username, display_name, role, created_at, updated_at)
+        values (1, 'tata', 'Táta', 'giver', '${A}', '${A}');
+      insert into tasks (id, title, status, score, approval_required, created_by, created_at, updated_at, agreed_at)
+        values (1, 'Umýt auto', 'proposed', 18, 1, 1, '${A}', '${A}', null),
+               (2, 'Vysát obývák', 'open', 10, 1, 1, '${A}', '${C}', '${B}');`)
+    applyMigrations(sqlite, 'drizzle')
+    expect(
+      sqlite
+        .prepare(
+          'select task_id, user_id, side, score, created_at, closed_at, closed_as from task_thread order by task_id',
+        )
+        .all(),
+    ).toEqual([
+      {
+        task_id: 1,
+        user_id: 1,
+        side: 'giver',
+        score: 18,
+        created_at: A,
+        closed_at: null,
+        closed_as: null,
+      },
+      {
+        task_id: 2,
+        user_id: 1,
+        side: 'giver',
+        score: 10,
+        created_at: A,
+        closed_at: B,
+        closed_as: 'accepted',
+      },
+    ])
+    sqlite.close()
+  })
+})

@@ -57,6 +57,20 @@
       "when": 1794958674310,
       "tag": "0007_task_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1795015822157,
+      "tag": "0008_task_thread",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1795015822872,
+      "tag": "0009_task_thread_first_offers",
+      "breakpoints": true
     }
   ]
 }
