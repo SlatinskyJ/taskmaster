@@ -38,6 +38,11 @@ export function taskChipState(task: Pick<TaskView, 'status' | 'bids'>): ItemStat
   return task.status
 }
 
+/** Hotovo and Uvolnit (spec §5.4, §5.5): only the brother who reserved the task. */
+export function canWorkOn(task: Pick<TaskView, 'status' | 'reservedBy'>, me: Me): boolean {
+  return me.role === 'taker' && task.status === 'reserved' && task.reservedBy?.id === me.id
+}
+
 /** His own open bid, never another brother's. */
 export function myBid(task: TaskView, me: Me): number | null {
   return task.bids.find((b) => b.takerId === me.id)?.score ?? null

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { TaskView } from '~/server/tasks/functions'
 import {
   bidButtons,
+  canWorkOn,
   detailMeta,
   lowestText,
   myBid,
@@ -226,5 +227,15 @@ describe('taskView', () => {
       'Nabídka odeslána',
       'Domluveno',
     ])
+  })
+  it('Hotovo and Uvolnit only for the brother who reserved it', () => {
+    const mine = view({ status: 'reserved', reservedBy: { id: 3, name: 'Starší' } })
+    expect(canWorkOn(mine, STARSI)).toBe(true)
+    expect(canWorkOn(mine, MLADSI)).toBe(false)
+    expect(canWorkOn(mine, TATA)).toBe(false)
+    expect(canWorkOn(mine, ADMIN)).toBe(false)
+    for (const status of ['open', 'proposed', 'done_unconfirmed', 'confirmed'] as const)
+      expect(canWorkOn({ ...mine, status }, STARSI)).toBe(false)
+    expect(canWorkOn(view({ status: 'reserved', reservedBy: null }), STARSI)).toBe(false)
   })
 })
