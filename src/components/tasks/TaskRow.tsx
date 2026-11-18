@@ -48,12 +48,20 @@ export function TaskRow({
       )}
     >
       <div className="grid min-w-0 flex-1 gap-1">
-        {/* Two lines before truncating, so a name still reads next to two action buttons at 360 px. */}
+        {/* Two lines before truncating, so a name still reads next to the action at 360 px. */}
         <div className="line-clamp-2 text-row font-bold break-words">{name}</div>
-        <div className="flex min-w-0 items-center gap-2 text-meta text-muted">
-          <StateChip state={state} label={stateLabel} className="min-w-0 shrink" />
-          {/* The meta line gives way first; the chip only truncates when nothing else is left. */}
-          {meta ? <span className="min-w-0 shrink-[1000] truncate">{meta}</span> : null}
+        {/* Chip and meta sit side by side when they fit, else the meta wraps under the chip; an
+            item is cut only when it alone is wider than the column (#131). */}
+        <div
+          data-slot="task-status"
+          className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-meta text-muted"
+        >
+          <StateChip state={state} label={stateLabel} className="max-w-full" />
+          {meta ? (
+            <span data-slot="task-meta" className="max-w-full truncate">
+              {meta}
+            </span>
+          ) : null}
         </div>
         {detail ? (
           <p data-slot="task-detail" className="text-meta break-words text-muted">
