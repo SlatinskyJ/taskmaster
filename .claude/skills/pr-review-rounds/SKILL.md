@@ -138,6 +138,7 @@ How: add the label `needs-jakub` to the PR, post one PR comment that mentions `@
 ## Stacked PRs
 
 - Each PR in the stack has its own plan and runs its own plan rounds and review rounds on its own diff.
+- A split the Architecture judge asks for in a plan round: this PR keeps the bottom part. Cut the plan down to it and carry on in the same plan rounds. Each part above gets its own PR and its own plan once the part below it is built.
 - Stacked PRs are linked as a GitHub stack (see CLAUDE.md, PR flow step 1).
 - Jakub merges bottom-up, or several PRs of the stack at once. GitHub rebases the PRs above onto `main` after a merge; check that each one's base is now `main` and its CI is green (section 8).
 - A fix in a lower PR → rebase the PRs above it (`gh stack rebase` or "Rebase stack" in the merge box).
