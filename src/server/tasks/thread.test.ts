@@ -1,8 +1,23 @@
 import { and, eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { taskThread } from '~/server/db/schema'
-import { family, rawTask, T1, T2 } from './testing'
+import { approveTaskOffer } from './tasks'
+import {
+  car,
+  failAuditOn,
+  family,
+  json,
+  lastAudit,
+  must,
+  offerInStep,
+  rawTask,
+  T0,
+  T1,
+  T2,
+  thread,
+} from './testing'
 import type { Family } from './testing'
+import { threadOf } from './thread'
 
 const bid = (f: Family, taskId: number, userId: number, side: 'giver' | 'taker', score: number) =>
   f.db.insert(taskThread).values({ taskId, userId, side, score, createdAt: T1.toISOString() }).run()
@@ -36,5 +51,42 @@ describe('task_thread constraints', () => {
     bid(f, id, f.starsi, 'taker', 1)
     expect(() => f.db.update(taskThread).set({ closedAs: 'closed' }).run()).toThrow(/CHECK/)
     expect(() => f.db.update(taskThread).set({ closedAt: T2.toISOString() }).run()).toThrow(/CHECK/)
+  })
+})
+
+describe('the thread behind path 1', () => {
+  it('creating a task writes its first offer', () => {
+    const f = family()
+    const id = car(f)
+    expect(thread(f.db, id)).toEqual([['giver', f.tata, 18, null]])
+    expect(threadOf(f.db, id)[0]).toMatchObject({ createdAt: T0.toISOString(), closedAt: null })
+    expect(offerInStep(f.db, id)).toBe(true)
+  })
+
+  it("a taker's approval closes the offer as accepted and names it in task.agreed", () => {
+    const f = family()
+    const id = car(f)
+    must(approveTaskOffer(f.db, f.starsi, id, 18, T1))
+    expect(thread(f.db, id)).toEqual([['giver', f.tata, 18, 'accepted']])
+    expect(threadOf(f.db, id)[0]?.closedAt).toBe(T1.toISOString())
+    expect(json(lastAudit(f.db)?.before)).toEqual({ status: 'proposed', score: 18, offerRound: 1 })
+    expect(json(lastAudit(f.db)?.after)).toEqual({
+      status: 'open',
+      score: 18,
+      offerRound: 1,
+      reservedBy: null,
+      reservedVia: null,
+      reservedGiverId: null,
+      accepted: [1],
+      closed: [],
+    })
+  })
+
+  it('a failed audit write leaves the offer open', () => {
+    const f = family()
+    const id = car(f)
+    failAuditOn(f.db, 'task.agreed')
+    expect(() => approveTaskOffer(f.db, f.starsi, id, 18, T1)).toThrow(/audit down/)
+    expect(thread(f.db, id)).toEqual([['giver', f.tata, 18, null]])
   })
 })

@@ -4,9 +4,9 @@ import {
   createOneTimeItem,
   createOneTimeTask,
   byPerson,
-  EMPTY_BOOK,
   findPerson,
   isValidScore,
+  markAgreed,
   missingRoles,
   reopenOneTimeOffer,
   resolveOneTime,
@@ -17,15 +17,19 @@ import type { Result } from '~/domain/result'
 import { toIsoUtc } from '~/domain/dates'
 import { TASK_TITLE_MAX } from '~/lib/taskLimits'
 import { writeAudit } from '~/server/audit'
-import type { Tx } from '~/server/audit'
+import type { Actor, Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { taskScoreApprovals, tasks, users } from '~/server/db/schema'
 import type { TaskRow } from '~/server/db/schema'
 import { listPeople } from '~/server/users/people'
+import { saveItem, toItem } from './item'
+import { addEntry, openBids, openOffer } from './thread'
 
 // One-time tasks and their score agreement (spec §5.2 path 1, §5.5). The rules live in
 // src/domain (agreement + lifecycle); this module loads the rows, asks the domain, and writes
-// the result with its audit entries in one transaction. Bidding (path 2) comes with #34.
+// the result with its audit entries in one transaction. The negotiation (offers and bids) lives
+// in the task's thread (./thread); bidding actions are in ./bidding. A task's state is written
+// only through `saveItem` (./item).
 
 export const TITLE_MAX = TASK_TITLE_MAX
 
@@ -58,23 +62,74 @@ function currentApprovers(tx: Db | Tx, task: TaskRow): number[] {
     .map((r) => r.userId)
 }
 
-/** The domain's view of a proposed task's agreement. Bids join in #34. */
-function agreementOf(tx: Db | Tx, task: TaskRow): OneTimeAgreement {
+/** The domain's view of a proposed task's agreement: the open offer and the open bids. */
+export function agreementOf(tx: Db | Tx, task: TaskRow): OneTimeAgreement {
   if (task.status !== 'proposed') return { status: 'open', score: task.score }
   return {
     status: 'proposed',
     offer: {
       score: task.score,
-      proposedBy: task.createdBy,
+      proposedBy: openOffer(tx, task.id).userId,
       approvedBy: currentApprovers(tx, task),
     },
-    book: EMPTY_BOOK,
+    book: { bids: openBids(tx, task.id).map((b) => ({ by: b.userId, score: b.score })) },
   }
+}
+
+export type AgreedOneTime = Exclude<OneTimeAgreement, { status: 'proposed' }>
+
+/**
+ * Ends a negotiation: the task is agreed at `agreed.score`, open or reserved to the bidder with
+ * the giver who agreed. The thread closes (`accepted` = the rows agreed at). An agreed score that
+ * differs from the current offer starts a new offer round, so no approval sits on it. Writes
+ * `task.agreed`. The caller checked the task is proposed.
+ */
+export function agree(
+  tx: Tx,
+  task: TaskRow,
+  agreed: AgreedOneTime,
+  accepted: readonly number[],
+  actor: Actor,
+  now: Date,
+): TaskRow {
+  const item = markAgreed(
+    toItem(task),
+    agreed.status === 'reserved' ? { takerId: agreed.takerId, giverId: agreed.giverId } : null,
+  )
+  if (!item.ok) throw new Error(`task ${String(task.id)} cannot be agreed: ${item.error}`)
+  const offerRound = agreed.score === task.score ? task.offerRound : task.offerRound + 1
+  const saved = saveItem(
+    tx,
+    task,
+    item.value,
+    { set: { score: agreed.score, agreedAt: toIsoUtc(now), offerRound }, accepted },
+    now,
+  )
+  const row = saved.row
+  writeAudit(tx, {
+    actor,
+    action: 'task.agreed',
+    entityType: 'task',
+    entityId: task.id,
+    before: { status: task.status, score: task.score, offerRound: task.offerRound },
+    after: {
+      status: row.status,
+      score: row.score,
+      offerRound: row.offerRound,
+      reservedBy: row.reservedBy,
+      reservedVia: row.reservedVia,
+      reservedGiverId: row.reservedGiverId,
+      accepted: saved.accepted,
+      closed: saved.closed,
+    },
+    at: now,
+  })
+  return row
 }
 
 /** A giver creates a one-time task with an offer (spec §5.2). It starts proposed. */
 export function createTask(
-  db: Db,
+  db: Db | Tx,
   giverId: number,
   input: NewTask,
   now: Date = new Date(),
@@ -115,6 +170,7 @@ export function createTask(
         approvedAt: at,
       })
       .run()
+    addEntry(tx, { taskId: row.id, userId: giverId, side: 'giver', score: row.score }, now)
     writeAudit(tx, {
       actor: { kind: 'user', userId: giverId },
       action: 'task.created',
@@ -160,29 +216,9 @@ export function approveTaskOffer(
       after: { score },
       at: now,
     })
-    if (result.value.status !== 'open') return ok(task)
-    const opened = openTask(tx, task, now)
-    writeAudit(tx, {
-      actor,
-      action: 'task.agreed',
-      entityType: 'task',
-      entityId: taskId,
-      before: { status: task.status },
-      after: { status: opened.status, score: opened.score },
-      at: now,
-    })
-    return ok(opened)
+    if (result.value.status === 'proposed') return ok(task)
+    return ok(agree(tx, task, result.value, [openOffer(tx, taskId).id], actor, now))
   })
-}
-
-function openTask(tx: Tx, task: TaskRow, now: Date): TaskRow {
-  const at = toIsoUtc(now)
-  return tx
-    .update(tasks)
-    .set({ status: 'open', agreedAt: at, updatedAt: at })
-    .where(eq(tasks.id, task.id))
-    .returning()
-    .get()
 }
 
 /**
@@ -211,12 +247,17 @@ export function reopenOffer(
   tx.insert(taskScoreApprovals)
     .values({ taskId: task.id, userId: giverId, offerRound, score: task.score, approvedAt: at })
     .run()
+  const { entry } = addEntry(
+    tx,
+    { taskId: task.id, userId: giverId, side: 'giver', score: task.score },
+    now,
+  )
   writeAudit(tx, {
     actor: { kind: 'system' },
     action: 'task.score_approved',
     entityType: 'task',
     entityId: task.id,
-    after: { userId: giverId, score: task.score, offerRound },
+    after: { userId: giverId, score: task.score, offerRound, entryId: entry.id },
     at: now,
   })
   return reopened
@@ -224,7 +265,8 @@ export function reopenOffer(
 
 /**
  * People changed (spec §3 caller duty): approvals are counted live, so a proposed task may now
- * be agreed (e.g. a new taker). Opens those, logged as the system. Runs inside the change's
+ * be agreed (e.g. a new taker). Opens those at the current offer, closing any open bids, logged
+ * as the system. Runs inside the change's
  * transaction (src/server/users/hooks.ts).
  */
 export function resolveProposedTasks(tx: Tx, people: Person[], now: Date): void {
@@ -232,16 +274,7 @@ export function resolveProposedTasks(tx: Tx, people: Person[], now: Date): void 
   for (const task of proposed) {
     const resolved = resolveOneTime(agreementOf(tx, task), people)
     if (resolved.status !== 'open') continue
-    const opened = openTask(tx, task, now)
-    writeAudit(tx, {
-      actor: { kind: 'system' },
-      action: 'task.agreed',
-      entityType: 'task',
-      entityId: task.id,
-      before: { status: task.status },
-      after: { status: opened.status, score: opened.score },
-      at: now,
-    })
+    agree(tx, task, resolved, [openOffer(tx, task.id).id], { kind: 'system' }, now)
   }
 }
 
