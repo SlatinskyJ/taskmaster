@@ -1,5 +1,11 @@
 import { eq } from 'drizzle-orm'
-import { acceptLowestBid, acceptOneTimeOffer, counterOneTimeOffer, placeOneTimeBid } from '~/domain'
+import {
+  acceptLowestBid,
+  acceptOneTimeOffer,
+  counterOneTimeOffer,
+  isActiveAs,
+  placeOneTimeBid,
+} from '~/domain'
 import type { Person } from '~/domain'
 import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
@@ -42,10 +48,18 @@ function onTask(
   })
 }
 
-/** The ids of the open bids at `score` held by `bidders` (the ones an agreement accepts). */
-function bidsAt(tx: Tx, taskId: number, score: number, bidders: readonly number[]): number[] {
-  return openBids(tx, taskId)
-    .filter((b) => b.score === score && bidders.includes(b.userId))
+/**
+ * The open bids an agreement accepts: the winner's bid when reserved, every current taker's bid
+ * at the agreed score when open (a tie). Taken from the domain's result, never from the request.
+ */
+function bidsAgreed(tx: Tx, task: TaskRow, people: Person[], agreed: AgreedOneTime): number[] {
+  return openBids(tx, task.id)
+    .filter((b) => b.score === agreed.score)
+    .filter((b) =>
+      agreed.status === 'reserved'
+        ? b.userId === agreed.takerId
+        : isActiveAs(people, b.userId, 'taker'),
+    )
     .map((b) => b.id)
 }
 
@@ -105,7 +119,10 @@ export function counterOffer(
     if (!result.ok) return result
     const actor = { kind: 'user', userId: giverId } as const
     if (result.value.status !== 'proposed') {
-      return ok(acceptBids(tx, task, result.value, bidders, actor, now, { by: 'counter' }))
+      // The counter goes into the thread too (spec §5.2: every bid and counter), accepted with
+      // the bids at its number.
+      const { entry } = addEntry(tx, { taskId, userId: giverId, side: 'giver', score }, now)
+      return ok(acceptBids(tx, { task, people }, result.value, actor, now, entry.id))
     }
     const old = openOffer(tx, taskId)
     const offerRound = task.offerRound + 1
@@ -173,28 +190,36 @@ export function acceptLowestTaskBid(
     const result = acceptLowestBid(agreementOf(tx, task), people, giverId, score, bidders)
     if (!result.ok) return result
     if (result.value.status === 'proposed') throw new Error('an accepted bid is agreed')
-    return ok(acceptBids(tx, task, result.value, bidders, { kind: 'user', userId: giverId }, now))
+    return ok(
+      acceptBids(tx, { task, people }, result.value, { kind: 'user', userId: giverId }, now),
+    )
   })
 }
 
-/** Accepts the open bids at the agreed score held by `bidders`, then ends the negotiation. */
+/**
+ * Accepts the bids the domain agreed, then ends the negotiation. A counter at a bid passes its
+ * own new offer row, which is accepted with them.
+ */
 function acceptBids(
   tx: Tx,
-  task: TaskRow,
+  { task, people }: { task: TaskRow; people: Person[] },
   agreed: AgreedOneTime,
-  bidders: readonly number[],
   actor: { kind: 'user'; userId: number },
   now: Date,
-  extra: { by?: 'counter' } = {},
+  offerEntryId?: number,
 ): TaskRow {
-  const entryIds = bidsAt(tx, task.id, agreed.score, bidders)
+  const entryIds = bidsAgreed(tx, task, people, agreed)
   writeAudit(tx, {
     actor,
     action: 'task.bid_accepted',
     entityType: 'task',
     entityId: task.id,
-    after: { score: agreed.score, entryIds, ...extra },
+    after:
+      offerEntryId === undefined
+        ? { score: agreed.score, entryIds }
+        : { score: agreed.score, entryIds, by: 'counter', offerEntryId },
     at: now,
   })
-  return agree(tx, task, agreed, entryIds, actor, now)
+  const accepted = offerEntryId === undefined ? entryIds : [...entryIds, offerEntryId]
+  return agree(tx, task, agreed, accepted, actor, now)
 }

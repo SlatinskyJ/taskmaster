@@ -89,4 +89,11 @@ describe('the thread behind path 1', () => {
     expect(() => approveTaskOffer(f.db, f.starsi, id, 18, T1)).toThrow(/audit down/)
     expect(thread(f.db, id)).toEqual([['giver', f.tata, 18, null]])
   })
+  it('an offer row out of step with the task score fails loudly (Architecture, code round 1)', () => {
+    const f = family()
+    const id = car(f)
+    f.db.update(taskThread).set({ score: 20 }).where(eq(taskThread.taskId, id)).run()
+    expect(() => approveTaskOffer(f.db, f.starsi, id, 18, T1)).toThrow(/offer 20 ≠ score 18/)
+    expect(offerInStep(f.db, id)).toBe(false)
+  })
 })

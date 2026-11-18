@@ -11,7 +11,7 @@ import { Input } from '~/components/ui/input'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { taskErrorMessage } from '~/lib/taskErrors'
-import { TASK_TITLE_MAX } from '~/lib/taskLimits'
+import { TASK_SCORE_MAX, TASK_TITLE_MAX } from '~/lib/taskLimits'
 import { createTaskFn } from '~/server/tasks/functions'
 
 // Nový úkol, the one-time part of GCreate (UI doc §7.2): name, points with − / + around a
@@ -27,7 +27,7 @@ export const Route = createFileRoute('/_app/ukoly/novy')({
 
 /** Everyday chores go for 2–5 points, weekly goals are 10–15 (Jakub 2026-11-18). */
 const START_SCORE = 3
-const MAX_SCORE = 999
+const MAX_SCORE = TASK_SCORE_MAX
 /** One tap to a common value; the bigger ones are for one-off jobs. */
 const QUICK_PICKS = [2, 5, 10, 20] as const
 

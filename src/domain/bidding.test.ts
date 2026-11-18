@@ -332,6 +332,16 @@ describe('an accept pins the number the person saw', () => {
     })
   })
 
+  it('a bidders list with a repeated taker is not the tie the giver saw (Security, Rules, code round 1)', () => {
+    const tie = bid(bid(carWash(), OLDER, 22), YOUNGER, 22)
+    expect(error(acceptLowestBid(tie, family, DAD, 22, [OLDER, OLDER]))).toBe('offer_changed')
+    expect(error(counterOneTimeOffer(tie, family, DAD, 22, [YOUNGER, YOUNGER]))).toBe(
+      'offer_changed',
+    )
+    const lone = bid(carWash(), OLDER, 22)
+    expect(error(acceptLowestBid(lone, family, DAD, 22, [OLDER, OLDER]))).toBe('offer_changed')
+  })
+
   it('a giver accepting the lowest at 25 after a re-bid to 23 is refused', () => {
     const t = bid(bid(carWash(), OLDER, 25), OLDER, 23)
     expect(error(acceptLowestBid(t, family, DAD, 25, [OLDER]))).toBe('offer_changed')

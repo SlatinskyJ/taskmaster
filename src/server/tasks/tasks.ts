@@ -67,11 +67,19 @@ function currentApprovers(tx: Db | Tx, task: TaskRow): number[] {
 /** The domain's view of a proposed task's agreement: the open offer and the open bids. */
 export function agreementOf(tx: Db | Tx, task: TaskRow): OneTimeAgreement {
   if (task.status !== 'proposed') return { status: 'open', score: task.score }
+  // The offer is stored twice (the task's score and its open giver row); a writer that moved
+  // only one fails here instead of agreeing a score next to the wrong giver.
+  const offer = openOffer(tx, task.id)
+  if (offer.score !== task.score) {
+    throw new Error(
+      `task ${String(task.id)} offer ${String(offer.score)} ≠ score ${String(task.score)}`,
+    )
+  }
   return {
     status: 'proposed',
     offer: {
       score: task.score,
-      proposedBy: openOffer(tx, task.id).userId,
+      proposedBy: offer.userId,
       approvedBy: currentApprovers(tx, task),
     },
     book: { bids: openBids(tx, task.id).map((b) => ({ by: b.userId, score: b.score })) },

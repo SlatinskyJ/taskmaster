@@ -98,11 +98,15 @@ function agreeAt(
   return ok({ status: 'open', score })
 }
 
-/** The same takers, in any order. */
+/** The same takers, in any order. A list that names a taker twice is never a match. */
 function sameTakers(a: readonly PersonId[], b: readonly PersonId[]): boolean {
-  if (a.length !== b.length) return false
   const set = new Set(a)
-  return b.every((id) => set.has(id))
+  return (
+    a.length === b.length &&
+    set.size === a.length &&
+    new Set(b).size === b.length &&
+    b.every((id) => set.has(id))
+  )
 }
 
 /**

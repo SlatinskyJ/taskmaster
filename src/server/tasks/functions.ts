@@ -1,6 +1,9 @@
 import { createServerFn } from '@tanstack/react-start'
 import { requireRole } from '~/server/auth/guards'
+import type { Result } from '~/domain/result'
+import { TASK_SCORE_MAX } from '~/lib/taskLimits'
 import { getDb } from '~/server/db'
+import type { TaskRow } from '~/server/db/schema'
 import type { TaskDetail, TaskError, TaskView, ThreadEntry } from './tasks'
 
 export type { TaskDetail, TaskError, TaskView, ThreadEntry }
@@ -21,9 +24,7 @@ import {
 // Server functions for one-time tasks (#33). Roles are checked here (guards) and again by the
 // domain rules inside (`not_a_giver`, `not_a_party`).
 
-export type TaskActionResult = { ok: true; id: number } | { ok: false; error: TaskError }
-
-export type BidActionResult =
+export type TaskActionResult =
   { ok: true; id: number; status: TaskView['status'] } | { ok: false; error: TaskError }
 
 function record(data: unknown): Record<string, unknown> {
@@ -36,17 +37,24 @@ function int(value: unknown): number {
   return value
 }
 
+/** A score a person typed: a safe integer up to TASK_SCORE_MAX (the domain checks it is ≥ 1). */
+function scoreOf(value: unknown): number {
+  const n = int(value)
+  if (n > TASK_SCORE_MAX) throw new Error('Invalid input')
+  return n
+}
+
 function parseNewTask(data: unknown): { title: string; score: number; approvalRequired: boolean } {
   const { title, score, approvalRequired } = record(data)
   if (typeof title !== 'string' || typeof approvalRequired !== 'boolean') {
     throw new Error('Invalid input')
   }
-  return { title, score: int(score), approvalRequired }
+  return { title, score: scoreOf(score), approvalRequired }
 }
 
 function parseApproval(data: unknown): { taskId: number; score: number } {
   const { taskId, score } = record(data)
-  return { taskId: int(taskId), score: int(score) }
+  return { taskId: int(taskId), score: scoreOf(score) }
 }
 
 function parseTaskId(data: unknown): { taskId: number } {
@@ -60,7 +68,9 @@ function bidders(value: unknown, min: number): number[] {
   if (!Array.isArray(value) || value.length < min || value.length > MAX_BIDDERS) {
     throw new Error('Invalid input')
   }
-  return value.map(int)
+  const ids = value.map(int)
+  if (new Set(ids).size !== ids.length) throw new Error('Invalid input')
+  return ids
 }
 
 /** A giver's accept: the lowest bid he saw and every taker who held it (1 to 50). */
@@ -77,7 +87,7 @@ export function parseCounter(data: unknown): { taskId: number; score: number; bi
   return { ...parseApproval(data), bidders: bidders(record(data).bidders, 0) }
 }
 
-function answered(result: ReturnType<typeof placeBid>): BidActionResult {
+function answered(result: Result<TaskRow, TaskError>): TaskActionResult {
   return result.ok ? { ok: true, id: result.value.id, status: result.value.status } : result
 }
 
@@ -85,10 +95,7 @@ function answered(result: ReturnType<typeof placeBid>): BidActionResult {
 export const createTaskFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver')])
   .validator(parseNewTask)
-  .handler(({ data, context }): TaskActionResult => {
-    const result = createTask(getDb(), context.user.id, data)
-    return result.ok ? { ok: true, id: result.value.id } : result
-  })
+  .handler(({ data, context }) => answered(createTask(getDb(), context.user.id, data)))
 
 /** A giver or taker approves the offer they were shown (spec §5.2 path 1). */
 export const approveTaskOfferFn = createServerFn({ method: 'POST' })

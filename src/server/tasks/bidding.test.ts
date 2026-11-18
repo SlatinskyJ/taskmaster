@@ -193,16 +193,23 @@ describe('counterOffer (Jakub 2026-11-17: one new offer to every taker)', () => 
       reservedVia: 'bid',
       reservedGiverId: f.tata,
     })
+    // The counter is in the thread too (spec §5.2: every bid and counter), accepted with the bid.
     expect(thread(f.db, id)).toEqual([
-      ['giver', f.tata, 18, 'closed'],
+      ['giver', f.tata, 18, 'replaced'],
       ['taker', f.starsi, 25, 'accepted'],
       ['taker', f.mladsi, 22, 'closed'],
+      ['giver', f.tata, 25, 'accepted'],
     ])
     expect(approvals(f.db, id, 2)).toEqual([])
     expect(audits(f.db, id).slice(-2)).toEqual(['task.bid_accepted', 'task.agreed'])
     const [accepted, agreed] = f.db.select().from(auditLog).all().slice(-2)
-    expect(json(accepted?.after)).toEqual({ score: 25, entryIds: [2], by: 'counter' })
-    expect(json(agreed?.after)).toMatchObject({ status: 'reserved', accepted: [2], closed: [1, 3] })
+    expect(json(accepted?.after)).toEqual({
+      score: 25,
+      entryIds: [2],
+      by: 'counter',
+      offerEntryId: 4,
+    })
+    expect(json(agreed?.after)).toMatchObject({ status: 'reserved', accepted: [2, 4], closed: [3] })
   })
   it('[call] another giver countering at a bid is the agreeing giver (decision 8b)', () => {
     const f = family()
@@ -225,7 +232,12 @@ describe('counterOffer (Jakub 2026-11-17: one new offer to every taker)', () => 
       score: 22,
       reservedBy: null,
     })
-    expect(thread(f.db, id).map((e) => e[3])).toEqual(['closed', 'accepted', 'accepted'])
+    expect(thread(f.db, id).map((e) => e[3])).toEqual([
+      'replaced',
+      'accepted',
+      'accepted',
+      'accepted',
+    ])
   })
   it('a counter is refused when the bids at that number changed under the giver (offer_changed)', () => {
     const f = family()
@@ -438,6 +450,23 @@ describe('acceptLowestTaskBid (the giver side accepts the lowest open bid)', () 
       status: 'reserved',
       reservedBy: f.starsi,
     })
+  })
+  it('a repeated bidder is refused and writes nothing; the tied bids are both accepted when named (code round 1)', () => {
+    const f = family()
+    const id = car(f)
+    must(placeBid(f.db, f.starsi, id, 15, T1))
+    must(placeBid(f.db, f.mladsi, id, 15, T1))
+    expect(acceptLowestTaskBid(f.db, f.tata, id, 15, [f.starsi, f.starsi], T2)).toEqual({
+      ok: false,
+      error: 'offer_changed',
+    })
+    expect(counterOffer(f.db, f.tata, id, 15, [f.mladsi, f.mladsi], T2)).toEqual({
+      ok: false,
+      error: 'offer_changed',
+    })
+    expect(audits(f.db, id)).toEqual(['task.created', 'task.bid_placed', 'task.bid_placed'])
+    must(acceptLowestTaskBid(f.db, f.tata, id, 15, [f.mladsi, f.starsi], T2))
+    expect(thread(f.db, id).map((e) => e[3])).toEqual(['closed', 'accepted', 'accepted'])
   })
   it('needs a bid; a taker and the admin cannot', () => {
     const f = family()
