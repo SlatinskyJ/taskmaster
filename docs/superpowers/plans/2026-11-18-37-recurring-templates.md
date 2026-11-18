@@ -36,7 +36,8 @@ The spec says a template has "a due time" but not how it is set. Jakub chose **d
 2. Deadline rule A: `dayOffset` 0–6 days after the instance appears, at `due` HH:MM; grace 0–48 h, picked in whole hours in the UI, stored in minutes.
 3. A template may have a deadline without a schedule (on-demand only, #38).
 4. No "Nesouhlasím" button for a proposed template (the mockup's TApprove has one): the spec has no refusal for templates; one taker's yes agrees it, and a taker who dislikes the score bids a change once it is active (#138).
-5. An active template's chip reads **"Platí"** (new label) in the `open` colour; a proposed one uses the existing `proposed` chip ("Návrh").
+5. An active template's chip reads **"Platí"** (new label) in the `confirmed` (green) colour, as in the GTasks mockup, so it doesn't read as a takeable task; a proposed one uses the existing `proposed` chip ("Návrh").
+7. On Úkoly, templates are a section **below** the one-time list (UX nit: rows that need action stay on top). Tabs as in the mockup can come with #38, when the list grows.
 6. Editing other fields and cancelling a template are not in the spec's rules for #37; left out (audit actions `template.updated` / `template.cancelled` stay unused).
 
 ## Review Focus
@@ -89,7 +90,7 @@ The spec says a template has "a due time" but not how it is set. Jakub chose **d
 - Test: `src/server/db/templates-schema.test.ts`
 
 **Interfaces:**
-- Produces: tables `templates`, `templateScoreApprovals`; `TEMPLATE_STATUSES = ['proposed', 'active'] as const`; types `TemplateRow`, `TemplateStatus`.
+- Produces: tables `templates`, `templateScoreApprovals`; `TEMPLATE_STATUSES = ['proposed', 'active'] as const` (schema comment: stored `active` = the domain's `TemplateAgreement` status `agreed`; `agreementOf` maps between them); types `TemplateRow`, `TemplateStatus`.
 
 `templates` columns: `id` pk autoincrement; `title` text not null; `status` text enum not null; `score` integer not null (the proposed score while proposed, the agreed score after); `approval_required` boolean not null; `schedule_days` integer not null default 0 (bit `1 << weekday`, 0 = no schedule); `schedule_time` text null (`HH:MM`); `due_day_offset` integer null; `due_time` text null (`HH:MM`); `grace_minutes` integer null; `created_by` → users not null; `created_at`, `updated_at` not null; `agreed_at` null.
 CHECKs: status in the list; `score >= 1`; `length(trim(title)) > 0`; `schedule_days BETWEEN 0 AND 127`; `schedule_time IS NULL OR schedule_days > 0`; deadline all-or-none (`(due_day_offset IS NULL) = (due_time IS NULL) AND (due_time IS NULL) = (grace_minutes IS NULL)`); `due_day_offset BETWEEN 0 AND 6`; `grace_minutes BETWEEN 0 AND 2880`. Index on `status`.
@@ -106,7 +107,7 @@ CHECKs: status in the list; `score >= 1`; `length(trim(title)) > 0`; `schedule_d
 
 **Files:**
 - Create: `src/server/templates/templates.ts`, `src/server/templates/index.ts`
-- Modify: `src/server/tasks/tasks.ts` (export the existing `normaliseTitle`), `src/server/users/hooks.ts` (add `resolveProposedTemplates`)
+- Modify: `src/lib/taskLimits.ts` (move `normaliseTitle(title: string): string | null` here from `src/server/tasks/tasks.ts`, which then imports it; behaviour unchanged), `src/server/users/hooks.ts` (add `resolveProposedTemplates`)
 - Test: `src/server/templates/templates.test.ts`
 
 **Interfaces:**
@@ -132,7 +133,7 @@ CHECKs: status in the list; `score >= 1`; `length(trim(title)) > 0`; `schedule_d
 Audit entries (entity `template`): `template.created` (after: the row), `template.score_approved` (after `{ score }`), `template.agreed` (before `{ status: 'proposed' }`, after `{ status: 'active', score }`). `resolveProposedTemplates` logs `template.agreed` as `{ kind: 'system' }`.
 
 - [ ] **Step 1: failing tests**, same `family()` helper shape as `tasks.test.ts`:
-  - `createTemplate`: giver creates → `proposed`, one approval row (the giver), `template.created` audited; the stored schedule/deadline round-trips through `listTemplates` (`days: [2]`, `time: '18:00'`, `deadline: { dayOffset: 1, due: '07:00', graceMinutes: 120 }`).
+  - `createTemplate`: giver creates → `proposed`, one approval row (the giver), `template.created` audited; the stored schedule/deadline round-trips through `listTemplates`: `days: [0, 3, 6]`, `time: '18:30'`, `deadline: { dayOffset: 1, due: '07:45', graceMinutes: 90 }` (Sunday, Saturday and non-zero minutes survive the bitmask and `HH:MM` helpers); a second template with `schedule: null, deadline: null` reads back as `schedule: null, deadline: null` (stored mask 0); a third with `time: null` reads back `time: null`.
   - wrong actors: taker and admin → `not_a_giver`, nothing written.
   - `invalid_title` (blank, 81 chars), `invalid_score` (0, 1.5), `invalid_schedule`, `invalid_deadline` → nothing written.
   - `approveTemplateScore`: a taker's yes → `active`, `agreedAt` set, entries `template.score_approved` + `template.agreed` with the before/after above.
@@ -157,9 +158,9 @@ Audit entries (entity `template`): `template.created` (after: the row), `templat
 
 **Interfaces:**
 - Produces: `createTemplateFn` (giver), `approveTemplateScoreFn` (giver, taker; data `{ templateId, score }`), `listTemplatesFn` (giver), `listPendingTemplateApprovalsFn` (giver, taker). Results `{ ok: true; id: number } | { ok: false; error: TemplateError }`, like `TaskActionResult`.
-- Validator `parseNewTemplate(data: unknown): NewTemplate` (exported for the test): checks types only (strings, safe integers, booleans, arrays, objects or null) and throws `Invalid input`; ranges are the domain's job.
+- Validator `parseNewTemplate(data: unknown): NewTemplate` (exported for the test): checks types only (strings, safe integers, booleans, arrays, objects or null) and throws `Invalid input`; `schedule.days` longer than 7 entries also throws (so an oversized array is refused before it is de-duplicated); ranges are the domain's job.
 
-- [ ] **Step 1: failing tests:** `parseNewTemplate` accepts a full valid body and `schedule: null, deadline: null`; throws on a string score, `days: '2'`, a missing `deadline` key, extra nesting garbage. Guards test gets the four new entries (fails until the functions exist).
+- [ ] **Step 1: failing tests:** `parseNewTemplate` accepts a full valid body and `schedule: null, deadline: null`; throws on a string score, `days: '2'`, `days` with 8 entries, a missing `deadline` key, extra nesting garbage. Guards test gets the four new entries (fails until the functions exist).
 - [ ] **Step 2:** run → FAIL.
 - [ ] **Step 3:** implement with `requireRole`, as in `src/server/tasks/functions.ts`.
 - [ ] **Step 4:** `pnpm vitest run src/server/templates tests/server-fn-guards.test.ts` → PASS.
@@ -173,9 +174,9 @@ Audit entries (entity `template`): `template.created` (after: the row), `templat
 - Test: `src/lib/templateText.test.ts`, `src/lib/taskErrors.test.ts`
 
 **Interfaces:**
-- Produces: `describeTemplate(t: Pick<TemplateView, 'schedule' | 'deadline'>): string`.
+- Produces: `describeTemplate(t: Pick<TemplateView, 'schedule' | 'deadline'>): string` and `templateDetail(t: Pick<TemplateView, 'schedule' | 'deadline' | 'approvalRequired' | 'approvedBy' | 'status'>): string` = summary + ` · ` + `schvaluje rodič` / `bez schvalování`, and for proposed ones + ` · Souhlasí: Táta`.
 
-Exact copy (strings.ts, `templates`): `kindOneTime: 'Jednorázový'`, `kindRecurring: 'Opakovaný'`, `section: 'Opakované'`, `empty: 'Zatím žádné opakované úkoly.'`, `when: 'Kdy vzniká'`, `days: ['Ne','Po','Út','St','Čt','Pá','So']` (index = Weekday), `atTime: 'V čase'`, `noTimeHint: 'Bez času vznikne hned ráno.'`, `onDemand: 'Jen na požádání'`, `deadline: 'Termín'`, `noDeadline: 'Bez termínu'`, `noDeadlineHint: 'čeká, dokud to někdo neudělá'`, `withDeadline: 'S termínem'`, `withDeadlineHint: 'pak propadne'`, `dueDay: 'Hotovo do'`, `dayOffsets: ['týž den','další den','za 2 dny','za 3 dny','za 4 dny','za 5 dnů','za 6 dnů']`, `dueTime: 'v'`, `grace: 'Zapsat jde ještě'`, `hours: (n) => \`${n} h\``, `proposeHint: 'Začne platit, až cenu schválí jeden z kluků.'`, `created: 'Opakovaný úkol navržen'`, `activeChip: 'Platí'`, `recurringMeta: 'Opakovaný'`, errors `invalidSchedule: 'Vyber aspoň jeden den.'`, `invalidDeadline: 'Termín nedává smysl. Zkontroluj ho.'`, `alreadyApproved: 'Už jsi souhlasil.'`.
+Exact copy (strings.ts, `templates`): `kindOneTime: 'Jednorázový'`, `kindRecurring: 'Opakovaný'`, `section: 'Opakované'`, `empty: 'Zatím žádné opakované úkoly.'`, `when: 'Kdy vzniká'`, `days: ['Ne','Po','Út','St','Čt','Pá','So']` (index = Weekday), `atTime: 'V čase'`, `withTime: 'V určitý čas'`, `noTimeHint: 'Bez času vznikne o půlnoci.'`, `onDemandHint: 'Bez vybraného dne vzniká jen na požádání.'`, `approvalOn: 'schvaluje rodič'`, `approvalOff: 'bez schvalování'`, `agreedBy: 'Souhlasí'`, `onDemand: 'Jen na požádání'`, `deadline: 'Termín'`, `noDeadline: 'Bez termínu'`, `noDeadlineHint: 'čeká, dokud to někdo neudělá'`, `withDeadline: 'S termínem'`, `withDeadlineHint: 'pak propadne'`, `dueDay: 'Hotovo do'`, `dayOffsets: ['týž den','další den','za 2 dny','za 3 dny','za 4 dny','za 5 dnů','za 6 dnů']`, `dueTime: 'v'`, `grace: 'Zapsat jde ještě'`, `hours: (n) => \`${n} h\``, `proposeHint: 'Začne platit, až cenu schválí jeden z kluků.'`, `created: 'Opakovaný úkol navržen'`, `activeChip: 'Platí'`, `recurringMeta: 'Opakovaný'`, errors `invalidSchedule: 'Vyber aspoň jeden den.'`, `invalidDeadline: 'Termín nedává smysl. Zkontroluj ho.'`, `alreadyApproved: 'Souhlas už máš zapsaný.'`.
 
 Summary format (days Monday first, so `[1, 2]` before `[0]`): `Út, Pá v 18:00 · do dalšího dne 7:00 (+2 h)`; no time: `Út, Pá`; no schedule: `Jen na požádání`; no deadline: no `·` part; `dayOffset` 0: `do 7:00 (+0 h)` reads `do 7:00`, grace 0 omits `(+0 h)`; `dayOffset` ≥ 2: `do 7:00 za 3 dny`. Hours with no leading zero (`7:00`), minutes always two digits.
 
@@ -186,27 +187,50 @@ Summary format (days Monday first, so `[1, 2]` before `[0]`): `Út, Pá v 18:00 
 ### Task 6: Nový úkol: the recurring half (GCreate)
 
 **Files:**
-- Create: `src/components/tasks/ScoreField.tsx` (the − / dial / + / quick picks block moved out of `novy.tsx`, unchanged behaviour), `src/components/templates/RecurringFields.tsx`
+- Create: `src/components/tasks/ScoreField.tsx` (the − / dial / + / quick picks block moved out of `novy.tsx`, unchanged behaviour), `src/components/templates/RecurringFields.tsx`, `src/components/templates/actions.ts`
 - Modify: `src/routes/_app/ukoly/novy.tsx`
-- Test: `src/components/templates/RecurringFields.test.tsx`, existing `src/components/tasks/tasks.test.tsx` still green
+- Test: `src/components/templates/RecurringFields.test.tsx`, `src/components/templates/actions.test.ts`, existing `src/components/tasks/tasks.test.tsx` still green
+
+The repo has no DOM test setup (Vitest `environment: 'node'`, component tests use `renderToStaticMarkup`), and this PR adds no dependency. So: what a button sends lives in pure functions that take the server function as a parameter (default = the real one) and are tested with a fake; rendering is tested with `renderToStaticMarkup` for given props.
 
 **Interfaces:**
-- Produces: `ScoreField({ value, onChange }: { value: number; onChange: (n: number) => void })`; `RecurringFields({ value, onChange }: { value: RecurringValue; onChange: (v: RecurringValue) => void })` with `RecurringValue = { days: Weekday[]; time: string /* "" = none */; hasDeadline: boolean; dayOffset: number; dueTime: string; graceHours: number }` and `toDefinition(v: RecurringValue): Pick<NewTemplate, 'schedule' | 'deadline'>` (exported, pure). Defaults: `days: []`, `time: '18:00'`, `hasDeadline: false`, `dayOffset: 1`, `dueTime: '07:00'`, `graceHours: 2`.
+- Produces:
+  - `ScoreField({ value, onChange }: { value: number; onChange: (n: number) => void })`;
+  - `RecurringFields({ value, onChange }: { value: RecurringValue; onChange: (v: RecurringValue) => void })` with `RecurringValue = { days: Weekday[]; withTime: boolean; time: string; hasDeadline: boolean; dayOffset: number; dueTime: string; graceHours: number }`. Defaults: `days: []`, `withTime: true`, `time: '18:00'`, `hasDeadline: false`, `dayOffset: 1`, `dueTime: '07:00'`, `graceHours: 2`;
+  - `toDefinition(v: RecurringValue): Pick<NewTemplate, 'schedule' | 'deadline'>` (pure, in `actions.ts`);
+  - `submitNewItem(kind: 'one_time' | 'recurring', form: { title: string; score: number; approvalRequired: boolean; recurring: RecurringValue }, fns?: { createTask: typeof createTaskFn; createTemplate: typeof createTemplateFn }): Promise<{ ok: true; id: number } | { ok: false; error: string }>`;
+  - `approveTemplate(t: Pick<TemplateView, 'id' | 'score'>, fn?: typeof approveTemplateScoreFn)` (used by Task 7).
 
-Layout (mockup GCreate): a two-button switch at the top (`Jednorázový` / `Opakovaný`, `aria-pressed`, each `min-h-tap`); name card + ScoreField + approval checkbox shared by both; for Opakovaný a second card: seven day toggles Po…Ne (`size-tap` round buttons, `aria-pressed`, wrap at 360 px), `<input type="time">` labelled `V čase` with the hint, the two deadline option buttons, and with a deadline: a Select for the day offset, a time input for the due time, and a − / + stepper for grace hours (0–48). Submit → `createTemplateFn` for Opakovaný, `createTaskFn` otherwise; busy state on the button, Czech error under the form with `role="alert"`, the form stays filled so a retry is one tap. The hint under the button switches to `templates.proposeHint`.
+Layout (mockup GCreate): a two-button switch at the top (`Jednorázový` / `Opakovaný`, `aria-pressed`, each `min-h-tap`); name card + ScoreField + approval checkbox shared by both; for Opakovaný a second card:
+- seven day toggles Po…Ne (`size-tap` round buttons, `aria-pressed`) in a `grid-cols-7` row that breaks out of the card padding (`-mx-2`, `gap-px`), so all seven fit on one line at 360 px (316 px available, 308 needed);
+- with no day picked: the time controls are hidden and the hint `onDemandHint` shows under the days, so "on demand" is a visible state;
+- with a day picked: a checkbox `V určitý čas` (default on) and, when on, `<input type="time">`; when off, the hint `noTimeHint`;
+- the two deadline option buttons; with a deadline: a Select for the day offset, a time input for the due time, and a − / + stepper for grace hours (0–48).
 
-- [ ] **Step 1: failing tests** (Testing Library, as in `tasks.test.tsx`): `toDefinition` with no days → `schedule: null`; days + empty time → `time: null`; deadline off → `deadline: null`; on → `{ dayOffset: 1, due: { hour: 7, minute: 0 }, graceMinutes: 120 }`. Rendering: tapping `Út` sets `aria-pressed="true"` and calls `onChange` with `days: [2]`; the deadline fields appear only after `S termínem`; the grace − button is disabled at 0, + at 48.
+Submit → `submitNewItem`; busy state on the button, Czech error under the form with `role="alert"`, the form stays filled so a retry is one tap. The hint under the button switches to `templates.proposeHint`.
+
+- [ ] **Step 1: failing tests:**
+  - `toDefinition`: no days → `schedule: null` (time ignored); `days: [0, 6]`, `time: '18:30'` → `{ days: [0, 6], time: { hour: 18, minute: 30 } }`; `withTime: false` → `time: null`; deadline off → `deadline: null`; on with `dueTime: '07:45'`, `graceHours: 2` → `{ dayOffset: 1, due: { hour: 7, minute: 45 }, graceMinutes: 120 }`.
+  - `submitNewItem` with fake fns: `recurring` calls only `createTemplate` with `{ data: { title, score, approvalRequired, ...toDefinition(form.recurring) } }`; `one_time` calls only `createTask` with `{ data: { title, score, approvalRequired } }`; a refused result is passed through.
+  - `approveTemplate` with a fake fn sends `{ data: { templateId: 7, score: 4 } }`.
+  - Rendering (`renderToStaticMarkup`): `days: [2]` → the `Út` button has `aria-pressed="true"`, the others `false`; `days: []` → the onDemand hint shows and no `type="time"` input for the schedule; deadline inputs only with `hasDeadline: true`; the grace − button is `disabled` at 0, + at 48.
 - [ ] **Step 2:** FAIL. **Step 3:** implement. **Step 4:** PASS; `pnpm typecheck`.
 - [ ] **Step 5:** commit `Nový úkol: recurring templates (GCreate)`.
 
 ### Task 7: Úkoly list and "Čeká na tebe"
 
 **Files:**
-- Modify: `src/routes/_app/ukoly/index.tsx` (loader also calls `listTemplatesFn`; a `SectionLabel` "Opakované" with template rows above the one-time list; the existing empty state stays for one-time tasks, the templates section gets `templates.empty` with the `+ Nový` link only when both lists are empty), `src/components/tasks/TaskRow.tsx` + `StateChip.tsx` (optional `stateLabel?: string` that overrides the chip text), `src/components/tasks/WaitingForYou.tsx` (new prop `templates: readonly TemplateView[]`; rows with meta `Opakovaný · <describeTemplate>` and `Souhlasím` → `approveTemplateScoreFn({ templateId, score })`; section count = tasks + templates), `src/routes/_app/index.tsx` (loader adds `listPendingTemplateApprovalsFn`)
+- Modify:
+  - `src/components/tasks/TaskRow.tsx` + `StateChip.tsx`: optional `stateLabel?: string` (overrides the chip text) and optional `detail?: ReactNode`, a line under the meta line that **wraps** (no truncation), for template rows;
+  - `src/routes/_app/ukoly/index.tsx`: loader also calls `listTemplatesFn`; under the one-time list a `SectionLabel` "Opakované" with template rows (`templates.empty` when there are none; the page's `+ Nový` link stays in the header);
+  - `src/components/tasks/WaitingForYou.tsx`: new prop `templates: readonly TemplateView[]`; template rows have meta `Opakovaný` and `detail` = `templateDetail(t)`, button `Souhlasím` → `approveTemplate(t)` (Task 6); section count = tasks + templates;
+  - `src/routes/_app/index.tsx`: loader adds `listPendingTemplateApprovalsFn`.
 - Test: `src/components/tasks/tasks.test.tsx` (extend)
 
-- [ ] **Step 1: failing tests:** `WaitingForYou` with one task and one template shows `Čeká na tebe (2)` and the template's summary; it renders nothing with both empty; `TaskRow` with `stateLabel="Platí"` shows that text in the chip; a failed approve shows the Czech toast and re-enables the buttons.
-- [ ] **Step 2:** FAIL. **Step 3:** implement (rows: proposed → state `proposed`, meta `Čeká na souhlas`; active → state `open` with `stateLabel` `Platí`, meta = summary). **Step 4:** PASS.
+Rows: proposed → state `proposed`, meta `Čeká na souhlas`, detail = `templateDetail` (summary + approval flag + who agreed); active → state `confirmed` with `stateLabel` `Platí`, detail = `templateDetail`. Long name: two lines then clamp (TaskRow as today); detail wraps fully; points and button stay whole.
+
+- [ ] **Step 1: failing tests** (`renderToStaticMarkup`): `WaitingForYou` with one task and one template shows `Čeká na tebe (2)` and the template's full detail text (Review Focus 4 summary, not cut in the markup); renders nothing with both empty; `TaskRow` with `stateLabel="Platí"` shows that text in the chip, and `detail` renders in an element without `truncate`.
+- [ ] **Step 2:** FAIL. **Step 3:** implement. **Step 4:** PASS.
 - [ ] **Step 5:** commit `Úkoly and Domů: show and approve templates`.
 
 ### Task 8: Demo data and full check
