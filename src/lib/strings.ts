@@ -92,6 +92,61 @@ export const cs = {
       reasonTooLong: (max: number) => `Důvod je moc dlouhý (nejvýš ${String(max)} znaků).`,
     },
   },
+  /** Recurring templates (#37): GCreate recurring part, GTasks, TApprove (UI doc §7). */
+  templates: {
+    kindOneTime: 'Jednorázový',
+    kindRecurring: 'Opakovaný',
+    /** Section on Úkoly. */
+    section: 'Opakované',
+    empty: 'Zatím žádné opakované úkoly.',
+    when: 'Kdy vzniká',
+    /** Index = weekday, 0 = Sunday (src/domain/dates.ts). */
+    days: ['Ne', 'Po', 'Út', 'St', 'Čt', 'Pá', 'So'],
+    atTime: 'V čase',
+    withTime: 'V určitý čas',
+    noTimeHint: 'Bez času vznikne o půlnoci.',
+    onDemandHint: 'Bez vybraného dne vzniká jen na požádání.',
+    onDemand: 'Jen na požádání',
+    deadline: 'Termín',
+    noDeadline: 'Bez termínu',
+    noDeadlineHint: 'čeká, dokud to někdo neudělá',
+    withDeadline: 'S termínem',
+    withDeadlineHint: 'pak propadne',
+    dueDay: 'Hotovo do',
+    /** Index = days after the instance appears. */
+    dayOffsets: [
+      'týž den',
+      'další den',
+      'za 2 dny',
+      'za 3 dny',
+      'za 4 dny',
+      'za 5 dnů',
+      'za 6 dnů',
+    ],
+    dueTime: 'v',
+    grace: 'Zapsat jde ještě',
+    hours: (n: number) => `${String(n).replace('.', ',')} h`,
+    proposeHint: 'Začne platit, až cenu schválí jeden z kluků.',
+    created: 'Opakovaný úkol navržen',
+    /** Chip of an agreed template. */
+    activeChip: 'Platí',
+    recurringMeta: 'Opakovaný',
+    approvalOn: 'schvaluje rodič',
+    approvalOff: 'bez schvalování',
+    /** Followed by names: "Souhlasí: Táta". */
+    agreedBy: 'Souhlasí',
+    /** Summary pieces: "Út, Pá v 18:00 · do dalšího dne 7:00 (+2 h)". */
+    summary: {
+      at: 'v',
+      due: 'do',
+      nextDay: 'dalšího dne',
+    },
+    errors: {
+      invalidSchedule: 'Vyber aspoň jeden den.',
+      invalidDeadline: 'Termín nedává smysl. Zkontroluj ho.',
+      alreadyApproved: 'Souhlas už máš zapsaný.',
+    },
+  },
   /** Reserve, release, done, approve, reject (spec §5.4–§5.5). */
   work: {
     mine: 'Moje',

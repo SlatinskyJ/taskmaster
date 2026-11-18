@@ -15,6 +15,9 @@ describe('taskErrorMessage', () => {
     ['not_allowed', cs.tasks.errors.notAllowed],
     ['not_a_taker', cs.tasks.errors.notAllowed],
     ['reason_too_long', 'Důvod je moc dlouhý (nejvýš 200 znaků).'],
+    ['invalid_schedule', 'Vyber aspoň jeden den.'],
+    ['invalid_deadline', 'Termín nedává smysl. Zkontroluj ho.'],
+    ['already_approved', 'Souhlas už máš zapsaný.'],
   ])('%s → Czech message', (code, message) => {
     expect(taskErrorMessage(code)).toBe(message)
   })
