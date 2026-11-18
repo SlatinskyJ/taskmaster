@@ -1,0 +1,229 @@
+import { describe, expect, it } from 'vitest'
+import type { TaskView } from '~/server/tasks/functions'
+import {
+  bidButtons,
+  detailMeta,
+  lowestText,
+  myBid,
+  parseTaskIdParam,
+  sendButton,
+  taskChipState,
+  threadTime,
+  toastFor,
+  waitingMeta,
+  waitingText,
+} from './taskView'
+
+// Every decision the bidding screens make (#34). Components only render what these return.
+
+const view = (over: Partial<TaskView>): TaskView => ({
+  id: 1,
+  title: 'Vyluxovat celý obývák a chodbu',
+  status: 'proposed',
+  score: 18,
+  approvalRequired: true,
+  createdByName: 'Táta',
+  offeredByName: 'Táta',
+  approvedBy: ['Táta'],
+  approverIds: [2],
+  bids: [],
+  lowest: null,
+  reservedBy: null,
+  completedBy: null,
+  completedAt: null,
+  earnerId: null,
+  waitingFor: [],
+  ...over,
+})
+const b = (takerId: number, name: string, score: number) => ({ takerId, name, score })
+const low = (score: number, ...bidders: { id: number; name: string }[]) => ({ score, bidders })
+
+describe('taskView', () => {
+  // `low(score, ...bidders)` builds a `lowest`; b(takerId, name, score) a bid.
+  const STARSI = { id: 3, role: 'taker' } as const,
+    MLADSI = { id: 4, role: 'taker' } as const
+  const TATA = { id: 2, role: 'giver' } as const,
+    ADMIN = { id: 1, role: 'admin' } as const
+  const keys = (bs: { key: string }[]) => bs.map((x) => x.key)
+
+  it('chip: proposed, negotiating once someone bid, pending for done_unconfirmed', () => {
+    expect(
+      [view({}), view({ bids: [b(3, 'Starší', 25)] }), view({ status: 'done_unconfirmed' })].map(
+        taskChipState,
+      ),
+    ).toEqual(['proposed', 'negotiating', 'pending'])
+  })
+  it('a brother without a bid says yes (open for all); with a bid he picks: his first, then open for all', () => {
+    expect(bidButtons(view({}), STARSI)).toEqual([
+      {
+        key: 'approve',
+        action: 'approveOffer',
+        data: { taskId: 1, score: 18 },
+        label: 'Souhlasím',
+        hint: 'Úkol bude volný pro všechny.',
+        variant: 'ok',
+      },
+    ])
+    const bids = [b(4, 'Mladší', 22), b(3, 'Starší', 25)]
+    expect(bidButtons(view({ bids }), STARSI)).toEqual([
+      {
+        key: 'take',
+        action: 'acceptOffer',
+        data: { taskId: 1, score: 18 },
+        label: 'Beru za 18',
+        hint: 'Úkol bude tvůj.',
+        variant: 'ok',
+      },
+      {
+        key: 'approve',
+        action: 'approveOffer',
+        data: { taskId: 1, score: 18 },
+        label: 'Souhlasím',
+        hint: 'Úkol bude volný pro všechny.',
+        variant: 'ghost',
+      },
+    ])
+  })
+  it('a brother who already said yes is not asked again, bid or not (decision 2)', () => {
+    expect(keys(bidButtons(view({ approverIds: [2, 3] }), STARSI))).toEqual([])
+    expect(
+      keys(bidButtons(view({ approverIds: [2, 3], bids: [b(3, 'Starší', 25)] }), STARSI)),
+    ).toEqual([])
+  })
+  it("myBid is his own bid, never the other brother's or the lowest", () => {
+    const both = view({
+      bids: [b(4, 'Mladší', 22), b(3, 'Starší', 25)],
+      lowest: low(22, { id: 4, name: 'Mladší' }),
+    })
+    expect([myBid(both, STARSI), myBid(both, MLADSI)]).toEqual([25, 22])
+    const other = view({ bids: [b(4, 'Mladší', 22)], lowest: low(22, { id: 4, name: 'Mladší' }) })
+    expect(myBid(other, STARSI)).toBeNull()
+    expect(keys(bidButtons(other, STARSI))).toEqual(['approve'])
+    expect(waitingMeta(other, STARSI)).toBe('Nabízí Táta')
+  })
+  it('who the offer still waits for', () => {
+    const brothers = [
+      { id: 3, name: 'Starší' },
+      { id: 4, name: 'Mladší' },
+    ]
+    expect(waitingText(view({ waitingFor: brothers }), TATA)).toBe('Čeká se na: Starší nebo Mladší')
+    expect(waitingText(view({ waitingFor: brothers }), STARSI)).toBe('Čeká se na: tebe nebo Mladší')
+    expect(waitingText(view({ waitingFor: [] }), TATA)).toBeNull()
+    expect(waitingText(view({ status: 'open', waitingFor: brothers }), TATA)).toBeNull()
+  })
+  it('a parent accepts the lowest bid as the server sent it: one bidder reserves, a tie opens', () => {
+    expect(bidButtons(view({}), TATA)).toEqual([])
+    const one = view({
+      bids: [b(4, 'Mladší', 22), b(3, 'Starší', 25)],
+      lowest: low(22, { id: 4, name: 'Mladší' }),
+    })
+    expect(bidButtons(one, TATA)).toEqual([
+      {
+        key: 'yes',
+        action: 'acceptLowestTaskBid',
+        data: { taskId: 1, score: 22, bidders: [4] },
+        label: 'Přijmout 22 (Mladší)',
+        hint: 'Úkol bude rezervovaný pro Mladší.',
+        variant: 'ok',
+      },
+    ])
+    const tie = view({
+      bids: [b(3, 'Starší', 22), b(4, 'Mladší', 22)],
+      lowest: low(22, { id: 3, name: 'Starší' }, { id: 4, name: 'Mladší' }),
+    })
+    expect(bidButtons(tie, TATA)[0]).toMatchObject({
+      label: 'Přijmout 22',
+      hint: 'Stejnou cenu chce víc lidí. Úkol bude volný.',
+      data: { bidders: [3, 4] },
+    })
+  })
+  it("a parent's counter: a new offer off the bids, an accept exactly on one (decision 8b)", () => {
+    const t = view({ bids: [b(4, 'Mladší', 22), b(3, 'Starší', 25), b(5, 'Bratranec', 25)] })
+    expect(sendButton(t, TATA, 21)).toMatchObject({
+      action: 'counterOffer',
+      data: { taskId: 1, score: 21, bidders: [] },
+      label: 'Nabídnout',
+      hint: 'Nová nabídka pro všechny.',
+      disabled: false,
+    })
+    expect(sendButton(t, TATA, 22)).toMatchObject({
+      data: { score: 22, bidders: [4] },
+      label: 'Přijmout 22 (Mladší)',
+      hint: 'Úkol bude rezervovaný pro Mladší.',
+    })
+    expect(sendButton(t, TATA, 23)).toMatchObject({ data: { bidders: [] }, label: 'Nabídnout' })
+    expect(sendButton(t, TATA, 25)).toMatchObject({
+      data: { bidders: [3, 5] },
+      label: 'Přijmout 25',
+      hint: 'Stejnou cenu chce víc lidí. Úkol bude volný.',
+    })
+    expect(sendButton(t, TATA, 18)?.disabled).toBe(true)
+    expect(sendButton(view({}), TATA, 30)).toMatchObject({ label: 'Nabídnout', disabled: false }) // decision 8a
+  })
+  it("a brother's bid: not the offer, not his own bid again", () => {
+    const t = view({ bids: [b(3, 'Starší', 25)] })
+    expect([18, 25, 24].map((n) => sendButton(t, STARSI, n)?.disabled)).toEqual([true, true, false])
+    expect(sendButton(t, STARSI, 24)).toMatchObject({
+      action: 'placeBid',
+      data: { taskId: 1, score: 24 },
+      label: 'Nabídnout',
+    })
+  })
+  it('nothing to do once agreed, or for the admin', () => {
+    for (const [t, me] of [
+      [view({ status: 'reserved' }), STARSI],
+      [view({ status: 'open' }), TATA],
+      [view({}), ADMIN],
+    ] as const) {
+      expect(bidButtons(t, me)).toEqual([])
+      expect(sendButton(t, me, 30)).toBeNull()
+    }
+  })
+  it('row and page texts', () => {
+    expect(waitingMeta(view({}), STARSI)).toBe('Nabízí Táta')
+    expect(
+      waitingMeta(view({ score: 20, offeredByName: 'Máma', bids: [b(3, 'Starší', 25)] }), STARSI),
+    ).toBe('Máma 20 · ty 25')
+    expect(lowestText(low(22, { id: 3, name: 'Starší' }, { id: 4, name: 'Mladší' }))).toBe(
+      'Starší, Mladší chtějí 22',
+    )
+    const reserved = view({
+      status: 'reserved',
+      offeredByName: null,
+      reservedBy: { id: 4, name: 'Mladší' },
+    })
+    expect([
+      detailMeta(reserved, MLADSI),
+      detailMeta(reserved, STARSI),
+      detailMeta(view({ status: 'open', offeredByName: null }), STARSI),
+    ]).toEqual(['Je to tvoje', 'Rezervoval Mladší', null])
+  })
+  it('thread times are Prague wall clock: Saturday 23:30 UTC is Sunday 00:30', () => {
+    expect(threadTime('2026-11-21T09:12:00.000Z')).toBe('so 10:12')
+    expect(threadTime('2026-11-21T23:30:00.000Z')).toBe('ne 00:30')
+  })
+  it('task id in the URL: plain positive digits only', () => {
+    expect(
+      ['7', '0', '-1', '1.5', 'abc', '1e3', ' 7', '9007199254740993'].map(parseTaskIdParam),
+    ).toEqual([7, null, null, null, null, null, null, null])
+  })
+  it('toasts: mine, agreed, approved, sent', () => {
+    expect([
+      toastFor('acceptOffer', 'reserved', STARSI),
+      toastFor('acceptLowestTaskBid', 'reserved', TATA),
+      toastFor('approveOffer', 'open', STARSI),
+      toastFor('approveOffer', 'proposed', TATA),
+      toastFor('placeBid', 'proposed', STARSI),
+      toastFor('counterOffer', 'proposed', TATA),
+      toastFor('counterOffer', 'open', TATA),
+    ]).toEqual([
+      'Domluveno, úkol je tvůj',
+      'Domluveno',
+      'Domluveno',
+      'Schváleno',
+      'Nabídka odeslána',
+      'Nabídka odeslána',
+      'Domluveno',
+    ])
+  })
+})

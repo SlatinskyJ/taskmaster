@@ -90,6 +90,9 @@ export const cs = {
       reservedByOther: 'Tenhle úkol si už vzal někdo jiný.',
       notAllowed: 'Tohle teď udělat nemůžeš.',
       reasonTooLong: (max: number) => `Důvod je moc dlouhý (nejvýš ${String(max)} znaků).`,
+      sameScore: 'Tohle číslo už platí. Zvol jiné.',
+      noBids: 'Zatím nikdo nic nenabídl.',
+      noBid: 'Nejdřív nabídni svou cenu.',
     },
   },
   /** Recurring templates (#37): GCreate recurring part, GTasks, TApprove (UI doc §7). */
@@ -148,6 +151,49 @@ export const cs = {
       invalidDeadline: 'Termín nedává smysl. Zkontroluj ho.',
       alreadyApproved: 'Souhlas už máš zapsaný.',
     },
+  },
+  /** Bidding on a one-time task (#34): the task page TTask / GBid and its ways in. */
+  bids: {
+    thread: 'Vyjednávání',
+    /** "Táta nabízí 18", "Starší chce 25"; my own: "Ty nabízíš 18", "Ty chceš 25". */
+    offers: 'nabízí',
+    wants: 'chce',
+    /** Several takers at one bid: "Starší, Mladší chtějí 22". */
+    wantMany: 'chtějí',
+    youOffer: 'Ty nabízíš',
+    youWant: 'Ty chceš',
+    /** Me in a row's short line: "Táta 20 · ty 25". */
+    you: 'ty',
+    yours: 'Je to tvoje',
+    replaced: 'změněno',
+    accepted: 'přijato',
+    closed: 'uzavřeno',
+    /** Who said yes to the current offer: "Souhlasí: Táta ✓". */
+    agreed: 'Souhlasí',
+    /** Who the offer still waits for: "Čeká se na: Starší nebo Mladší" (any one of them is enough). */
+    waitingFor: 'Čeká se na',
+    or: 'nebo',
+    /** Me after "na": "Čeká se na: tebe nebo Mladší". */
+    youAcc: 'tebe',
+    approveHint: 'Úkol bude volný pro všechny.',
+    take: (score: number) => `Beru za ${String(score)}`,
+    takeHint: 'Úkol bude tvůj.',
+    otherPrice: 'Chci jinou cenu',
+    newOffer: 'Nová nabídka',
+    send: 'Nabídnout',
+    sendHint: 'Nová nabídka pro všechny.',
+    acceptBid: (score: number, name: string) => `Přijmout ${String(score)} (${name})`,
+    acceptBidHint: (name: string) => `Úkol bude rezervovaný pro ${name}.`,
+    acceptTie: (score: number) => `Přijmout ${String(score)}`,
+    tieHint: 'Stejnou cenu chce víc lidí. Úkol bude volný.',
+    yourBid: 'Tvoje nabídka',
+    toAnswer: 'Vyjednávání',
+    answer: 'Odpovědět',
+    otherPriceShort: 'Jiná cena',
+    open: 'Otevřít',
+    /** Short weekday names, Sunday first (dates.ts `Weekday`). */
+    weekdays: ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'],
+    toast: { sent: 'Nabídka odeslána', agreed: 'Domluveno', agreedMine: 'Domluveno, úkol je tvůj' },
   },
   /** Reserve, release, done, approve, reject (spec §5.4–§5.5). */
   work: {

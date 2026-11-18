@@ -26,6 +26,12 @@ export function taskErrorMessage(error: string): string {
       return cs.templates.errors.invalidDeadline
     case 'already_approved':
       return cs.templates.errors.alreadyApproved
+    case 'same_score':
+      return cs.tasks.errors.sameScore
+    case 'no_bids':
+      return cs.tasks.errors.noBids
+    case 'no_bid':
+      return cs.tasks.errors.noBid
     case 'reason_too_long':
       return cs.tasks.errors.reasonTooLong(REASON_MAX)
     default:
