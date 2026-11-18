@@ -121,6 +121,7 @@ describe('ToApprove', () => {
     completedBy: { id: 4, name: 'Mladší' },
     completedAt: '2026-11-18T14:00:00.000Z',
     earnerId: 4,
+    waitingFor: [],
   }
   const buttons = (html: string) => html.match(/<button[\s\S]*?<\/button>/g) ?? []
   function byLabel(html: string, label: string): string {

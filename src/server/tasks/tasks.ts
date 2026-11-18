@@ -315,6 +315,11 @@ export interface TaskView {
   completedAt: string | null
   /** The taker who gets the points, or null (open, or done by a giver). */
   earnerId: number | null
+  /**
+   * Proposed only: the active people of each side that has not said yes to the current offer
+   * yet (any one of them agreeing is enough). Else [].
+   */
+  waitingFor: { id: number; name: string }[]
 }
 
 /** Display names by user id ('' for an unknown id). */
@@ -339,6 +344,7 @@ function views(db: Db | Tx, rows: TaskRow[]): TaskView[] {
     const book = proposed ? liveBook(proposed.book, people) : { bids: [] }
     const lowest = lowestBid(book)
     const approverIds = [...(proposed?.offer.approvedBy ?? [])]
+    const missing = proposed ? missingRoles(proposed.offer, people) : []
     return {
       id: t.id,
       title: t.title,
@@ -360,6 +366,9 @@ function views(db: Db | Tx, rows: TaskRow[]): TaskView[] {
       completedBy: t.completedBy === null ? null : { id: t.completedBy, name: name(t.completedBy) },
       completedAt: t.completedAt,
       earnerId: t.earnerId,
+      waitingFor: people
+        .filter((p) => p.active && missing.some((role) => role === p.role))
+        .map((p) => ({ id: p.id, name: name(p.id) })),
     }
   })
 }
