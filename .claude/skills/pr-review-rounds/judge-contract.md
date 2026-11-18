@@ -42,7 +42,7 @@ git diff --name-only origin/<base>...HEAD -- docs/superpowers/plans/
 gh api 'repos/SlatinskyJ/taskmaster/pulls/<n>/reviews?per_page=100' --jq '[.[].body|select(test("^\\[Judge: \\w+\\] Plan round"))|capture("^\\[Judge: (?<j>\\w+)\\] Plan round (?<r>\\d) — (?<v>\\w+)")]|group_by(.j)|map(max_by(.r))|.[]|"\(.j) \(.v)"'
 ```
 
-Check 2 is skipped when the PR body says `Plan: none (ad-hoc)` or `Plan: none (Dependabot)` and has no `Closes #` line.
+A judge that joined the panel only for the code phase has no line in check 2; that is fine. Check 2 is skipped when the PR body says `Plan: none (ad-hoc)` or `Plan: none (Dependabot)` and has no `Closes #` line.
 
 A check fails → post nothing and review nothing. Return `<Name> round 1: NOT STARTED, plan file still on the branch` or `<Name> round 1: NOT STARTED, no approved plan`.
 

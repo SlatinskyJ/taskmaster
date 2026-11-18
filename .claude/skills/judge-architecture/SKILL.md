@@ -17,7 +17,7 @@ Read `.claude/skills/pr-review-rounds/judge-contract.md` first. It defines your 
 - **Migrations:** safe on a live DB that already has data (defaults for new non-null columns, no destructive change without a data step).
 - **Dependencies:** each new one is justified and small. No second library for a job one already does.
 - **Names:** match the spec's glossary (taker, giver, period, settlement…).
-- **Panel (round 1 of each phase):** you are on every code PR, so you check who else is. Hold the PR body's `Judges:` line against the panel table in `.claude/skills/pr-review-rounds/SKILL.md` section 2, for the files the PR touches (plan round: the files the plan says it will touch). A judge the table asks for is missing → `should-fix` on the first line that needs that judge, with `Fix: add <judge> to the panel`.
+- **Panel (round 1 of each phase):** you are on every code PR, so you check who else is. Hold the PR body's `Judges:` line against the panel table in `.claude/skills/pr-review-rounds/SKILL.md` section 2, for the files the PR touches (plan round: the files the plan says it will touch). A judge the table asks for is missing → `should-fix` on the first line that needs that judge, with `Fix: add <judge> to the panel` and `Failure: <file> <what it adds or changes> → no <judge> judge reviews it`.
 - **Trivial label:** if the builder marked the PR trivial, check it touches no protected area (CLAUDE.md). Disagree → `should-fix` with the protected path in the `Failure:` line.
 
 ## In a plan round
@@ -27,9 +27,11 @@ PR size is yours, and the plan round is the only time a split is cheap. The plan
 | The plan expects | And | You |
 | --- | --- | --- |
 | up to about 800 lines | | say nothing about size |
-| more than about 800 | gives a reason for one PR, and you find no place where it splits into steps that each pass CI alone | no finding. Say it in your summary sentence: `About <n> lines in one PR: <the reason>.` |
-| more than about 800 | gives no reason, or you can name where it splits | `should-fix` on the plan's size line, `Fix:` the split you see (which tasks go in which stacked PR) |
+| more than about 800 | its reason for one PR holds: the parts cannot land one after the other (one fails CI without the other, or the first alone leaves people with a broken or half-working feature) | no finding. Say it in your summary sentence: `About <n> lines in one PR: <the reason>.` |
+| more than about 800 | it gives no reason, or the reason does not hold: you can name parts that each pass CI alone and leave nothing half-working for people | `should-fix` on the plan's size line, with the split in `Fix:` (which tasks go in which stacked PR) |
 | no size stated | | count the tasks' files yourself, then use the rows above |
+
+The `Failure:` line for a size finding: `Built as written: about <n> changed lines land as one PR → <part A> and <part B> get one review and one brief, though <why each stands alone>`.
 
 ## Not your lane
 
