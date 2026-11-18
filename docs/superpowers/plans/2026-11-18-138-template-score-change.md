@@ -117,6 +117,7 @@
   - `refusals write nothing`: bid on a proposed template → `not_agreed`; giver bids → `not_a_taker`; taker counters → `not_a_giver`; admin → refused; bid at current score → `same_score`; unknown id → `not_found`.
   - `a deactivated taker's bid is ignored`: OLDER bids 2, YOUNGER bids 4, OLDER deactivated (`updateUser`) → accept lowest at 2 → `offer_changed`, at 4 → ok; OLDER's row ends `closed`.
   - `the next change starts empty after an acceptance` (new bid → `agreementOf` shows only it).
+  - `a failed audit write rolls back` each action: with `failAuditOn(db, action)` (trigger pattern from `src/server/tasks/lifecycle.test.ts:74`, moved to `testing.ts`) for `template.bid_placed`, `template.score_countered` and `template.score_changed`, the call throws and the thread rows and `templates.score` are as before.
 - [ ] **Step 2–4:** red, implement, green.
 - [ ] **Step 5:** commit `Template score change actions`.
 
@@ -132,7 +133,7 @@
 - `listTemplatesFn` becomes `giver,taker` (takers see agreed templates and their changes in PR B); `listTemplates` for a taker returns only `active` templates. Proposed ones stay in "Čeká na tebe".
 - New server fns: `bidTemplateScoreFn` (taker), `counterTemplateScoreFn` (giver), `acceptTemplateBidFn` (giver), `acceptTemplateOfferFn` (taker), `getTemplateHistoryFn` (giver,taker). All return `TemplateActionResult` except the read. Add each to `EXPECTED_ROLES`.
 
-- [ ] **Step 1: failing tests:** `listTemplates` shows the change with the deactivated taker's bid gone and `lowest` right; taker gets only active templates; `templateHistory` lists replaced and accepted rows with names; `functions.test.ts`: each new fn rejects the wrong role (pattern already in that file); guard test fails until `EXPECTED_ROLES` updated.
+- [ ] **Step 1: failing tests:** `listTemplates` returns exactly the `TemplateView` keys (pinned with `Object.keys`, no user ids beyond `takerId`, no password or session fields); `listTemplates` shows the change with the deactivated taker's bid gone and `lowest` right; taker gets only active templates; `templateHistory` lists replaced and accepted rows with names; `functions.test.ts`: each new fn rejects the wrong role (pattern already in that file); guard test fails until `EXPECTED_ROLES` updated.
 - [ ] **Step 2–4:** red, implement, green.
 - [ ] **Step 5:** commit `Template score change reads and server functions`.
 
