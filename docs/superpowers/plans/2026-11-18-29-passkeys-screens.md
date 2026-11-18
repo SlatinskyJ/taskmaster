@@ -117,7 +117,7 @@ Behaviour: after a successful **password** login, `login.tsx` checks `passkeysEn
   - `formatPragueDate(iso: string): string` → `d. M. yyyy` of the Prague calendar day.
   - `cs.passkeys.device: Record<PasskeySummary['deviceKind'], string>` = `{ iphone: 'iPhone', ipad: 'iPad', android: 'Android', mac: 'Mac', windows: 'Windows', linux: 'Linux', other: 'Jiné zařízení' }` (exhaustive at compile time).
   - `PasskeyList({ items, busyId, onRemove })` presentational.
-  - Strings: `section` = 'Přihlášení otiskem / obličejem', `addHere` = 'Přidat toto zařízení', `addedOn` = 'Přidáno {date}', `lastUsed` = 'Naposledy {date}', `neverUsed` = 'Zatím nepoužito', `remove` = 'Odebrat', `removeConfirmTitle` = 'Odebrat přihlášení: {device}?', `removeConfirmText` = 'Na zařízení {device} se pak přihlásíš heslem.', `removed` = 'Odebráno.', `empty` = 'Zatím žádné. Přidej toto zařízení.'
+  - Strings: `section` = 'Přihlášení otiskem / obličejem', `addHere` = 'Přidat toto zařízení', `addedOn` = 'Přidáno {date}', `lastUsed` = 'Naposledy {date}', `neverUsed` = 'Zatím nepoužito', `remove` = 'Odebrat', `removeConfirmTitle` = 'Odebrat přihlášení: {device}, přidáno {date}?' (two iPhones stay apart), `removeConfirmText` = 'Na tom zařízení se pak přihlásíš heslem.', `removed` = 'Odebráno.', `empty` = 'Zatím žádné. Přidej toto zařízení.'
 
 Behaviour: the Profil loader adds `passkeys: enabled ? await listMyPasskeysFn() : null`. The section shows when `enabled && passkeysUsable()` or the list is non-empty (so keys can be removed from a browser without WebAuthn); "Přidat toto zařízení" only when `passkeysUsable()`. Each row: device label, added date, last used. "Odebrat" opens a Dialog naming the row's device; confirm (disabled while running) → `removeMyPasskeyFn({ data: { passkeyId } })` → toast `removed` → `router.invalidate()`; a throw or `not_found` → `toast.error(cs.login.failed)` and invalidate. "Přidat toto zařízení" (disabled while running) → `addPasskey()` → toasts `added` / `already`; `failed` → `toast.error(cs.login.failed)`; `cancelled` → nothing. `backedUp` is not shown (no UI doc entry).
 
@@ -167,9 +167,10 @@ Behaviour: the Správa loader also loads `listPasskeyCountsFn()` (works with pas
 3. Log out; password login as `tata` again → straight to home, no `/klic` (has a passkey now).
 4. Log out; `/login?redirect=/profil` → button → lands on `/profil`, row shows "Naposledy …" (passkey login honours `redirect`).
 5. Validator (Review Focus 5): log out; `page.route` the next `passkeyLoginFn` POST and replace `"type":"public-key"` with `"type":"x"`; click the button; `page.waitForResponse` for that call has a non-2xx status or a serialized error (not a `{"ok":false,…}` result); `cs.login.failed` shown, still on `/login`. Remove the route.
-6. Offer escape (Review Focus 3): password login as `starsi` via `/login?redirect=/tyden` → `/klic` → "Teď ne" → `/tyden`.
+6. Offer escape (Review Focus 3): password login as `starsi` via `/login?redirect=/tyden` → `/klic`; `page.route` aborts the next `passkeyRegisterOptionsFn` POST → "Nastavit" → `cs.login.failed` shown and both buttons enabled again; unroute → "Teď ne" → `/tyden`.
 7. Admin (Review Focus 2 and the right user): log out; password login as `admin` (offer → "Teď ne") → Správa: tata's row shows "1 klíč", starsi's row none → "Odebrat klíče" → confirm → toast; tata's row has no count.
 8. Log out; button → `cs.passkeys.unknown` shown, still on `/login`.
+9. Own removal in Profil: password login as `tata` → `/klic` → "Nastavit" → Profil → "Odebrat" → the dialog names the device and date → confirm → toast `removed`, `cs.passkeys.empty` shown; log out → button → `cs.passkeys.unknown`.
 
 `passkeys-off.spec.ts`, test `passkeys off look as today`: `/login` has no passkey button and no hint, the username input's `autocomplete` is `username`; password login as `tata` goes straight home (no `/klic`); `/klic` typed directly lands on home; Profil has no passkey section; admin's Správa rows show no count or remove button.
 
