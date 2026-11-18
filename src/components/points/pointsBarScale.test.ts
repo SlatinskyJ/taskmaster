@@ -74,21 +74,27 @@ describe('createLevelWatcher', () => {
 
   it('never celebrates the value it starts with, however high', () => {
     const w = createLevelWatcher(120, 'ondra/w46')
-    expect(w.next(120, levels, 'ondra/w46')).toBeNull()
+    expect(w.next(120, levels, 'ondra/w46', true)).toBeNull()
   })
 
   it('celebrates one crossing once, not again on an unchanged re-render', () => {
     const w = createLevelWatcher(45, 'ondra/w46')
-    expect(w.next(55, levels, 'ondra/w46')).toBe('lower')
-    expect(w.next(55, levels, 'ondra/w46')).toBeNull()
-    expect(w.next(100, levels, 'ondra/w46')).toBe('upper')
+    expect(w.next(55, levels, 'ondra/w46', true)).toBe('lower')
+    expect(w.next(55, levels, 'ondra/w46', true)).toBeNull()
+    expect(w.next(100, levels, 'ondra/w46', true)).toBe('upper')
   })
 
   it('does not celebrate when the bar switches to another taker or period', () => {
     const w = createLevelWatcher(40, 'ondra/w45')
-    expect(w.next(60, levels, 'ondra/w46')).toBeNull()
-    expect(w.next(60, levels, 'tomas/w46')).toBeNull()
+    expect(w.next(60, levels, 'ondra/w46', true)).toBeNull()
+    expect(w.next(60, levels, 'tomas/w46', true)).toBeNull()
     // …but a real rise after the switch still counts.
-    expect(w.next(100, levels, 'tomas/w46')).toBe('upper')
+    expect(w.next(100, levels, 'tomas/w46', true)).toBe('upper')
+  })
+
+  it('stays quiet without celebrate, and does not replay that crossing later', () => {
+    const w = createLevelWatcher(45, 'ondra/w46')
+    expect(w.next(55, levels, 'ondra/w46', false)).toBeNull()
+    expect(w.next(55, levels, 'ondra/w46', true)).toBeNull()
   })
 })

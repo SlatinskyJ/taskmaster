@@ -76,13 +76,19 @@ export function levelCrossed(
 /**
  * Remembers the last confirmed total a bar showed, for one subject (a taker in a period).
  * `next()` says which level to celebrate, if any. The first value and any change of subject
- * never celebrate: only a rise seen on screen does.
+ * never celebrate: only a rise seen on screen does, and only when `celebrate` is on (it still
+ * tracks the value when off, so turning it on later does not replay an old crossing).
  */
 export function createLevelWatcher(initialConfirmed: number, initialSubject: string) {
   let last = initialConfirmed
   let subject = initialSubject
   return {
-    next(confirmed: number, levels: { lower: number; upper: number }, nextSubject: string) {
+    next(
+      confirmed: number,
+      levels: { lower: number; upper: number },
+      nextSubject: string,
+      celebrate: boolean,
+    ) {
       if (nextSubject !== subject) {
         subject = nextSubject
         last = confirmed
@@ -90,7 +96,7 @@ export function createLevelWatcher(initialConfirmed: number, initialSubject: str
       }
       const crossed = levelCrossed(last, confirmed, levels)
       last = confirmed
-      return crossed
+      return celebrate ? crossed : null
     },
   }
 }
