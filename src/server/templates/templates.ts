@@ -28,10 +28,11 @@ import type { Db } from '~/server/db'
 import { templates, templateScoreApprovals, users } from '~/server/db/schema'
 import type { TemplateRow, TemplateStatus } from '~/server/db/schema'
 import { listPeople } from '~/server/users/people'
+import { openRows } from './thread'
 
 // Recurring templates and their first score agreement (spec §5.1, §5.3). The rules live in
 // src/domain (agreement + templates); this module loads the rows, asks the domain, and writes
-// the result with its audit entries in one transaction. Score changes after agreement: #138.
+// the result with its audit entries in one transaction. Score changes after agreement: ./scoreChange.
 
 export type TemplateError = AgreementError | TemplateDefinitionError | 'invalid_title' | 'not_found'
 
@@ -70,9 +71,24 @@ function approvers(db: Db | Tx, templateId: number): number[] {
     .map((r) => r.userId)
 }
 
-/** The domain's view: stored `active` is the domain's `agreed`. */
-function agreementOf(db: Db | Tx, row: TemplateRow): TemplateAgreement {
-  if (row.status === 'active') return { status: 'agreed', score: row.score, change: null }
+/**
+ * The domain's view: stored `active` is the domain's `agreed`, with the score change in flight
+ * read from the open thread rows (null when none are open).
+ */
+export function agreementOf(db: Db | Tx, row: TemplateRow): TemplateAgreement {
+  if (row.status === 'active') {
+    const rows = openRows(db, row.id)
+    if (rows.length === 0) return { status: 'agreed', score: row.score, change: null }
+    const offer = rows.find((r) => r.side === 'giver')
+    return {
+      status: 'agreed',
+      score: row.score,
+      change: {
+        offer: offer ? { score: offer.score, proposedBy: offer.userId } : null,
+        bids: rows.filter((r) => r.side === 'taker').map((r) => ({ by: r.userId, score: r.score })),
+      },
+    }
+  }
   return {
     status: 'proposed',
     proposal: { score: row.score, proposedBy: row.createdBy, approvedBy: approvers(db, row.id) },
