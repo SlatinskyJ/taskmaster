@@ -9,6 +9,7 @@ import type {
   PublicKeyCredentialCreationOptionsJSON,
   PublicKeyCredentialRequestOptionsJSON,
 } from '@simplewebauthn/browser'
+import { useSyncExternalStore } from 'react'
 import {
   passkeyLoginFn,
   passkeyLoginOptionsFn,
@@ -32,6 +33,13 @@ export type PasskeyAddOutcome =
 
 /** Whether this browser can do WebAuthn at all. */
 export const passkeysUsable = (): boolean => browserSupportsWebAuthn()
+
+const noSubscribe = () => () => undefined
+
+/** `passkeysUsable()` for a component: false in the server render, the real answer after. */
+export function usePasskeysUsable(): boolean {
+  return useSyncExternalStore(noSubscribe, passkeysUsable, () => false)
+}
 
 /** Whether this browser offers passkeys in the username field's autofill. */
 export const autofillUsable = (): Promise<boolean> => browserSupportsWebAuthnAutofill()

@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { cs } from '~/lib/strings'
+import { PasskeyList } from './PasskeyList'
 import { PasskeyLoginButton } from './PasskeyLoginButton'
 
 describe('PasskeyLoginButton', () => {
@@ -14,5 +15,44 @@ describe('PasskeyLoginButton', () => {
   it('is disabled while its ceremony runs', () => {
     const html = renderToStaticMarkup(<PasskeyLoginButton busy onClick={() => undefined} />)
     expect(html).toMatch(/<button[^>]*disabled=/)
+  })
+})
+
+describe('PasskeyList', () => {
+  const ITEMS = [
+    {
+      id: 7,
+      deviceKind: 'iphone' as const,
+      createdAt: '2026-11-17T23:30:00.000Z',
+      lastUsedAt: null,
+      backedUp: true,
+    },
+    {
+      id: 3,
+      deviceKind: 'other' as const,
+      createdAt: '2026-06-30T22:30:00.000Z',
+      lastUsedAt: '2026-11-17T22:59:59.000Z',
+      backedUp: false,
+    },
+  ]
+
+  it('renders device label, Prague dates and a remove button per item', () => {
+    const html = renderToStaticMarkup(
+      <PasskeyList items={ITEMS} busyId={null} onRemove={() => undefined} />,
+    )
+    expect(html).toContain('iPhone')
+    expect(html).toContain(cs.passkeys.device.other)
+    expect(html).toContain(cs.passkeys.addedOn('18. 11. 2026'))
+    expect(html).toContain(cs.passkeys.neverUsed)
+    expect(html).toContain(cs.passkeys.addedOn('1. 7. 2026'))
+    expect(html).toContain(cs.passkeys.lastUsed('17. 11. 2026'))
+    expect(html.match(new RegExp(`>${cs.passkeys.remove}<`, 'g'))).toHaveLength(2)
+  })
+
+  it('an empty list says so', () => {
+    const html = renderToStaticMarkup(
+      <PasskeyList items={[]} busyId={null} onRemove={() => undefined} />,
+    )
+    expect(html).toContain(cs.passkeys.empty)
   })
 })
