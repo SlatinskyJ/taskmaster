@@ -11,7 +11,7 @@ import {
   removeAllPasskeysOf,
   removeMyPasskey,
 } from './handlers'
-import { parseId } from './parse'
+import { parseAuthenticationResponse, parseId, parseRegistrationResponse } from './parse'
 
 export type { OptionsResult, PasskeyLoginResult, PasskeyRegisterResult } from './handlers'
 export type { PasskeySummary } from './register'
@@ -29,7 +29,7 @@ export const passkeyLoginOptionsFn = createServerFn({ method: 'POST' }).handler(
 )
 
 export const passkeyLoginFn = createServerFn({ method: 'POST' })
-  .validator((data: unknown) => data)
+  .validator((data: unknown) => parseAuthenticationResponse(data))
   .handler(({ data }) => passkeyLogin(data))
 
 export const passkeyRegisterOptionsFn = createServerFn({ method: 'POST' })
@@ -38,7 +38,7 @@ export const passkeyRegisterOptionsFn = createServerFn({ method: 'POST' })
 
 export const passkeyRegisterFn = createServerFn({ method: 'POST' })
   .middleware([requireUser])
-  .validator((data: unknown) => data)
+  .validator((data: unknown) => parseRegistrationResponse(data))
   .handler(({ data, context }) => passkeyRegister(context.user, data))
 
 export const listMyPasskeysFn = createServerFn({ method: 'GET' })

@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto'
 import type {
+  AuthenticationResponseJSON,
   PublicKeyCredentialCreationOptionsJSON,
   PublicKeyCredentialRequestOptionsJSON,
+  RegistrationResponseJSON,
 } from '@simplewebauthn/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Db } from '~/server/db'
@@ -79,9 +81,15 @@ describe('passkeys off (no WEBAUTHN_RP_ID)', () => {
   it('answers disabled and stores nothing', async () => {
     expect(h.passkeysEnabled(OFF)).toBe(false)
     expect(await h.passkeyLoginOptions(OFF)).toEqual({ ok: false, error: 'disabled' })
-    expect(await h.passkeyLogin({}, OFF)).toEqual({ ok: false, error: 'disabled' })
+    expect(await h.passkeyLogin({} as AuthenticationResponseJSON, OFF)).toEqual({
+      ok: false,
+      error: 'disabled',
+    })
     expect(await h.passkeyRegisterOptions(f.tata, OFF)).toEqual({ ok: false, error: 'disabled' })
-    expect(await h.passkeyRegister(f.tata, {}, OFF)).toEqual({ ok: false, error: 'disabled' })
+    expect(await h.passkeyRegister(f.tata, {} as RegistrationResponseJSON, OFF)).toEqual({
+      ok: false,
+      error: 'disabled',
+    })
     expect(req.set).toEqual([])
     expect(f.db.select().from(passkeyChallenges).all()).toEqual([])
   })

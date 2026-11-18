@@ -29,6 +29,15 @@ export interface PasskeySummary {
   backedUp: boolean
 }
 
+/** The same fields as columns, for queries that select only them. */
+export const PASSKEY_SUMMARY_COLUMNS = {
+  id: passkeys.id,
+  deviceKind: passkeys.deviceKind,
+  createdAt: passkeys.createdAt,
+  lastUsedAt: passkeys.lastUsedAt,
+  backedUp: passkeys.backedUp,
+}
+
 export const toPasskeySummary = (p: PasskeyRow): PasskeySummary => ({
   id: p.id,
   deviceKind: p.deviceKind,

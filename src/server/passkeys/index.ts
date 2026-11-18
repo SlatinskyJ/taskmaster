@@ -1,7 +1,0 @@
-export { describePasskeys, passkeyConfig, PasskeyConfigError } from './config'
-export type { PasskeyConfig } from './config'
-export { finishPasskeyLogin, startPasskeyLogin } from './login'
-export type { PasskeyLoginError } from './login'
-export { countPasskeysByUser, listPasskeys, removePasskey, removeUserPasskeys } from './manage'
-export { finishRegistration, startRegistration } from './register'
-export type { PasskeySummary, RegisterError } from './register'

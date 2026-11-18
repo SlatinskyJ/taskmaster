@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { describePasskeys, passkeyConfig, PasskeyConfigError } from './config'
 
-const RP = 'taskmaster.slatinsky.cz'
+const RP = 'taskmaster.example.cz'
 
 describe('passkeyConfig (spec §11 Passkeys: RP ID from config)', () => {
   it('is off when WEBAUTHN_RP_ID is unset or empty', () => {
@@ -39,7 +39,7 @@ describe('passkeyConfig (spec §11 Passkeys: RP ID from config)', () => {
     )
   })
 
-  it.each([`https://${RP}`, `${RP}:443`, `${RP}/`, 'Taskmaster.slatinsky.cz'])(
+  it.each([`https://${RP}`, `${RP}:443`, `${RP}/`, 'Taskmaster.example.cz'])(
     'refuses the RP ID %s',
     (rpId) => {
       expect(() => passkeyConfig({ WEBAUTHN_RP_ID: rpId })).toThrow(PasskeyConfigError)
@@ -62,7 +62,7 @@ describe('passkeyConfig (spec §11 Passkeys: RP ID from config)', () => {
 
   it('accepts an origin on a subdomain of the RP ID', () => {
     expect(
-      passkeyConfig({ WEBAUTHN_RP_ID: 'slatinsky.cz', WEBAUTHN_ORIGIN: `https://${RP}` })?.origin,
+      passkeyConfig({ WEBAUTHN_RP_ID: 'example.cz', WEBAUTHN_ORIGIN: `https://${RP}` })?.origin,
     ).toBe(`https://${RP}`)
   })
 })

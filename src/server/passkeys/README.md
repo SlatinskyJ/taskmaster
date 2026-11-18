@@ -27,7 +27,7 @@ instead of a password. Built on `@simplewebauthn/server`. Password login stays a
 
 ## Config
 
-- `WEBAUTHN_RP_ID`: the host passkeys are bound to, e.g. `taskmaster.slatinsky.cz`.
+- `WEBAUTHN_RP_ID`: the host passkeys are bound to, e.g. `taskmaster.example.cz`.
 - `WEBAUTHN_ORIGIN` (optional): the exact origin when it is not `https://<WEBAUTHN_RP_ID>`, e.g.
   with a port. `http://` is allowed only for `localhost`.
 

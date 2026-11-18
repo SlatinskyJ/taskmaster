@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import type * as WebAuthnServer from '@simplewebauthn/server'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  MAX_FAILURES_PER_IP,
   MAX_FAILURES_PER_USER,
   resolveSession,
   toCurrentUser,
@@ -80,6 +81,8 @@ describe('passkey login (spec §11 Passkeys)', () => {
   it('opens a passkey session and stores the counter', async () => {
     const { db, tata } = family()
     const device = await enrol(db, tata)
+    // Stored as not backed up, so the login's update is what flips it.
+    db.update(passkeys).set({ backedUp: false }).run()
     const now = at(5000)
     const r = must(await tryLogin(db, device, {}, now))
     const row = db.select().from(users).where(eq(users.id, tata.id)).get()
@@ -91,10 +94,11 @@ describe('passkey login (spec §11 Passkeys)', () => {
     expect(db.select().from(passkeys).get()).toMatchObject({
       counter: 1,
       lastUsedAt: now.toISOString(),
+      backedUp: true,
     })
     const ok = auditOf(db, 'auth.login_succeeded')
     expect(ok).toHaveLength(1)
-    expect(afterOf(ok[0])).toMatchObject({ method: 'passkey', ip: IP })
+    expect(afterOf(ok[0])).toMatchObject({ method: 'passkey', ip: IP, backedUp: true })
     expect(resolveSession(db, r.token, now)?.user.id).toBe(tata.id)
   })
 
@@ -229,6 +233,42 @@ describe('passkey login (spec §11 Passkeys)', () => {
     expect(must(await tryLogin(db, device, {}, at(2000 + FAILURE_WINDOW_MS + 1))).user.id).toBe(
       tata.id,
     )
+  })
+
+  it('a good login takes back its counted attempt', async () => {
+    const { db, tata } = family()
+    const device = await enrol(db, tata)
+    for (let i = 0; i < MAX_FAILURES_PER_USER - 1; i++) {
+      expect((await tryLogin(db, device, { userVerified: false })).ok).toBe(false)
+    }
+    must(await tryLogin(db, device))
+    const keys = db
+      .select()
+      .from(loginFailures)
+      .all()
+      .map((r) => r.key)
+    expect(keys.filter((k) => k.startsWith('user:'))).toEqual([])
+    expect(keys).toEqual(Array<string>(MAX_FAILURES_PER_USER - 1).fill(`ip:${IP}`))
+    // The passkey's count starts again: ten more failures are all checked.
+    for (let i = 0; i < MAX_FAILURES_PER_USER; i++) {
+      expect(await tryLogin(db, device, { userVerified: false })).toEqual({
+        ok: false,
+        error: 'not_verified',
+      })
+    }
+  })
+
+  it(`stops passkey tries from an IP after ${String(MAX_FAILURES_PER_IP)} failures`, async () => {
+    const { db, admin, tata, starsi } = family()
+    const devices = [await enrol(db, admin), await enrol(db, tata), await enrol(db, starsi)]
+    for (const device of devices) {
+      for (let i = 0; i < MAX_FAILURES_PER_IP / devices.length; i++) {
+        expect((await tryLogin(db, device, { userVerified: false })).ok).toBe(false)
+      }
+    }
+    const fresh = await enrol(db, tata)
+    expect(await tryLogin(db, fresh)).toEqual({ ok: false, error: 'rate_limited' })
+    expect(must(await tryLogin(db, fresh, {}, at(1000), '10.0.0.9')).user.id).toBe(tata.id)
   })
 
   it("unknown passkeys don't use up the IP's password allowance", async () => {

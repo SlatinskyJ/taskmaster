@@ -138,7 +138,12 @@ export async function finishPasskeyLogin(
       action: 'auth.login_succeeded',
       entityType: 'session',
       entityId: created.session.id,
-      after: { method: 'passkey', ip: input.ip, passkeyId: current.id },
+      after: {
+        method: 'passkey',
+        ip: input.ip,
+        passkeyId: current.id,
+        backedUp: info.credentialBackedUp,
+      },
       at: now,
     })
     return { ...created, user: toCurrentUser(user) }

@@ -1,3 +1,4 @@
+import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server'
 import { getRequestHeader } from '@tanstack/react-start/server'
 import type { CurrentUser } from '~/server/auth'
 import { clientIp, setSessionCookie } from '~/server/auth/http'
@@ -7,7 +8,6 @@ import { challengeToken, clearChallengeCookie, setChallengeCookie } from './http
 import { finishPasskeyLogin, startPasskeyLogin } from './login'
 import type { PasskeyLoginError } from './login'
 import { countPasskeysByUser, listPasskeys, removePasskey, removeUserPasskeys } from './manage'
-import { parseAuthenticationResponse, parseRegistrationResponse } from './parse'
 import { finishRegistration, startRegistration } from './register'
 import type { PasskeySummary, RegisterError } from './register'
 
@@ -48,14 +48,14 @@ export async function passkeyLoginOptions(
   return { ok: true, optionsJson: JSON.stringify(started.value.options) }
 }
 
+/** `response` is already checked by the server function's validator (./parse). */
 export async function passkeyLogin(
-  data: unknown,
+  response: AuthenticationResponseJSON,
   env: NodeJS.ProcessEnv = process.env,
   now: Date = new Date(),
 ): Promise<PasskeyLoginResult> {
   const config = passkeyConfig(env)
   if (!config) return OFF
-  const response = parseAuthenticationResponse(data)
   const token = challengeToken()
   if (!token) return { ok: false, error: 'expired_challenge' }
   clearChallengeCookie()
@@ -85,13 +85,12 @@ export async function passkeyRegisterOptions(
 
 export async function passkeyRegister(
   user: CurrentUser,
-  data: unknown,
+  response: RegistrationResponseJSON,
   env: NodeJS.ProcessEnv = process.env,
   now: Date = new Date(),
 ): Promise<PasskeyRegisterResult> {
   const config = passkeyConfig(env)
   if (!config) return OFF
-  const response = parseRegistrationResponse(data)
   const token = challengeToken()
   if (!token) return { ok: false, error: 'expired_challenge' }
   clearChallengeCookie()

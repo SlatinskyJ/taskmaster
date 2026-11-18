@@ -3,7 +3,7 @@
 // throws at boot, so a typo stops the server instead of failing every registration later.
 
 export interface PasskeyConfig {
-  /** The host passkeys are bound to, e.g. `taskmaster.slatinsky.cz`. */
+  /** The host passkeys are bound to, e.g. `taskmaster.example.cz`. */
   rpId: string
   rpName: 'Taskmaster'
   /** The exact origin browsers report: scheme, host and port, no trailing slash. */

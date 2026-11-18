@@ -14,9 +14,11 @@ import type { ChallengePurpose } from '~/server/db/schema'
 // or where it was issued for. Expired rows are pruned on every issue. Challenges are not state
 // the audit log tracks (like login_failures), so neither issuing nor pruning writes an entry.
 //
-// Caps, so an anonymous flood can't switch passkeys off for the family: login challenges are
-// limited per client IP (an IPv6 client counts by its /64) and in total; registration
-// challenges, which need a signed-in user, are limited per user and don't count toward either.
+// Caps, so an anonymous flood can't fill the table: login challenges are limited per client IP
+// (an IPv6 client counts by its /64) and in total; registration challenges, which need a
+// signed-in user, are limited per user and don't count toward either. Flooding from about 25
+// addresses at once can still make passkey login answer `busy` for up to 5 minutes; password
+// login is not affected.
 
 export const CHALLENGE_TTL_MS = 5 * 60 * 1000
 export const MAX_LOGIN_CHALLENGES_PER_IP = 20

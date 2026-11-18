@@ -7,23 +7,16 @@ import type { CurrentUser } from '~/server/auth'
 import type { Db } from '~/server/db'
 import { passkeys } from '~/server/db/schema'
 import type { PasskeyRow } from '~/server/db/schema'
+import { PASSKEY_SUMMARY_COLUMNS } from './register'
 import type { PasskeySummary } from './register'
 
 // Listing and removing passkeys (spec §11 Passkeys; the admin's removal: Jakub, 2026-11-18).
 // A removed passkey's row is deleted; the audit log keeps who removed which one and when.
 
-const SUMMARY = {
-  id: passkeys.id,
-  deviceKind: passkeys.deviceKind,
-  createdAt: passkeys.createdAt,
-  lastUsedAt: passkeys.lastUsedAt,
-  backedUp: passkeys.backedUp,
-}
-
 /** One user's passkeys, newest first. Named columns only. */
 export function listPasskeys(db: Db | Tx, userId: number): PasskeySummary[] {
   return db
-    .select(SUMMARY)
+    .select(PASSKEY_SUMMARY_COLUMNS)
     .from(passkeys)
     .where(eq(passkeys.userId, userId))
     .orderBy(desc(passkeys.id))
