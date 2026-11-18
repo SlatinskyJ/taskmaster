@@ -1,15 +1,26 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useRouter } from '@tanstack/react-router'
+import { ChevronRight } from 'lucide-react'
+import { useState } from 'react'
+import { toast } from 'sonner'
+import type { PersonFormValues } from '~/components/admin/PersonForm'
+import { PersonDrawer } from '~/components/admin/PersonDrawer'
+import { ResetPasswordDialog } from '~/components/admin/ResetPasswordDialog'
 import { AdminPasskeysControl } from '~/components/auth/AdminPasskeys'
 import { Avatar } from '~/components/shell/Avatar'
 import { Screen } from '~/components/shell/Screen'
 import { SectionLabel } from '~/components/shell/SectionLabel'
+import { Button } from '~/components/ui/button'
 import { Card } from '~/components/ui/card'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
+import { userErrorMessage } from '~/lib/userErrors'
 import { listPasskeyCountsFn } from '~/server/passkeys/functions'
-import { listUsersFn } from '~/server/users/functions'
+import type { PersonSummary } from '~/server/users/functions'
+import { createUserFn, listUsersFn, resetPasswordFn, updateUserFn } from '~/server/users/functions'
 
 // Správa, the admin's only screen, no bottom bar (UI doc §6, §7.5). Others go to their landing.
+// People (#134): add, rename, change role, reset password. No deactivation (Jakub 2026-11-17).
+// The list is never empty: the admin is always in it. Settings and disputes come with #47.
 export const Route = createFileRoute('/_app/sprava')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/sprava')
@@ -21,33 +32,125 @@ export const Route = createFileRoute('/_app/sprava')({
   component: Sprava,
 })
 
-// People list only, until the admin console (#47).
+type Sheet = { mode: 'add' } | { mode: 'edit'; person: PersonSummary } | null
+
 function Sprava() {
   const { user } = Route.useRouteContext()
   const { people, passkeys } = Route.useLoaderData()
+  const router = useRouter()
+  const [sheet, setSheet] = useState<Sheet>(null)
+  // Kept apart from `sheet` so the drawer can close while its last content fades out.
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [resetOpen, setResetOpen] = useState(false)
+  const editing = sheet?.mode === 'edit' ? sheet.person : undefined
+
+  function open(next: Exclude<Sheet, null>) {
+    setSheet(next)
+    setSheetOpen(true)
+  }
+
+  async function done(message: string) {
+    toast.success(message)
+    setResetOpen(false)
+    setSheetOpen(false)
+    await router.invalidate()
+  }
+
+  async function save(values: PersonFormValues): Promise<string | null> {
+    if (sheet?.mode === 'add') {
+      const r = await createUserFn({ data: values })
+      if (!r.ok) return userErrorMessage(r.error)
+      await done(cs.admin.added)
+      return null
+    }
+    if (!editing) return null
+    const self = editing.id === user.id
+    const r = await updateUserFn({
+      data: self
+        ? { userId: editing.id, displayName: values.displayName }
+        : { userId: editing.id, displayName: values.displayName, role: values.role },
+    })
+    if (!r.ok) return userErrorMessage(r.error)
+    await done(cs.admin.saved)
+    return null
+  }
+
+  async function reset(password: string): Promise<string | null> {
+    if (!editing) return null
+    const r = await resetPasswordFn({ data: { userId: editing.id, password } })
+    if (!r.ok) return userErrorMessage(r.error)
+    await done(cs.admin.resetDone)
+    return null
+  }
+
   return (
     <Screen title={cs.admin.title} user={user}>
       <SectionLabel>{cs.admin.people}</SectionLabel>
       <Card>
         <ul className="grid gap-1">
-          {people.map((p) => (
-            <li key={p.id} className="grid gap-1">
-              <div className="flex min-h-11 items-center gap-2.5">
-                <Avatar userId={p.id} name={p.displayName} />
-                <b className="font-extrabold">{p.displayName}</b>
-                <span className="ml-auto rounded-full bg-track px-2 py-0.5 text-xs font-extrabold text-muted">
-                  {cs.roles[p.role]}
-                </span>
-              </div>
-              <AdminPasskeysControl
-                userId={p.id}
-                name={p.displayName}
-                count={passkeys[p.id] ?? 0}
-              />
-            </li>
-          ))}
+          {people.map((p) => {
+            const self = p.id === user.id
+            return (
+              <li key={p.id} className="grid gap-1">
+                <button
+                  type="button"
+                  aria-label={cs.admin.editPerson(p.displayName)}
+                  onClick={() => {
+                    open({ mode: 'edit', person: p })
+                  }}
+                  className="flex min-h-tap w-full cursor-pointer items-center gap-2.5 rounded-button text-left"
+                >
+                  <Avatar userId={p.id} name={p.displayName} />
+                  <span className="grid min-w-0 flex-1">
+                    <b className="font-extrabold break-words">
+                      {p.displayName}
+                      {self && <span className="font-bold text-muted"> ({cs.admin.you})</span>}
+                    </b>
+                    <span className="truncate text-meta font-bold text-muted">{p.username}</span>
+                  </span>
+                  <span className="shrink-0 rounded-full bg-track px-2 py-0.5 text-xs font-extrabold text-muted">
+                    {cs.roles[p.role]}
+                  </span>
+                  <ChevronRight aria-hidden="true" className="size-5 shrink-0 text-muted" />
+                </button>
+                <AdminPasskeysControl
+                  userId={p.id}
+                  name={p.displayName}
+                  count={passkeys[p.id] ?? 0}
+                />
+              </li>
+            )
+          })}
         </ul>
       </Card>
+      <Button
+        size="lg"
+        className="mt-3.5 w-full"
+        onClick={() => {
+          open({ mode: 'add' })
+        }}
+      >
+        {cs.admin.add}
+      </Button>
+      <PersonDrawer
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        mode={sheet?.mode ?? 'add'}
+        person={editing}
+        isSelf={editing?.id === user.id}
+        onSubmit={save}
+        onReset={() => {
+          setResetOpen(true)
+        }}
+      />
+      {editing && (
+        <ResetPasswordDialog
+          name={editing.displayName}
+          open={resetOpen}
+          onOpenChange={setResetOpen}
+          onSubmit={reset}
+        />
+      )}
     </Screen>
   )
 }
