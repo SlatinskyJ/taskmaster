@@ -19,7 +19,7 @@
 # on the tailnet with `tailscale serve` on HTTPS port BASE_PORT+PR. No host names live here.
 set -euo pipefail
 
-MAX_PREVIEWS="${TM_MAX_PREVIEWS:-3}"
+MAX_PREVIEWS="${TM_MAX_PREVIEWS:-10}"
 MEMORY="${TM_PREVIEW_MEMORY:-256m}"
 BASE_PORT=10000
 PREFIX=tm-pr-

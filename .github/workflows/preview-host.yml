@@ -117,7 +117,7 @@ jobs:
             if [ -n "$PREVIEW_URL_BASE" ]; then where="${PREVIEW_URL_BASE}:${port}"; else where="port ${port} on the preview host"; fi
             body="**Preview** for ${HEAD_SHA::7}: ${where} (tailnet only)"
           elif [ "$rc" = 75 ]; then
-            body="**Preview skipped** for ${HEAD_SHA::7}: the preview host already runs its maximum. Take the \`preview\` label off a PR that no longer needs one, then remove and re-add the label here."
+            body="**Preview skipped** for ${HEAD_SHA::7}: the preview host already runs its maximum, so the \`preview\` label was taken off. Take the label off a PR that no longer needs a preview, then add it here again."
           else
             body="**Preview failed** for ${HEAD_SHA::7}. See the \`preview\` job log."
           fi
@@ -137,6 +137,13 @@ jobs:
           elif [ "$ACTION" = deploy ]; then
             gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" -F body=@comment.md >/dev/null
           fi
+      # A skipped preview must not keep the label: the label means "this PR has a preview".
+      # Removed with github.token, so it starts no `unlabeled` run that would edit the comment.
+      - name: Take the label off a skipped preview
+        if: steps.host.outputs.rc == '75'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X DELETE "repos/${GITHUB_REPOSITORY}/issues/${PR}/labels/preview" >/dev/null
       - name: Fail on host error
         if: steps.check.outputs.go == 'true' && steps.host.outputs.rc != '0' && steps.host.outputs.rc != '75'
         run: exit 1
