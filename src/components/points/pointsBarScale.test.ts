@@ -96,5 +96,7 @@ describe('createLevelWatcher', () => {
     const w = createLevelWatcher(45, 'ondra/w46')
     expect(w.next(55, levels, 'ondra/w46', false)).toBeNull()
     expect(w.next(55, levels, 'ondra/w46', true)).toBeNull()
+    // …but a real rise after it comes back on still counts.
+    expect(w.next(100, levels, 'ondra/w46', true)).toBe('upper')
   })
 })
