@@ -118,7 +118,7 @@
   - `a giver counters; a taker accepts the offer → score changes, every open row closes` (offer row `accepted`, bids `closed`, audit `template.score_changed` with `by: 'offer'`, template score new).
   - `a giver accepts the lowest bid` (bids 4 and 6 → the 4 row `accepted`, the 6 row `closed`, `entryIds` = [the 4 row], `by: 'bid'`).
   - `a tie at the lowest bid accepts both bids, one score change`.
-  - `a giver countering at the lowest bid accepts it` (Táta offered 5 earlier; bid 4; Táta counters 4 → offer row + bid row `accepted`, the old 5 offer `replaced`, `template.score_changed` by Táta with `by: 'counter'` and `before.replacedOffer` = the 5 row).
+  - `a giver countering at the lowest bid accepts it` (Táta offered 5 earlier; bids 4 and 6; Táta counters 4 → the 6 bid ends `closed` → offer row + bid row `accepted`, the old 5 offer `replaced`, `template.score_changed` by Táta with `by: 'counter'` and `before.replacedOffer` = the 5 row).
   - `Máma counters after Táta` (Táta offers 5, Máma counters 6 → one open offer, Máma's; a taker accepts 6 → score 6).
   - `stale numbers are refused and write nothing` (accept lowest with a number that moved → `offer_changed`; accept offer after a new counter → `offer_changed`; audit count unchanged).
   - `refusals write nothing`: bid on a proposed template → `not_agreed`; giver bids → `not_a_taker`; taker counters → `not_a_giver`; admin → refused; bid at current score → `same_score`; unknown id → `not_found`.
