@@ -180,7 +180,7 @@ Exact copy (strings.ts, `templates`): `kindOneTime: 'Jednorázový'`, `kindRecur
 
 Summary format (days Monday first, so `[1, 2]` before `[0]`): `Út, Pá v 18:00 · do dalšího dne 7:00 (+2 h)`; no time: `Út, Pá`; no schedule: `Jen na požádání`; no deadline: no `·` part; `dayOffset` 0: `do 7:00 (+0 h)` reads `do 7:00`, grace 0 omits `(+0 h)`; `dayOffset` ≥ 2: `do 7:00 za 3 dny`. Hours with no leading zero (`7:00`), minutes always two digits.
 
-- [ ] **Step 1: failing tests** for each summary case above (exact strings) and for the three new error messages.
+- [ ] **Step 1: failing tests** for each summary case above (exact strings), for `templateDetail` (approval on → `… · schvaluje rodič`; off → `… · bez schvalování`; proposed with Táta approved → ends `· Souhlasí: Táta`; active → no `Souhlasí`), and for the three new error messages.
 - [ ] **Step 2:** FAIL. **Step 3:** implement. **Step 4:** PASS (`src/lib/strings.test.ts` too).
 - [ ] **Step 5:** commit `Templates: Czech labels and schedule summary`.
 
@@ -213,6 +213,7 @@ Submit → `submitNewItem`; busy state on the button, Czech error under the form
   - `toDefinition`: no days → `schedule: null` (time ignored); `days: [0, 6]`, `time: '18:30'` → `{ days: [0, 6], time: { hour: 18, minute: 30 } }`; `withTime: false` → `time: null`; deadline off → `deadline: null`; on with `dueTime: '07:45'`, `graceHours: 2` → `{ dayOffset: 1, due: { hour: 7, minute: 45 }, graceMinutes: 120 }`.
   - `submitNewItem` with fake fns: `recurring` calls only `createTemplate` with `{ data: { title, score, approvalRequired, ...toDefinition(form.recurring) } }`; `one_time` calls only `createTask` with `{ data: { title, score, approvalRequired } }`; a refused result is passed through.
   - `approveTemplate` with a fake fn sends `{ data: { templateId: 7, score: 4 } }`.
+  - `approveTemplate` result handling: a pure `approveOutcome(result: { ok: true } | { ok: false; error: string } | 'threw'): { toast: 'success' | 'error'; message: string }` returns `templates.approved`-style success or the Czech `taskErrorMessage` text / `cs.login.failed`; tested for ok, `not_proposed` and a thrown call. `WaitingForYou` uses it and always clears its busy id in `finally`.
   - Rendering (`renderToStaticMarkup`): `days: [2]` → the `Út` button has `aria-pressed="true"`, the others `false`; `days: []` → the onDemand hint shows and no `type="time"` input for the schedule; deadline inputs only with `hasDeadline: true`; the grace − button is `disabled` at 0, + at 48.
 - [ ] **Step 2:** FAIL. **Step 3:** implement. **Step 4:** PASS; `pnpm typecheck`.
 - [ ] **Step 5:** commit `Nový úkol: recurring templates (GCreate)`.
