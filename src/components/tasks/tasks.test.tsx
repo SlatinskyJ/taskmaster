@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { PointsBar } from '~/components/points/PointsBar'
@@ -15,6 +16,12 @@ vi.mock('./useTaskAction', () => ({
   useTaskAction: () => ({ busy: action.busy, run: vi.fn() }),
 }))
 vi.mock('~/server/tasks/functions', () => ({ approveTaskFn: vi.fn(), rejectTaskFn: vi.fn() }))
+vi.mock('./bidCalls', () => ({ callBid: vi.fn(), BID_CALLS: {} }))
+// WaitingForYou's task rows link to the task page (#34); a plain <a> stands in for the router.
+vi.mock('@tanstack/react-router', () => ({
+  useRouter: () => ({ invalidate: vi.fn() }),
+  Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
+}))
 
 const STATES = Object.keys(cs.state) as ItemStateKey[]
 
@@ -159,7 +166,9 @@ describe('WaitingForYou with templates (#37)', () => {
   }
 
   it('counts tasks and templates and shows the full template detail', () => {
-    const html = renderToStaticMarkup(<WaitingForYou items={[task]} templates={[template]} />)
+    const html = renderToStaticMarkup(
+      <WaitingForYou items={[task]} templates={[template]} me={{ id: 3, role: 'taker' }} />,
+    )
     expect(html).toContain(`${cs.home.waiting} (2)`)
     expect(html).toContain(
       'Po, Út, St, Čt, Pá, So, Ne v 18:00 · do dalšího dne 7:00 (+2 h) · schvaluje rodič · Souhlasí: Táta',
@@ -168,7 +177,11 @@ describe('WaitingForYou with templates (#37)', () => {
   })
 
   it('renders nothing when nothing waits', () => {
-    expect(renderToStaticMarkup(<WaitingForYou items={[]} templates={[]} />)).toBe('')
+    expect(
+      renderToStaticMarkup(
+        <WaitingForYou items={[]} templates={[]} me={{ id: 3, role: 'taker' }} />,
+      ),
+    ).toBe('')
   })
 })
 
