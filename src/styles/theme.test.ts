@@ -107,10 +107,12 @@ describe('theme.css', () => {
         expect(contrast(tok(t, 'on-ok'), tok(t, 'ok'))).toBeGreaterThanOrEqual(4.5)
       })
 
-      it.each(STATES)('state %s text on surface and on its chip', (state) => {
+      it.each(STATES)('state %s text on surface, on the page and on its chip', (state) => {
         const text = tok(t, `s-${state}-text`)
         const surface = tok(t, 'surface')
         expect(contrast(text, surface)).toBeGreaterThanOrEqual(4.5)
+        // Also the page background: avatars put a `bg`-coloured initial on these (Avatar.tsx).
+        expect(contrast(text, tok(t, 'bg'))).toBeGreaterThanOrEqual(4.5)
         expect(
           contrast(text, chipBackground(tok(t, `s-${state}`), surface)),
         ).toBeGreaterThanOrEqual(4.5)

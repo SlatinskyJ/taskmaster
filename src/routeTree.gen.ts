@@ -12,9 +12,15 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppProfilRouteImport } from './routes/_app/profil'
+import { Route as AppSchuzkaRouteImport } from './routes/_app/schuzka'
 import { Route as AppSpravaRouteImport } from './routes/_app/sprava'
+import { Route as AppTydenRouteImport } from './routes/_app/tyden'
+import { Route as AppZapsatRouteImport } from './routes/_app/zapsat'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as DevUiRouteImport } from './routes/dev/ui'
+import { Route as AppUkolyIndexRouteImport } from './routes/_app/ukoly/index'
+import { Route as AppUkolyNovyRouteImport } from './routes/_app/ukoly/novy'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -30,9 +36,29 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppProfilRoute = AppProfilRouteImport.update({
+  id: '/profil',
+  path: '/profil',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSchuzkaRoute = AppSchuzkaRouteImport.update({
+  id: '/schuzka',
+  path: '/schuzka',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSpravaRoute = AppSpravaRouteImport.update({
   id: '/sprava',
   path: '/sprava',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTydenRoute = AppTydenRouteImport.update({
+  id: '/tyden',
+  path: '/tyden',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppZapsatRoute = AppZapsatRouteImport.update({
+  id: '/zapsat',
+  path: '/zapsat',
   getParentRoute: () => AppRoute,
 } as any)
 const ApiHealthRoute = ApiHealthRouteImport.update({
@@ -45,43 +71,99 @@ const DevUiRoute = DevUiRouteImport.update({
   path: '/dev/ui',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppUkolyIndexRoute = AppUkolyIndexRouteImport.update({
+  id: '/ukoly/',
+  path: '/ukoly/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppUkolyNovyRoute = AppUkolyNovyRouteImport.update({
+  id: '/ukoly/novy',
+  path: '/ukoly/novy',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
+  '/profil': typeof AppProfilRoute
+  '/schuzka': typeof AppSchuzkaRoute
   '/sprava': typeof AppSpravaRoute
+  '/tyden': typeof AppTydenRoute
+  '/zapsat': typeof AppZapsatRoute
   '/api/health': typeof ApiHealthRoute
   '/dev/ui': typeof DevUiRoute
+  '/ukoly/novy': typeof AppUkolyNovyRoute
+  '/ukoly/': typeof AppUkolyIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/profil': typeof AppProfilRoute
+  '/schuzka': typeof AppSchuzkaRoute
   '/sprava': typeof AppSpravaRoute
+  '/tyden': typeof AppTydenRoute
+  '/zapsat': typeof AppZapsatRoute
   '/api/health': typeof ApiHealthRoute
   '/dev/ui': typeof DevUiRoute
   '/': typeof AppIndexRoute
+  '/ukoly/novy': typeof AppUkolyNovyRoute
+  '/ukoly': typeof AppUkolyIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/_app/profil': typeof AppProfilRoute
+  '/_app/schuzka': typeof AppSchuzkaRoute
   '/_app/sprava': typeof AppSpravaRoute
+  '/_app/tyden': typeof AppTydenRoute
+  '/_app/zapsat': typeof AppZapsatRoute
   '/api/health': typeof ApiHealthRoute
   '/dev/ui': typeof DevUiRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/ukoly/novy': typeof AppUkolyNovyRoute
+  '/_app/ukoly/': typeof AppUkolyIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/sprava' | '/api/health' | '/dev/ui'
+  fullPaths:
+    | '/'
+    | '/login'
+    | '/profil'
+    | '/schuzka'
+    | '/sprava'
+    | '/tyden'
+    | '/zapsat'
+    | '/api/health'
+    | '/dev/ui'
+    | '/ukoly/novy'
+    | '/ukoly/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/sprava' | '/api/health' | '/dev/ui' | '/'
+  to:
+    | '/login'
+    | '/profil'
+    | '/schuzka'
+    | '/sprava'
+    | '/tyden'
+    | '/zapsat'
+    | '/api/health'
+    | '/dev/ui'
+    | '/'
+    | '/ukoly/novy'
+    | '/ukoly'
   id:
     | '__root__'
     | '/_app'
     | '/login'
+    | '/_app/profil'
+    | '/_app/schuzka'
     | '/_app/sprava'
+    | '/_app/tyden'
+    | '/_app/zapsat'
     | '/api/health'
     | '/dev/ui'
     | '/_app/'
+    | '/_app/ukoly/novy'
+    | '/_app/ukoly/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -114,11 +196,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/profil': {
+      id: '/_app/profil'
+      path: '/profil'
+      fullPath: '/profil'
+      preLoaderRoute: typeof AppProfilRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/schuzka': {
+      id: '/_app/schuzka'
+      path: '/schuzka'
+      fullPath: '/schuzka'
+      preLoaderRoute: typeof AppSchuzkaRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/sprava': {
       id: '/_app/sprava'
       path: '/sprava'
       fullPath: '/sprava'
       preLoaderRoute: typeof AppSpravaRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/tyden': {
+      id: '/_app/tyden'
+      path: '/tyden'
+      fullPath: '/tyden'
+      preLoaderRoute: typeof AppTydenRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/zapsat': {
+      id: '/_app/zapsat'
+      path: '/zapsat'
+      fullPath: '/zapsat'
+      preLoaderRoute: typeof AppZapsatRouteImport
       parentRoute: typeof AppRoute
     }
     '/api/health': {
@@ -135,17 +245,43 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevUiRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/ukoly/': {
+      id: '/_app/ukoly/'
+      path: '/ukoly'
+      fullPath: '/ukoly/'
+      preLoaderRoute: typeof AppUkolyIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/ukoly/novy': {
+      id: '/_app/ukoly/novy'
+      path: '/ukoly/novy'
+      fullPath: '/ukoly/novy'
+      preLoaderRoute: typeof AppUkolyNovyRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
+  AppProfilRoute: typeof AppProfilRoute
+  AppSchuzkaRoute: typeof AppSchuzkaRoute
   AppSpravaRoute: typeof AppSpravaRoute
+  AppTydenRoute: typeof AppTydenRoute
+  AppZapsatRoute: typeof AppZapsatRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppUkolyNovyRoute: typeof AppUkolyNovyRoute
+  AppUkolyIndexRoute: typeof AppUkolyIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppProfilRoute: AppProfilRoute,
+  AppSchuzkaRoute: AppSchuzkaRoute,
   AppSpravaRoute: AppSpravaRoute,
+  AppTydenRoute: AppTydenRoute,
+  AppZapsatRoute: AppZapsatRoute,
   AppIndexRoute: AppIndexRoute,
+  AppUkolyNovyRoute: AppUkolyNovyRoute,
+  AppUkolyIndexRoute: AppUkolyIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

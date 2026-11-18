@@ -80,7 +80,7 @@ export function createUser(
       .returning()
       .get()
     audit(tx, by, 'user.created', row.id, null, auditView(row), now)
-    runPeopleChangeHooks(tx, hooks)
+    runPeopleChangeHooks(tx, hooks, now)
     return ok(row)
   })
 }
@@ -118,7 +118,7 @@ export function updateUser(
       .returning()
       .get()
     audit(tx, by, 'user.updated', row.id, auditView(row), auditView(updated), now)
-    if (takesPartChanged) runPeopleChangeHooks(tx, hooks)
+    if (takesPartChanged) runPeopleChangeHooks(tx, hooks, now)
     return ok(updated)
   })
 }

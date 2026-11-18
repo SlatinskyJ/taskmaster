@@ -1,27 +1,45 @@
-import { createFileRoute, redirect } from '@tanstack/react-router'
-import { LogoutButton } from '~/components/LogoutButton'
+import { createFileRoute } from '@tanstack/react-router'
+import { Placeholder } from '~/components/shell/Placeholder'
+import { Screen } from '~/components/shell/Screen'
+import { TakerBoard } from '~/components/tasks/TakerBoard'
+import { ToApprove } from '~/components/tasks/ToApprove'
+import { WaitingForYou } from '~/components/tasks/WaitingForYou'
+import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
-import { landingPath } from '~/lib/landing'
+import {
+  listBoardFn,
+  listPendingApprovalsFn,
+  listPendingCompletionsFn,
+} from '~/server/tasks/functions'
 
 // Domů for takers and givers (UI doc §6). The admin has no Domů and lands on Správa.
 export const Route = createFileRoute('/_app/')({
   beforeLoad: ({ context }) => {
-    const landing = landingPath(context.user.role)
-    // eslint-disable-next-line @typescript-eslint/only-throw-error -- the router's redirect
-    if (landing !== '/') throw redirect({ to: landing })
+    guardScreen(context.user.role, '/')
+  },
+  loader: async ({ context }) => {
+    const waiting = await listPendingApprovalsFn()
+    if (context.user.role === 'taker') {
+      return { waiting, board: await listBoardFn(), toApprove: [] }
+    }
+    return { waiting, board: [], toApprove: await listPendingCompletionsFn() }
   },
   component: Home,
 })
 
-// Placeholder until the app shell (#31) and the home screens land.
+// "Čeká na tebe" first, then the work lists; the rest of the home screens comes with #40, #41.
 function Home() {
   const { user } = Route.useRouteContext()
+  const { waiting, board, toApprove } = Route.useLoaderData()
   return (
-    <main className="grid min-h-dvh place-items-center gap-4 p-4">
-      <h1 className="text-3xl font-bold">
-        {cs.home.greeting}, {user.displayName}
-      </h1>
-      <LogoutButton />
-    </main>
+    <Screen title={`${cs.home.greeting}, ${user.displayName}!`} user={user}>
+      <WaitingForYou items={waiting} />
+      {user.role === 'taker' ? (
+        <TakerBoard items={board} me={user.id} />
+      ) : (
+        <ToApprove items={toApprove} />
+      )}
+      <Placeholder />
+    </Screen>
   )
 }

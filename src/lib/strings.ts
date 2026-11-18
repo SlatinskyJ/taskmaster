@@ -5,16 +5,41 @@
 export const cs = {
   app: {
     name: 'Taskmaster',
+    /** Under the name on the login screen. */
+    tagline: 'Body za domácí práce',
   },
+  /** Bottom bars (UI doc §6). */
   nav: {
+    label: 'Hlavní menu',
     home: 'Domů',
+    log: 'Zapsat',
+    week: 'Týden',
+    tasks: 'Úkoly',
+    meeting: 'Schůzka',
+  },
+  /** One friendly line on pages whose content lands in later issues (UI doc §8 [call]). */
+  placeholder: {
+    soon: 'Tady brzy něco bude.',
+  },
+  routeError: {
+    title: 'Něco se nepovedlo',
+    message: 'Data se nenačetla. Zkontroluj připojení a zkus to znovu.',
+    retry: 'Zkusit znovu',
+  },
+  /** Shown by the service worker when a page cannot load offline (src/pwa/offline.ts). */
+  offline: {
+    title: 'Jsi offline',
+    message: 'Taskmaster potřebuje internet. Až budeš zase online, zkus to znovu.',
+    retry: 'Zkusit znovu',
   },
   notFound: {
     message: 'Tahle stránka neexistuje.',
   },
-  /** Login screen (UI doc §7.4). Bare form until the app shell (#31) styles it. */
+  /** Login screen (UI doc §7.4). The passkey button comes with #29. */
   login: {
     title: 'Přihlášení',
+    /** Accounts come from the admin only (spec §6). */
+    help: 'Účty zakládá správce. Zapomenuté heslo? Řekni správci.',
     username: 'Jméno',
     password: 'Heslo',
     submit: 'Přihlásit',
@@ -23,9 +48,86 @@ export const cs = {
     failed: 'Něco se pokazilo. Zkus to znovu.',
     logout: 'Odhlásit',
   },
+  /** Profile (UI doc §7.4): theme, effects, log out. */
+  profile: {
+    title: 'Profil',
+    open: 'Otevřít profil',
+    back: 'Zpět',
+    appearance: 'Vzhled',
+    themeLight: 'Světlý',
+    themeDark: 'Tmavý',
+    themeAuto: 'Podle telefonu',
+    effects: 'Efekty',
+    effectsLabel: 'Konfety a animace',
+    effectsHint: 'Když dokončíš úkol nebo dosáhneš hranice',
+  },
+  /** One-time tasks (#33): GTasks, GCreate, TApprove (UI doc §7). */
+  tasks: {
+    new: '+ Nový',
+    empty: 'Zatím žádné úkoly.',
+    createTitle: 'Nový úkol',
+    title: 'Název',
+    score: 'Body',
+    less: 'Méně',
+    more: 'Více',
+    /** Before the quick-pick point values: "Rychle: 5 10 20 50". */
+    quickPick: 'Rychlá volba',
+    approvalRequired: 'Po dokončení schvaluji já',
+    propose: 'Navrhnout',
+    proposeHint: 'Úkol bude volný, až cenu schválí jeden z kluků.',
+    created: 'Úkol navržen',
+    /** Followed by the giver's name: "Nabízí Táta". */
+    offeredBy: 'Nabízí',
+    waitingForTaker: 'Čeká na souhlas',
+    approve: 'Souhlasím',
+    approving: 'Ukládám…',
+    approved: 'Schváleno',
+    errors: {
+      invalidTitle: (max: number) => `Napiš název (nejvýš ${String(max)} znaků).`,
+      invalidScore: 'Body musí být celé číslo od 1.',
+      offerChanged: 'Cena se mezitím změnila. Podívej se znovu.',
+      gone: 'Tenhle úkol už je vyřízený.',
+      reservedByOther: 'Tenhle úkol si už vzal někdo jiný.',
+      notAllowed: 'Tohle teď udělat nemůžeš.',
+      reasonTooLong: (max: number) => `Důvod je moc dlouhý (nejvýš ${String(max)} znaků).`,
+    },
+  },
+  /** Reserve, release, done, approve, reject (spec §5.4–§5.5). */
+  work: {
+    mine: 'Moje',
+    free: 'Volné',
+    toApprove: 'Ke schválení',
+    reserve: 'Rezervovat',
+    release: 'Uvolnit',
+    done: 'Hotovo',
+    /** A giver did it themselves: closed with no points (spec §5.5). Gender-neutral on purpose. */
+    doneSelf: 'Hotovo bez bodů',
+    doneSelfConfirm: {
+      title: 'Hotovo bez bodů?',
+      body: 'Úkol se uzavře a nikdo za něj body nedostane. Vrátit to nejde.',
+      confirm: 'Uzavřít',
+    },
+    approve: 'Schválit',
+    reject: 'Zamítnout',
+    rejectReason: 'Proč? (nepovinné)',
+    back: 'Zpět',
+    /** Followed by a name: "Rezervoval Starší". */
+    reservedBy: 'Rezervoval',
+    /** Followed by a name: "Udělal Starší". */
+    doneBy: 'Udělal',
+    toast: {
+      reserved: 'Rezervováno',
+      released: 'Uvolněno',
+      done: 'Hotovo!',
+      pending: 'Hotovo, čeká na schválení',
+      approved: 'Schváleno, body připsány',
+      rejected: 'Zamítnuto',
+    },
+  },
   home: {
-    /** Followed by the user's name: "Ahoj, Táta". */
     greeting: 'Ahoj',
+    /** "Čeká na tebe (2)" (UI doc §6 [call]: always at the top of Domů). */
+    waiting: 'Čeká na tebe',
   },
   admin: {
     title: 'Správa',

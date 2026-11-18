@@ -42,7 +42,8 @@ export function TaskRow({
       )}
     >
       <div className="grid min-w-0 flex-1 gap-1">
-        <div className="truncate text-row font-bold">{name}</div>
+        {/* Two lines before truncating, so a name still reads next to two action buttons at 360 px. */}
+        <div className="line-clamp-2 text-row font-bold break-words">{name}</div>
         <div className="flex min-w-0 items-center gap-2 text-meta text-muted">
           <StateChip state={state} className="min-w-0 shrink" />
           {/* The meta line gives way first; the chip only truncates when nothing else is left. */}
