@@ -1,5 +1,6 @@
 import { and, eq, ne } from 'drizzle-orm'
 import { toIsoUtc } from '~/domain/dates'
+import { MAX_DISPLAY_NAME } from '~/lib/userLimits'
 import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
 import type { Actor, Tx } from '~/server/audit'
@@ -46,7 +47,7 @@ export interface UserChanges {
 }
 
 const USERNAME = /^[a-z][a-z0-9._-]{1,31}$/
-export const MAX_DISPLAY_NAME = 40
+export { MAX_DISPLAY_NAME }
 
 export function createUser(
   db: Db | Tx,
