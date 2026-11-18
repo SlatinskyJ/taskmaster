@@ -1,8 +1,8 @@
 {
-  "id": "2697a71c-ca96-4662-937c-0a5a3c039fc7",
-  "prevId": "be7f234a-15b1-4709-92d8-edf10bfeb303",
   "version": "6",
   "dialect": "sqlite",
+  "id": "8a37bee0-7a09-4d5b-8c41-35b34d511982",
+  "prevId": "8ce079cf-249d-4361-9fe7-3087642a18e8",
   "tables": {
     "audit_log": {
       "name": "audit_log",
@@ -226,15 +226,15 @@
         "sessions_user_id_users_id_fk": {
           "name": "sessions_user_id_users_id_fk",
           "tableFrom": "sessions",
+          "tableTo": "users",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -393,28 +393,28 @@
         "task_score_approvals_task_id_tasks_id_fk": {
           "name": "task_score_approvals_task_id_tasks_id_fk",
           "tableFrom": "task_score_approvals",
+          "tableTo": "tasks",
           "columnsFrom": [
             "task_id"
           ],
-          "tableTo": "tasks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "task_score_approvals_user_id_users_id_fk": {
           "name": "task_score_approvals_user_id_users_id_fk",
           "tableFrom": "task_score_approvals",
+          "tableTo": "users",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
@@ -496,8 +496,8 @@
           "columns": [
             "task_id"
           ],
-          "where": "closed_at IS NULL AND side = 'giver'",
-          "isUnique": true
+          "isUnique": true,
+          "where": "closed_at IS NULL AND side = 'giver'"
         },
         "task_thread_open_bid_idx": {
           "name": "task_thread_open_bid_idx",
@@ -505,8 +505,8 @@
             "task_id",
             "user_id"
           ],
-          "where": "closed_at IS NULL AND side = 'taker'",
-          "isUnique": true
+          "isUnique": true,
+          "where": "closed_at IS NULL AND side = 'taker'"
         },
         "task_thread_task_idx": {
           "name": "task_thread_task_idx",
@@ -520,28 +520,28 @@
         "task_thread_task_id_tasks_id_fk": {
           "name": "task_thread_task_id_tasks_id_fk",
           "tableFrom": "task_thread",
+          "tableTo": "tasks",
           "columnsFrom": [
             "task_id"
           ],
-          "tableTo": "tasks",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "task_thread_user_id_users_id_fk": {
           "name": "task_thread_user_id_users_id_fk",
           "tableFrom": "task_thread",
+          "tableTo": "users",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -691,67 +691,67 @@
         "tasks_created_by_users_id_fk": {
           "name": "tasks_created_by_users_id_fk",
           "tableFrom": "tasks",
+          "tableTo": "users",
           "columnsFrom": [
             "created_by"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "tasks_reserved_by_users_id_fk": {
           "name": "tasks_reserved_by_users_id_fk",
           "tableFrom": "tasks",
+          "tableTo": "users",
           "columnsFrom": [
             "reserved_by"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "tasks_reserved_giver_id_users_id_fk": {
           "name": "tasks_reserved_giver_id_users_id_fk",
           "tableFrom": "tasks",
+          "tableTo": "users",
           "columnsFrom": [
             "reserved_giver_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "tasks_completed_by_users_id_fk": {
           "name": "tasks_completed_by_users_id_fk",
           "tableFrom": "tasks",
+          "tableTo": "users",
           "columnsFrom": [
             "completed_by"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         },
         "tasks_earner_id_users_id_fk": {
           "name": "tasks_earner_id_users_id_fk",
           "tableFrom": "tasks",
+          "tableTo": "users",
           "columnsFrom": [
             "earner_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -768,6 +768,243 @@
         "tasks_title_check": {
           "name": "tasks_title_check",
           "value": "length(trim(\"tasks\".\"title\")) > 0"
+        }
+      }
+    },
+    "template_score_approvals": {
+      "name": "template_score_approvals",
+      "columns": {
+        "template_id": {
+          "name": "template_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "score": {
+          "name": "score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "template_score_approvals_template_id_templates_id_fk": {
+          "name": "template_score_approvals_template_id_templates_id_fk",
+          "tableFrom": "template_score_approvals",
+          "tableTo": "templates",
+          "columnsFrom": [
+            "template_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "template_score_approvals_user_id_users_id_fk": {
+          "name": "template_score_approvals_user_id_users_id_fk",
+          "tableFrom": "template_score_approvals",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "template_score_approvals_template_id_user_id_pk": {
+          "columns": [
+            "template_id",
+            "user_id"
+          ],
+          "name": "template_score_approvals_template_id_user_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "templates": {
+      "name": "templates",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "score": {
+          "name": "score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "approval_required": {
+          "name": "approval_required",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "schedule_days": {
+          "name": "schedule_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "schedule_time": {
+          "name": "schedule_time",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "due_day_offset": {
+          "name": "due_day_offset",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "due_time": {
+          "name": "due_time",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "grace_minutes": {
+          "name": "grace_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "agreed_at": {
+          "name": "agreed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "templates_status_idx": {
+          "name": "templates_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "templates_created_by_users_id_fk": {
+          "name": "templates_created_by_users_id_fk",
+          "tableFrom": "templates",
+          "tableTo": "users",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "templates_status_check": {
+          "name": "templates_status_check",
+          "value": "\"templates\".\"status\" IN ('proposed', 'active')"
+        },
+        "templates_score_check": {
+          "name": "templates_score_check",
+          "value": "\"templates\".\"score\" >= 1"
+        },
+        "templates_title_check": {
+          "name": "templates_title_check",
+          "value": "length(trim(\"templates\".\"title\")) > 0"
+        },
+        "templates_days_check": {
+          "name": "templates_days_check",
+          "value": "\"templates\".\"schedule_days\" BETWEEN 0 AND 127"
+        },
+        "templates_time_check": {
+          "name": "templates_time_check",
+          "value": "\"templates\".\"schedule_time\" IS NULL OR \"templates\".\"schedule_days\" > 0"
+        },
+        "templates_deadline_check": {
+          "name": "templates_deadline_check",
+          "value": "(\"templates\".\"due_day_offset\" IS NULL) = (\"templates\".\"due_time\" IS NULL) AND (\"templates\".\"due_time\" IS NULL) = (\"templates\".\"grace_minutes\" IS NULL)"
+        },
+        "templates_offset_check": {
+          "name": "templates_offset_check",
+          "value": "\"templates\".\"due_day_offset\" >= 0"
+        },
+        "templates_grace_check": {
+          "name": "templates_grace_check",
+          "value": "\"templates\".\"grace_minutes\" >= 0"
         }
       }
     },
@@ -865,15 +1102,15 @@
         "passkey_challenges_user_id_users_id_fk": {
           "name": "passkey_challenges_user_id_users_id_fk",
           "tableFrom": "passkey_challenges",
+          "tableTo": "users",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -981,15 +1218,15 @@
         "passkeys_user_id_users_id_fk": {
           "name": "passkeys_user_id_users_id_fk",
           "tableFrom": "passkeys",
+          "tableTo": "users",
           "columnsFrom": [
             "user_id"
           ],
-          "tableTo": "users",
           "columnsTo": [
             "id"
           ],
-          "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "no action",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1000,9 +1237,9 @@
   "views": {},
   "enums": {},
   "_meta": {
-    "columns": {},
     "schemas": {},
-    "tables": {}
+    "tables": {},
+    "columns": {}
   },
   "internal": {
     "indexes": {}

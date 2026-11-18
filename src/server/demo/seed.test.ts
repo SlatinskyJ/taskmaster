@@ -1,8 +1,8 @@
 import { verify } from '@node-rs/argon2'
-import { sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { login } from '~/server/auth'
-import { auditLog, tasks, users } from '~/server/db/schema'
+import { auditLog, tasks, templates, users } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { listTasks } from '~/server/tasks'
 import { bootstrapAdmin } from '~/server/users'
@@ -26,9 +26,12 @@ describe('demo seed (#62)', () => {
       ['mladsi', 'taker', true],
     ])
     expect(await verify(rows[0]?.passwordHash ?? '', DEMO_PASSWORD)).toBe(true)
-    const log = db.select().from(auditLog).all()
-    expect(log.map((r) => [r.action, r.actorKind])).toEqual([
-      ...Array.from({ length: 4 }, () => ['user.created', 'system']),
+    const log = db.select().from(auditLog).where(eq(auditLog.entityType, 'user')).all()
+    expect(log.map((r) => [r.action, r.actorKind])).toEqual(
+      Array(4).fill(['user.created', 'system']),
+    )
+    const taskLog = db.select().from(auditLog).where(eq(auditLog.entityType, 'task')).all()
+    expect(taskLog.map((r) => [r.action, r.actorKind])).toEqual([
       ['task.created', 'user'],
       ['task.bid_placed', 'user'],
       ['task.bid_placed', 'user'],
@@ -114,6 +117,57 @@ describe('demo seed (#62)', () => {
     db.run(sql`DROP TRIGGER boom`)
     expect(seedDemo(db, PREVIEW, T0).kind).toBe('seeded')
     expect(db.select().from(users).all()).toHaveLength(4)
+  })
+
+  it('adds two templates (#37): one waiting for agreement, one agreed', () => {
+    const db = createTestDb()
+    seedDemo(db, PREVIEW, T0)
+    expect(
+      db
+        .select({
+          title: templates.title,
+          status: templates.status,
+          score: templates.score,
+          days: templates.scheduleDays,
+          time: templates.scheduleTime,
+          due: templates.dueTime,
+        })
+        .from(templates)
+        .all(),
+    ).toEqual([
+      {
+        title: 'Vynést koše',
+        status: 'proposed',
+        score: 4,
+        days: 1 << 2,
+        time: '18:00',
+        due: '07:00',
+      },
+      { title: 'Vyndat myčku', status: 'active', score: 3, days: 0, time: null, due: null },
+    ])
+    const actions = db
+      .select({ action: auditLog.action })
+      .from(auditLog)
+      .where(eq(auditLog.entityType, 'template'))
+      .all()
+      .map((r) => r.action)
+    expect(actions).toEqual([
+      'template.created',
+      'template.created',
+      'template.score_approved',
+      'template.agreed',
+    ])
+  })
+
+  it('all or nothing: a failing template leaves no people either', () => {
+    const db = createTestDb()
+    db.run(
+      sql`CREATE TRIGGER boom BEFORE INSERT ON templates WHEN NEW.title = 'Vyndat myčku' BEGIN SELECT RAISE(ABORT, 'boom'); END`,
+    )
+    expect(() => seedDemo(db, PREVIEW, T0)).toThrow('boom')
+    expect(db.select().from(users).all()).toHaveLength(0)
+    expect(db.select().from(templates).all()).toHaveLength(0)
+    expect(db.select().from(auditLog).all()).toHaveLength(0)
   })
 
   it('a second boot seeds nothing more', () => {

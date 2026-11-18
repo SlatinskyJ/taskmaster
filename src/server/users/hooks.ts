@@ -1,4 +1,5 @@
 import { resolveProposedTasks } from '~/server/tasks/tasks'
+import { resolveProposedTemplates } from '~/server/templates/templates'
 import type { PeopleChangeHook } from './people'
 
 /**
@@ -12,5 +13,8 @@ import type { PeopleChangeHook } from './people'
 export const PEOPLE_CHANGE_HOOKS: readonly PeopleChangeHook[] = [
   (tx, people, now) => {
     resolveProposedTasks(tx, people, now)
+  },
+  (tx, people, now) => {
+    resolveProposedTemplates(tx, people, now)
   },
 ]

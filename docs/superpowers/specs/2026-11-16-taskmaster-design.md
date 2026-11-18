@@ -121,7 +121,7 @@ A template defines:
 - **Schedule** (optional): the days (and optionally a time) an instance is created automatically, e.g. trash every Tuesday, bins Sunday evening.
 - **Deadline mode**, one of:
   - **No deadline** (e.g. dishwasher): the instance stays open until someone does it.
-  - **Deadline + grace window** (e.g. bins out before the collection truck): the instance has a due time. Completion may still be logged during a grace window after the due time (the person did it on time and only logs it afterwards). After the grace window the instance **expires**; no points, logged.
+  - **Deadline + grace window** (e.g. bins out before the collection truck): the instance has a due time. The template sets it as a number of days after the instance appears plus a Prague clock time, e.g. "next day, 7:00": bins that appear Tuesday 18:00 are due Wednesday 7:00. If that moment has already passed when the instance appears, the due time moves one day later (Jakub, 2026-11-18). Completion may still be logged during a grace window after the due time (the person did it on time and only logs it afterwards). After the grace window the instance **expires**; no points, logged.
 - **Approval required** flag (see 5.5).
 
 Instances come into existence three ways:
