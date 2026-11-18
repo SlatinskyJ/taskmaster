@@ -26,6 +26,12 @@ export const cs = {
     message: 'Data se nenačetla. Zkontroluj připojení a zkus to znovu.',
     retry: 'Zkusit znovu',
   },
+  /** Shown by the service worker when a page cannot load offline (src/pwa/offline.ts). */
+  offline: {
+    title: 'Jsi offline',
+    message: 'Taskmaster potřebuje internet. Až budeš zase online, zkus to znovu.',
+    retry: 'Zkusit znovu',
+  },
   notFound: {
     message: 'Tahle stránka neexistuje.',
   },
