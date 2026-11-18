@@ -157,6 +157,8 @@ test('passkey story', async ({ page, browser, baseURL }) => {
   await logout(page)
   await pressPasskeyButton(page)
   await expect(page.getByRole('alert')).toHaveText(cs.passkeys.unknown)
+  // The passkey's own error: the untouched password form is not marked wrong.
+  await expect(page.getByLabel(cs.login.password)).toHaveAttribute('aria-invalid', 'false')
   await expect(page).toHaveURL(/\/login/)
 
   // 9. Enrol again, then remove it in Profil; the dialog names the device and the date.
