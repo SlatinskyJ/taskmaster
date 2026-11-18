@@ -17,6 +17,8 @@ export const AUDIT_ACTIONS = [
   'task.created',
   'task.score_offered',
   'task.score_countered',
+  'task.bid_placed',
+  'task.bid_accepted',
   'task.score_approved',
   'task.score_change_proposed',
   'task.score_changed',
