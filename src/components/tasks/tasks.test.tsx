@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { PointsBar } from '~/components/points/PointsBar'
 import { cs, type ItemStateKey } from '~/lib/strings'
-import type { TaskView } from '~/server/tasks/functions'
+import { completeTaskFn, releaseTaskFn, type TaskView } from '~/server/tasks/functions'
 import { StateChip } from './StateChip'
 import { STATE_CHIP_BG, STATE_DOT, STATE_STRIPE, STATE_TEXT } from './stateStyles'
 import { TaskRow } from './TaskRow'
@@ -278,19 +278,31 @@ describe('TakerBoard Moje row (#148)', () => {
     expect(doneButton(html)).toMatch(/<button[^>]*aria-busy="true"/)
   })
 
-  it('Uvolnit runs the release of its own task', () => {
+  it('Uvolnit releases its own task, not marks it done', async () => {
     action.busy = null
     action.run.mockClear()
-    const tree = TakerBoard({ items: [reserved], me: 4 })
-    const release = findByLabel(tree, cs.work.release)
-    release.onClick()
+    vi.mocked(releaseTaskFn).mockClear()
+    vi.mocked(completeTaskFn).mockClear()
+    const other: TaskView = { ...reserved, id: 7, title: 'Vynést tříděný odpad' }
+    const tree = TakerBoard({ items: [reserved, other], me: 4 })
+    findByLabel(tree, cs.work.release, 1).onClick()
     expect(action.run).toHaveBeenCalledTimes(1)
-    expect(action.run.mock.calls[0]?.[0]).toBe('release-1')
+    const [key, call] = action.run.mock.calls[0] as [string, () => Promise<unknown>]
+    expect(key).toBe('release-7')
+    await call()
+    expect(releaseTaskFn).toHaveBeenCalledWith({ data: { taskId: 7 } })
+    expect(completeTaskFn).not.toHaveBeenCalled()
+  })
+
+  it('hides the ↶ icon from screen readers, which read the label', () => {
+    action.busy = null
+    const html = renderToStaticMarkup(<TakerBoard items={[reserved]} me={4} />)
+    expect(byLabel(html, cs.work.release)).toMatch(/<svg[^>]*aria-hidden="true"/)
   })
 })
 
-/** Walks a React element tree (props and children, not rendered) for the one element with this aria-label. */
-function findByLabel(node: unknown, label: string): { onClick: () => void } {
+/** Walks a React element tree (props and children, not rendered) for the element(s) with this aria-label; `index` picks one of several. */
+function findByLabel(node: unknown, label: string, index?: number): { onClick: () => void } {
   const found: { onClick: () => void }[] = []
   const walk = (n: unknown): void => {
     if (Array.isArray(n)) {
@@ -303,8 +315,9 @@ function findByLabel(node: unknown, label: string): { onClick: () => void } {
     Object.values(props).forEach(walk)
   }
   walk(node)
-  if (found.length !== 1) throw new Error(`expected one "${label}", got ${String(found.length)}`)
-  const hit = found[0]
+  if (index === undefined && found.length !== 1)
+    throw new Error(`expected one "${label}", got ${String(found.length)}`)
+  const hit = found[index ?? 0]
   if (!hit) throw new Error('unreachable')
   return hit
 }
