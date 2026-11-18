@@ -1,5 +1,8 @@
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
+import { Button } from '~/components/ui/button'
+import { Card } from '~/components/ui/card'
+import { Input } from '~/components/ui/input'
 import { safeRedirect } from '~/lib/redirect'
 import { cs } from '~/lib/strings'
 import { landingPath } from '~/lib/landing'
@@ -23,7 +26,7 @@ export const Route = createFileRoute('/login')({
   component: Login,
 })
 
-// Bare password form; the app shell (#31) styles it and #29 adds the passkey button.
+// Password form (UI doc §7.4). #29 puts the passkey button first, above it.
 function Login() {
   const search = Route.useSearch()
   const router = useRouter()
@@ -56,49 +59,53 @@ function Login() {
   }
 
   return (
-    <main className="mx-auto grid max-w-xs gap-4 p-4 pt-16">
-      <h1 className="text-3xl font-bold">{cs.login.title}</h1>
-      <form
-        method="post"
-        className="grid gap-3"
-        onSubmit={(e) => {
-          e.preventDefault()
-          void submit(new FormData(e.currentTarget))
-        }}
-      >
-        <label className="grid gap-1">
-          {cs.login.username}
-          <input
-            name="username"
-            autoComplete="username"
-            autoCapitalize="none"
-            required
-            aria-invalid={error !== null}
-            aria-describedby={error ? 'login-error' : undefined}
-            className="rounded border p-3"
-          />
-        </label>
-        <label className="grid gap-1">
-          {cs.login.password}
-          <input
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            aria-invalid={error !== null}
-            aria-describedby={error ? 'login-error' : undefined}
-            className="rounded border p-3"
-          />
-        </label>
-        {error && (
-          <p id="login-error" role="alert">
-            {error}
-          </p>
-        )}
-        <button type="submit" disabled={busy} className="rounded border p-3 font-semibold">
-          {cs.login.submit}
-        </button>
-      </form>
+    <main className="mx-auto grid min-h-dvh max-w-sm content-center gap-6 px-gutter py-10">
+      <div className="grid justify-items-center gap-1 text-center">
+        <span className="font-display text-4xl font-bold text-accent-strong">{cs.app.name}</span>
+        <h1 className="text-xl font-semibold text-muted">{cs.login.title}</h1>
+      </div>
+      <Card>
+        {/* #29: passkey button ("Přihlásit otiskem / obličejem") goes here, before the form. */}
+        <form
+          method="post"
+          className="grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            void submit(new FormData(e.currentTarget))
+          }}
+        >
+          <label className="grid gap-1.5 font-semibold">
+            {cs.login.username}
+            <Input
+              name="username"
+              autoComplete="username"
+              autoCapitalize="none"
+              required
+              aria-invalid={error !== null}
+              aria-describedby={error ? 'login-error' : undefined}
+            />
+          </label>
+          <label className="grid gap-1.5 font-semibold">
+            {cs.login.password}
+            <Input
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              aria-invalid={error !== null}
+              aria-describedby={error ? 'login-error' : undefined}
+            />
+          </label>
+          {error && (
+            <p id="login-error" role="alert" className="font-semibold text-destructive">
+              {error}
+            </p>
+          )}
+          <Button type="submit" size="lg" disabled={busy}>
+            {cs.login.submit}
+          </Button>
+        </form>
+      </Card>
     </main>
   )
 }

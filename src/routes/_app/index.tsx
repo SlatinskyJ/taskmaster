@@ -1,7 +1,8 @@
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { LogoutButton } from '~/components/LogoutButton'
-import { cs } from '~/lib/strings'
+import { EmptyState } from '~/components/EmptyState'
+import { Card } from '~/components/ui/card'
 import { landingPath } from '~/lib/landing'
+import { cs } from '~/lib/strings'
 
 // Domů for takers and givers (UI doc §6). The admin has no Domů and lands on Správa.
 export const Route = createFileRoute('/_app/')({
@@ -13,15 +14,17 @@ export const Route = createFileRoute('/_app/')({
   component: Home,
 })
 
-// Placeholder until the app shell (#31) and the home screens land.
+// Placeholder until the home screens (#40 taker, #41 giver).
 function Home() {
   const { user } = Route.useRouteContext()
   return (
-    <main className="grid min-h-dvh place-items-center gap-4 p-4">
-      <h1 className="text-3xl font-bold">
-        {cs.home.greeting}, {user.displayName}
+    <div className="grid gap-4">
+      <h1 className="text-title font-bold">
+        {cs.home.greeting}, {user.displayName}!
       </h1>
-      <LogoutButton />
-    </main>
+      <Card>
+        <EmptyState>{cs.shell.comingSoon}</EmptyState>
+      </Card>
+    </div>
   )
 }

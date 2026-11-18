@@ -6,13 +6,39 @@ export const cs = {
   app: {
     name: 'Taskmaster',
   },
+  /** Bottom bar and screen titles (UI doc §6). */
   nav: {
     home: 'Domů',
+    log: 'Zapsat',
+    week: 'Týden',
+    tasks: 'Úkoly',
+    meeting: 'Schůzka',
+    main: 'Hlavní menu',
+  },
+  /** App shell (#31): the frame around every screen. */
+  shell: {
+    /** Empty placeholder screens until their feature lands. */
+    comingSoon: 'Tahle obrazovka se teprve staví.',
+    /** Avatar button; followed by the user's name. */
+    openProfile: 'Profil',
+  },
+  /** Profile screen (UI doc §7.4). Theme and effects are kept on this device. */
+  profile: {
+    title: 'Profil',
+    appearance: 'Vzhled',
+    theme: {
+      auto: 'Automaticky',
+      light: 'Světlý',
+      dark: 'Tmavý',
+    },
+    effects: 'Efekty',
+    effectsHint: 'Konfety a animace při splnění úkolu',
+    deviceNote: 'Platí pro toto zařízení.',
   },
   notFound: {
     message: 'Tahle stránka neexistuje.',
   },
-  /** Login screen (UI doc §7.4). Bare form until the app shell (#31) styles it. */
+  /** Login screen (UI doc §7.4). */
   login: {
     title: 'Přihlášení',
     username: 'Jméno',
