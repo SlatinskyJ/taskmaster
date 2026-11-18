@@ -1,3 +1,4 @@
+import { Undo2 } from 'lucide-react'
 import { EmptyState } from '~/components/EmptyState'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
@@ -15,6 +16,8 @@ import { useTaskAction } from './useTaskAction'
  * A taker's work on Domů (UI doc §7.1, until #40 builds the full home): "Moje" (reserved by me,
  * or done and waiting for approval) and "Volné" (open, Rezervovat). Marking an open task done
  * without reserving it is allowed by the server (spec §5.5) and gets its button with #40.
+ * On a reserved "Moje" row, ↶ Uvolnit is an icon button so the name and chip read in full at
+ * 360 px; Hotovo, the main action, keeps its label (mockup Main, #148).
  */
 export function TakerBoard({ items, me }: { items: readonly TaskView[]; me: number }) {
   const { busy, run } = useTaskAction()
@@ -49,10 +52,13 @@ export function TakerBoard({ items, me }: { items: readonly TaskView[]; me: numb
                     state="reserved"
                     points={t.score}
                     action={
-                      <div className="flex gap-1.5">
+                      <div className="flex gap-2">
                         <Button
                           variant="ghost"
+                          size="icon"
+                          aria-label={cs.work.release}
                           disabled={busy !== null}
+                          aria-busy={busy === `release-${String(t.id)}`}
                           onClick={() => {
                             void run(
                               `release-${String(t.id)}`,
@@ -61,7 +67,7 @@ export function TakerBoard({ items, me }: { items: readonly TaskView[]; me: numb
                             )
                           }}
                         >
-                          {cs.work.release}
+                          <Undo2 aria-hidden="true" />
                         </Button>
                         <Button
                           variant="ok"
