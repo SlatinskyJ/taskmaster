@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TemplateView } from '~/server/templates/templates'
+import type { TemplateView } from '~/server/templates/functions'
 import { describeTemplate, templateDetail } from './templateText'
 
 type Def = Pick<TemplateView, 'schedule' | 'deadline'>

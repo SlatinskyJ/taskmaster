@@ -1,4 +1,4 @@
-import type { TemplateView } from '~/server/templates/templates'
+import type { TemplateView } from '~/server/templates/functions'
 import { cs } from './strings'
 
 // One-line Czech summary of a template's schedule and deadline (spec §5.3), for rows on Úkoly

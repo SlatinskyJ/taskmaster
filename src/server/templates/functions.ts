@@ -2,7 +2,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { requireRole } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
 import { parseApproval, parseNewTemplate } from './parse'
-import type { TemplateError, TemplateView } from './templates'
+import type { NewTemplate, TemplateError, TemplateView } from './templates'
 import {
   approveTemplateScore,
   createTemplate,
@@ -10,7 +10,7 @@ import {
   pendingTemplateApprovals,
 } from './templates'
 
-export type { TemplateError, TemplateView }
+export type { NewTemplate, TemplateError, TemplateView }
 
 // Server functions for recurring templates (#37). Roles are checked here (guards) and again by
 // the domain rules inside (`not_a_giver`, `not_a_party`).
