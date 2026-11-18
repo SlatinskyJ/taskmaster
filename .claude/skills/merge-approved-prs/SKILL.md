@@ -37,6 +37,8 @@ A PR that got new code after the label is out; the report asks him to re-add the
 
 Order: stacks first, bottom-up (`gh api 'repos/SlatinskyJ/taskmaster/stacks?pull_request=<n>'`), then the rest by PR number. A PR stacked on an out or stopped PR is out too (label off as well).
 
+**Unstack before landing.** GitHub refuses update-branch, merge and auto-merge on any PR that is in a GitHub stack (403/422). So when a stack's PRs are all **in**, take its open PRs out of the stack first: `echo '{"pull_requests":[<open PRs>]}' | gh api -X POST repos/SlatinskyJ/taskmaster/stacks/<stack number>/unstack --input -`. The PR bases stay as they were, so the order still holds: after the lower PR merges, GitHub retargets the next one to `main`. Leave a stack with an out or stopped PR as it is.
+
 ## 2. Land one PR
 
 Strictly one at a time: start the next PR only when this one is merged or stopped, then rebuild the queue (labels may have changed). Every merge moves `main`, so the next PR always starts with step 2.
