@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { cs } from '~/lib/strings'
+import { AdminPasskeys } from './AdminPasskeys'
 import { PasskeyList } from './PasskeyList'
 import { PasskeyLoginButton } from './PasskeyLoginButton'
 
@@ -54,5 +55,22 @@ describe('PasskeyList', () => {
       <PasskeyList items={[]} busyId={null} onRemove={() => undefined} />,
     )
     expect(html).toContain(cs.passkeys.empty)
+  })
+})
+
+describe('AdminPasskeys', () => {
+  it('renders nothing for a person without passkeys', () => {
+    const html = renderToStaticMarkup(
+      <AdminPasskeys count={0} busy={false} onRemove={() => undefined} />,
+    )
+    expect(html).toBe('')
+  })
+
+  it('shows the count and the remove button', () => {
+    const html = renderToStaticMarkup(
+      <AdminPasskeys count={3} busy={false} onRemove={() => undefined} />,
+    )
+    expect(html).toContain('3 klíče')
+    expect(html).toContain(cs.passkeys.admin.removeAll)
   })
 })
