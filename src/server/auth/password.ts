@@ -3,8 +3,7 @@ import { hash, hashSync, verify } from '@node-rs/argon2'
 // Passwords (spec §6, §11 Auth): argon2id with the library defaults (argon2id, m=19 MiB, t=2,
 // p=1: the OWASP minimum). Only the PHC string is stored; the password never is.
 
-/** Longer input is refused before hashing, so a huge body can't keep the CPU busy. */
-export const MAX_PASSWORD_LENGTH = 256
+export { MAX_PASSWORD_LENGTH } from '~/lib/userLimits'
 
 export function hashPassword(password: string): Promise<string> {
   return hash(password)

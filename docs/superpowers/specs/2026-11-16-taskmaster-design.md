@@ -109,7 +109,8 @@ Details:
   - When the giver side accepts, it accepts the **lowest** open bid (the best one for the givers). If one taker holds the lowest bid, the task becomes reserved to him at that score; if several takers tie at the lowest, the task becomes **open** at that score and they sort out who takes it.
   - On acceptance all other bids on that task close, and pending score approvals are discarded.
 - **[call]** On the giver side, any active giver may accept or counter a bid (so Mum or Dad can respond).
-- A taker may also simply accept the giver's current offer within a bid, which is agreement plus reservation in one step.
+- A taker who has an open bid and says yes to the giver's current offer **picks** (Jakub, 2026-11-18): **take it himself** at that score (agreement plus reservation in one step), or **agree and leave it open** for every taker (path 1). A taker without a bid has path 1 only.
+- On the giver side (Jakub, 2026-11-18): a giver may change the offer at any time while the task is proposed, whether or not anyone has bid. A giver's counter at exactly a taker's open bid **accepts that bid**: the task becomes reserved to that taker at that score, or open at that score if several takers bid it.
 - Changing the score of an agreed one-time task:
   - if reserved: needs that taker + a giver;
   - if open (unreserved): any party may propose it; needs score agreement (a giver + a taker), and the old score stays until then;
