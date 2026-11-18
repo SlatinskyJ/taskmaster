@@ -151,6 +151,8 @@ export const cs = {
     saved: 'Uloženo',
     resetTitle: 'Nové heslo',
     reset: 'Nastavit nové heslo',
+    /** The reset dialog's confirm button: short, it shares a row with Zrušit at 360 px. */
+    resetSubmit: 'Změnit heslo',
     resetConfirm: (name: string) =>
       `${name} se odhlásí ze všech zařízení a přihlásí se novým heslem.`,
     resetDone: 'Heslo změněno',
