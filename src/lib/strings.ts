@@ -87,6 +87,41 @@ export const cs = {
       invalidScore: 'Body musí být celé číslo od 1.',
       offerChanged: 'Cena se mezitím změnila. Podívej se znovu.',
       gone: 'Tenhle úkol už je vyřízený.',
+      reservedByOther: 'Tenhle úkol si už vzal někdo jiný.',
+      notAllowed: 'Tohle teď udělat nemůžeš.',
+      reasonTooLong: (max: number) => `Důvod je moc dlouhý (nejvýš ${String(max)} znaků).`,
+    },
+  },
+  /** Reserve, release, done, approve, reject (spec §5.4–§5.5). */
+  work: {
+    mine: 'Moje',
+    free: 'Volné',
+    toApprove: 'Ke schválení',
+    reserve: 'Rezervovat',
+    release: 'Uvolnit',
+    done: 'Hotovo',
+    /** A giver did it themselves: closed with no points (spec §5.5). Gender-neutral on purpose. */
+    doneSelf: 'Hotovo bez bodů',
+    doneSelfConfirm: {
+      title: 'Hotovo bez bodů?',
+      body: 'Úkol se uzavře a nikdo za něj body nedostane. Vrátit to nejde.',
+      confirm: 'Uzavřít',
+    },
+    approve: 'Schválit',
+    reject: 'Zamítnout',
+    rejectReason: 'Proč? (nepovinné)',
+    back: 'Zpět',
+    /** Followed by a name: "Rezervoval Starší". */
+    reservedBy: 'Rezervoval',
+    /** Followed by a name: "Udělal Starší". */
+    doneBy: 'Udělal',
+    toast: {
+      reserved: 'Rezervováno',
+      released: 'Uvolněno',
+      done: 'Hotovo!',
+      pending: 'Hotovo, čeká na schválení',
+      approved: 'Schváleno, body připsány',
+      rejected: 'Zamítnuto',
     },
   },
   home: {
