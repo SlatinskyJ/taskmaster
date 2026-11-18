@@ -57,6 +57,13 @@
       "when": 1794958674310,
       "tag": "0007_task_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1795015509637,
+      "tag": "0008_templates",
+      "breakpoints": true
     }
   ]
 }
