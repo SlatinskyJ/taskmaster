@@ -47,8 +47,8 @@ export function PointsBar({
   watcher.current ??= createLevelWatcher(confirmed, subject)
 
   useEffect(() => {
-    const crossed = watcher.current?.next(confirmed, { lower, upper }, subject) ?? null
-    if (!crossed || !celebrate) return
+    const crossed = watcher.current?.next(confirmed, { lower, upper }, subject, celebrate) ?? null
+    if (!crossed) return
     toast(crossed === 'upper' ? cs.effects.upperReached : cs.effects.lowerReached)
     setGlow((g) => g + 1)
     burstConfetti(null, 'big')
