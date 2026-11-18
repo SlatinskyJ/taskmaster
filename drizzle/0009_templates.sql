@@ -30,8 +30,8 @@ CREATE TABLE `templates` (
 	CONSTRAINT "templates_days_check" CHECK("templates"."schedule_days" BETWEEN 0 AND 127),
 	CONSTRAINT "templates_time_check" CHECK("templates"."schedule_time" IS NULL OR "templates"."schedule_days" > 0),
 	CONSTRAINT "templates_deadline_check" CHECK(("templates"."due_day_offset" IS NULL) = ("templates"."due_time" IS NULL) AND ("templates"."due_time" IS NULL) = ("templates"."grace_minutes" IS NULL)),
-	CONSTRAINT "templates_offset_check" CHECK("templates"."due_day_offset" BETWEEN 0 AND 6),
-	CONSTRAINT "templates_grace_check" CHECK("templates"."grace_minutes" BETWEEN 0 AND 2880)
+	CONSTRAINT "templates_offset_check" CHECK("templates"."due_day_offset" >= 0),
+	CONSTRAINT "templates_grace_check" CHECK("templates"."grace_minutes" >= 0)
 );
 --> statement-breakpoint
 CREATE INDEX `templates_status_idx` ON `templates` (`status`);
