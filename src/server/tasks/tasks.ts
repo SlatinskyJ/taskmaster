@@ -15,7 +15,7 @@ import type { AgreementError, LifecycleError, OneTimeAgreement, Person } from '~
 import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
 import { toIsoUtc } from '~/domain/dates'
-import { TASK_TITLE_MAX } from '~/lib/taskLimits'
+import { normaliseTitle, TASK_TITLE_MAX } from '~/lib/taskLimits'
 import { writeAudit } from '~/server/audit'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
@@ -35,11 +35,6 @@ export interface NewTask {
   title: string
   score: number
   approvalRequired: boolean
-}
-
-function normaliseTitle(title: string): string | null {
-  const t = title.trim().replace(/\s+/g, ' ')
-  return t.length > 0 && t.length <= TITLE_MAX ? t : null
 }
 
 /** Approvals of the task's current offer, oldest first (the proposer first). */

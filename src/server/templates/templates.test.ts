@@ -1,0 +1,283 @@
+import { eq } from 'drizzle-orm'
+import { describe, expect, it } from 'vitest'
+import type { Db } from '~/server/db'
+import { auditLog, templates, templateScoreApprovals, users } from '~/server/db/schema'
+import { createTestDb } from '~/server/db/testing'
+import { updateUser } from '~/server/users/manage'
+import type { NewTemplate } from './templates'
+import {
+  approveTemplateScore,
+  createTemplate,
+  listTemplates,
+  pendingTemplateApprovals,
+} from './templates'
+
+const T0 = new Date('2026-11-18T10:00:00.000Z')
+const T1 = new Date('2026-11-18T11:00:00.000Z')
+const T2 = new Date('2026-11-18T12:00:00.000Z')
+
+function must<T>(r: { ok: true; value: T } | { ok: false; error: string }): T {
+  if (!r.ok) throw new Error(r.error)
+  return r.value
+}
+
+/** Admin, Táta and Máma (givers), the two brothers (takers). */
+function family() {
+  const db = createTestDb()
+  const add = (username: string, displayName: string, role: 'admin' | 'giver' | 'taker') =>
+    db
+      .insert(users)
+      .values({
+        username,
+        displayName,
+        role,
+        createdAt: T0.toISOString(),
+        updatedAt: T0.toISOString(),
+      })
+      .returning()
+      .get().id
+  return {
+    db,
+    admin: add('admin', 'Admin', 'admin'),
+    tata: add('tata', 'Táta', 'giver'),
+    mama: add('mama', 'Máma', 'giver'),
+    starsi: add('starsi', 'Starší', 'taker'),
+    mladsi: add('mladsi', 'Mladší', 'taker'),
+  }
+}
+
+const audit = (db: Db) =>
+  db
+    .select({
+      action: auditLog.action,
+      actor: auditLog.actorUserId,
+      kind: auditLog.actorKind,
+      before: auditLog.before,
+      after: auditLog.after,
+    })
+    .from(auditLog)
+    .where(eq(auditLog.entityType, 'template'))
+    .all()
+
+const BINS: NewTemplate = {
+  title: 'Vynést koše',
+  score: 4,
+  approvalRequired: true,
+  schedule: { days: [2], time: { hour: 18, minute: 0 } },
+  deadline: { dayOffset: 1, due: { hour: 7, minute: 0 }, graceMinutes: 120 },
+}
+const DISHES: NewTemplate = {
+  title: 'Vyndat myčku',
+  score: 3,
+  approvalRequired: false,
+  schedule: null,
+  deadline: null,
+}
+
+describe('createTemplate (spec §5.1, §5.3)', () => {
+  it('a giver creates a proposed template; proposing counts as approving', () => {
+    const { db, tata } = family()
+    const row = must(createTemplate(db, tata, BINS, T0))
+    expect(row).toMatchObject({
+      title: 'Vynést koše',
+      status: 'proposed',
+      score: 4,
+      agreedAt: null,
+    })
+    expect(db.select().from(templateScoreApprovals).all()).toEqual([
+      { templateId: row.id, userId: tata, score: 4, approvedAt: T0.toISOString() },
+    ])
+    expect(audit(db).map((a) => [a.action, a.actor])).toEqual([['template.created', tata]])
+  })
+
+  it('round-trips Sunday, Saturday, minutes and the grace through storage', () => {
+    const { db, tata } = family()
+    must(
+      createTemplate(
+        db,
+        tata,
+        {
+          ...BINS,
+          schedule: { days: [6, 0, 3], time: { hour: 18, minute: 30 } },
+          deadline: { dayOffset: 1, due: { hour: 7, minute: 45 }, graceMinutes: 90 },
+        },
+        T0,
+      ),
+    )
+    must(createTemplate(db, tata, DISHES, T0))
+    must(
+      createTemplate(
+        db,
+        tata,
+        { ...DISHES, title: 'Zalít kytky', schedule: { days: [1], time: null } },
+        T0,
+      ),
+    )
+    const [flowers, dishes, bins] = listTemplates(db)
+    expect(bins).toMatchObject({
+      schedule: { days: [0, 3, 6], time: '18:30' },
+      deadline: { dayOffset: 1, due: '07:45', graceMinutes: 90 },
+    })
+    expect(dishes).toMatchObject({ schedule: null, deadline: null })
+    expect(flowers).toMatchObject({ schedule: { days: [1], time: null }, deadline: null })
+  })
+
+  it.each([
+    ['taker', 'starsi'],
+    ['admin', 'admin'],
+  ] as const)('a %s may not create one', (_, who) => {
+    const f = family()
+    expect(createTemplate(f.db, f[who], BINS, T0)).toEqual({ ok: false, error: 'not_a_giver' })
+    expect(f.db.select().from(templates).all()).toEqual([])
+    expect(audit(f.db)).toEqual([])
+  })
+
+  it.each([
+    ['blank title', { title: '   ' }, 'invalid_title'],
+    ['81-char title', { title: 'x'.repeat(81) }, 'invalid_title'],
+    ['score 0', { score: 0 }, 'invalid_score'],
+    ['score 1.5', { score: 1.5 }, 'invalid_score'],
+    ['no days', { schedule: { days: [], time: null } }, 'invalid_schedule'],
+    [
+      'grace over 48 h',
+      { deadline: { dayOffset: 1, due: { hour: 7, minute: 0 }, graceMinutes: 2881 } },
+      'invalid_deadline',
+    ],
+  ] as const)('refuses a %s, writing nothing', (_, change, error) => {
+    const { db, tata } = family()
+    expect(createTemplate(db, tata, { ...BINS, ...change }, T0)).toEqual({
+      ok: false,
+      error,
+    })
+    expect(db.select().from(templates).all()).toEqual([])
+    expect(db.select().from(templateScoreApprovals).all()).toEqual([])
+    expect(audit(db)).toEqual([])
+  })
+})
+
+describe('approveTemplateScore (spec §3 score agreement)', () => {
+  it("a taker's yes agrees it: active, audited with before and after", () => {
+    const { db, tata, starsi } = family()
+    const { id } = must(createTemplate(db, tata, BINS, T0))
+    const row = must(approveTemplateScore(db, starsi, id, 4, T1))
+    expect(row).toMatchObject({ status: 'active', agreedAt: T1.toISOString(), score: 4 })
+    const entries = audit(db)
+    expect(entries.map((a) => [a.action, a.actor])).toEqual([
+      ['template.created', tata],
+      ['template.score_approved', starsi],
+      ['template.agreed', starsi],
+    ])
+    expect(JSON.parse(entries[1]?.after ?? 'null')).toEqual({ score: 4 })
+    expect(JSON.parse(entries[2]?.before ?? 'null')).toEqual({ status: 'proposed' })
+    expect(JSON.parse(entries[2]?.after ?? 'null')).toEqual({ status: 'active', score: 4 })
+  })
+
+  it("a second giver's yes alone keeps it proposed", () => {
+    const { db, tata, mama } = family()
+    const { id } = must(createTemplate(db, tata, BINS, T0))
+    expect(must(approveTemplateScore(db, mama, id, 4, T1)).status).toBe('proposed')
+  })
+
+  it('the admin is never a party', () => {
+    const { db, tata, admin } = family()
+    const { id } = must(createTemplate(db, tata, BINS, T0))
+    expect(approveTemplateScore(db, admin, id, 4, T1)).toEqual({ ok: false, error: 'not_a_party' })
+  })
+
+  it.each([
+    ['a score that is not the stored one', 'offer_changed'],
+    ['an unknown template', 'not_found'],
+    ['the same person twice', 'already_approved'],
+    ['a template already agreed', 'not_proposed'],
+  ] as const)('refuses %s, writing nothing', (what, error) => {
+    const { db, tata, starsi, mladsi } = family()
+    const { id } = must(createTemplate(db, tata, BINS, T0))
+    let call = () => approveTemplateScore(db, starsi, id, 5, T1)
+    if (what === 'an unknown template') call = () => approveTemplateScore(db, starsi, 999, 4, T1)
+    if (what === 'the same person twice') call = () => approveTemplateScore(db, tata, id, 4, T1)
+    if (what === 'a template already agreed') {
+      must(approveTemplateScore(db, starsi, id, 4, T1))
+      call = () => approveTemplateScore(db, mladsi, id, 4, T2)
+    }
+    const before = { rows: db.select().from(templateScoreApprovals).all(), log: audit(db) }
+    expect(call()).toEqual({ ok: false, error })
+    expect(db.select().from(templateScoreApprovals).all()).toEqual(before.rows)
+    expect(audit(db)).toEqual(before.log)
+  })
+
+  it('approvals count live: the proposing giver left, so a taker alone is not enough', () => {
+    const { db, admin, tata, mama, starsi } = family()
+    const { id } = must(createTemplate(db, tata, BINS, T0))
+    must(updateUser(db, { kind: 'user', userId: admin }, tata, { active: false }, T0))
+    expect(must(approveTemplateScore(db, starsi, id, 4, T1)).status).toBe('proposed')
+    expect(must(approveTemplateScore(db, mama, id, 4, T2)).status).toBe('active')
+  })
+
+  it('rolls back the approval and the agreement when the audit write fails', () => {
+    const { db, tata, starsi } = family()
+    const { id } = must(createTemplate(db, tata, BINS, T0))
+    db.$client.exec(
+      `CREATE TRIGGER fail_agreed BEFORE INSERT ON audit_log WHEN NEW.action = 'template.agreed'
+       BEGIN SELECT RAISE(ABORT, 'audit down'); END`,
+    )
+    expect(() => approveTemplateScore(db, starsi, id, 4, T1)).toThrow(/audit down/)
+    expect(db.select().from(templates).get()).toMatchObject({ status: 'proposed', agreedAt: null })
+    expect(db.select().from(templateScoreApprovals).all()).toHaveLength(1)
+    expect(audit(db).map((a) => a.action)).toEqual(['template.created'])
+  })
+})
+
+describe('resolveProposedTemplates (people changed)', () => {
+  it('agrees a proposed template through the real people-change hook, logged as the system', () => {
+    const { db, admin, tata, mama } = family()
+    const { id } = must(createTemplate(db, tata, BINS, T0))
+    // Máma approved as a giver; the admin turns her into a taker: now a giver and a taker agree.
+    must(approveTemplateScore(db, mama, id, 4, T1))
+    must(updateUser(db, { kind: 'user', userId: admin }, mama, { role: 'taker' }, T2))
+    expect(db.select().from(templates).get()).toMatchObject({
+      status: 'active',
+      agreedAt: T2.toISOString(),
+    })
+    expect(audit(db).at(-1)).toMatchObject({ action: 'template.agreed', kind: 'system' })
+  })
+})
+
+describe('reads', () => {
+  it('pins the TemplateView shape (no ids of people, nothing else)', () => {
+    const { db, tata } = family()
+    const { id } = must(createTemplate(db, tata, BINS, T0))
+    expect(listTemplates(db)).toEqual([
+      {
+        id,
+        title: 'Vynést koše',
+        status: 'proposed',
+        score: 4,
+        approvalRequired: true,
+        createdByName: 'Táta',
+        approvedBy: ['Táta'],
+        schedule: { days: [2], time: '18:00' },
+        deadline: { dayOffset: 1, due: '07:00', graceMinutes: 120 },
+      },
+    ])
+  })
+
+  it('pending approvals: takers until they approve, givers only when no current giver has', () => {
+    const { db, admin, tata, mama, starsi } = family()
+    const { id } = must(createTemplate(db, tata, BINS, T0))
+    expect(pendingTemplateApprovals(db, starsi).map((t) => t.id)).toEqual([id])
+    expect(pendingTemplateApprovals(db, mama)).toEqual([])
+    expect(pendingTemplateApprovals(db, admin)).toEqual([])
+    must(updateUser(db, { kind: 'user', userId: admin }, tata, { active: false }, T1))
+    expect(pendingTemplateApprovals(db, mama).map((t) => t.id)).toEqual([id])
+    expect(pendingTemplateApprovals(db, tata)).toEqual([])
+  })
+
+  it('a taker no longer sees it after his own yes, while it waits for a giver', () => {
+    const { db, admin, tata, mama, starsi } = family()
+    const { id } = must(createTemplate(db, tata, BINS, T0))
+    must(updateUser(db, { kind: 'user', userId: admin }, tata, { active: false }, T0))
+    expect(must(approveTemplateScore(db, starsi, id, 4, T1)).status).toBe('proposed')
+    expect(pendingTemplateApprovals(db, starsi)).toEqual([])
+    expect(pendingTemplateApprovals(db, mama).map((t) => t.id)).toEqual([id])
+  })
+})
