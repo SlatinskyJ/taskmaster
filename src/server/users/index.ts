@@ -5,3 +5,5 @@ export { createUser, MAX_DISPLAY_NAME, setPasswordHash, updateUser } from './man
 export type { NewUser, UserChanges, UserError } from './manage'
 export { listPeople, listUsers } from './people'
 export type { PeopleChangeHook, PersonSummary } from './people'
+export { addPerson, editPerson, MIN_USER_PASSWORD, resetPassword } from './admin'
+export type { AddPersonInput, EditPersonInput, PeopleError } from './admin'

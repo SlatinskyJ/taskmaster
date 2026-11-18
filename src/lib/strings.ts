@@ -132,6 +132,44 @@ export const cs = {
   admin: {
     title: 'Správa',
     people: 'Lidé',
+    add: 'Přidat člověka',
+    addTitle: 'Nový člověk',
+    editTitle: 'Upravit',
+    /** Accessible name of a person row. */
+    editPerson: (name: string) => `Upravit ${name}`,
+    displayName: 'Jméno',
+    username: 'Přihlašovací jméno',
+    usernameHint: 'Malá písmena bez diakritiky, třeba kuba',
+    role: 'Role',
+    password: 'Heslo',
+    startPasswordHint: (min: number) =>
+      `Aspoň ${String(min)} znaků. Řekni ho dotyčnému, pak už ho nikde neuvidíš.`,
+    save: 'Uložit',
+    saving: 'Ukládám…',
+    cancel: 'Zrušit',
+    added: 'Přidáno',
+    saved: 'Uloženo',
+    resetTitle: 'Nové heslo',
+    reset: 'Nastavit nové heslo',
+    /** The reset dialog's confirm button: short, it shares a row with Zrušit at 360 px. */
+    resetSubmit: 'Změnit heslo',
+    resetConfirm: (name: string) =>
+      `${name} se odhlásí ze všech zařízení a přihlásí se novým heslem.`,
+    resetDone: 'Heslo změněno',
+    you: 'ty',
+    selfHint: 'Svou roli ani heslo tady neměníš.',
+    errors: {
+      invalidUsername:
+        'Jen malá písmena bez diakritiky, číslice a . _ -, 2 až 32 znaků, začíná písmenem.',
+      usernameTaken: 'Tohle přihlašovací jméno už někdo má.',
+      invalidName: (max: number) => `Jméno musí mít 1 až ${String(max)} znaků.`,
+      invalidRole: 'Vyber roli.',
+      invalidPassword: (min: number, max: number) =>
+        `Heslo musí mít ${String(min)} až ${String(max)} znaků.`,
+      lastAdmin: 'Musí zůstat aspoň jeden správce.',
+      notFound: 'Tenhle člověk už neexistuje.',
+      notAdmin: 'Na tohle nemáš práva.',
+    },
   },
   roles: {
     taker: 'Bere úkoly',

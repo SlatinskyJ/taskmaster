@@ -1,3 +1,4 @@
+import { Check, X } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
@@ -10,8 +11,9 @@ import { useTaskAction } from './useTaskAction'
 
 /**
  * "Ke schválení" on a giver's Domů (spec §5.5, until #41 builds the full home): completions
- * waiting for a giver. Schválit counts the points; Zamítnout opens a reason field (optional)
- * and sends the task back to its taker. Renders nothing when nothing waits.
+ * waiting for a giver. ✓ Schválit counts the points; ✕ Zamítnout opens a reason field (optional)
+ * and sends the task back to its taker. Icon buttons (mockup GHome) leave room for the name,
+ * chip and who did it at 360 px (#131). Renders nothing when nothing waits.
  */
 export function ToApprove({ items }: { items: readonly TaskView[] }) {
   const { busy, run } = useTaskAction()
@@ -49,16 +51,20 @@ export function ToApprove({ items }: { items: readonly TaskView[] }) {
                         else rejectButtons.current.delete(t.id)
                       }}
                       variant="no"
+                      size="icon"
+                      aria-label={cs.work.reject}
                       disabled={busy !== null}
                       onClick={() => {
                         setRejecting(t.id)
                         setReason('')
                       }}
                     >
-                      {cs.work.reject}
+                      <X aria-hidden="true" />
                     </Button>
                     <Button
                       variant="ok"
+                      size="icon"
+                      aria-label={cs.work.approve}
                       disabled={busy !== null}
                       aria-busy={busy === `approve-${String(t.id)}`}
                       onClick={(e) => {
@@ -70,7 +76,7 @@ export function ToApprove({ items }: { items: readonly TaskView[] }) {
                         )
                       }}
                     >
-                      {cs.work.approve}
+                      <Check aria-hidden="true" />
                     </Button>
                   </div>
                 )
