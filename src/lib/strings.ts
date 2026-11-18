@@ -21,6 +21,11 @@ export const cs = {
   placeholder: {
     soon: 'Tady brzy něco bude.',
   },
+  routeError: {
+    title: 'Něco se nepovedlo',
+    message: 'Data se nenačetla. Zkontroluj připojení a zkus to znovu.',
+    retry: 'Zkusit znovu',
+  },
   /** Shown by the service worker when a page cannot load offline (src/pwa/offline.ts). */
   offline: {
     title: 'Jsi offline',
@@ -43,10 +48,6 @@ export const cs = {
     failed: 'Něco se pokazilo. Zkus to znovu.',
     logout: 'Odhlásit',
   },
-  home: {
-    /** Followed by the user's name: "Ahoj, Táta". */
-    greeting: 'Ahoj',
-  },
   /** Profile (UI doc §7.4): theme, effects, log out. */
   profile: {
     title: 'Profil',
@@ -59,6 +60,39 @@ export const cs = {
     effects: 'Efekty',
     effectsLabel: 'Konfety a animace',
     effectsHint: 'Když dokončíš úkol nebo dosáhneš hranice',
+  },
+  /** One-time tasks (#33): GTasks, GCreate, TApprove (UI doc §7). */
+  tasks: {
+    new: '+ Nový',
+    empty: 'Zatím žádné úkoly.',
+    createTitle: 'Nový úkol',
+    title: 'Název',
+    score: 'Body',
+    less: 'Méně',
+    more: 'Více',
+    /** Before the quick-pick point values: "Rychle: 5 10 20 50". */
+    quickPick: 'Rychlá volba',
+    approvalRequired: 'Po dokončení schvaluji já',
+    propose: 'Navrhnout',
+    proposeHint: 'Úkol bude volný, až cenu schválí jeden z kluků.',
+    created: 'Úkol navržen',
+    /** Followed by the giver's name: "Nabízí Táta". */
+    offeredBy: 'Nabízí',
+    waitingForTaker: 'Čeká na souhlas',
+    approve: 'Souhlasím',
+    approving: 'Ukládám…',
+    approved: 'Schváleno',
+    errors: {
+      invalidTitle: (max: number) => `Napiš název (nejvýš ${String(max)} znaků).`,
+      invalidScore: 'Body musí být celé číslo od 1.',
+      offerChanged: 'Cena se mezitím změnila. Podívej se znovu.',
+      gone: 'Tenhle úkol už je vyřízený.',
+    },
+  },
+  home: {
+    greeting: 'Ahoj',
+    /** "Čeká na tebe (2)" (UI doc §6 [call]: always at the top of Domů). */
+    waiting: 'Čeká na tebe',
   },
   admin: {
     title: 'Správa',

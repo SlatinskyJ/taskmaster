@@ -36,12 +36,13 @@ export function listUsers(db: Db | Tx): PersonSummary[] {
 /**
  * Runs whenever people change (added, deactivated, reactivated, role changed), inside the same
  * transaction as the change, with everyone as they are after it. Each hook writes its own audit
- * entries through `tx`. The hooks themselves are listed in `./hooks`.
+ * entries through `tx`, stamped with `now`, the change's own time. The hooks themselves are
+ * listed in `./hooks`.
  */
-export type PeopleChangeHook = (tx: Tx, people: Person[]) => void
+export type PeopleChangeHook = (tx: Tx, people: Person[], now: Date) => void
 
-export function runPeopleChangeHooks(tx: Tx, hooks: readonly PeopleChangeHook[]): void {
+export function runPeopleChangeHooks(tx: Tx, hooks: readonly PeopleChangeHook[], now: Date): void {
   if (hooks.length === 0) return
   const people = listPeople(tx)
-  for (const hook of hooks) hook(tx, people)
+  for (const hook of hooks) hook(tx, people, now)
 }

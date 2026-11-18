@@ -1,3 +1,4 @@
+import { resolveProposedTasks } from '~/server/tasks/tasks'
 import type { PeopleChangeHook } from './people'
 
 /**
@@ -7,4 +8,8 @@ import type { PeopleChangeHook } from './people'
  * - proposals and bids: re-run `resolveTemplate` / `resolveOneTime` (#33, #37);
  * - reservations of a deactivated taker: release them (#35).
  */
-export const PEOPLE_CHANGE_HOOKS: readonly PeopleChangeHook[] = []
+export const PEOPLE_CHANGE_HOOKS: readonly PeopleChangeHook[] = [
+  (tx, people, now) => {
+    resolveProposedTasks(tx, people, now)
+  },
+]

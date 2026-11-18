@@ -36,6 +36,20 @@
       "when": 1794940678014,
       "tag": "0004_auth_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1794957286741,
+      "tag": "0005_one_time_tasks",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1794958300256,
+      "tag": "0006_approvals_by_offer_round",
+      "breakpoints": true
     }
   ]
 }

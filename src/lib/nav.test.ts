@@ -33,6 +33,7 @@ describe('canSee', () => {
     '/zapsat': 'taker',
     '/tyden': 'taker giver',
     '/ukoly': 'giver',
+    '/ukoly/novy': 'giver',
     '/schuzka': 'giver',
     '/profil': 'taker giver admin',
     '/sprava': 'admin',
