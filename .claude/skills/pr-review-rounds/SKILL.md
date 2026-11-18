@@ -71,7 +71,7 @@ Sections 2, 3, 4 and 7 are the same in both phases. A PR with no issue (ad-hoc) 
 | `src/domain/`, DB schema, migrations, server functions for tasks/points/periods | + Rules |
 | auth, sessions, passkeys, server functions, dependencies, Docker, CI | + Security |
 | screens, components, styles, Czech strings | + UX |
-| Dockerfile, CI workflows, migration runner, backup, tunnel config, a new native dependency (it compiles or ships a binary, like `better-sqlite3`) | + Ops |
+| Dockerfile, CI workflows, what runs when the server starts (`src/server/plugins/`, the migration runner), the preview host files (`deploy/preview/`, `docs/runbooks/`), backup or deploy config, a new native dependency (it compiles or ships a binary, like `better-sqlite3`) | + Ops |
 | only docs or comments | none: skip to section 6 |
 
 Write the panel into the PR body: `Judges: Rules, Architecture, Tests`. If the code ends up touching more than the plan said, the code phase panel grows to match. The Architecture judge checks the panel against this table; when it asks for a missing judge, add that judge and run it in the next round with `first review` in place of the round-2 line, so it reads the whole diff.
