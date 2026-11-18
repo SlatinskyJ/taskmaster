@@ -14,7 +14,7 @@ import { writeAudit } from '~/server/audit'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { taskScoreApprovals, tasks } from '~/server/db/schema'
-import type { TaskRow } from '~/server/db/schema'
+import type { TaskRow, ThreadRow } from '~/server/db/schema'
 import { listPeople } from '~/server/users/people'
 import type { AgreedOneTime, TaskError } from './tasks'
 import { agree, agreementOf } from './tasks'
@@ -121,8 +121,13 @@ export function counterOffer(
     if (result.value.status !== 'proposed') {
       // The counter goes into the thread too (spec §5.2: every bid and counter), accepted with
       // the bids at its number.
-      const { entry } = addEntry(tx, { taskId, userId: giverId, side: 'giver', score }, now)
-      return ok(acceptBids(tx, { task, people }, result.value, actor, now, entry.id))
+      const { entry, replaced } = addEntry(
+        tx,
+        { taskId, userId: giverId, side: 'giver', score },
+        now,
+      )
+      const counter = { entryId: entry.id, replaced }
+      return ok(acceptBids(tx, { task, people }, result.value, actor, now, counter))
     }
     const old = openOffer(tx, taskId)
     const offerRound = task.offerRound + 1
@@ -206,20 +211,22 @@ function acceptBids(
   agreed: AgreedOneTime,
   actor: { kind: 'user'; userId: number },
   now: Date,
-  offerEntryId?: number,
+  counter?: { entryId: number; replaced: ThreadRow | null },
 ): TaskRow {
   const entryIds = bidsAgreed(tx, task, people, agreed)
+  const old = counter?.replaced
   writeAudit(tx, {
     actor,
     action: 'task.bid_accepted',
     entityType: 'task',
     entityId: task.id,
-    after:
-      offerEntryId === undefined
-        ? { score: agreed.score, entryIds }
-        : { score: agreed.score, entryIds, by: 'counter', offerEntryId },
+    // A counter at a bid replaced the offer: `before` names that row (spec §5.10).
+    before: old ? { entryId: old.id, score: old.score } : undefined,
+    after: counter
+      ? { score: agreed.score, entryIds, by: 'counter', offerEntryId: counter.entryId }
+      : { score: agreed.score, entryIds },
     at: now,
   })
-  const accepted = offerEntryId === undefined ? entryIds : [...entryIds, offerEntryId]
+  const accepted = counter ? [...entryIds, counter.entryId] : entryIds
   return agree(tx, task, agreed, accepted, actor, now)
 }

@@ -209,6 +209,7 @@ describe('counterOffer (Jakub 2026-11-17: one new offer to every taker)', () => 
       by: 'counter',
       offerEntryId: 4,
     })
+    expect(json(accepted?.before)).toEqual({ entryId: 1, score: 18 }) // the offer it replaced
     expect(json(agreed?.after)).toMatchObject({ status: 'reserved', accepted: [2, 4], closed: [3] })
   })
   it('[call] another giver countering at a bid is the agreeing giver (decision 8b)', () => {
