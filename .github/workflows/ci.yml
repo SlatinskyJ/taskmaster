@@ -152,6 +152,15 @@ jobs:
           if grep -q '__TM_SW_BUILD__' sw.js; then echo "sw.js build data missing"; exit 1; fi
           grep -qi '^cache-control: no-cache' sw.headers || { echo "sw.js lacks no-cache"; cat sw.headers; exit 1; }
           echo "sw.js ok"
+      # Browser tests against the built server: passkeys on (virtual authenticator) and off.
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm e2e
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-results
+          path: test-results/
+          retention-days: 7
 
   # Multi-arch image (spec §11, #50). Each arch builds natively and smoke-runs the container,
   # including the image's own HEALTHCHECK. Read-only token; nothing is pushed here.

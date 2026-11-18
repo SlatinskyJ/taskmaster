@@ -18,7 +18,8 @@
     "test:watch": "vitest",
     "prepare": "node -e \"require('node:fs').existsSync('.git') && require('node:child_process').execSync('lefthook install', { stdio: 'inherit' })\"",
     "db:generate": "drizzle-kit generate",
-    "db:check": "drizzle-kit check && node scripts/check-migrations.ts"
+    "db:check": "drizzle-kit check && node scripts/check-migrations.ts",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
@@ -44,6 +45,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "^4.3.5",
     "@tanstack/eslint-plugin-query": "^5.107.1",
     "@tanstack/eslint-plugin-router": "^1.162.0",
