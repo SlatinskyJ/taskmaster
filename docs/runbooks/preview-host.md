@@ -13,7 +13,7 @@ generic on purpose: host names, addresses and ports live in private notes, never
   `tag:tm-preview` on SSH, and Tailscale SSH lets it log in only as the `deploy` user.
 - `deploy`'s login shell is [`deploy/preview/tm-preview`](../../deploy/preview/tm-preview), so CI
   can run only `deploy`, `remove`, `list` and `sweep`. No SSH keys exist anywhere.
-- Each preview: one Docker container, fresh data volume, 256 MB memory cap, at most 3 at once,
+- Each preview: one Docker container, fresh data volume, 256 MB memory cap, at most 10 at once,
   published on the tailnet with `tailscale serve` on HTTPS port `10000 + PR number`.
 - Opt-in: only PRs with the `preview` label get one. Adding the label deploys the PR's last
   tested image; removing it runs `remove` and frees the slot (`.github/workflows/preview.yml`).
@@ -51,7 +51,7 @@ incus launch images:debian/13 tm-previews \
   -c security.nesting=true \
   -c security.syscalls.intercept.mknod=true \
   -c security.syscalls.intercept.setxattr=true \
-  -c limits.memory=2GiB -c limits.cpu=2 \
+  -c limits.memory=4GiB -c limits.cpu=2 \
   -c boot.autostart=true
 incus config device add tm-previews tun unix-char path=/dev/net/tun
 
@@ -123,6 +123,10 @@ By hand: `ssh deploy@tm-previews remove <pr>`. `remove` and `sweep` wait for a r
 The script is copied in by hand (above), so a change to `deploy/preview/tm-preview` needs a
 fresh `incus file push` (as above, with `--uid 0 --gid 0`) after it merges. CI never changes
 the host. Compare `version` with the repo copy to spot drift.
+
+The preview cap (`MAX_PREVIEWS`, 10) times the per-preview memory cap (256 MB) must fit in the
+container's `limits.memory`, with room for Docker and Tailscale. When raising the cap, raise it
+too, e.g. `incus config set tm-previews limits.memory=4GiB` (applies live).
 
 ## Disk
 
