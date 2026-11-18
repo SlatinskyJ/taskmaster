@@ -7,7 +7,7 @@ import { updateUser } from '~/server/users/manage'
 import { acceptLowestTaskBid, acceptOffer, counterOffer, placeBid } from './bidding'
 import { saveItem, toItem } from './item'
 import { completeTask, releaseTask, reserveTask } from './lifecycle'
-import { approveTaskOffer } from './tasks'
+import { approveTaskOffer, getTaskDetail, listBidsToAnswer, pendingApprovals } from './tasks'
 import {
   addGiver,
   addTaker,
@@ -593,5 +593,129 @@ describe('first agreement wins (spec §5.2; issue "Done when")', () => {
       score: 20,
       reservedBy: f.starsi,
     })
+  })
+})
+
+describe('what screens get (PR B)', () => {
+  it('a proposed task carries its offering giver and open bids, lowest first', () => {
+    const f = family()
+    const id = car(f)
+    must(placeBid(f.db, f.starsi, id, 25, T1))
+    must(placeBid(f.db, f.mladsi, id, 22, T1))
+    expect(pendingApprovals(f.db, f.starsi)[0]).toMatchObject({
+      id,
+      score: 18,
+      offeredByName: 'Táta',
+      bids: [
+        { takerId: f.mladsi, name: 'Mladší', score: 22 },
+        { takerId: f.starsi, name: 'Starší', score: 25 },
+      ],
+      lowest: { score: 22, bidders: [{ id: f.mladsi, name: 'Mladší' }] },
+    })
+    must(placeBid(f.db, f.starsi, id, 22, T2))
+    expect(pendingApprovals(f.db, f.mladsi)[0]?.lowest).toEqual({
+      score: 22,
+      bidders: [
+        { id: f.starsi, name: 'Starší' },
+        { id: f.mladsi, name: 'Mladší' },
+      ],
+    })
+  })
+  it("after another giver's counter the view names her as the one offering", () => {
+    const f = family()
+    const id = car(f)
+    const mama = addGiver(f)
+    must(placeBid(f.db, f.starsi, id, 25, T1))
+    must(counterOffer(f.db, mama, id, 20, [], T1))
+    expect(pendingApprovals(f.db, f.starsi)[0]).toMatchObject({
+      score: 20,
+      createdByName: 'Táta',
+      offeredByName: 'Máma',
+    })
+  })
+  it('getTaskDetail returns exactly the view and the thread', () => {
+    const f = family()
+    const id = car(f)
+    must(placeBid(f.db, f.starsi, id, 25, T1))
+    must(placeBid(f.db, f.starsi, id, 23, T2))
+    expect(getTaskDetail(f.db, id)).toEqual({
+      task: {
+        id,
+        title: 'Umýt auto',
+        status: 'proposed',
+        score: 18,
+        approvalRequired: true,
+        createdByName: 'Táta',
+        offeredByName: 'Táta',
+        approvedBy: ['Táta'],
+        approverIds: [f.tata],
+        bids: [{ takerId: f.starsi, name: 'Starší', score: 23 }],
+        lowest: { score: 23, bidders: [{ id: f.starsi, name: 'Starší' }] },
+        reservedBy: null,
+        completedBy: null,
+        completedAt: null,
+        earnerId: null,
+      },
+      thread: [
+        {
+          id: 1,
+          side: 'giver',
+          by: { id: f.tata, name: 'Táta' },
+          score: 18,
+          at: T0.toISOString(),
+          state: 'open',
+        },
+        {
+          id: 2,
+          side: 'taker',
+          by: { id: f.starsi, name: 'Starší' },
+          score: 25,
+          at: T1.toISOString(),
+          state: 'replaced',
+        },
+        {
+          id: 3,
+          side: 'taker',
+          by: { id: f.starsi, name: 'Starší' },
+          score: 23,
+          at: T2.toISOString(),
+          state: 'open',
+        },
+      ],
+    })
+    expect(getTaskDetail(f.db, 999)).toBeNull()
+  })
+  it("the taker who lost sees the task as his brother's (issue 'Done when')", () => {
+    const f = family()
+    const id = car(f)
+    must(placeBid(f.db, f.starsi, id, 25, T1))
+    must(placeBid(f.db, f.mladsi, id, 22, T1))
+    must(acceptLowestTaskBid(f.db, f.tata, id, 22, [f.mladsi], T2))
+    const detail = getTaskDetail(f.db, id)
+    expect(detail?.task).toMatchObject({
+      status: 'reserved',
+      score: 22,
+      reservedBy: { id: f.mladsi, name: 'Mladší' },
+      bids: [],
+      lowest: null,
+      offeredByName: null,
+    })
+    expect(detail?.thread.map((e) => [e.by.name, e.score, e.state])).toEqual([
+      ['Táta', 18, 'closed'],
+      ['Starší', 25, 'closed'],
+      ['Mladší', 22, 'accepted'],
+    ])
+    expect(pendingApprovals(f.db, f.starsi)).toEqual([])
+  })
+  it('listBidsToAnswer: proposed tasks with an open bid, oldest first; gone once agreed', () => {
+    const f = family()
+    const a = car(f)
+    const b = car(f)
+    car(f)
+    must(placeBid(f.db, f.starsi, b, 25, T1))
+    must(placeBid(f.db, f.mladsi, a, 22, T2))
+    expect(listBidsToAnswer(f.db).map((t) => t.id)).toEqual([a, b])
+    must(acceptLowestTaskBid(f.db, f.tata, a, 22, [f.mladsi], T3))
+    expect(listBidsToAnswer(f.db).map((t) => t.id)).toEqual([b])
   })
 })

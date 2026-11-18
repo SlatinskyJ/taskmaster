@@ -6,6 +6,8 @@ import {
   byPerson,
   findPerson,
   isValidScore,
+  liveBook,
+  lowestBid,
   markAgreed,
   missingRoles,
   reopenOneTimeOffer,
@@ -23,7 +25,7 @@ import { taskScoreApprovals, tasks, users } from '~/server/db/schema'
 import type { TaskRow } from '~/server/db/schema'
 import { listPeople } from '~/server/users/people'
 import { saveItem, toItem } from './item'
-import { addEntry, openBids, openOffer } from './thread'
+import { addEntry, openBids, openOffer, threadOf } from './thread'
 
 // One-time tasks and their score agreement (spec §5.2 path 1, §5.5). The rules live in
 // src/domain (agreement + lifecycle); this module loads the rows, asks the domain, and writes
@@ -288,8 +290,16 @@ export interface TaskView {
   score: number
   approvalRequired: boolean
   createdByName: string
+  /** Proposed only: the giver whose offer `score` is (may differ from the creator), else null. */
+  offeredByName: string | null
   /** Proposed only: display names of who approved the current offer, oldest first. */
   approvedBy: string[]
+  /** The ids behind `approvedBy`, same order. */
+  approverIds: number[]
+  /** Proposed only: current takers' open bids, lowest score first, then oldest. Else []. */
+  bids: { takerId: number; name: string; score: number }[]
+  /** Proposed with a bid: the lowest bid and who holds it, as a giver's accept sends it back. */
+  lowest: { score: number; bidders: { id: number; name: string }[] } | null
   /** The reserving taker (also kept through completion, spec §5.5), or null. */
   reservedBy: { id: number; name: string } | null
   /** Who marked it done, and when (UTC ISO), or null. */
@@ -299,8 +309,8 @@ export interface TaskView {
   earnerId: number | null
 }
 
-function views(db: Db | Tx, rows: TaskRow[]): TaskView[] {
-  if (rows.length === 0) return []
+/** Display names by user id ('' for an unknown id). */
+function namesOf(db: Db | Tx): (id: number) => string {
   const names = new Map(
     db
       .select({ id: users.id, name: users.displayName })
@@ -308,22 +318,87 @@ function views(db: Db | Tx, rows: TaskRow[]): TaskView[] {
       .all()
       .map((u) => [u.id, u.name]),
   )
-  return rows.map((t) => ({
-    id: t.id,
-    title: t.title,
-    status: t.status,
-    score: t.score,
-    approvalRequired: t.approvalRequired,
-    createdByName: names.get(t.createdBy) ?? '',
-    approvedBy:
-      t.status === 'proposed' ? currentApprovers(db, t).map((id) => names.get(id) ?? '') : [],
-    reservedBy:
-      t.reservedBy === null ? null : { id: t.reservedBy, name: names.get(t.reservedBy) ?? '' },
-    completedBy:
-      t.completedBy === null ? null : { id: t.completedBy, name: names.get(t.completedBy) ?? '' },
-    completedAt: t.completedAt,
-    earnerId: t.earnerId,
+  return (id) => names.get(id) ?? ''
+}
+
+function views(db: Db | Tx, rows: TaskRow[]): TaskView[] {
+  if (rows.length === 0) return []
+  const name = namesOf(db)
+  const people = listPeople(db)
+  return rows.map((t) => {
+    const agreement = agreementOf(db, t)
+    const proposed = agreement.status === 'proposed' ? agreement : null
+    const book = proposed ? liveBook(proposed.book, people) : { bids: [] }
+    const lowest = lowestBid(book)
+    const approverIds = [...(proposed?.offer.approvedBy ?? [])]
+    return {
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      score: t.score,
+      approvalRequired: t.approvalRequired,
+      createdByName: name(t.createdBy),
+      offeredByName: proposed ? name(proposed.offer.proposedBy) : null,
+      approvedBy: approverIds.map(name),
+      approverIds,
+      bids: [...book.bids]
+        .sort((a, b) => a.score - b.score)
+        .map((b) => ({ takerId: b.by, name: name(b.by), score: b.score })),
+      lowest: lowest && {
+        score: lowest.score,
+        bidders: lowest.bidders.map((id) => ({ id, name: name(id) })),
+      },
+      reservedBy: t.reservedBy === null ? null : { id: t.reservedBy, name: name(t.reservedBy) },
+      completedBy: t.completedBy === null ? null : { id: t.completedBy, name: name(t.completedBy) },
+      completedAt: t.completedAt,
+      earnerId: t.earnerId,
+    }
+  })
+}
+
+/** One row of a task's negotiation thread, as the detail screen shows it. */
+export interface ThreadEntry {
+  id: number
+  side: 'giver' | 'taker'
+  by: { id: number; name: string }
+  score: number
+  /** When it was made (UTC ISO). */
+  at: string
+  state: 'open' | 'replaced' | 'accepted' | 'closed'
+}
+
+export interface TaskDetail {
+  task: TaskView
+  thread: ThreadEntry[]
+}
+
+/** A task with its full negotiation history (spec §5.2: every bid visible), or null. */
+export function getTaskDetail(db: Db | Tx, taskId: number): TaskDetail | null {
+  const row = db.select().from(tasks).where(eq(tasks.id, taskId)).get()
+  if (!row) return null
+  const [task] = views(db, [row])
+  if (!task) return null
+  const name = namesOf(db)
+  const thread = threadOf(db, taskId).map((e): ThreadEntry => ({
+    id: e.id,
+    side: e.side,
+    by: { id: e.userId, name: name(e.userId) },
+    score: e.score,
+    at: e.createdAt,
+    state: e.closedAs ?? 'open',
   }))
+  return { task, thread }
+}
+
+/** Proposed tasks with at least one current open bid, oldest task first (a giver answers them). */
+export function listBidsToAnswer(db: Db | Tx): TaskView[] {
+  const proposed = db
+    .select()
+    .from(tasks)
+    .where(eq(tasks.status, 'proposed'))
+    .orderBy(asc(tasks.id))
+    .all()
+  return views(db, proposed).filter((t) => t.bids.length > 0)
 }
 
 /**

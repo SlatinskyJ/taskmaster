@@ -1,14 +1,17 @@
 import { createServerFn } from '@tanstack/react-start'
 import { requireRole } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
-import type { TaskError, TaskView } from './tasks'
+import type { TaskDetail, TaskError, TaskView, ThreadEntry } from './tasks'
 
-export type { TaskError, TaskView }
+export type { TaskDetail, TaskError, TaskView, ThreadEntry }
 import type { LifecycleActionError } from './lifecycle'
 import { approveTask, completeTask, rejectTask, releaseTask, reserveTask } from './lifecycle'
+import { acceptLowestTaskBid, acceptOffer, counterOffer, placeBid } from './bidding'
 import {
   approveTaskOffer,
   createTask,
+  getTaskDetail,
+  listBidsToAnswer,
   listBoard,
   listPendingCompletions,
   listTasks,
@@ -19,6 +22,9 @@ import {
 // domain rules inside (`not_a_giver`, `not_a_party`).
 
 export type TaskActionResult = { ok: true; id: number } | { ok: false; error: TaskError }
+
+export type BidActionResult =
+  { ok: true; id: number; status: TaskView['status'] } | { ok: false; error: TaskError }
 
 function record(data: unknown): Record<string, unknown> {
   if (typeof data !== 'object' || data === null) throw new Error('Invalid input')
@@ -43,6 +49,38 @@ function parseApproval(data: unknown): { taskId: number; score: number } {
   return { taskId: int(taskId), score: int(score) }
 }
 
+function parseTaskId(data: unknown): { taskId: number } {
+  return { taskId: int(record(data).taskId) }
+}
+
+/** The most takers a bidders list may name (the family is far smaller). */
+const MAX_BIDDERS = 50
+
+function bidders(value: unknown, min: number): number[] {
+  if (!Array.isArray(value) || value.length < min || value.length > MAX_BIDDERS) {
+    throw new Error('Invalid input')
+  }
+  return value.map(int)
+}
+
+/** A giver's accept: the lowest bid he saw and every taker who held it (1 to 50). */
+export function parseAcceptBid(data: unknown): {
+  taskId: number
+  score: number
+  bidders: number[]
+} {
+  return { ...parseApproval(data), bidders: bidders(record(data).bidders, 1) }
+}
+
+/** A giver's counter: the takers he saw bidding exactly that number (0 to 50). */
+export function parseCounter(data: unknown): { taskId: number; score: number; bidders: number[] } {
+  return { ...parseApproval(data), bidders: bidders(record(data).bidders, 0) }
+}
+
+function answered(result: ReturnType<typeof placeBid>): BidActionResult {
+  return result.ok ? { ok: true, id: result.value.id, status: result.value.status } : result
+}
+
 /** A giver creates a one-time task with an offer (spec §5.2). */
 export const createTaskFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver')])
@@ -56,10 +94,9 @@ export const createTaskFn = createServerFn({ method: 'POST' })
 export const approveTaskOfferFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver', 'taker')])
   .validator(parseApproval)
-  .handler(({ data, context }): TaskActionResult => {
-    const result = approveTaskOffer(getDb(), context.user.id, data.taskId, data.score)
-    return result.ok ? { ok: true, id: result.value.id } : result
-  })
+  .handler(({ data, context }) =>
+    answered(approveTaskOffer(getDb(), context.user.id, data.taskId, data.score)),
+  )
 
 /** "Čeká na tebe": offers waiting for this person's approval. */
 export const listPendingApprovalsFn = createServerFn({ method: 'GET' })
@@ -71,16 +108,57 @@ export const listTasksFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver')])
   .handler((): TaskView[] => listTasks(getDb()))
 
+// ── Bidding (#34, spec §5.2 path 2) ─────────────────────────────────────────────────────
+
+/** A taker bids (or re-bids) a number of his own. */
+export const placeBidFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('taker')])
+  .validator(parseApproval)
+  .handler(({ data, context }) =>
+    answered(placeBid(getDb(), context.user.id, data.taskId, data.score)),
+  )
+
+/** A taker with a bid takes the offer he was shown: reserved to him. */
+export const acceptOfferFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('taker')])
+  .validator(parseApproval)
+  .handler(({ data, context }) =>
+    answered(acceptOffer(getDb(), context.user.id, data.taskId, data.score)),
+  )
+
+/** A giver changes the offer for every taker; at takers' own bid it accepts them. */
+export const counterOfferFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('giver')])
+  .validator(parseCounter)
+  .handler(({ data, context }) =>
+    answered(counterOffer(getDb(), context.user.id, data.taskId, data.score, data.bidders)),
+  )
+
+/** A giver accepts the lowest bid he was shown. */
+export const acceptLowestTaskBidFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('giver')])
+  .validator(parseAcceptBid)
+  .handler(({ data, context }) =>
+    answered(acceptLowestTaskBid(getDb(), context.user.id, data.taskId, data.score, data.bidders)),
+  )
+
+/** A task with its negotiation thread. */
+export const getTaskDetailFn = createServerFn({ method: 'GET' })
+  .middleware([requireRole('giver', 'taker')])
+  .validator(parseTaskId)
+  .handler(({ data }): TaskDetail | null => getTaskDetail(getDb(), data.taskId))
+
+/** Proposed tasks with bids waiting for a giver. */
+export const listBidsToAnswerFn = createServerFn({ method: 'GET' })
+  .middleware([requireRole('giver')])
+  .handler((): TaskView[] => listBidsToAnswer(getDb()))
+
 // ── Work flow (#35, spec §5.4–§5.6) ─────────────────────────────────────────────────────
 
 export type LifecycleActionResult =
   { ok: true; id: number; status: TaskView['status'] } | { ok: false; error: LifecycleActionError }
 
 export type { LifecycleActionError }
-
-function parseTaskId(data: unknown): { taskId: number } {
-  return { taskId: int(record(data).taskId) }
-}
 
 function parseReject(data: unknown): { taskId: number; reason?: string } {
   const { taskId, reason } = record(data)
