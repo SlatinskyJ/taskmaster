@@ -92,48 +92,55 @@ export function ScoreDial({
   for (let n = Math.max(min, value - SIDE); n <= Math.min(max, value + SIDE); n++) numbers.push(n)
 
   return (
-    <div
-      role="slider"
-      tabIndex={0}
-      aria-label={label}
-      aria-valuemin={min}
-      aria-valuemax={max}
-      aria-valuenow={value}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerEnd}
-      onPointerCancel={onPointerEnd}
-      onKeyDown={onKeyDown}
-      className="relative h-20 flex-1 cursor-grab touch-none overflow-hidden rounded-card bg-bg select-none focus-visible:outline-2 focus-visible:outline-accent-strong active:cursor-grabbing"
-      style={{
-        maskImage: 'linear-gradient(to right, transparent, black 30%, black 70%, transparent)',
-      }}
-    >
-      <span
-        aria-hidden="true"
-        className="absolute top-0 left-1/2 h-2 w-1 -translate-x-1/2 rounded-b-full bg-accent-strong"
-      />
-      {numbers.map((n) => {
-        const distance = Math.abs(n - value)
-        return (
-          <span
-            key={n}
-            aria-hidden="true"
-            className={cn(
-              'absolute top-1/2 grid -translate-1/2 justify-items-center gap-1 num font-display font-bold',
-              !dragging && 'transition-[left] duration-200 ease-out motion-reduce:transition-none',
-              distance === 0 ? 'text-points text-ink' : 'text-lg text-muted',
-            )}
-            style={{
-              left: `calc(50% + ${String((n - value) * DIAL_STEP_PX + offset)}px)`,
-              opacity: distance === 0 ? 1 : Math.max(0.25, 1 - distance * 0.18),
-            }}
-          >
-            {n}
-            <span className="h-2 w-0.5 rounded-full bg-current opacity-50" />
-          </span>
-        )
-      })}
-    </div>
+    <>
+      {/* Announces changes from the − / + buttons and quick picks too, not only while focused. */}
+      <output aria-live="polite" className="sr-only">
+        {value}
+      </output>
+      <div
+        role="slider"
+        tabIndex={0}
+        aria-label={label}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-valuenow={value}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
+        onKeyDown={onKeyDown}
+        className="relative h-20 flex-1 cursor-grab touch-pan-y overflow-hidden rounded-card bg-bg select-none focus-visible:outline-2 focus-visible:outline-accent-strong active:cursor-grabbing"
+        style={{
+          maskImage: 'linear-gradient(to right, transparent, black 30%, black 70%, transparent)',
+        }}
+      >
+        <span
+          aria-hidden="true"
+          className="absolute top-0 left-1/2 h-2 w-1 -translate-x-1/2 rounded-b-full bg-accent-strong"
+        />
+        {numbers.map((n) => {
+          const distance = Math.abs(n - value)
+          return (
+            <span
+              key={n}
+              aria-hidden="true"
+              className={cn(
+                'absolute top-1/2 grid -translate-1/2 justify-items-center gap-1 num font-display font-bold',
+                !dragging &&
+                  'transition-[left] duration-200 ease-out motion-reduce:transition-none',
+                distance === 0 ? 'text-points text-ink' : 'text-lg text-muted',
+              )}
+              style={{
+                left: `calc(50% + ${String((n - value) * DIAL_STEP_PX + offset)}px)`,
+                opacity: distance === 0 ? 1 : Math.max(0.25, 1 - distance * 0.18),
+              }}
+            >
+              {n}
+              <span className="h-2 w-0.5 rounded-full bg-current opacity-50" />
+            </span>
+          )
+        })}
+      </div>
+    </>
   )
 }
