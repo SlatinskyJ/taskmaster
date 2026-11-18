@@ -1,7 +1,7 @@
 # Auth
 
-Password login, sessions and the login rate limit (spec §6, §11 Auth). Passkeys (#29) and
-role guards (#28) build on this.
+Password login, sessions and the login rate limit (spec §6, §11 Auth). Role guards (#28) and
+passkeys ([`src/server/passkeys`](../passkeys/README.md)) build on this.
 
 - `login.ts`: `login()` / `logout()`. Each writes its audit entry in the same transaction.
 - `sessions.ts`: random 256-bit token in the cookie, SHA-256 in `sessions`. ~90-day sliding
@@ -34,6 +34,7 @@ what protects the data.
 - `TRUST_PROXY=1`: behind a reverse proxy, take the client IP from the last `X-Forwarded-For`
   entry. Without it every request looks like it comes from the proxy, and the per-IP limit
   then counts the whole family's failures together. Set it wherever the app sits behind a proxy.
+- `WEBAUTHN_RP_ID`, `WEBAUTHN_ORIGIN`: passkeys, see [`src/server/passkeys`](../passkeys/README.md).
 
 ## CSRF
 
