@@ -91,7 +91,7 @@ export function approveTemplate(
 }
 
 /** The toast after an approval, or after the call threw (network). */
-export function approveOutcome(result: ActionResult | 'threw'): {
+export function approveOutcome(result: { ok: true } | { ok: false; error: string } | 'threw'): {
   toast: 'success' | 'error'
   message: string
 } {

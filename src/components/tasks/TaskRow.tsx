@@ -20,6 +20,8 @@ export function TaskRow({
   state,
   points,
   meta,
+  detail,
+  stateLabel,
   action,
   className,
 }: {
@@ -28,6 +30,10 @@ export function TaskRow({
   points: number
   /** Short secondary line after the chip, e.g. a deadline. */
   meta?: ReactNode
+  /** A full line under the meta line that wraps instead of being cut (a template's schedule). */
+  detail?: ReactNode
+  /** Chip text in place of the state's own label. */
+  stateLabel?: string
   action?: ReactNode
   className?: string
 }) {
@@ -45,10 +51,15 @@ export function TaskRow({
         {/* Two lines before truncating, so a name still reads next to two action buttons at 360 px. */}
         <div className="line-clamp-2 text-row font-bold break-words">{name}</div>
         <div className="flex min-w-0 items-center gap-2 text-meta text-muted">
-          <StateChip state={state} className="min-w-0 shrink" />
+          <StateChip state={state} label={stateLabel} className="min-w-0 shrink" />
           {/* The meta line gives way first; the chip only truncates when nothing else is left. */}
           {meta ? <span className="min-w-0 shrink-[1000] truncate">{meta}</span> : null}
         </div>
+        {detail ? (
+          <p data-slot="task-detail" className="text-meta break-words text-muted">
+            {detail}
+          </p>
+        ) : null}
       </div>
       <span className={cn('num text-base font-bold whitespace-nowrap', POINTS_COLOUR[state])}>
         {points}
