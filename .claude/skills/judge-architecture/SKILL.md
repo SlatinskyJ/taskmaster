@@ -29,8 +29,13 @@ Read `.claude/skills/pr-review-rounds/judge-contract.md` first. It defines your 
 | Screens | UX |
 | Docker, CI | Ops |
 
+**Tie-break with Rules** (when Rules is on the panel), by the contract's first severity question:
+
+- The failure can happen with this PR's code and ends in wrong points, a broken §5 rule or a missing audit entry → Rules'. Leave it out. What stays yours is a shape problem with a `Failure:` line of its own, e.g. "the write lives outside the agreement module → the next caller skips the check".
+- The failure is a trap: a shape this PR adds (a key, a type, a signature, a module split) that a later issue will spring → yours, also when a §5 rule is what breaks then. Rules leaves these to you, so nobody else will raise it.
+
 ## Common mistakes
 
-- Repeating the Rules judge's spec findings because "the pattern would have prevented it". If Rules is on the panel, leave it out.
+- Repeating the Rules judge's spec findings because "the pattern would have prevented it" or "it is really a schema problem". See the tie-break above.
 - Proposing refactors of code the PR didn't touch. That is `pre-existing`.
 - Performance advice for 5 users. Only a `Failure:` line with real slowness counts.

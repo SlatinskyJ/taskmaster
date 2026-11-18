@@ -9,17 +9,27 @@ Read `.claude/skills/pr-review-rounds/judge-contract.md` first. It defines your 
 
 **Your lane:** does the code do what spec §5 says? Wrong points or a broken rule here means the family argues, which the app exists to prevent.
 
-## Check
+## The spec is the rule list
 
-- **Lifecycle (§5.6):** only the transitions in the diagram exist. A rejected completion returns to *reserved by the same taker* if it was reserved, otherwise to open. A rejected self-logged chore closes as rejected.
-- **Agreement (§5.1, §5.2):** "all parties" = all active givers + all active takers. The admin is never a party. The first bid to reach agreement wins, and other bids close. A score is frozen after completion.
-- **Reservation (§5.4):** only the reserving taker completes for points. A giver may complete, with no points.
-- **Completion (§5.5):** approval flag on → `done_unconfirmed`; off → `confirmed`. Self-logged always needs approval. `completed_at` is stored.
-- **Periods (§5.8):** a period runs from the previous cutoff (inclusive) to its own cutoff (exclusive). Attribution uses `completed_at`, not approval time. Length and levels are locked once a period starts.
-- **Settlement (§5.9):** total ≥ upper → deduct upper; ≥ lower → deduct lower; else nothing. Never negative. Settlements are final; a correction is a new record plus a forward adjustment.
-- **Audit (§5.10):** every state change writes its audit entry in the **same transaction**, with actor, action, entity, before/after. No hard deletes. Running totals can be rebuilt from the log + settlements.
-- **Check-then-write:** the state check and the write happen inside one transaction, so two requests at once can't both pass (double completion, double points).
-- **Time:** all rules use Europe/Prague. Boundaries are compared on instants, not strings.
+This file does not repeat the rules, because a copy goes stale. Before you read the diff, read in the checked-out branch: spec §3 (roles, score agreement, period agreement) and every §5 subsection the PR touches. Where your memory of a rule and the spec differ, the spec wins.
+
+## Check, in this order
+
+1. **Scope.** List the §5 rules this PR claims to implement, from the PR brief, the issue it closes and the module headers. A subsection the PR claims only in part is in scope only for the claimed sentences. The rest belongs to other issues and is not a finding.
+2. **Every rule has code or a named owner.** Go through the claimed rules sentence by sentence: each bullet, each arrow of the §5.6 diagram, each **[call]**. For each one, find the code that enforces it, in every place that stores the state the rule names (an item's status and its score agreement are two places; both must move, in both directions). When this PR's layer can't enforce a rule itself (a pure function can't see the scheduler or the database), the module header, the README or the brief must name who does: a caller duty or a later issue. A claimed rule with no code and no named owner is a `should-fix`, with `Fix:` enforce it here or name the owner.
+3. **Every code path has a rule.** Each transition, actor check and number the diff adds matches a spec sentence. Code that allows more than the spec (an extra transition, a wider set of actors, a different winner) is a finding.
+4. **What the spec does not spell out:**
+    - **Audit (§5.10):** each state change writes its audit entry in the **same transaction**, with actor, action, entity, before/after. Every row the change writes, follow-on rows too, shows in an entry. No hard deletes.
+    - **Check-then-write:** the state check and the write happen inside one transaction, so two requests at once can't both pass (double completion, double points).
+    - **The number the person saw:** an accept or approve carries the value the person saw (score, offer, bid) and is refused when that value changed before the request landed.
+    - **Time:** all rules use Europe/Prague. Boundaries are compared on instants, not strings.
+5. **Spec gap.** The spec is silent, or two of its rules disagree, for an input the code handles: don't pick a reading. File it as a finding that names both readings, with `Fix: ask Jakub`.
+
+Start your review's one-sentence summary with what you traced: `Traced §5.4, §5.5 and §5.6 sentence by sentence: <most important point>`.
+
+## Severity in this lane
+
+Use the contract's two questions. In this lane, a failure that can happen now is a `blocker` when its `Failure:` line ends in wrong points, a wrong winner, a state or transition §5 does not allow, or a state change with no audit entry.
 
 ## Not your lane
 
@@ -32,7 +42,10 @@ Read `.claude/skills/pr-review-rounds/judge-contract.md` first. It defines your 
 
 A role check that §5 requires (e.g. reservation) is yours. Generic authorization hardening is Security's.
 
+**Tie-break with Architecture:** a §5 failure that can happen with this PR's code is yours, whatever causes it. A trap set by a shape (a key, a type, a signature, a module split) that only a later issue will spring is Architecture's, also when a §5 rule is what breaks. Leave it out when Architecture is on the panel.
+
 ## Common mistakes
 
+- Reviewing only the code that is there. Step 2 starts from the spec's sentences, so a missing transition or a missing way back shows up.
 - Reporting the same rule break twice, once per file. One finding at the line that breaks the rule.
 - Citing a spec rule without the `Failure:` line. "Breaks §5.10" is a claim; "audit insert throws → task stays completed with no log entry" is evidence.

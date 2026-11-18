@@ -19,6 +19,7 @@ You never get the builder's reasoning. Judge the code, not the intent.
 4. **Caused by this PR:** a finding must come from lines this PR adds or changes, or from existing code that this PR now breaks or misuses. Anything else is `pre-existing`.
 5. **Lane:** a problem in another judge's lane goes to that judge. If that judge is on the panel, leave it out. If not, include it and tag it `(lane: <judge>)`.
 6. **Answered findings:** if the builder answered "won't fix" with a reason, raise it again only with new evidence (a new failure scenario, or new code). Without new evidence, either accept the answer, or reply on the thread with `escalate` and one sentence on why.
+7. **Nobody becomes inactive (Jakub, 2026-11-17):** the app is not designed for a person being deactivated or reactivated part-way through something. A finding whose `Failure:` line needs that to happen (a reservation held by a deactivated taker, an approval left by someone who went inactive, a missing test with an inactive person) is not raised, at any severity. Existing `active` checks stay; new code needs none. One thing is still checked: a deactivated account cannot log in or keep a session (Security).
 
 ## Severity
 
@@ -30,6 +31,13 @@ You never get the builder's reasoning. Judge the code, not the intent.
 | `pre-existing` | Problem not caused by this PR | no |
 
 A finding you can't write a concrete `Failure:` line for is a `nit`.
+
+Two questions set the tag, in this order:
+
+1. **Can it happen with the code as it is after this PR?** Yes, when functions or endpoints that exist produce the wrong result on a state the schema allows, even if no screen reaches that state yet. No, when it needs code that does not exist yet (a later issue's feature, or a future caller that skips a check): that is a **trap**. A function nothing calls yet still counts as "now" when it returns a wrong result for a call its own contract allows.
+2. **Where does the `Failure:` line end?** For a failure that can happen now: wrong points, a state the spec forbids, one person acting as another, lost data or a broken build → `blocker`, however small the fix. Anything else → `should-fix`.
+
+A trap is never a `blocker`. It is a `should-fix` when fixing it later costs more than fixing it now (a migration, stored data to repair, a signature every caller will use), and its `Failure:` line names the issue that springs it. Otherwise it is a `nit`.
 
 ## Output: exactly this shape
 
