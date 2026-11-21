@@ -21,6 +21,8 @@ describe('taskErrorMessage', () => {
     ['invalid_schedule', 'Vyber aspoň jeden den.'],
     ['invalid_deadline', 'Termín nedává smysl. Zkontroluj ho.'],
     ['already_approved', 'Souhlas už máš zapsaný.'],
+    ['no_offer', cs.tasks.errors.offerChanged],
+    ['not_agreed', 'Tenhle opakovaný úkol ještě není domluvený.'],
   ])('%s → Czech message', (code, message) => {
     expect(taskErrorMessage(code)).toBe(message)
   })

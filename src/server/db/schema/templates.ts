@@ -73,7 +73,8 @@ export type TemplateRow = typeof templates.$inferSelect
 
 /**
  * Who approved a proposed template's score (spec §5.1). A proposed template's score never
- * changes, so there is no offer round; score changes after agreement are `template_thread` below. The proposer's row is written with the template: proposing counts as approving.
+ * changes, so there is no offer round; score changes after agreement are `template_thread`
+ * below. The proposer's row is written with the template: proposing counts as approving.
  * Append-only.
  */
 export const templateScoreApprovals = sqliteTable(

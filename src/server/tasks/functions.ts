@@ -4,7 +4,8 @@ import type { Result } from '~/domain/result'
 import { TASK_SCORE_MAX } from '~/lib/taskLimits'
 import { getDb } from '~/server/db'
 import type { TaskRow } from '~/server/db/schema'
-import type { TaskDetail, TaskError, TaskView, ThreadEntry } from './tasks'
+import type { ThreadEntry } from '~/server/threadEntry'
+import type { TaskDetail, TaskError, TaskView } from './tasks'
 
 export type { TaskDetail, TaskError, TaskView, ThreadEntry }
 import type { LifecycleActionError } from './lifecycle'

@@ -5,13 +5,14 @@ import { burstConfetti } from '~/components/effects/confetti'
 import { cs } from '~/lib/strings'
 import { taskErrorMessage } from '~/lib/taskErrors'
 import type { LifecycleActionResult, TaskActionResult } from '~/server/tasks/functions'
+import type { TemplateActionResult } from '~/server/templates/functions'
 
 /** One task action (work flow or bidding) from a row or the task page: busy state, toast, confetti, and a reload. */
 export function useTaskAction() {
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
 
-  async function run<R extends LifecycleActionResult | TaskActionResult>(
+  async function run<R extends LifecycleActionResult | TaskActionResult | TemplateActionResult>(
     key: string,
     action: () => Promise<R>,
     success: (r: Extract<R, { ok: true }>) => string,
