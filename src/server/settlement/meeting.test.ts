@@ -2,7 +2,8 @@ import { asc, eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import type { Db } from '~/server/db'
-import { auditLog, periods, settlements } from '~/server/db/schema'
+import { auditLog, periods, settlements, users } from '~/server/db/schema'
+import { createTestDb } from '~/server/db/testing'
 import { listPeriods, rollPeriods } from '~/server/periods'
 import { failAuditOn, family, json, must } from '~/server/tasks/testing'
 import { getMeeting, settlePeriod } from './meeting'
@@ -217,6 +218,18 @@ describe('settlePeriod', () => {
     must(settlePeriod(f.db, f.tata, f.p1.id, now, later))
   })
 
+  it('totals swapped between takers: totals_changed', () => {
+    const f = example()
+    const swapped = [
+      { takerId: f.starsi, total: 30 },
+      { takerId: f.mladsi, total: 130 },
+    ]
+    expect(settlePeriod(f.db, f.tata, f.p1.id, swapped, MEETING)).toEqual({
+      ok: false,
+      error: 'totals_changed',
+    })
+  })
+
   it('refused early end rolls everything back', () => {
     const f = example()
     const stale = plus(CUTOFF, -1)
@@ -284,6 +297,32 @@ describe('settlePeriod', () => {
       })
     }
     expect(records(f.db)).toEqual([])
+  })
+
+  it('with no takers, only a giver can still end the week', () => {
+    const db = createTestDb()
+    const user = (username: string, role: 'admin' | 'giver') =>
+      db
+        .insert(users)
+        .values({
+          username,
+          displayName: username,
+          role,
+          createdAt: SAT.toISOString(),
+          updatedAt: SAT.toISOString(),
+        })
+        .returning()
+        .get().id
+    const admin = user('admin', 'admin')
+    const tata = user('tata', 'giver')
+    rollPeriods(db, SAT, D)
+    const [p1] = listPeriods(db)
+    expect(settlePeriod(db, admin, p1?.id ?? 0, [], MEETING)).toEqual({
+      ok: false,
+      error: 'not_a_giver',
+    })
+    expect(listPeriods(db)).toHaveLength(1)
+    expect(must(settlePeriod(db, tata, p1?.id ?? 0, [], MEETING)).records).toEqual([])
   })
 
   it('a failed audit write rolls back every record and the early end', () => {
