@@ -25,10 +25,10 @@
 
 ## Review Focus
 
-1. A judge comment on a line GitHub cannot comment on (outside the diff hunks, or a deleted file) makes the whole create call fail with 422, so nobody's findings land. Expected: that finding moves into the review body as `path:line` text and the rest post inline. Tested in Task 1 (`off-diff comment moves into the body`).
+1. A judge comment on a line GitHub cannot comment on (outside the diff hunks, or a deleted file) makes the whole create call fail with 422, so nobody's findings land. Expected: that finding is re-anchored on a commentable line (same file if it is in the diff, else the first file of the diff) with its real place written first, so it still gets a thread the builder must answer and the exit check counts. Tested in Task 1 (`off-diff comment is re-anchored`).
 2. A judge that crashed, timed out or returned `NOT STARTED` writes no file. Expected: the script posts nothing and names the missing judge; the builder reruns that judge. Tested in Task 1 (`missing panel judge is a problem`).
 3. A judge that reviewed an older commit than the others (builder pushed mid-round). Expected: nothing is posted; the problem names the judge and both SHAs. Tested in Task 1 (`commit mismatch is a problem`).
-4. The builder runs the script twice (a reply call failed after the review went out). Expected: the review is not posted a second time; only the replies and resolves not done yet are sent. Covered by the `posted.json` marker in Task 2, checked in the Task 2 dry run.
+4. The builder runs the script twice (a reply call failed after the review went out). Expected: the review is not posted a second time; only the replies and resolves not done yet are sent. Tested in Task 1 (`pendingSteps`), and checked in the Task 2 dry run.
 5. The code-phase gate reads plan verdicts from review bodies. With one combined body, each judge's verdict is a line inside it, not the start of the body. Expected: the gate finds every judge's last plan verdict in both old (one judge per review) and new (combined) reviews. Checked in Task 3 against the real reviews of [#145 Bidding on one-time tasks: screens](https://github.com/SlatinskyJ/taskmaster/pull/145) and a local JSON array holding a combined plan-round body.
 
 ---
@@ -64,6 +64,9 @@ export type Combined = {
   replies: Reply[]                     // footer appended to each body
 }
 export function combine(files: JudgeFile[], opts: { panel: string[]; headSha: string; diff: Map<string, Set<number>> }): Combined
+export type Posted = { reviewUrl: string; repliesDone: number[] }   // the CLI's posted.json
+export function pendingSteps(posted: Posted | null, replies: Reply[]): { postReview: boolean; replies: Reply[] }
+// postReview = no posted.json yet; replies = those whose commentId is not in repliesDone, in order
 ```
 
 Problems `combine` reports (one string each): a panel judge with no file; a file whose judge is not on the panel; two files for one judge; a file whose `commit` ≠ `headSha` (`<judge> reviewed <sha>, PR head is <sha>`); files that disagree on `phase` or `round`; `verdict` ≠ (`blockers + shouldFix > 0 ? 'CHANGES' : 'APPROVE'`).
@@ -76,17 +79,19 @@ Blockers <n> · Should-fix <n> · Nits <n> · Pre-existing <n>
 <summary>
 ```
 
-A finding whose `line` is not in `diff.get(path)` goes into the body instead, after the judge blocks and before the footer, under `Findings not on a diff line:` as `- \`<path>:<line>\` <first line of body>` followed by the rest of its body indented two spaces. Every inline comment body and reply body gets the footer.
+A finding whose `line` is not in `diff.get(path)` (also when `path` is not in the diff at all, or is a deleted file) is re-anchored, never dropped and never sent as is: on the lowest commentable line of its own file when that file is in the diff, else on the lowest commentable line of the first file in the diff (paths sorted). Its body gets a first line `Off the diff: \`<path>:<line>\`` before the judge's text. So every finding has a thread, and §4 / the 0-open-threads exit apply to it unchanged. Every inline comment body and reply body gets the footer. Each reply keeps its `commentId` and `resolve` exactly as the judge wrote them.
 
 - [ ] **Step 1: Write the failing tests** in `tests/judge-review-combine.test.ts`:
-    - `parseJudgeFile` accepts a valid file; rejects missing `commit`, `round: 0`, `round: 6`, `verdict: 'OK'`, a comment with `line: 'x'`, invalid JSON. Each error message contains the file name.
+    - `parseJudgeFile` accepts a valid file; rejects missing `commit`, `round: 0`, `round: 6`, `verdict: 'OK'`, a comment with `line: 'x'`, missing `counts.nits`, `counts.blockers: '1'`, a reply with no `resolve` or `resolve: 'yes'`, invalid JSON. Each error message contains the file name.
     - `commentableLines` on a diff with two files, two hunks in one, a renamed file (`rename to`), a deleted file (`+++ /dev/null`, no entry) and a `\ No newline at end of file` line: exact sets of line numbers; removed (`-`) lines are not counted and don't advance the new-side counter.
     - `combine`, panel `['Rules','Architecture','Tests']`, all files at `headSha`:
-        - body is exactly the three blocks in panel order plus footer (pin the full string for one case, `Plan round 2` header for phase `plan`);
+        - body is exactly the three blocks in panel order plus footer (pin the full string for one case with phase `plan`, round 2: `Plan round 2` headers; and one header line for phase `code`, round 3: `[Judge: Rules] Round 3 — APPROVE`);
         - `missing panel judge is a problem`: no Tests file → `problems` = `['Tests: no findings file']`;
         - `commit mismatch is a problem`: Rules at another SHA → problem names Rules and both SHAs;
-        - judge not on panel, duplicate judge, round mismatch, `CHANGES` with zero blockers and should-fix → one problem each;
-        - `off-diff comment moves into the body`: a comment on line 999 → not in `review.comments`, present in body under `Findings not on a diff line:`; the other comments stay inline with `side: 'RIGHT'`;
+        - judge not on panel, duplicate judge, round mismatch, phase mismatch, `CHANGES` with zero blockers and should-fix → one problem each;
+        - `off-diff comment is re-anchored`: three comments, on line 999 of a file in the diff, on a path not in the diff, and on the deleted file → each in `review.comments` at the expected anchor line (exact `path` and `line`), body starting `Off the diff: \`<original path>:<original line>\``; a comment on a real diff line stays exactly where it was, with `side: 'RIGHT'`; `review.comments.length` equals the number of findings;
+        - `replies are passed through`: one reply `{ commentId: 11, body: 'Fixed in abc', resolve: true }` and one `{ commentId: 12, body: 'Still open: x', resolve: false }` → `replies` equals exactly those two, in order, with the footer added to each body and `resolve` unchanged;
+        - `pendingSteps`: `null` → `postReview: true`, all replies; `{ reviewUrl, repliesDone: [11] }` → `postReview: false`, only reply 12;
         - every comment and reply body ends with the footer; `event` is `'COMMENT'`, `commit_id` is `headSha`.
 - [ ] **Step 2:** `pnpm test tests/judge-review-combine.test.ts`. Expected: FAIL, module not found.
 - [ ] **Step 3:** Implement `scripts/judge-review/combine.ts` with no imports except types (framework-free; easy to test). Unified diff walk: `+++ b/<path>` sets the file, `@@ -a,b +c,d @@` sets the new-side counter to `c`, `+` and ` ` lines add the counter and advance it, `-` and `\` lines don't.
@@ -99,7 +104,7 @@ A finding whose `line` is not in `diff.get(path)` goes into the body instead, af
 - Create: `scripts/post-judge-review.ts`
 
 **Interfaces:**
-- Consumes: `parseJudgeFile`, `commentableLines`, `combine` from Task 1.
+- Consumes: `parseJudgeFile`, `commentableLines`, `combine`, `pendingSteps`, `Posted` from Task 1.
 - Produces the command the builder runs:
   `node scripts/post-judge-review.ts --dir <folder> --pr <n> --panel Rules,Architecture,Tests`
   Exit 0 and prints `Posted <review html_url>` (or `Already posted <url>` plus replies sent). Exit 1 and prints each problem when `combine` reports any, or a `gh` call fails.
@@ -108,13 +113,13 @@ Behaviour, in order:
 1. Read every `<dir>/*.json` except `review.json` and `posted.json`; `parseJudgeFile` each (a throw is printed as a problem).
 2. `gh api repos/SlatinskyJ/taskmaster/pulls/<n> --jq .head.sha` → `headSha`; `gh api -H 'Accept: application/vnd.github.v3.diff' repos/SlatinskyJ/taskmaster/pulls/<n>` → diff text. GitHub's own diff, so the line check matches what the create call accepts.
 3. `combine`. Problems → print, exit 1, post nothing.
-4. If `<dir>/posted.json` has no `reviewUrl`: write `<dir>/review.json`, `gh api -X POST repos/SlatinskyJ/taskmaster/pulls/<n>/reviews --input <dir>/review.json`, then write `posted.json` `{ reviewUrl, repliesDone: [] }` straight away.
-5. For each reply not in `repliesDone`: `POST .../pulls/<n>/comments/<commentId>/replies` with `-f body=<body>`; if `resolve`, `POST .../pulls/<n>/ccr/comments/<commentId>/resolve`; add the id to `repliesDone` and rewrite `posted.json` after each.
+4. `pendingSteps(<posted.json or null>, replies)`. If `postReview`: write `<dir>/review.json`, `gh api -X POST repos/SlatinskyJ/taskmaster/pulls/<n>/reviews --input <dir>/review.json`, then write `posted.json` `{ reviewUrl, repliesDone: [] }` straight away.
+5. For each reply `pendingSteps` returned: `POST .../pulls/<n>/comments/<commentId>/replies` with `-f body=<body>`; if `resolve`, `POST .../pulls/<n>/ccr/comments/<commentId>/resolve`; add the id to `repliesDone` and rewrite `posted.json` after each.
 
 All `gh` calls through `execFileSync('gh', [...args])` (no shell, so no quoting or `${...}` problems).
 
-- [ ] **Step 1:** Implement the CLI as above. No unit test: its logic lives in Task 1; it is checked by the dry run below.
-- [ ] **Step 2: Dry run** against this PR: write two sample judge files into a scratch folder (one with a finding on a real diff line of the plan file, one with a finding on line 999), run with `--panel` naming three judges. Expected: exit 1, `Tests: no findings file`, nothing posted (check `gh api .../pulls/<n>/reviews` count unchanged). Add the third file, run again. Expected: one review on the PR holding both inline-able findings plus the off-diff one in the body. Run a third time. Expected: `Already posted`, no second review. A submitted review can't be deleted, so the sample files use phase `code` (header `Round 1`, which the plan gate ignores) and every body starts with `[dry run for #83, ignore]`; resolve their threads afterwards.
+- [ ] **Step 1:** Implement the CLI as above. No unit test of its own: every decision it makes is in Task 1 (`combine`, `pendingSteps`); the `gh` calls are checked by the dry run below.
+- [ ] **Step 2: Dry run** against this PR: write two sample judge files into a scratch folder (one with a finding on a real diff line of the plan file, one with a finding on line 999), run with `--panel` naming three judges. Expected: exit 1, `Tests: no findings file`, nothing posted (check `gh api .../pulls/<n>/reviews` count unchanged). Add the third file, run again. Expected: one review on the PR with all findings inline, the line-999 one re-anchored with its `Off the diff:` line. Run a third time. Expected: `Already posted`, no second review. A submitted review can't be deleted, so the sample files use phase `code` (header `Round 1`, which the plan gate ignores) and every body starts with `[dry run for #83, ignore]`; resolve their threads afterwards.
 - [ ] **Step 3:** `pnpm typecheck && pnpm lint && pnpm format:check`. Commit `Post the combined judge review with one script`.
 
 ### Task 3: Skills: judges write a file, the builder posts once
@@ -123,11 +128,12 @@ All `gh` calls through `execFileSync('gh', [...args])` (no shell, so no quoting 
 - Modify: `.claude/skills/pr-review-rounds/judge-contract.md` (sections "What you get", gate check 2, "How you review", "Output", "What you return")
 - Modify: `.claude/skills/pr-review-rounds/SKILL.md` (sections 3, 4, 6 and Common mistakes)
 - Modify: `.claude/skills/judge-tests/SKILL.md` ("Prove a gap with a mutant")
+- Modify: `.claude/skills/judge-ops/SKILL.md` (line 36: the build and server run)
 
 Changes:
 - **judge-contract, What you get:** new input `Findings file: <folder>/<judge>.json` (a path outside the repo).
-- **judge-contract, new rule under How you review:** `You post nothing to GitHub and change nothing in the checkout you were given. Your only write is your findings file, made with the Write tool.` Reading (`gh api` GET, `git diff`, `git show`) stays allowed.
-- **judge-contract, Output:** replace the MCP `create` / `add_comment_to_pending_review` / `submit_pending` steps with the `JudgeFile` JSON shape (copied from Task 1's interface, with one filled example). The header, count line, inline comment text (`[Judge: <Name>] \`<severity>\` — ...`, `Failure:`, `Spec:`, `Fix:`) and all severity rules stay as they are; the footer is no longer written by the judge. Round 2+ replies (`Fixed in <sha>`, `Accepted`, `Still open: ...`) go into `replies`, with `resolve: true` for `Fixed in` and `Accepted`. Comment only on lines the PR diff adds or keeps as context; anything else goes in the summary.
+- **judge-contract, new rule under How you review:** `You post nothing to GitHub and change nothing in the checkout you were given. Your only write is your findings file, made with the Write tool.` Reading (`gh api` GET, `git fetch`, `git diff`, `git show`) stays allowed. Step 1 of How you review changes from "Check out the PR branch" to "Read the PR branch (`git fetch origin <branch>`, then `git diff`/`git show` against `origin/<branch>`); anything that runs code, such as tests, mutants or a build, runs in your own worktree."
+- **judge-contract, Output:** replace the MCP `create` / `add_comment_to_pending_review` / `submit_pending` steps with the `JudgeFile` JSON shape (copied from Task 1's interface, with one filled example). The header, count line, inline comment text (`[Judge: <Name>] \`<severity>\` — ...`, `Failure:`, `Spec:`, `Fix:`) and all severity rules stay as they are; the footer is no longer written by the judge. Round 2+ replies (`Fixed in <sha>`, `Accepted`, `Still open: ...`) go into `replies`, with `resolve: true` for `Fixed in` and `Accepted`. Comment on lines the PR diff adds or keeps as context. A finding elsewhere still goes in `comments` with its real path and line; the script re-anchors it with an `Off the diff:` line.
 - **judge-contract, gate check 2:** match per line, so combined bodies count:
   `--jq '[.[].body|split("\n")[]|select(test("^\\[Judge: \\w+\\] Plan round"))|capture("^\\[Judge: (?<j>\\w+)\\] Plan round (?<r>\\d) — (?<v>\\w+)")]|group_by(.j)|map(max_by(.r))|.[]|"\(.j) \(.v)"'`
   Check it on #145 (old reviews, expect the same lines as today's command) and on a local JSON array `[{"body": "<combined plan-round body for Rules APPROVE and Tests CHANGES>"}]` piped to `jq`.
@@ -135,6 +141,7 @@ Changes:
 - **pr-review-rounds §3:** the builder makes a fresh folder outside the repo per round (`<scratch>/judges-pr<n>-<phase>-r<N>/`) and adds `Findings file: <folder>/<judge>.json` to each prompt. Judges still spawn all at once. New steps after spawning: wait until every judge has returned (Agent notifications), then run `node scripts/post-judge-review.ts --dir <folder> --pr <n> --panel <judges of this round>`. A missing or bad file → rerun only that judge into the same folder, then the script again. Never post a partial round. `NOT STARTED` → fix the gate cause; the round did not count and nothing is posted. Round 2+ panel = only the judges running this round. Don't commit or touch the checkout while judges run.
 - **pr-review-rounds §4 and §6:** the judges' replies and resolves now arrive through the script; the "resolve it yourself" fallback in §6 stays.
 - **pr-review-rounds Common mistakes:** add `Posting while a judge is still running, or a judge posting itself` → `Wait for every judge, then one script run`.
+- **judge-ops, build and run (line 36):** `pnpm build` and the server run in the judge's own worktree (`git worktree add <scratch>/ops-judge-<pr> origin/<branch>`, `pnpm install --frozen-lockfile`, build and run there, `git worktree remove --force` when done), not in the shared checkout.
 - **judge-tests, mutants:** run them in your own worktree outside the shared checkout: `git worktree add <scratch>/tests-judge-<pr> origin/<branch>`, edit there, run `pnpm install --frozen-lockfile` once and the tests there, `git worktree remove --force` when done. Step 5 (`git checkout -- <file>`) applies inside that worktree.
 
 - [ ] **Step 1:** Make the edits above.
