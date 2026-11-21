@@ -167,11 +167,7 @@ export function nextPeriod(
   proposal: PeriodSettingsProposal | null,
 ): PeriodSpan {
   const startsAt = periodEnd(previous)
-  if (
-    proposal?.status === 'agreed' &&
-    previous.id !== undefined &&
-    proposal.afterPeriodId === previous.id
-  ) {
+  if (proposal?.status === 'agreed' && proposal.afterPeriodId === previous.id) {
     return { startsAt, cutoffAt: proposal.settings.cutoffAt, levels: proposal.settings.levels }
   }
   return { startsAt, cutoffAt: defaultCutoff(startsAt, defaults), levels: defaults.levels }

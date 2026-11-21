@@ -624,6 +624,8 @@ describe('Sunday 23:59 defaults (Jakub 2026-11-21, spec §5.8)', () => {
       expect(periodAt([ended, next], at)).toBe(next)
       expect(isRunning(ended, at)).toBe(false)
       expect(isRunning(next, at)).toBe(true)
+      expect(isRunning(next, plus(at, -1))).toBe(false)
+      expect(isRunning(ended, ended.startsAt)).toBe(true)
     })
 
     it('the chain continues from the early end', () => {

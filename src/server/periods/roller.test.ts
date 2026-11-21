@@ -94,6 +94,31 @@ describe('startPeriodRoller', () => {
     roller.stop()
   })
 
+  it('logs each started period, and the running end once per change', () => {
+    const db = createTestDb()
+    const log = quietLog()
+    const roller = startPeriodRoller(db, D, { log })
+    vi.advanceTimersByTime(CUTOFF.getTime() - SAT.getTime())
+    const lines = log.info.mock.calls.map((c) => String(c[0]))
+    const [first, second] = listPeriods(db)
+    expect(lines).toEqual([
+      `[periods] started ${SAT.toISOString()} → ${CUTOFF.toISOString()}`,
+      `[periods] running period ends ${CUTOFF.toISOString()}`,
+      `[periods] started ${CUTOFF.toISOString()} → ${second?.cutoffAt.toISOString()}`,
+      `[periods] running period ends ${second?.cutoffAt.toISOString()}`,
+    ])
+    expect(first?.cutoffAt).toEqual(CUTOFF)
+    roller.stop()
+  })
+
+  it('after stop() nothing rolls, even across a cutoff', () => {
+    const db = createTestDb()
+    const roller = startPeriodRoller(db, D, { log: quietLog() })
+    roller.stop()
+    vi.advanceTimersByTime(CUTOFF.getTime() - SAT.getTime() + HOUR)
+    expect(listPeriods(db)).toHaveLength(1)
+  })
+
   it('stop() clears the timer', () => {
     const db = createTestDb()
     const roller = startPeriodRoller(db, D, { log: quietLog() })

@@ -146,10 +146,9 @@ export function endRunningPeriod(
 ): Result<{ ended: Period; next: Period }, EndPeriodError> {
   const row = tx.select().from(periods).where(eq(periods.id, periodId)).get()
   if (!row) return fail('not_found')
-  const period = toPeriod(row)
-  const latest = latestPeriod(tx)
-  if (latest?.id !== period.id || !isRunning(period, now)) return fail('not_running')
-  const step = endPeriodEarly(period, now, defaults, null)
+  // Refused unless this period is still running: ended early, or its cutoff passed (the roller
+  // started the next one) → not_running.
+  const step = endPeriodEarly(toPeriod(row), now, defaults, null)
   if (!step.ok) return step
   const endedAt = toIsoUtc(now)
   tx.update(periods)
@@ -166,5 +165,5 @@ export function endRunningPeriod(
     at: now,
   })
   const next = insertPeriod(tx, step.value.next, 'settled', actor, now)
-  return ok({ ended: { ...period, endedAt: now }, next })
+  return ok({ ended: { ...toPeriod(row), endedAt: now }, next })
 }
