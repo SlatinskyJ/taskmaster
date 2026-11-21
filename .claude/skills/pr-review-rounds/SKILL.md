@@ -60,7 +60,7 @@ Sections 2, 3, 4 and 7 are the same in both phases. A PR with no issue (ad-hoc) 
     - named `<screen>-<role>-<state>.png`, in one folder outside the repo.
 
     Look at each one before round 1. Whatever a person needs to read or tap is whole. Retake the ones a fix changes before the next round. An ad-hoc PR with screens has no plan, so also go through the UX pre-flight list above.
-- The `preview` label is set if the PR changes something a user sees (screens, flows, styles, Czech text) and off otherwise (`CLAUDE.md`, PR flow step 4). With the label, the brief links the preview.
+- The `preview` label is set if the PR changes something a user sees (screens, flows, styles, Czech text) and off otherwise (`CLAUDE.md`, PR flow step 5). Add it together with marking the PR ready, never on a draft: it deploys a preview and takes a slot. With the label, the brief links the preview.
 - Mark the PR ready for review.
 
 ## 2. Pick the panel
@@ -165,7 +165,7 @@ Escalate when any of these is true:
 - you're unsure whether the PR is trivial;
 - round 5 of a phase ends with an open `blocker` or `should-fix`.
 
-How: add the label `needs-jakub` to the PR, post one PR comment that mentions `@SlatinskyJ` with the question and the options, and send the same question in the project thread. Then wait. Never start round 6 on your own.
+How: add the label `needs-jakub` to the PR, post one PR comment that mentions `@SlatinskyJ` with the question and the options, and send the same question in the project thread. Then wait. When he answers, take `needs-jakub` off. Never start round 6 on your own.
 
 ## 8. After another PR merges
 
