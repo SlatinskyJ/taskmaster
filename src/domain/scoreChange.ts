@@ -4,13 +4,14 @@ import {
   isAgreed,
   isValidScore,
   liveTemplateBook,
+  missingRoles,
   proposeScore,
   pruneApprovals,
 } from './agreement'
 import { bidOf, lowestBid, placeBid } from './bids'
 import type { Item } from './lifecycle'
 import type { Person, PersonId } from './parties'
-import { isActiveAs } from './parties'
+import { findPerson, isActiveAs, isParty } from './parties'
 import type { Result } from './result'
 import { fail, ok } from './result'
 
@@ -216,4 +217,54 @@ export function approveOneTimeScoreChange(
   const approved = approveScore(change, people, approverId)
   if (!approved.ok) return approved
   return ok({ change: approved.value, agreed: isOneTimeChangeAgreed(item, approved.value, people) })
+}
+
+/**
+ * The active people whose yes would still count toward agreeing this change, in `people` order.
+ * Open: everyone of each side that has not said yes. Reserved: the reserving taker until he
+ * has, plus every giver until one has. Empty once agreed, or when the task can't change.
+ */
+export function oneTimeChangeWaitingFor(
+  item: Item,
+  change: ScoreProposal,
+  people: readonly Person[],
+): PersonId[] {
+  const rule = changeRule(item)
+  if (!rule.ok) return []
+  if (rule.value.kind === 'open') {
+    const missing = missingRoles(change, people)
+    return people
+      .filter((p) => isParty(p) && missing.some((role) => role === p.role))
+      .map((p) => p.id)
+  }
+  const { takerId } = rule.value
+  const takerYes = change.approvedBy.includes(takerId)
+  const giverYes = change.approvedBy.some((id) => isGiver(people, id))
+  return people
+    .filter(
+      (p) =>
+        (!takerYes && p.id === takerId && isTaker(people, p.id)) ||
+        (!giverYes && isGiver(people, p.id)),
+    )
+    .map((p) => p.id)
+}
+
+/**
+ * Says no to a pending change (Jakub 2026-11-21): the proposer withdraws it; someone the change
+ * still waits for declines it. Either way the change closes and the old score stays. Anyone
+ * else is `not_involved`.
+ */
+export function declineOneTimeScoreChange(
+  item: Item,
+  change: ScoreProposal,
+  people: readonly Person[],
+  userId: PersonId,
+): Result<'declined' | 'withdrawn', AgreementError> {
+  const rule = changeRule(item)
+  if (!rule.ok) return rule
+  const person = findPerson(people, userId)
+  if (!person || !isParty(person)) return fail('not_a_party')
+  if (change.proposedBy === userId) return ok('withdrawn')
+  if (oneTimeChangeWaitingFor(item, change, people).includes(userId)) return ok('declined')
+  return fail('not_involved')
 }

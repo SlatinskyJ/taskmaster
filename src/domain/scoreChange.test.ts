@@ -11,6 +11,7 @@ import type { Item } from './lifecycle'
 import {
   approveCompletion,
   byPerson,
+  cancelItem,
   completeItem,
   createInstance,
   createOneTimeItem,
@@ -26,6 +27,8 @@ import {
   approveOneTimeScoreChange,
   bidTemplateScore,
   counterTemplateScore,
+  declineOneTimeScoreChange,
+  oneTimeChangeWaitingFor,
   isOneTimeChangeAgreed,
   proposeOneTimeScoreChange,
   resolveOneTimeChange,
@@ -402,5 +405,70 @@ describe('when a one-time score cannot change (spec §5.2)', () => {
   it('a proposer approving again is refused', () => {
     const change = value(propose(open(), DAD, 25))
     expect(error(approve(open(), change, DAD))).toBe('already_approved')
+  })
+})
+
+const decline = (item: Item, change: ScoreProposal, who: number, people: Person[] = family) =>
+  declineOneTimeScoreChange(item, change, people, who)
+const waiting = (item: Item, change: ScoreProposal, people: Person[] = family) =>
+  oneTimeChangeWaitingFor(item, change, people)
+
+describe('saying no to a one-time change (Jakub 2026-11-21: only who it waits for)', () => {
+  it('the proposer withdraws; a taker it waits for declines; the admin cannot', () => {
+    const change = value(propose(open(), DAD, 25))
+    expect(value(decline(open(), change, DAD))).toBe('withdrawn')
+    expect(value(decline(open(), change, OLDER))).toBe('declined')
+    expect(error(decline(open(), change, JAKUB))).toBe('not_a_party')
+  })
+
+  it('open, a taker proposed: the other taker is not involved, the giver declines', () => {
+    const change = value(propose(open(), OLDER, 15))
+    expect(error(decline(open(), change, YOUNGER))).toBe('not_involved')
+    expect(value(decline(open(), change, DAD))).toBe('declined')
+  })
+
+  it('reserved, a giver proposed: only the reserving taker declines', () => {
+    const item = reservedTo(OLDER)
+    const change = value(propose(item, DAD, 15))
+    expect(error(decline(item, change, YOUNGER))).toBe('not_involved')
+    expect(value(decline(item, change, OLDER))).toBe('declined')
+  })
+
+  it('someone who already approved (not the proposer) cannot say no', () => {
+    const change = value(propose(open(), DAD, 25, withMum))
+    const approved = value(approve(open(), change, MUM, withMum)).change
+    expect(error(decline(open(), approved, MUM, withMum))).toBe('not_involved')
+  })
+
+  it('a frozen, negotiating or cancelled task refuses', () => {
+    const change = value(propose(open(), DAD, 25))
+    const done = value(completeItem(open(), person(OLDER), T0))
+    expect(error(decline(done, change, OLDER))).toBe('score_frozen')
+    expect(error(decline(negotiating(), change, OLDER))).toBe('not_agreed')
+    const cancelled = value(cancelItem(open(), person(DAD)))
+    expect(error(decline(cancelled, change, OLDER))).toBe('not_changeable')
+  })
+})
+
+describe('who a one-time change waits for', () => {
+  it('open: the side that has not said yes', () => {
+    expect(waiting(open(), value(propose(open(), DAD, 25)))).toEqual([OLDER, YOUNGER])
+    expect(waiting(open(), value(propose(open(), OLDER, 15)))).toEqual([DAD])
+    expect(waiting(open(), value(propose(open(), OLDER, 15, withMum)), withMum)).toEqual([DAD, MUM])
+  })
+
+  it('reserved: the reserving taker, or the givers', () => {
+    const item = reservedTo(OLDER)
+    expect(waiting(item, value(propose(item, DAD, 15)))).toEqual([OLDER])
+    expect(waiting(item, value(propose(item, OLDER, 25)))).toEqual([DAD])
+  })
+
+  it('nobody once agreed or frozen', () => {
+    const change = value(propose(open(), DAD, 25))
+    expect(waiting(open(), value(approve(open(), change, OLDER)).change)).toEqual([])
+    const confirmed = value(
+      approveCompletion(value(completeItem(open(), person(OLDER), T0)), person(DAD)),
+    )
+    expect(waiting(confirmed, change)).toEqual([])
   })
 })
