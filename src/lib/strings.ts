@@ -35,7 +35,7 @@ export const cs = {
   notFound: {
     message: 'Tahle stránka neexistuje.',
   },
-  /** Login screen (UI doc §7.4). The passkey button comes with #29. */
+  /** Login screen (UI doc §7.4). Passkey texts are under `passkeys`. */
   login: {
     title: 'Přihlášení',
     /** Accounts come from the admin only (spec §6). */
@@ -294,6 +294,57 @@ export const cs = {
       notAdmin: 'Na tohle nemáš práva.',
     },
   },
+  /**
+   * Passkeys (spec §11, UI doc §7.4/§7.5, #29). One name for the feature everywhere:
+   * "přihlášení otiskem / obličejem". Only the admin's count says "klíč".
+   */
+  passkeys: {
+    loginButton: 'Přihlásit otiskem / obličejem',
+    /** Under the button (Login mockup): a first login has no passkey yet. */
+    hint: 'První přihlášení nebo nový telefon? Použij heslo.',
+    or: 'nebo heslem',
+    unknown: 'Přihlášení otiskem tu už neplatí. Přihlas se heslem.',
+    offerTitle: 'Přihlásit otiskem / obličejem',
+    offerText:
+      'Příště se přihlásíš jedním dotykem, bez hesla. Funguje s Face ID, otiskem prstu nebo zámkem telefonu.',
+    /** Passkey mockup: the reassurance under the offer. */
+    offerSafe: 'Obličej ani otisk neopustí tvůj telefon. Heslo zadáš jen na novém telefonu.',
+    offerSet: 'Nastavit',
+    offerLater: 'Teď ne',
+    added: 'Hotovo. Příště stačí otisk nebo obličej.',
+    already: 'Tohle zařízení už přihlášení otiskem má.',
+    section: 'Přihlášení otiskem / obličejem',
+    addHere: 'Přidat toto zařízení',
+    addedOn: (date: string) => `Přidáno ${date}`,
+    lastUsed: (date: string) => `Naposledy ${date}`,
+    neverUsed: 'Zatím nepoužito',
+    /** The passkey this browser added (Profile mockup: "Zapnuto na tomto telefonu"). */
+    thisDevice: 'Toto zařízení',
+    remove: 'Odebrat',
+    cancel: 'Zrušit',
+    removeConfirmTitle: (device: string, date: string) =>
+      `Odebrat přihlášení: ${device}, přidáno ${date}?`,
+    removeConfirmText: 'Na tom zařízení se pak přihlásíš heslem.',
+    removed: 'Odebráno.',
+    empty: 'Zatím žádné. Přidej toto zařízení.',
+    /** The device a passkey was added on, guessed from the browser (server: deviceKind.ts). */
+    device: {
+      iphone: 'iPhone',
+      ipad: 'iPad',
+      android: 'Android',
+      mac: 'Mac',
+      windows: 'Windows',
+      linux: 'Linux',
+      other: 'Jiné zařízení',
+    },
+    admin: {
+      removeAll: 'Odebrat klíče',
+      confirmTitle: (name: string) => `Odebrat klíče: ${name}?`,
+      /** Security judge, PR #132: removing passkeys leaves open sessions alone. */
+      confirmText: 'Telefon tím neodhlásíš. Odhlásí ho až nové heslo.',
+      removed: 'Klíče odebrány.',
+    },
+  },
   roles: {
     taker: 'Bere úkoly',
     giver: 'Zadává úkoly',
@@ -351,6 +402,13 @@ export function plural(n: number, forms: PluralForms): string {
   if (abs === 1) return forms.one
   if (abs >= 2 && abs <= 4) return forms.few
   return forms.many
+}
+
+export const keyWords: PluralForms = { one: 'klíč', few: 'klíče', many: 'klíčů' }
+
+/** `1 klíč`, `3 klíče`, `5 klíčů`: the admin's passkey count on Správa. */
+export function formatKeys(n: number): string {
+  return `${String(n)} ${plural(n, keyWords)}`
 }
 
 /** `5 bodů`, `1 bod`, `-3 body`. */

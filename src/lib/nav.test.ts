@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ROLES } from '~/domain/parties'
 import { landingPath } from './landing'
-import { APP_PATHS, canSee, navItems } from './nav'
+import { APP_PATHS, canSee, navItems, showsBar } from './nav'
 import { cs } from './strings'
 
 describe('navItems (UI doc §6)', () => {
@@ -37,6 +37,7 @@ describe('canSee', () => {
     '/schuzka': 'giver',
     '/profil': 'taker giver admin',
     '/sprava': 'admin',
+    '/klic': 'taker giver admin',
     '/ukol/$taskId': 'taker giver',
     '/sablona/$templateId': 'taker giver',
   }
@@ -52,5 +53,20 @@ describe('canSee', () => {
 
   it.each(ROLES)('%s may see its landing page', (role) => {
     expect(canSee(role, landingPath(role))).toBe(true)
+  })
+})
+
+describe('showsBar', () => {
+  it("the passkey offer is a full screen: in nobody's bar, no bar on it", () => {
+    for (const role of ROLES) {
+      expect(navItems(role).map((i) => i.to)).not.toContain('/klic')
+      expect(showsBar(role, '/klic')).toBe(false)
+    }
+  })
+
+  it('takers and givers have the bar elsewhere; the admin never', () => {
+    expect(showsBar('taker', '/')).toBe(true)
+    expect(showsBar('giver', '/profil')).toBe(true)
+    expect(showsBar('admin', '/sprava')).toBe(false)
   })
 })

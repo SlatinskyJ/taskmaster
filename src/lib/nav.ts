@@ -14,6 +14,7 @@ export const APP_PATHS = [
   '/schuzka',
   '/profil',
   '/sprava',
+  '/klic',
   '/ukol/$taskId',
   '/sablona/$templateId',
 ] as const
@@ -31,11 +32,15 @@ export const SCREEN_ROLES: Readonly<Record<AppPath, readonly Role[]>> = {
   '/schuzka': ['giver'],
   '/profil': ['taker', 'giver', 'admin'],
   '/sprava': ['admin'],
+  '/klic': ['taker', 'giver', 'admin'],
   /** One task's page with its bid thread: TTask for a brother, GBid for a parent (#34). */
   '/ukol/$taskId': ['taker', 'giver'],
   /** A recurring template's price page: its score change and history (#138). */
   '/sablona/$templateId': ['taker', 'giver'],
 }
+
+/** Full screens without the bottom bar: the passkey offer after login (Passkey mockup). */
+export const BARLESS_PATHS: readonly AppPath[] = ['/klic']
 
 export type NavKey = 'home' | 'log' | 'week' | 'tasks' | 'meeting'
 
@@ -62,4 +67,9 @@ export function navItems(role: Role): readonly NavItem[] {
 
 export function canSee(role: Role, path: AppPath): boolean {
   return SCREEN_ROLES[path].includes(role)
+}
+
+/** Whether the app shell shows the bottom bar on this screen. */
+export function showsBar(role: Role, pathname: string): boolean {
+  return navItems(role).length > 0 && !BARLESS_PATHS.some((p) => p === pathname)
 }

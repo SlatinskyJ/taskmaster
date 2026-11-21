@@ -8,7 +8,7 @@ import { TaskWorkPanel } from './WorkButtons'
 
 // Hotovo and Uvolnit (#150), on the task page and the Domů row, rendered statically. The action
 // hook and the server functions are stubbed as in bidPanel.test.tsx; Button records each label's
-// click handler and disabled flag so a test can press it.
+// (or icon button's aria-label's) click handler and disabled flag so a test can press it.
 const action = vi.hoisted(() => ({
   busy: null as string | null,
   run: vi.fn(),
@@ -22,8 +22,10 @@ vi.mock('~/components/ui/button', async (original) => {
   return {
     ...real,
     Button: (props: Parameters<typeof real.Button>[0]) => {
-      if (typeof props.children === 'string') {
-        action.pressed.set(props.children, {
+      // An icon button (Uvolnit on a row, #148) is recorded by its aria-label.
+      const name = typeof props.children === 'string' ? props.children : props['aria-label']
+      if (name !== undefined) {
+        action.pressed.set(name, {
           onClick: props.onClick as ((e: unknown) => void) | undefined,
           disabled: props.disabled,
         })
@@ -137,13 +139,15 @@ describe('TakerBoard Moje row (Domů)', () => {
     })
     const html = renderToStaticMarkup(<TakerBoard items={[view({}), pending]} me={3} />)
     expect(html.indexOf(cs.work.release)).toBeLessThan(html.indexOf(cs.work.done))
-    expect(html).toMatch(/class="flex gap-1.5"/)
+    expect(html).toMatch(/class="flex gap-2"/)
     expect(action.pressed.get(cs.work.release)?.disabled).toBe(true)
     expect(action.pressed.get(cs.work.done)?.disabled).toBe(true)
     expect(count(html, 'aria-busy="false"')).toBe(2)
     // The done-and-waiting row is the pending row, with no buttons of its own.
     expect(count(html, `>${cs.work.done}<`)).toBe(1)
-    expect(count(html, `>${cs.work.release}<`)).toBe(1)
+    // Uvolnit is an icon button on the row (#148): named by aria-label, no visible text.
+    expect(count(html, `aria-label="${cs.work.release}"`)).toBe(1)
+    expect(count(html, `>${cs.work.release}<`)).toBe(0)
     expect(html).toContain('Vynést koše')
     action.pressed.get(cs.work.release)?.onClick?.({ currentTarget: null })
     expect(lastRun()[0]).toBe('release-1')
