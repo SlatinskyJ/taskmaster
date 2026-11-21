@@ -69,8 +69,24 @@ describe('getWeek', () => {
     expect(getWeek(f.db, { id: f.tata, role: 'giver' }, SAT)).toEqual({
       period: null,
       takers: [
-        { id: f.starsi, name: 'Starší', confirmed: 0, pending: 0, carriedIn: 0, items: [] },
-        { id: f.mladsi, name: 'Mladší', confirmed: 0, pending: 0, carriedIn: 0, items: [] },
+        {
+          id: f.starsi,
+          name: 'Starší',
+          confirmed: 0,
+          pending: 0,
+          carriedIn: 0,
+          unsettled: 0,
+          items: [],
+        },
+        {
+          id: f.mladsi,
+          name: 'Mladší',
+          confirmed: 0,
+          pending: 0,
+          carriedIn: 0,
+          unsettled: 0,
+          items: [],
+        },
       ],
       history: [],
     })
@@ -92,6 +108,7 @@ describe('getWeek', () => {
           confirmed: 112,
           pending: 2,
           carriedIn: 0,
+          unsettled: 0,
           items: [4, 3, 2, 1].map((h, i) => ({
             taskId: expect.any(Number) as number,
             title: 'Vyndat myčku',
@@ -180,7 +197,7 @@ describe('getWeek', () => {
     expect(w.takers[0]?.carriedIn).toBe(8)
   })
 
-  it('late meeting: confirmed includes last week; a still-waiting item from last week is listed', () => {
+  it('late meeting: last week apart until settled (Jakub 2026-11-21); its waiting item still listed', () => {
     const f = week()
     doneTask(f, { score: 30, completedAt: plus(SAT, H), earner: f.starsi })
     const waiting = doneTask(f, {
@@ -191,10 +208,26 @@ describe('getWeek', () => {
     })
     rollPeriods(f.db, MONDAY, D) // P1 ended at its cutoff, not settled
     const now5 = doneTask(f, { score: 5, completedAt: plus(MONDAY, -H), earner: f.starsi })
+    const now2 = doneTask(f, {
+      score: 2,
+      completedAt: plus(MONDAY, -H / 2),
+      earner: f.starsi,
+      status: 'done_unconfirmed',
+    })
     const [t] = getWeek(f.db, starsi(f), MONDAY).takers
-    expect(t?.confirmed).toBe(35)
-    expect(t?.pending).toBe(6)
-    expect(t?.items.map((i) => i.taskId)).toEqual([now5, waiting])
+    expect([t?.confirmed, t?.pending, t?.unsettled]).toEqual([5, 2, 36])
+    expect(t?.items.map((i) => i.taskId)).toEqual([now2, now5, waiting])
+  })
+
+  it('late meeting settled: nothing apart any more, bar = carry-over + this week', () => {
+    const f = week()
+    doneTask(f, { score: 130, completedAt: plus(SAT, H), earner: f.starsi })
+    rollPeriods(f.db, MONDAY, D) // P1 ended at its cutoff, not settled
+    doneTask(f, { score: 5, completedAt: plus(MONDAY, -H), earner: f.starsi })
+    expect(getWeek(f.db, starsi(f), MONDAY).takers[0]?.unsettled).toBe(130)
+    settle(f.db, f.tata, MONDAY) // P1: 130 → upper, carry 30
+    const [t] = getWeek(f.db, starsi(f), MONDAY).takers
+    expect([t?.confirmed, t?.carriedIn, t?.unsettled]).toEqual([35, 30, 0])
   })
 
   it('a completion exactly at the start is this week; one a millisecond before is not', () => {
@@ -245,7 +278,15 @@ describe('getWeek', () => {
     const w = getWeek(f.db, starsi(f), plus(CUTOFF, 30_000))
     expect(w.period).toBeNull()
     expect(w.takers).toEqual([
-      { id: f.starsi, name: 'Starší', confirmed: 112, pending: 2, carriedIn: 0, items: [] },
+      {
+        id: f.starsi,
+        name: 'Starší',
+        confirmed: 112,
+        pending: 2,
+        carriedIn: 0,
+        unsettled: 0,
+        items: [],
+      },
     ])
   })
 })

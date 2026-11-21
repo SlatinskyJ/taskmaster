@@ -38,6 +38,15 @@ describe('Tento týden', () => {
     expect(out).not.toContain('spodní 50 · horní 100')
   })
 
+  it('last week not settled yet: its points on their own line; none once settled', () => {
+    const w = takerWeek()
+    const [t] = w.takers
+    if (!t) throw new Error('no taker')
+    const late = { ...w, takers: [{ ...t, unsettled: 36 }] }
+    expect(html(late, 'this', 'taker')).toContain('Z minulého týdne čeká na poradu: 36 bodů</p>')
+    expect(html(w, 'this', 'taker')).not.toContain('Z minulého týdne')
+  })
+
   it('items: state chips, the day, a rejection with its reason', () => {
     const out = html(takerWeek(), 'this', 'taker')
     expect(out).toContain(cs.week.happened)

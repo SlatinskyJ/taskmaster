@@ -1,4 +1,4 @@
-import { and, asc, inArray } from 'drizzle-orm'
+import { and, asc, gte, inArray } from 'drizzle-orm'
 import { periodEnd } from '~/domain'
 import type { Level, Levels, Role } from '~/domain'
 import { toIsoUtc } from '~/domain/dates'
@@ -29,12 +29,19 @@ export interface WeekItem {
 export interface WeekTaker {
   id: number
   name: string
-  /** The ledger running total now (carry-over + confirmed since). */
+  /**
+   * With a period: carry-over + confirmed this period (§5.7). Without one: the running total.
+   */
   confirmed: number
-  /** Done, waiting for a giver. */
+  /** Done, waiting for a giver: this period's, or all of them without a period. */
   pending: number
   /** The carry-over of his latest settlement, else 0. */
   carriedIn: number
+  /**
+   * Points from an ended week no meeting has settled yet, confirmed and waiting (Jakub
+   * 2026-11-21: shown apart until settled, not on this week's bar). 0 once settled.
+   */
+  unsettled: number
   /** Newest first. */
   items: WeekItem[]
 }
@@ -90,6 +97,7 @@ export function getWeek(db: Db | Tx, viewer: Viewer, now: Date): Week {
   const carried = new Map<number, number>()
   for (const r of rows) carried.set(r.takerId, r.carryOver)
   const items = period ? weekItems(db, ids, period.startsAt) : new Map<number, WeekItem[]>()
+  const thisWeek = period ? pointsSince(db, ids, period.startsAt) : null
   return {
     period: period
       ? {
@@ -99,16 +107,47 @@ export function getWeek(db: Db | Tx, viewer: Viewer, now: Date): Week {
           levels: period.levels,
         }
       : null,
-    takers: takers.map((t) => ({
-      id: t.id,
-      name: t.name,
-      confirmed: points.get(t.id)?.confirmed ?? 0,
-      pending: points.get(t.id)?.pending ?? 0,
-      carriedIn: carried.get(t.id) ?? 0,
-      items: items.get(t.id) ?? [],
-    })),
+    takers: takers.map((t) => {
+      const all = points.get(t.id) ?? { confirmed: 0, pending: 0 }
+      const carriedIn = carried.get(t.id) ?? 0
+      const base = { id: t.id, name: t.name, carriedIn, items: items.get(t.id) ?? [] }
+      if (!thisWeek) return { ...base, ...all, unsettled: 0 }
+      // Running total = carry-over + this week + the ended, unsettled weeks; the rest is those.
+      const now = thisWeek.get(t.id) ?? { confirmed: 0, pending: 0 }
+      const confirmed = carriedIn + now.confirmed
+      const unsettled = all.confirmed - confirmed + (all.pending - now.pending)
+      return { ...base, confirmed, pending: now.pending, unsettled }
+    }),
     history: history(db, rows, names),
   }
+}
+
+/** Confirmed and waiting scores per taker, of tasks completed at or after `start`. */
+function pointsSince(
+  db: Db | Tx,
+  ids: number[],
+  start: Date,
+): Map<number, { confirmed: number; pending: number }> {
+  const out = new Map<number, { confirmed: number; pending: number }>()
+  if (ids.length === 0) return out
+  for (const t of db
+    .select({ earnerId: tasks.earnerId, score: tasks.score, status: tasks.status })
+    .from(tasks)
+    .where(
+      and(
+        inArray(tasks.earnerId, ids),
+        inArray(tasks.status, ['confirmed', 'done_unconfirmed']),
+        gte(tasks.completedAt, toIsoUtc(start)),
+      ),
+    )
+    .all()) {
+    if (t.earnerId === null) continue
+    const p = out.get(t.earnerId) ?? { confirmed: 0, pending: 0 }
+    if (t.status === 'confirmed') p.confirmed += t.score
+    else p.pending += t.score
+    out.set(t.earnerId, p)
+  }
+  return out
 }
 
 /** This period's items per taker: done since its start, still waiting, and its rejections. */

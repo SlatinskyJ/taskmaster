@@ -27,6 +27,7 @@ export function week(over: Partial<Week> = {}): Week {
         confirmed: 112,
         pending: 2,
         carriedIn: 8,
+        unsettled: 0,
         items: [
           item({ taskId: 11, title: 'Zalít kytky', score: 2, status: 'done_unconfirmed' }),
           item(),
@@ -39,7 +40,7 @@ export function week(over: Partial<Week> = {}): Week {
           }),
         ],
       },
-      { id: 4, name: 'Mladší', confirmed: 47, pending: 0, carriedIn: 0, items: [] },
+      { id: 4, name: 'Mladší', confirmed: 47, pending: 0, carriedIn: 0, unsettled: 0, items: [] },
     ],
     history: [
       {

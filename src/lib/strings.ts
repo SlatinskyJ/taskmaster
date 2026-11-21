@@ -302,6 +302,8 @@ export const cs = {
     thisWeek: 'Tento týden',
     history: 'Historie',
     carried: (points: string) => `Z minula převedeno ${points}`,
+    /** An ended week no meeting has settled yet: its points, apart from this week's. */
+    unsettled: (points: string) => `Z minulého týdne čeká na poradu: ${points}`,
     happened: 'Co se tento týden stalo',
     noItems: 'Tento týden zatím nic hotového.',
     noPeriod: 'Týden ještě nezačal.',

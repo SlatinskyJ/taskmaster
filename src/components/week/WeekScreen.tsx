@@ -97,6 +97,11 @@ function TakerWeek({ taker, week, named }: { taker: WeekTaker; week: Week; named
           </p>
         )}
         <p className="text-meta text-muted">{cs.week.carried(formatPoints(taker.carriedIn))}</p>
+        {taker.unsettled > 0 && (
+          <p className="text-meta font-bold text-state-pending-text">
+            {cs.week.unsettled(formatPoints(taker.unsettled))}
+          </p>
+        )}
       </div>
       {week.period && (
         <section className="grid gap-2">
