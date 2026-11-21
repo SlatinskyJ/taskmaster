@@ -162,6 +162,40 @@ jobs:
           path: test-results/
           retention-days: 7
 
+  # Mutation testing (#155) for the Tests judge: mutates the src/ files this PR changes and
+  # lists surviving mutants (job log between the "=== mutation report ===" markers, job summary,
+  # artifact mutation-report). Deliberately not a required check: survivors never fail it, only
+  # a Stryker run that breaks (e.g. a red test suite) does.
+  mutation:
+    name: mutation
+    needs: [changes]
+    if: github.event_name == 'pull_request' && needs.changes.outputs.code != 'false'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - *checkout
+      - *pnpm
+      - *node
+      - *install
+      - name: List the PR's files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files?per_page=100" --paginate \
+            --jq '[.[] | {filename, status}]' | jq -s add > pr-files.json
+      - run: node scripts/mutation/run.ts pr-files.json
+      - if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mutation-report
+          path: reports/mutation/
+          if-no-files-found: ignore
+          retention-days: 14
+
   # Multi-arch image (spec §11, #50). Each arch builds natively and smoke-runs the container,
   # including the image's own HEALTHCHECK. Read-only token; nothing is pushed here.
   # On docs-only PRs the job still starts, so the matrix expands and `image (amd64)` /
