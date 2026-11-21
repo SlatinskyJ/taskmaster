@@ -3,6 +3,7 @@ import type { Result } from '~/domain/result'
 import { requireRole } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
 import type { SettlementRow } from '~/server/db/schema'
+import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import type { Period } from '~/domain'
 import { getMeeting, settlePeriod } from './meeting'
 import type { Meeting, MeetingTaker, SettleError, ShownTotal } from './meeting'
@@ -74,5 +75,15 @@ export const settlePeriodFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver')])
   .validator(parseSettle)
   .handler(({ data, context }) =>
-    settled(settlePeriod(getDb(), context.user.id, data.periodId, data.shown, new Date())),
+    settled(
+      settlePeriod(
+        getDb(),
+        context.user.id,
+        data.periodId,
+        data.shown,
+        new Date(),
+        // The same defaults the roller gets (src/server/plugins/database.ts) until #43/#47 store them.
+        DEFAULT_PERIOD_DEFAULTS,
+      ),
+    ),
   )

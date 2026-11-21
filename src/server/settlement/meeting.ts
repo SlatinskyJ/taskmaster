@@ -1,6 +1,5 @@
 import { asc } from 'drizzle-orm'
 import {
-  DEFAULT_PERIOD_DEFAULTS,
   findPerson,
   isActiveGiver,
   isRunning,
@@ -13,6 +12,7 @@ import type {
   Level,
   Levels,
   Period,
+  PeriodDefaults,
   PeriodError,
   PeriodId,
   Person,
@@ -73,6 +73,7 @@ export type SettleError =
   | 'pending_items'
   | 'already_settled'
   | 'totals_changed'
+  | 'no_takers'
 
 export interface ShownTotal {
   takerId: number
@@ -136,7 +137,8 @@ export function getMeeting(db: Db | Tx, now: Date): Meeting {
   const target = periodToSettle(listPeriods(db), settledIds(db), now)
   // The preview needs a giver for the domain's `settle`; with none there is nobody to settle.
   const giver = people.find(isActiveGiver)
-  if (!target || !giver) return { period: null }
+  // No takers yet (accounts still being set up): nothing to settle, so no week is ended for it.
+  if (!target || !giver || takersOf(db, people).length === 0) return { period: null }
   const p = preview(db, people, giver.id, target, now)
   if (!p.ok) return { period: null }
   return {
@@ -176,7 +178,10 @@ class Refused extends Error {
  * The giver confirms step 2 for `periodId` with the totals the screen showed. Refused unless
  * that period is the one to settle now, nothing is pending before its end, and the totals are
  * unchanged. Writes a final record and a `settlement.created` audit entry per active taker; if
- * the week is still running, ends it now and starts the next one. One transaction.
+ * the week is still running, ends it now and starts the next one (`defaults` give the next
+ * week's length and levels). Refused with `no_takers` while there is no active taker: settled
+ * is read from the records, so a week settled with none would be offered again forever. One
+ * transaction.
  */
 export function settlePeriod(
   db: Db,
@@ -184,6 +189,7 @@ export function settlePeriod(
   periodId: number,
   shown: readonly ShownTotal[],
   now: Date,
+  defaults: PeriodDefaults,
 ): Result<{ period: Period; records: SettlementRow[]; next: Period | null }, SettleError> {
   try {
     return db.transaction((tx) => {
@@ -199,6 +205,7 @@ export function settlePeriod(
       if (target.id !== periodId) return fail('wrong_period')
       const p = preview(tx, people, giverId, target, now)
       if (!p.ok) return p
+      if (p.value.records.length === 0) return fail('no_takers')
       if (p.value.pending.length > 0) return fail('pending_items')
       if (!sameTotals(p.value.records, shown)) return fail('totals_changed')
       const actor: Actor = { kind: 'user', userId: giverId }
@@ -231,7 +238,7 @@ export function settlePeriod(
       let next: Period | null = null
       let period = target
       if (isRunning(target, now)) {
-        const ended = endRunningPeriod(tx, actor, target.id, now, DEFAULT_PERIOD_DEFAULTS)
+        const ended = endRunningPeriod(tx, actor, target.id, now, defaults)
         // Throwing rolls back the records written above.
         if (!ended.ok) throw new Refused(ended.error)
         next = ended.value.next

@@ -683,6 +683,7 @@ describe('periodToSettle (spec §5.8, §5.9 step 1)', () => {
   })
 
   it('between the cutoff and its roll: settles the ended week', () => {
+    expect(periodToSettle([P1], none, P1.cutoffAt)).toBe(P1)
     expect(periodToSettle([P1], none, new Date(P1.cutoffAt.getTime() + 1000))).toBe(P1)
   })
 
