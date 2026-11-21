@@ -188,7 +188,7 @@ class Refused extends Error {
  * transaction.
  */
 export function settlePeriod(
-  db: Db,
+  db: Db | Tx,
   giverId: number,
   periodId: number,
   shown: readonly ShownTotal[],

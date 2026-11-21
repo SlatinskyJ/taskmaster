@@ -2,12 +2,13 @@ import { verify } from '@node-rs/argon2'
 import { asc, eq, sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { login } from '~/server/auth'
-import { auditLog, tasks, templates, templateThread, users } from '~/server/db/schema'
+import { auditLog, settlements, tasks, templates, templateThread, users } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { listTasks } from '~/server/tasks'
 import { bootstrapAdmin } from '~/server/users'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
-import { rollPeriods } from '~/server/periods'
+import { listPeriods, rollPeriods } from '~/server/periods'
+import { rejectionsSince } from '~/server/tasks/rejections'
 import { getMeeting } from '~/server/settlement/meeting'
 import { DEMO_PASSWORD, describeDemo, seedDemo } from './seed'
 
@@ -39,7 +40,21 @@ describe('demo seed (#62)', () => {
       .where(eq(auditLog.entityType, 'task'))
       .orderBy(asc(auditLog.id))
       .all()
+    const done = [
+      'task.created',
+      'task.score_approved',
+      'task.agreed',
+      'task.reserved',
+      'task.completed',
+    ]
     expect(taskLog.map((r) => [r.action, r.actorKind])).toEqual([
+      // #45's past week: three approved chores, then this week's rejected one.
+      ...[
+        ...[...done, 'task.approved'],
+        ...[...done, 'task.approved'],
+        ...[...done, 'task.approved'],
+        ...[...done, 'task.rejected'],
+      ].map((action) => [action, 'user']),
       ['task.created', 'user'],
       ['task.bid_placed', 'user'],
       ['task.bid_placed', 'user'],
@@ -81,8 +96,10 @@ describe('demo seed (#62)', () => {
           ['Starší', 25],
         ],
       ],
+      // Rejected (#45), so back to Mladší's reservation.
+      ['Vynést sklo', 'reserved', 4, []],
     ])
-    expect(all.find((t) => t.status === 'reserved')?.reservedBy?.name).toBe('Starší')
+    expect(all.find((t) => t.title.startsWith('Vyluxovat'))?.reservedBy?.name).toBe('Starší')
   })
 
   it('demo login works for every role', async () => {
@@ -221,7 +238,7 @@ describe('demo seed (#62)', () => {
     expect(db.select().from(auditLog).all()).toHaveLength(0)
   })
 
-  it('demo seed gives a meeting with 2 pending items and totals 112 / 47 (#44)', () => {
+  it('demo seed gives a meeting with 2 pending items and totals 120 / 47 (#44, #45 carry 8)', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     // The roller starts the week at boot, right after the seed.
@@ -233,9 +250,50 @@ describe('demo seed (#62)', () => {
       ['Vynést tříděný', 3, 'Mladší'],
     ])
     expect(meeting.takers.map((t) => [t.name, t.total])).toEqual([
-      ['Starší', 112],
+      ['Starší', 120],
       ['Mladší', 47],
     ])
+  })
+
+  it('a settled past week (#45): records, the current week from the settle, one rejection', () => {
+    const db = createTestDb()
+    seedDemo(db, PREVIEW, T0)
+    const [past, current] = listPeriods(db)
+    if (!past || !current) throw new Error('no weeks')
+    expect(past.startsAt).toEqual(new Date(T0.getTime() - 7 * 86_400_000))
+    expect(current.startsAt).toEqual(past.endedAt)
+    expect(listPeriods(db)).toHaveLength(2)
+    const name = (id: number) => db.select().from(users).where(eq(users.id, id)).get()?.username
+    expect(
+      db
+        .select()
+        .from(settlements)
+        .all()
+        .map((r) => [r.periodId, name(r.takerId), r.totalBefore, r.level, r.deducted, r.carryOver]),
+    ).toEqual([
+      [past.id, 'starsi', 108, 'upper', 100, 8],
+      [past.id, 'mladsi', 50, 'lower', 50, 0],
+    ])
+    expect(
+      rejectionsSince(db, current.startsAt).map((r) => [
+        r.title,
+        r.score,
+        name(r.earnerId),
+        r.reason,
+      ]),
+    ).toEqual([['Vynést sklo', 4, 'mladsi', 'Nedodělané']])
+  })
+
+  it('the audit log is in time order (#45)', () => {
+    const db = createTestDb()
+    seedDemo(db, PREVIEW, T0)
+    const at = db
+      .select({ at: auditLog.at })
+      .from(auditLog)
+      .orderBy(asc(auditLog.id))
+      .all()
+      .map((r) => r.at)
+    expect(at).toEqual([...at].sort())
   })
 
   it('a second boot seeds nothing more', () => {
