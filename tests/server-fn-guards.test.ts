@@ -51,6 +51,7 @@ const EXPECTED_ROLES: Record<string, string> = {
   getMeetingFn: 'giver',
   getWeekFn: 'taker,giver',
   settlePeriodFn: 'giver',
+  getPointsFn: 'giver,taker',
 }
 
 const SRC = join(import.meta.dirname, '..', 'src')

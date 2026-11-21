@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { login } from '~/server/auth'
 import { auditLog, settlements, tasks, templates, templateThread, users } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
+import { takerPoints } from '~/server/points'
 import { listTasks } from '~/server/tasks'
 import { bootstrapAdmin } from '~/server/users'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
@@ -63,6 +64,17 @@ describe('demo seed (#62)', () => {
       ['task.bid_placed', 'user'],
       ['task.score_approved', 'user'],
       ['task.agreed', 'user'],
+      // #40: five tasks done (four of them approved), one left open, each agreed on one yes.
+      ...[true, true, false, true, true].flatMap((approved) => [
+        ['task.created', 'user'],
+        ['task.score_approved', 'user'],
+        ['task.agreed', 'user'],
+        ['task.completed', 'user'],
+        ...(approved ? [['task.approved', 'user']] : []),
+      ]),
+      ['task.created', 'user'],
+      ['task.score_approved', 'user'],
+      ['task.agreed', 'user'],
       // #44's week: six approved chores, then one pending completion per boy.
       ...[...Array<boolean>(6).fill(true), false, false].flatMap((approved) =>
         [
@@ -100,6 +112,17 @@ describe('demo seed (#62)', () => {
       ['Vynést sklo a plasty do kontejneru', 'reserved', 4, []],
     ])
     expect(all.find((t) => t.title.startsWith('Vyluxovat'))?.reservedBy?.name).toBe('Starší')
+  })
+
+  it('gives both brothers points (#40 + #44 week): confirmed and waiting, plus an open task', () => {
+    const db = createTestDb()
+    seedDemo(db, PREVIEW, T0)
+    expect(takerPoints(db).takers.map((t) => [t.name, t.confirmed, t.pending])).toEqual([
+      ['Starší', 260, 14],
+      ['Mladší', 152, 3],
+    ])
+    const open = listTasks(db).filter((t) => t.status === 'open')
+    expect(open.map((t) => [t.title, t.score])).toEqual([['Umýt okna v obýváku i v ložnici', 5]])
   })
 
   it('demo login works for every role', async () => {
@@ -238,7 +261,7 @@ describe('demo seed (#62)', () => {
     expect(db.select().from(auditLog).all()).toHaveLength(0)
   })
 
-  it('demo seed gives a meeting with 2 pending items and totals 120 / 47 (#44, #45 carry 8)', () => {
+  it('demo seed gives a meeting with 3 pending items and totals 160 / 102 (#40 + #44, #45 carry 8)', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     // The roller starts the week at boot, right after the seed.
@@ -246,12 +269,13 @@ describe('demo seed (#62)', () => {
     const meeting = getMeeting(db, new Date(T0.getTime() + 120_000))
     if (!meeting.period) throw new Error('no meeting')
     expect(meeting.pending.map((t) => [t.title, t.score, t.completedBy?.name])).toEqual([
+      ['Vytřít podlahu v kuchyni', 12, 'Starší'],
       ['Zalít kytky', 2, 'Starší'],
       ['Vynést tříděný', 3, 'Mladší'],
     ])
     expect(meeting.takers.map((t) => [t.name, t.total])).toEqual([
-      ['Starší', 120],
-      ['Mladší', 47],
+      ['Starší', 160],
+      ['Mladší', 102],
     ])
   })
 

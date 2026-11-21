@@ -11,7 +11,8 @@ test('Starší sees his own week and history, nobody else', async ({ page }) => 
   await page.goto('/tyden')
   await expect(page.getByRole('heading', { name: cs.week.myTitle })).toBeVisible()
   const main = page.locator('main')
-  await expect(main).toContainText('120 ✔')
+  // 160 from the seeds (#40, #44 week, 8 carried), plus 17 the parent approved in home.spec (same server).
+  await expect(main).toContainText('177 ✔')
   await expect(main).toContainText('Z minula převedeno 8 bodů')
   await expect(main).toContainText('Zalít kytky')
   await expect(main).not.toContainText('Mladší')

@@ -53,14 +53,14 @@ Sections 2, 3, 4 and 7 are the same in both phases. A PR with no issue (ad-hoc) 
     The PR body line becomes `Plan: removed in <sha>`. To read the plan again later: `git show <sha>~1:<path>`.
 - The PR brief exists (skill `pr-brief`) and its link is at the top of the PR body. Every ruling you made while building (a place where you left the plan) is in the brief.
 - The PR body has the line `Review round: 0/5`.
-- **Screenshots for the UX judge** (UX on the panel). The UX judge does not run the app; it judges your screenshots. Take them in the same Playwright run as the brief's (skill `pr-brief`), with the viewport 360 px wide, light theme:
+- **Screenshots for the UX judge** (UX on the panel). The UX judge does not run the app; it judges your screenshots. Take them in the same Playwright run as the brief's (skill `pr-brief`), with the viewport 360×800, light theme, one screen per file (no `fullPage`; scroll and take another file for what sits below the fold):
     - one for every screen and every state this PR adds or changes: each kind of row, each set of buttons on a row, each form and dialog, each empty and error state;
     - logged in as the role that sees it, on the demo data (`TASKMASTER_ENV=preview`);
     - a long Czech task name (about 30 letters, like "Vyluxovat celý obývák a chodbu") in every row that shows one;
     - named `<screen>-<role>-<state>.png`, in one folder outside the repo.
 
     Look at each one before round 1. Whatever a person needs to read or tap is whole. Retake the ones a fix changes before the next round. An ad-hoc PR with screens has no plan, so also go through the UX pre-flight list above.
-- The `preview` label is set if the PR changes something a user sees (screens, flows, styles, Czech text) and off otherwise (`CLAUDE.md`, PR flow step 4). With the label, the brief links the preview.
+- The `preview` label is set if the PR changes something a user sees (screens, flows, styles, Czech text) and off otherwise (`CLAUDE.md`, PR flow step 5). Add it together with marking the PR ready, never on a draft: it deploys a preview and takes a slot. With the label, the brief links the preview.
 - Mark the PR ready for review.
 
 ## 2. Pick the panel
@@ -165,7 +165,7 @@ Escalate when any of these is true:
 - you're unsure whether the PR is trivial;
 - round 5 of a phase ends with an open `blocker` or `should-fix`.
 
-How: add the label `needs-jakub` to the PR, post one PR comment that mentions `@SlatinskyJ` with the question and the options, and send the same question in the project thread. Then wait. Never start round 6 on your own.
+How: add the label `needs-jakub` to the PR, post one PR comment that mentions `@SlatinskyJ` with the question and the options, and send the same question in the project thread. Then wait. When he answers, take `needs-jakub` off. Never start round 6 on your own.
 
 ## 8. After another PR merges
 

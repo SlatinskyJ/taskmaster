@@ -20,7 +20,7 @@ Read `.claude/skills/pr-review-rounds/judge-contract.md` first. It defines your 
 
 ## Screenshots (code rounds)
 
-You don't run the app. You look at the builder's screenshots: the folder your prompt names (`Screenshots: <folder>`, 360 px wide, one file per screen and state) and the ones in the PR brief (390 px wide).
+You don't run the app. You look at the builder's screenshots: the folder your prompt names (`Screenshots: <folder>`, 360 px wide, one file per screen and state) and the ones in the PR brief (the iPhone 15 Pro screen, 393×852, one screen per file).
 
 1. **List first.** From the diff, write down every screen and state this PR adds or changes: each kind of row, each set of buttons on a row, each form and dialog, each empty and error state.
 2. **Look at every file** in the folder (Read tool). Judge what the picture shows, not what the class names promise: a `truncate` in the code tells you text can be cut, the screenshot tells you whether a person can still read it. Look for text cut or broken in the middle of a word, something the code renders that is not on the picture (a chip label, a name, the line under the title), things on top of each other, a row whose buttons squeeze out its text.

@@ -1,3 +1,4 @@
+import { Bookmark } from 'lucide-react'
 import { EmptyState } from '~/components/EmptyState'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
@@ -6,14 +7,14 @@ import { reserveTaskFn, type TaskView } from '~/server/tasks/functions'
 import { canWorkOn } from './taskView'
 import { TaskRow } from './TaskRow'
 import { useTaskAction } from './useTaskAction'
-import { WorkButtons } from './WorkButtons'
+import { DoneButton, WorkButtons } from './WorkButtons'
 
 /**
- * A taker's work on Domů (UI doc §7.1, until #40 builds the full home): "Moje" (reserved by me,
- * or done and waiting for approval) and "Volné" (open, Rezervovat). Marking an open task done
- * without reserving it is allowed by the server (spec §5.5) and gets its button with #40.
- * On a reserved "Moje" row, ↶ Uvolnit is an icon button so the name and chip read in full at
- * 360 px; Hotovo, the main action, keeps its label (mockup Main, #148). See WorkButtons.
+ * A taker's work on Domů (UI doc §7.1): "Moje" (reserved by me, or done and waiting for
+ * approval) and "Volné" (open). An open task can be marked done without reserving it (spec
+ * §5.4, #40). On both rows the main action, Hotovo, keeps its label and the other one is a
+ * 44 px icon button (↶ Uvolnit on "Moje", Rezervovat on "Volné"), so a long name and the chip
+ * read in full at 360 px (mockup Main, #148). The task page keeps both labelled.
  */
 export function TakerBoard({ items, me }: { items: readonly TaskView[]; me: number }) {
   const { busy, run } = useTaskAction()
@@ -58,20 +59,26 @@ export function TakerBoard({ items, me }: { items: readonly TaskView[]; me: numb
                   state="open"
                   points={t.score}
                   action={
-                    <Button
-                      variant="ghost"
-                      disabled={busy !== null}
-                      aria-busy={busy === `reserve-${String(t.id)}`}
-                      onClick={() => {
-                        void run(
-                          `reserve-${String(t.id)}`,
-                          () => reserveTaskFn({ data: { taskId: t.id } }),
-                          () => cs.work.toast.reserved,
-                        )
-                      }}
-                    >
-                      {cs.work.reserve}
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label={cs.work.reserve}
+                        title={cs.work.reserve}
+                        disabled={busy !== null}
+                        aria-busy={busy === `reserve-${String(t.id)}`}
+                        onClick={() => {
+                          void run(
+                            `reserve-${String(t.id)}`,
+                            () => reserveTaskFn({ data: { taskId: t.id } }),
+                            () => cs.work.toast.reserved,
+                          )
+                        }}
+                      >
+                        <Bookmark aria-hidden="true" />
+                      </Button>
+                      <DoneButton task={t} busy={busy} run={run} />
+                    </div>
                   }
                 />
               </li>
