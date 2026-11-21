@@ -41,7 +41,7 @@
 - A change still open when the task leaves `open`/`reserved` (done, released back to negotiation, cancelled) closes as `discarded` in the same transaction (domain `resolveOneTimeChange` returns `null`).
 - Cancel: only a giver, only from `proposed`, `open`, `reserved` (domain `cancelItem`). Optional reason, shown to everyone in the history. Asks first (Dialog). A cancelled proposed task closes its negotiation thread (existing `saveItem`).
 
-**[call] Saying no.** The spec is silent on rejecting a change; without it one ignored proposal would block the task's price forever (one change at a time). The approved mockup TApprove "Změna ceny" has a "Nesouhlasím" button. This plan: anyone who could still approve the change says "Nesouhlasím" → the change closes as `declined`; the proposer can "Stáhnout návrh" → `withdrawn`. The old score stays. Same spirit as Jakub's period rule "any 'no' closes". Goes into the PR brief as a call Jakub may overturn.
+**Saying no — DECIDED by Jakub 2026-11-21 (decision card): option 1.** The spec is silent on rejecting a change; without it one ignored proposal would block the task's price forever (one change at a time). The approved mockup TApprove "Změna ceny" has a "Nesouhlasím" button. Options put to Jakub: (1) only the people the change waits for (`oneTimeChangeWaitingFor`) may say no, the proposer may withdraw; (2) anyone who could approve may say no; (3) withdraw only. **Jakub chose option 1:** "Nesouhlasím" by someone the change waits for → `declined`; "Stáhnout návrh" by the proposer → `withdrawn`; anyone else → `not_involved`. The old score stays.
 
 **[call] Who sees history.** Everyone who can open the task page (givers and takers). Reasons are visible to all, as the mockup says ("Důvod (uvidí ho všichni)").
 
@@ -63,13 +63,14 @@
 
 **Interfaces:**
 - Produces:
-  - `declineOneTimeScoreChange(item: Item, change: ScoreProposal, people: readonly Person[], userId: PersonId): Result<'declined' | 'withdrawn', AgreementError>` — proposer → `'withdrawn'` (even after the task's rule changed, as long as `changeRule` is ok); else same involvement check as `approveOneTimeScoreChange` (`not_involved` for a non-reserving taker on a reserved task; `not_a_party` for admin/unknown); someone who already approved and isn't the proposer → `already_approved`; frozen/proposed/cancelled → the `changeRule` error.
+  - `declineOneTimeScoreChange(item: Item, change: ScoreProposal, people: readonly Person[], userId: PersonId): Result<'declined' | 'withdrawn', AgreementError>` — checks in this order: `changeRule` error (frozen/proposed/cancelled); not an active party (admin, unknown) → `not_a_party`; proposer → `'withdrawn'` (even after the task's rule changed); `userId` in `oneTimeChangeWaitingFor(item, change, people)` → `'declined'`; anyone else (an approver, a non-reserving taker on a reserved task, a second taker on an open task whose taker side already said yes) → `not_involved`.
   - `oneTimeChangeWaitingFor(item: Item, change: ScoreProposal, people: readonly Person[]): PersonId[]` — the active people whose yes would still count: `open` → active people of each role in `missingRoles`; `reserved` → the reserving taker if he hasn't approved, plus every active giver if no giver approved; `[]` if `changeRule` fails. Ordered as in `people`.
 
 - [ ] **Step 1: Write failing tests** in `scoreChange.test.ts` (`describe('declineOneTimeScoreChange')`, `describe('oneTimeChangeWaitingFor')`):
   - proposer (giver, open task) → `ok('withdrawn')`; a taker on the open task → `ok('declined')`; admin → `fail('not_a_party')`.
+  - open task, Starší proposed: Mladší → `fail('not_involved')` (Starší's yes already covers the taker side); Táta → `ok('declined')`.
   - reserved to Starší, giver proposed: Mladší → `fail('not_involved')`; Starší → `ok('declined')`.
-  - an approver who is not the proposer → `fail('already_approved')`.
+  - an approver who is not the proposer (Máma added; open task, Táta proposed, Máma approved) → Máma `fail('not_involved')`.
   - item `done_unconfirmed` → `fail('score_frozen')`; `proposed` → `fail('not_agreed')`; `cancelled` → `fail('not_changeable')`.
   - waitingFor: open, giver proposed → `[starsi, mladsi]`; open, Starší proposed → `[tata]` (with Máma added: `[tata, mama]`); reserved to Starší, giver proposed → `[starsi]`; reserved, Starší proposed → `[tata]`; fully agreed → `[]`; confirmed item → `[]`.
 - [ ] **Step 2:** `pnpm test src/domain/scoreChange.test.ts` → FAIL (not exported).
@@ -98,8 +99,8 @@
 ### Task 3: Server — propose, approve, say no, discard
 
 **Files:**
-- Create: `src/server/tasks/scoreChange.ts`
-- Modify: `src/server/tasks/lifecycle.ts` (discard in `runStep`)
+- Create: `src/server/tasks/scoreChange.ts` (actions), `src/server/tasks/changeRows.ts` (reader, like `./thread`; no import of `./tasks`, so no cycle)
+- Modify: `src/server/tasks/lifecycle.ts` (discard in `runStep`), `src/server/tasks/tasks.ts` (`listScoreChangesWaiting` next to `pendingApprovals`)
 - Modify: `src/server/tasks/index.ts` (export)
 - Test: `src/server/tasks/scoreChange.test.ts`
 
@@ -107,13 +108,13 @@
 - Consumes: Task 1 domain functions; Task 2 tables; `toItem` (`./item`); `listPeople`; `writeAudit`.
 - Produces:
   - `type ScoreChangeError = AgreementError | 'not_found' | 'no_change'`
-  - `openChangeOf(tx: Db | Tx, taskId: number): (ScoreProposal & { id: number; createdAt: string }) | null` — the open row + its approvals (oldest first, proposer first).
+  - in `changeRows.ts`: `openChangeOf(tx: Db | Tx, taskId: number): (ScoreProposal & { id: number; createdAt: string }) | null` — the open row + its approvals (oldest first, proposer first).
   - `proposeTaskScoreChange(db: Db, userId: number, taskId: number, score: number, now?: Date): Result<TaskRow, ScoreChangeError>` — inserts change + proposer's approval; audit `task.score_change_proposed` `after: { changeId, score, from: task.score }`. A proposal alone is never agreed (every rule needs two people), so propose never changes `tasks.score`.
-  - `approveTaskScoreChange(db, userId, taskId, changeId: number, now?): Result<TaskRow, ScoreChangeError>` — `changeId` must be the open change (else `no_change` when none is open, `offer_changed` when another is); inserts approval; audit `task.score_change_approved` `after: { changeId, score }`; when agreed: `tasks.score = change.score`, `updatedAt`, close change `agreed` (closedBy = approver), audit `task.score_changed` `before: { score: old }`, `after: { changeId, score }`.
+  - `approveTaskScoreChange(db, userId, taskId, changeId: number, now?): Result<TaskRow, ScoreChangeError>` — `changeId` must be the open change (else `no_change` when none is open, `offer_changed` when another is); inserts approval; audit `task.score_change_approved` `after: { changeId, score }`; when agreed: the new score is written through `saveItem(tx, row, toItem(row), { set: { score: change.score } }, now)` (the one writer of a task row), close change `agreed` (closedBy = approver), audit `task.score_changed` `before: { score: old }`, `after: { changeId, score }`.
   - `declineTaskScoreChange(db: Db, userId: number, taskId: number, changeId: number, now?: Date): Result<TaskRow, ScoreChangeError>` — same `changeId` check as approve; domain decides `declined`/`withdrawn`; closes the change with that `closedAs`, `closedBy=userId`; audit `task.score_change_declined` or `task.score_change_withdrawn` `after: { changeId, score }`.
   - `discardStaleChange(tx: Tx, row: TaskRow, actor: Actor, now: Date): number | null` — after a lifecycle step: if an open change exists and `resolveOneTimeChange(toItem(row), change, people)` is `null`, close it `discarded` (closedBy = actor's user id or null) and write `task.score_change_discarded` `after: { changeId, score }`; returns the closed change id.
-  - `runStep` in `lifecycle.ts` calls `discardStaleChange` after `saveItem`/`extra`, before the step's audit entry, so complete, release and cancel all discard.
-  - `listScoreChangesWaiting(db: Db | Tx, userId: number): TaskView[]` — tasks with an open change where `userId` is in `oneTimeChangeWaitingFor`, oldest change first.
+  - `runStep` in `lifecycle.ts` calls `discardStaleChange` after `saveItem`/`extra`, before the step's audit entry, so complete, release and cancel all discard. (Not inside `saveItem`: it has no actor for the audit entry, and `agree`, the only other `saveItem` caller on a non-proposed path, only moves `proposed` → agreed, where no change can exist.)
+  - in `tasks.ts`: `listScoreChangesWaiting(db: Db | Tx, userId: number): TaskView[]` — tasks with an open change where `userId` is in `oneTimeChangeWaitingFor`, oldest change first.
 - Every function runs in one `db.transaction`; roles checked against `listPeople` inside.
 
 - [ ] **Step 1: Failing tests** (`family()`, `T0..T3`, helper `openTask(f)` = created + approved by Starší, `reservedTask(f)` = open + reserved by Starší):
@@ -133,7 +134,7 @@
 
 **Files:**
 - Modify: `src/server/tasks/lifecycle.ts`
-- Create: `src/server/tasks/history.ts`
+- Create: `src/server/tasks/history.ts`; `src/server/audit/read.ts` (`entityLog`, exported from `~/server/audit`)
 - Modify: `src/server/tasks/tasks.ts` (`TaskView.scoreChange`, `TaskDetail.history`)
 - Test: `src/server/tasks/lifecycle.test.ts`, `src/server/tasks/history.test.ts`
 
@@ -141,7 +142,8 @@
 - Produces:
   - `cancelTask(db: Db, userId: number, taskId: number, reason: string | undefined, now?: Date): Result<TaskRow, LifecycleActionError>` — `runStep(..., 'task.cancelled', cancelItem, now, { reason })`; reason trimmed, `reason_too_long` over `REASON_MAX`, blank → none.
   - `HistoryEntry = { id: number; at: string; action: TaskHistoryAction; by: { id: number; name: string } | null; score: number | null; reservedBy: string | null; reason: string | null }` where `TaskHistoryAction` is the `task.*` subset of `AuditAction`.
-  - `taskHistory(db: Db | Tx, taskId: number): HistoryEntry[]` — `audit_log` rows with `entity_type='task'` and `entity_id=String(taskId)`, ordered by `id` ascending. `score` = `after.score` when it is a safe integer, else null; `reservedBy` = name of `after.reservedBy` for `task.agreed` only; `reason` = the row's `reason`. Nothing else from `before`/`after` leaves the server. `by` is null for system actors.
+  - `entityLog(db: Db | Tx, entityType: EntityType, entityId: number | string): AuditLogRow[]` in `src/server/audit/read.ts` — the first reader of the log, reusable by #49 (CSV export); ordered by `id` ascending.
+  - `taskHistory(db: Db | Tx, taskId: number): HistoryEntry[]` — via `entityLog(db, 'task', taskId)`: `audit_log` rows with `entity_type='task'` and `entity_id=String(taskId)`, ordered by `id` ascending. `score` = `after.score` when it is a safe integer, else null; `reservedBy` = name of `after.reservedBy` for `task.agreed` only; `reason` = the row's `reason`. Nothing else from `before`/`after` leaves the server. `by` is null for system actors.
   - `TaskView` gains `scoreChange: { id: number; score: number; proposedBy: { id: number; name: string }; approvedBy: { id: number; name: string }[]; waitingFor: { id: number; name: string }[] } | null` (set only for open/reserved tasks with an open change).
   - `TaskDetail` gains `history: HistoryEntry[]`.
 
@@ -154,7 +156,7 @@
 ### Task 5: Server functions
 
 **Files:**
-- Modify: `src/server/tasks/functions.ts`
+- Modify: `src/server/tasks/functions.ts`, `tests/server-fn-guards.test.ts` (`EXPECTED_ROLES`: `cancelTaskFn: giver`; `proposeTaskScoreChangeFn`, `approveTaskScoreChangeFn`, `declineTaskScoreChangeFn`, `listScoreChangesWaitingFn`: `giver, taker`)
 - Test: `src/server/tasks/functions.test.ts`
 
 **Interfaces:**
@@ -164,7 +166,7 @@
   - `cancelTaskFn` — role giver, `parseReject` ({ taskId, reason? }).
   - `listScoreChangesWaitingFn` — `GET`, giver|taker.
   - `ScoreChangeActionResult` type exported for the UI.
-- [ ] **Step 1: Failing tests:** each validator rejects a non-integer id / string score / score 1000 / non-string reason (pattern of the existing tests in this file).
+- [ ] **Step 1: Failing tests:** each validator rejects a non-integer id / string score / score 1000 / non-string reason, and accepts score 999 (pattern of the existing tests in this file); the guard test fails until the five entries are in `EXPECTED_ROLES`.
 - [ ] **Steps 2–5:** FAIL → implement → PASS → commit `Server functions: score change and cancel`.
 
 ### Task 6: UI — price change on the task page
@@ -185,14 +187,15 @@
   - `drawerTitle: 'Změnit cenu'`, `drawerText: (score) => \`Nová cena platí, až ji potvrdí druhá strana. Do té doby zůstává ${score} b.\``, `send: (n) => \`Navrhnout ${n} b\``, `back: 'Zpět'`
   - `pending: 'Návrh nové ceny'`, `agree: 'Souhlasím'`, `disagree: 'Nesouhlasím'`, `withdraw: 'Stáhnout návrh'`, `oldStays: (n) => \`Dokud se nedomluvíte, platí ${n} b.\``
   - `toast: { proposed: 'Návrh odeslán', agreed: 'Cena změněna', declined: 'Návrh zamítnut', withdrawn: 'Návrh stažen' }`
-  - error messages through the existing `src/lib/taskErrors.ts` map, adding `not_involved`, `change_pending`, `no_change`, `score_frozen` in Czech (e.g. `no_change: 'Návrh už neplatí. Obnov stránku.'`).
+  - `disagreeHint: (score) => \`Návrh se zavře, dál platí ${score} b.\``, `withdrawHint: (score) => \`Dál platí ${score} b.\``
+  - `scoreChangeErrorMessage(error: string): string` in `src/lib/taskErrors.ts`, used by the price panel and the cancel dialog, falling back to `taskErrorMessage`: `not_involved` → 'Tohle rozhodují jiní.'; `change_pending` → 'O nové ceně se už jedná. Obnov stránku.'; `no_change` and `offer_changed` → 'Návrh už neplatí. Obnov stránku.'; `score_frozen` → 'Úkol je hotový, cenu už měnit nejde.'; `not_agreed` → 'Úkol se zase vyjednává. Obnov stránku.' (not the recurring-task text); `not_changeable` → `cs.tasks.errors.gone`.
 - `ScoreChangePanel({ task, me })`:
-  - open change: a tinted card (`bg-state-proposed/15`): "Návrh nové ceny", old score struck through → new score (Fredoka, `num`), "Souhlasí: Táta ✓", "Čeká se na: Starší nebo Mladší" (reuse `cs.bids.waitingFor`/`or`/`youAcc`), "Dokud se nedomluvíte, platí 18 b."; then per `changeAnswer`: two buttons "Nesouhlasím" (ghost) + "Souhlasím" (ok) side by side, or one ghost "Stáhnout návrh".
+  - open change: a tinted card (`bg-state-proposed/15`): "Návrh nové ceny", old score struck through → new score (Fredoka, `num`), "Souhlasí: Táta ✓", "Čeká se na: Starší nebo Mladší" (reuse `cs.bids.waitingFor`/`or`/`youAcc`), "Dokud se nedomluvíte, platí 18 b."; then per `changeAnswer`: two buttons "Nesouhlasím" (ghost) + "Souhlasím" (ok) side by side (`grid-cols-2`, labels never cut at 360 px) with the hint "Návrh se zavře, dál platí 18 b." under them, or one ghost "Stáhnout návrh" with "Dál platí 18 b.".
   - no change and `canProposeChange`: an action row button (full width, `min-h-tap`, pencil icon) "Změnit cenu" with the hint line; it opens a `Drawer` with `ScoreStepper` starting at the current score, the drawer text, primary "Navrhnout N b" (disabled while N equals the current score) and ghost "Zpět".
   - every call goes through `useTaskAction().run` (busy state on the tapped button, all disabled while busy, Czech error toast on refusal or network failure, `router.invalidate()` after).
 - Route: render `<ScoreChangePanel>` after `TaskWorkPanel`; loader unchanged (detail already carries `scoreChange`).
 
-- [ ] **Step 1: Failing tests:** `canProposeChange` table (giver/taker/other taker × open/reserved/proposed/done/cancelled × with/without change); `changeAnswer` for proposer/waiting/other; panel test: renders the pending card for Mladší with both buttons, tapping "Souhlasím" calls `approveTaskScoreChangeFn` with `{ taskId, changeId }`; proposer sees only "Stáhnout návrh"; drawer send disabled at the current score, enabled at +1 and sends `{ taskId, score: 19 }`.
+- [ ] **Step 1: Failing tests:** `canProposeChange` table (giver/taker/other taker × open/reserved/proposed/done/cancelled × with/without change); `changeAnswer` for proposer/waiting/other; panel test: renders the pending card for Mladší with both buttons, tapping "Souhlasím" calls `approveTaskScoreChangeFn` with `{ taskId, changeId }` and not the decline one; tapping "Nesouhlasím" (as Mladší) calls `declineTaskScoreChangeFn` with `{ taskId, changeId }` and never the approve one; the proposer sees only "Stáhnout návrh", and tapping it calls `declineTaskScoreChangeFn`; `scoreChangeErrorMessage` table for the six codes above; drawer send disabled at the current score, enabled at +1 and sends `{ taskId, score: 19 }`.
 - [ ] **Steps 2–5:** FAIL → implement → PASS → commit `Task page: change the price`.
 
 ### Task 7: UI — cancel and history on the task page
@@ -204,13 +207,13 @@
 
 **Interfaces:**
 - `historyLine(entry: HistoryEntry, meId: number): string` (pure): `"<Prague weekday d. M. HH:MM> · <who>: <phrase>"`, who = `cs.bids.you`-style "ty" for me, name otherwise, omitted for null actor. Phrases (gender-neutral nouns), `n` = score:
-  - created `nový úkol za n b` · score_countered `nabídka n b` · bid_placed `chce n b` · bid_accepted `přijetí n b` · score_approved `souhlas s n b` · agreed `domluveno za n b` (+ ` · rezervace: <name>` when `reservedBy`) · reserved `rezervace` · released `uvolnění` · completed `hotovo` · approved `schváleno` · rejected `vráceno` · cancelled `zrušeno` · score_change_proposed `návrh nové ceny n b` · score_change_approved `souhlas s novou cenou n b` · score_change_declined `nesouhlas s novou cenou n b` · score_change_withdrawn `návrh ceny stažen` · score_changed `nová cena n b` · score_change_discarded `návrh ceny n b propadl` · any other task action `změna`.
+  - created `nový úkol za n b` · score_countered `nabídka n b` · bid_placed `chce n b` · bid_accepted `přijato n b` · score_approved `souhlas s n b` · agreed `domluveno za n b` (+ ` · rezervace: <name>` when `reservedBy`) · reserved `rezervace` · released `uvolnění` · completed `hotovo` · approved `schváleno` · rejected `vráceno` · cancelled `zrušeno` · score_change_proposed `návrh nové ceny n b` · score_change_approved `souhlas s novou cenou n b` · score_change_declined `nesouhlas s novou cenou n b` · score_change_withdrawn `návrh ceny stažen` · score_changed `nová cena n b` · score_change_discarded `návrh ceny n b propadl` · any other task action `změna`.
   - reason, when set, follows on its own line: `„<reason>“`.
 - `TaskHistory({ entries, meId })`: section label "Historie", a card with one line per entry (dot + text, `text-meta`, `break-words`, reasons wrap). Empty list → nothing rendered (a task always has `task.created`).
 - `CancelTask({ task, me })`: shown only for a giver and status proposed/open/reserved. A full-width action row "Zrušit úkol" (red text, icon), hint "Zůstane v historii jako zrušený". Tap → `Dialog`: title "Zrušit úkol?", body "Úkol zmizí ze seznamů, ale zůstane v historii. Vrátit to nejde.", optional `Textarea` labelled "Důvod (uvidí ho všichni)" with `maxLength={REASON_MAX}`, buttons "Zrušit úkol" (no variant) and "Zpět" (ghost). Busy state on confirm; on success toast "Úkol zrušen", dialog closes, page invalidates (chip shows Zrušeno); on refusal the Czech error toast and the dialog stays open.
 - Route order: state card, work panel, price panel, cancel, thread (when it has entries), history.
 
-- [ ] **Step 1: Failing tests:** `historyLine` for each phrase above with a fixed `at` (`2026-11-21T09:12:00.000Z` → `so 21. 11. 10:12`), "ty" for me, the agreed + reservedBy form, reason line; cancel component: not rendered for a taker or a confirmed task; dialog confirm calls `cancelTaskFn` with `{ taskId, reason: 'Už to udělala máma.' }`, and with `reason: undefined` when blank.
+- [ ] **Step 1: Failing tests:** `historyLine` for each phrase above with a fixed `at` (`2026-11-21T09:12:00.000Z` → `so 21. 11. 10:12`, and summer `2026-07-04T09:12:00.000Z` → `so 4. 7. 11:12`), "ty" for me, the agreed + reservedBy form, reason line; cancel component: not rendered for a taker or a confirmed task; dialog confirm calls `cancelTaskFn` with `{ taskId, reason: 'Už to udělala máma.' }`, and with `reason: undefined` when blank.
 - [ ] **Steps 2–5:** FAIL → implement → PASS → commit `Task page: cancel and history`.
 
 ### Task 8: "Čeká na tebe" row and demo data
@@ -220,7 +223,7 @@
 - Test: `src/components/tasks/homePage.test.tsx` (or `tasks.test.tsx` where WaitingForYou is tested), `src/server/demo/seed.test.ts`
 
 **Interfaces:**
-- WaitingForYou row: the task name, meta `Nová cena: 18 → 20 b` (`cs.taskPrice.rowMeta(old, new)`), link button "Otevřít" to `/ukol/$taskId`. Counted in the section total.
+- WaitingForYou row: same shape as the template price-change row (#138): `negotiating` chip, the task name, meta `Nová cena: 18 → 20 b` (`cs.taskPrice.rowMeta(old, new)`), link button "Odpovědět" (`cs.bids.answer`) to `/ukol/$taskId`. Counted in the section total.
 - Demo (`TASKMASTER_ENV=preview`): one open task "Vyluxovat celý obývák a chodbu" (score 10) with Táta's open proposal to 12 (waits for the brothers), and one cancelled task "Umýt okna v kuchyni" with reason "Udělá to firma.".
 - [ ] **Step 1: Failing tests:** WaitingForYou renders the price-change row with the link for Starší; seed test finds the open change and the cancelled task with its audit reason.
 - [ ] **Steps 2–5:** FAIL → implement → PASS → commit `Domů and demo: task price changes`.
@@ -228,5 +231,6 @@
 ### Task 9: Verify
 
 - [ ] `pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm build && pnpm db:check` all pass.
+- [ ] **E2E** `e2e/task-page.spec.ts` (+ a project for it in `playwright.config.ts`, on the passkeys-off server like the existing off spec; `pnpm build` first), against the preview seed, logging in with the demo password: (a) Starší opens the seeded "Vyluxovat celý obývák a chodbu" from the "Čeká na tebe" row, taps Nesouhlasím → the page shows 10 b and no proposal; (b) Táta proposes 12 on it, Starší taps Souhlasím from the row → the page shows 12 b; (c) Táta cancels a seeded open task with reason "Udělá to firma." → chip Zrušeno, history shows "zrušeno" and the reason, and it is gone from Starší's Domů.
 - [ ] Run the app with `TASKMASTER_ENV=preview`, Playwright at 360 px light theme: screenshots of the task page for Táta (open task with pending change; reserved task with "Změnit cenu" + "Zrušit úkol"; cancel dialog; cancelled task with history), Starší (pending change with Souhlasím / Nesouhlasím; Domů with the "Čeká na tebe" row), Mladší on a task reserved to Starší (no price buttons). Long Czech task name in each.
 - [ ] Delete this plan file in its own commit, write the brief (skill `pr-brief`), mark ready, add label `preview`.
