@@ -4,7 +4,8 @@ import { clientCache } from './clientCache'
 const HOUR = 60 * 60 * 1000
 
 function setup(isServer = false) {
-  let t = 0
+  // A real-looking clock: starting at 0 would hide a `now() + at` slip.
+  let t = 1_700_000_000_000
   let n = 0
   const fetch = vi.fn(() => Promise.resolve(++n))
   const get = clientCache(fetch, HOUR, { now: () => t, isServer: () => isServer })
@@ -45,6 +46,35 @@ describe('clientCache', () => {
     const { fetch, get } = setup(true)
     expect(await get()).toBe(1)
     expect(await get()).toBe(2)
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('in this test process (no window) the default counts as the server and never caches', async () => {
+    let n = 0
+    const get = clientCache(() => Promise.resolve(++n), HOUR)
+    expect(await get()).toBe(1)
+    expect(await get()).toBe(2)
+  })
+
+  it('a slow failed fetch does not drop the newer value that replaced it', async () => {
+    let t = 1_700_000_000_000
+    let failSlow: (e: Error) => void = () => undefined
+    const fetch = vi
+      .fn<() => Promise<string>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise<string>((_, reject) => {
+            failSlow = reject
+          }),
+      )
+      .mockResolvedValueOnce('fresh')
+    const get = clientCache(fetch, HOUR, { now: () => t, isServer: () => false })
+    const slow = get()
+    t += HOUR
+    expect(await get()).toBe('fresh')
+    failSlow(new Error('offline'))
+    await expect(slow).rejects.toThrow('offline')
+    expect(await get()).toBe('fresh')
     expect(fetch).toHaveBeenCalledTimes(2)
   })
 
