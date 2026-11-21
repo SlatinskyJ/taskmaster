@@ -200,13 +200,14 @@ export function hasStarted(period: PeriodSpan, now: Date): boolean {
 }
 
 /**
- * Settlement is allowed from the period's start on: before the cutoff it ends the running
+ * Settlement is allowed once the period has started (strictly after its first instant): before the cutoff it ends the running
  * period, after the cutoff it settles a period that ended there (spec §5.8). A period that
  * settling already ended early is settled. Double settlement of a period ended at its cutoff is
  * guarded by its settlement records (#44), not here.
  */
 export function canSettle(period: PeriodSpan, now: Date): boolean {
-  return hasStarted(period, now) && period.endedAt == null
+  // Strictly after the start, like `endPeriodEarly`: a settlement can't end a zero-length period.
+  return now.getTime() > period.startsAt.getTime() && period.endedAt == null
 }
 
 /**

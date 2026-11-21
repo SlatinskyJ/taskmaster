@@ -119,6 +119,19 @@ describe('startPeriodRoller', () => {
     expect(listPeriods(db)).toHaveLength(1)
   })
 
+  it('retries a failed roll after one minute by default', () => {
+    const db = createTestDb()
+    failAuditOn(db, 'period.created')
+    const log = quietLog()
+    const roller = startPeriodRoller(db, D, { log })
+    expect(log.error).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(59_999)
+    expect(log.error).toHaveBeenCalledTimes(1)
+    vi.advanceTimersByTime(1)
+    expect(log.error).toHaveBeenCalledTimes(2)
+    roller.stop()
+  })
+
   it('stop() clears the timer', () => {
     const db = createTestDb()
     const roller = startPeriodRoller(db, D, { log: quietLog() })

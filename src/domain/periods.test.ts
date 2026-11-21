@@ -236,7 +236,9 @@ describe('chain of periods (spec §5.8)', () => {
     // Spec §5.8 (Jakub 2026-11-21): settling the running period ends it; a period that ended at
     // its cutoff can be settled any time after.
     expect(canSettle(WEEK, plus(WEEK.startsAt, -1))).toBe(false)
-    expect(canSettle(WEEK, WEEK.startsAt)).toBe(true)
+    // The first instant: endPeriodEarly refuses it too (a period must have length).
+    expect(canSettle(WEEK, WEEK.startsAt)).toBe(false)
+    expect(canSettle(WEEK, plus(WEEK.startsAt, 1))).toBe(true)
     expect(canSettle(WEEK, plus(WEEK.cutoffAt, -1))).toBe(true)
     expect(canSettle(WEEK, plus(WEEK.cutoffAt, 3 * 24 * HOUR))).toBe(true)
     const ended = { ...WEEK, endedAt: prague(2026, 11, 22, 17) }
@@ -434,6 +436,13 @@ describe('per-period proposals (spec §5.8)', () => {
     )
     expect(lapsePeriodSettings(p, CURRENT, plus(FOLLOWING_START, -1)).status).toBe('pending')
     expect(lapsePeriodSettings(p, CURRENT, FOLLOWING_START).status).toBe('lapsed')
+  })
+
+  it('a closed proposal stays not_pending after its period started', () => {
+    const rejected = value(rejectPeriodProposal(value(propose()), family, YOUNGER))
+    expect(error(approvePeriodSettings(rejected, family, OLDER, CURRENT, FOLLOWING_START))).toBe(
+      'not_pending',
+    )
   })
 
   it('an agreed proposal does not lapse', () => {

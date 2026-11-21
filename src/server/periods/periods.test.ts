@@ -246,6 +246,18 @@ describe('endRunningPeriod: settling ends the period (spec §5.8)', () => {
     expect(audits(db)).toHaveLength(before)
   })
 
+  it('a confirm whose clock read just before the cutoff, after the roll, ends nothing', () => {
+    const { db, first } = rolled()
+    rollPeriods(db, CUTOFF, D)
+    const before = audits(db).length
+    expect(endAt(db, first.id, plus(CUTOFF, -1))).toEqual({ ok: false, error: 'not_running' })
+    expect(listPeriods(db).map((p) => [p.startsAt, p.endedAt])).toEqual([
+      [SAT, null],
+      [CUTOFF, null],
+    ])
+    expect(audits(db)).toHaveLength(before)
+  })
+
   it('the roll after an early end does nothing until the new cutoff', () => {
     const { db, first } = rolled()
     endAt(db, first.id, MEETING)

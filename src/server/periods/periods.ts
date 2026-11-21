@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, isNull, lte } from 'drizzle-orm'
 import { endPeriodEarly, firstPeriod, isRunning, periodAt, periodsToStart } from '~/domain'
-import type { Levels, Period, PeriodDefaults, PeriodError, PeriodSpan } from '~/domain'
+import type { Levels, Period, PeriodDefaults, PeriodError, PeriodId, PeriodSpan } from '~/domain'
 import { parseIsoUtc, toIsoUtc } from '~/domain/dates'
 import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
@@ -140,14 +140,16 @@ export type EndPeriodError = PeriodError | 'not_found'
 export function endRunningPeriod(
   tx: Tx,
   actor: Actor,
-  periodId: number,
+  periodId: PeriodId,
   now: Date,
   defaults: PeriodDefaults,
 ): Result<{ ended: Period; next: Period }, EndPeriodError> {
   const row = tx.select().from(periods).where(eq(periods.id, periodId)).get()
   if (!row) return fail('not_found')
-  // Refused unless this period is still running: ended early, or its cutoff passed (the roller
-  // started the next one) → not_running.
+  // Refused unless this period is still running and is the latest one. The second check matters
+  // when `now` was read just before the cutoff but the roller has already started the next
+  // period: ending this one would insert a period overlapping it.
+  if (latestPeriod(tx)?.id !== periodId) return fail('not_running')
   const step = endPeriodEarly(toPeriod(row), now, defaults, null)
   if (!step.ok) return step
   const endedAt = toIsoUtc(now)
