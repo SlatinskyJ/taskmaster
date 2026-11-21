@@ -8,6 +8,7 @@ import { listPeople } from '~/server/users/people'
 import {
   approveTaskOffer,
   createTask,
+  listPlanTasks,
   listTasks,
   pendingApprovals,
   resolveProposedTasks,
@@ -293,6 +294,29 @@ describe('listTasks', () => {
       ['Umýt auto', 'open'],
     ])
     expect(b.status).toBe('proposed')
+  })
+})
+
+describe("listPlanTasks (the meeting's plan step)", () => {
+  it('lists proposed, open and reserved tasks, newest first', () => {
+    const { db, tata } = family()
+    const statuses = [
+      'open',
+      'done_unconfirmed',
+      'reserved',
+      'confirmed',
+      'proposed',
+      'cancelled',
+    ] as const
+    for (const [i, status] of statuses.entries()) {
+      const t = must(createTask(db, tata, { ...CAR, title: `Úkol ${String(i)}` }, T0))
+      db.update(tasks).set({ status }).where(eq(tasks.id, t.id)).run()
+    }
+    expect(listPlanTasks(db).map((t) => [t.title, t.status])).toEqual([
+      ['Úkol 4', 'proposed'],
+      ['Úkol 2', 'reserved'],
+      ['Úkol 0', 'open'],
+    ])
   })
 })
 

@@ -18,6 +18,7 @@ const EXPECTED_ROLES: Record<string, string> = {
   approveTaskOfferFn: 'giver,taker',
   listPendingApprovalsFn: 'giver,taker',
   listTasksFn: 'giver',
+  listPlanTasksFn: 'giver',
   listBoardFn: 'taker',
   listPendingCompletionsFn: 'giver',
   reserveTaskFn: 'taker',

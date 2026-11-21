@@ -128,6 +128,19 @@ describe('settlePeriod', () => {
     expect(listPeriods(f.db).map((p) => p.endedAt)).toEqual([MEETING, null])
   })
 
+  it('settling ends the week with the defaults passed in', () => {
+    const f = example()
+    const defaults = { ...D, lengthDays: 14, levels: { lower: 40, upper: 80 } }
+    const result = must(
+      settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING, defaults),
+    )
+    expect(result.next).toMatchObject({
+      startsAt: MEETING,
+      cutoffAt: prague(2026, 12, 13, 23, 59),
+      levels: { lower: 40, upper: 80 },
+    })
+  })
+
   it('late meeting: settles the ended week, total excludes completions after the cutoff, running week not ended', () => {
     const f = example()
     // Done Sunday 23:00, approved Monday 09:00: counts for P1 (spec §5.5).
