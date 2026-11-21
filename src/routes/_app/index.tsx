@@ -3,6 +3,7 @@ import { Placeholder } from '~/components/shell/Placeholder'
 import { Screen } from '~/components/shell/Screen'
 import { BidsToAnswer } from '~/components/tasks/BidsToAnswer'
 import { TakerBoard } from '~/components/tasks/TakerBoard'
+import { RecurringList } from '~/components/templates/RecurringList'
 import { ToApprove } from '~/components/tasks/ToApprove'
 import { WaitingForYou } from '~/components/tasks/WaitingForYou'
 import { guardScreen } from '~/lib/screenGuard'
@@ -13,7 +14,11 @@ import {
   listPendingApprovalsFn,
   listPendingCompletionsFn,
 } from '~/server/tasks/functions'
-import { listPendingTemplateApprovalsFn } from '~/server/templates/functions'
+import {
+  listPendingTemplateApprovalsFn,
+  listPendingTemplatePriceChangesFn,
+  listTemplatesFn,
+} from '~/server/templates/functions'
 
 // Domů for takers and givers (UI doc §6). The admin has no Domů and lands on Správa.
 export const Route = createFileRoute('/_app/')({
@@ -23,13 +28,24 @@ export const Route = createFileRoute('/_app/')({
   loader: async ({ context }) => {
     const waiting = await listPendingApprovalsFn()
     const waitingTemplates = await listPendingTemplateApprovalsFn()
+    const priceChanges = await listPendingTemplatePriceChangesFn()
     if (context.user.role === 'taker') {
-      return { waiting, waitingTemplates, board: await listBoardFn(), toApprove: [], bids: [] }
+      return {
+        waiting,
+        waitingTemplates,
+        priceChanges,
+        board: await listBoardFn(),
+        recurring: await listTemplatesFn(),
+        toApprove: [],
+        bids: [],
+      }
     }
     return {
       waiting,
       waitingTemplates,
+      priceChanges,
       board: [],
+      recurring: [],
       toApprove: await listPendingCompletionsFn(),
       bids: await listBidsToAnswerFn(),
     }
@@ -40,16 +56,21 @@ export const Route = createFileRoute('/_app/')({
 // "Čeká na tebe" first, then the work lists; the rest of the home screens comes with #40, #41.
 function Home() {
   const { user } = Route.useRouteContext()
-  const { waiting, waitingTemplates, board, toApprove, bids } = Route.useLoaderData()
+  const { waiting, waitingTemplates, priceChanges, board, recurring, toApprove, bids } =
+    Route.useLoaderData()
   return (
     <Screen title={`${cs.home.greeting}, ${user.displayName}!`} user={user}>
       <WaitingForYou
         items={waiting}
         templates={waitingTemplates}
+        priceChanges={priceChanges}
         me={{ id: user.id, role: user.role }}
       />
       {user.role === 'taker' ? (
-        <TakerBoard items={board} me={user.id} />
+        <>
+          <TakerBoard items={board} me={user.id} />
+          <RecurringList items={recurring} />
+        </>
       ) : (
         <>
           <ToApprove items={toApprove} />
