@@ -36,15 +36,21 @@ describe('demo seed (#62)', () => {
       ['task.bid_placed', 'user'],
       ['task.bid_placed', 'user'],
       ['task.created', 'user'],
+      ['task.created', 'user'],
+      ['task.bid_placed', 'user'],
+      ['task.score_approved', 'user'],
+      ['task.agreed', 'user'],
     ])
   })
 
-  it('seeds a task in negotiation and a plain offer, through the real actions', () => {
+  it('seeds a task in negotiation, a plain offer and one reserved to Starší, through the real actions', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
+    const all = listTasks(db)
     expect(
-      listTasks(db).map((t) => [t.title, t.status, t.score, t.bids.map((b) => [b.name, b.score])]),
+      all.map((t) => [t.title, t.status, t.score, t.bids.map((b) => [b.name, b.score])]),
     ).toEqual([
+      ['Vyluxovat celý obývák a chodbu', 'reserved', 8, []],
       ['Uklidit sklep', 'proposed', 10, []],
       [
         'Umýt auto',
@@ -56,6 +62,7 @@ describe('demo seed (#62)', () => {
         ],
       ],
     ])
+    expect(all.find((t) => t.status === 'reserved')?.reservedBy?.name).toBe('Starší')
   })
 
   it('demo login works for every role', async () => {

@@ -4,6 +4,7 @@ import { SectionLabel } from '~/components/shell/SectionLabel'
 import { BidPanel } from '~/components/tasks/BidPanel'
 import { BidThread } from '~/components/tasks/BidThread'
 import { StateChip } from '~/components/tasks/StateChip'
+import { TaskWorkPanel } from '~/components/tasks/WorkButtons'
 import {
   detailMeta,
   parseTaskIdParam,
@@ -16,7 +17,8 @@ import { cs } from '~/lib/strings'
 import { getTaskDetailFn } from '~/server/tasks/functions'
 
 // One task's page (#34): TTask for a brother, GBid for a parent (UI doc §7). The state, the
-// whole bid thread, and what this person can do now. Reserve, done and release stay on Domů.
+// whole bid thread, and what this person can do now: bid, or Hotovo and Uvolnit for the brother
+// who has the task (#150). Reserve stays on Domů.
 export const Route = createFileRoute('/_app/ukol/$taskId')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/ukol/$taskId')
@@ -60,6 +62,7 @@ function TaskPage() {
           </p>
         )}
       </Card>
+      <TaskWorkPanel task={task} me={me} />
       <section className="grid gap-2" aria-labelledby="thread-label">
         <SectionLabel id="thread-label">{cs.bids.thread}</SectionLabel>
         <BidThread entries={thread} me={user.id} />
