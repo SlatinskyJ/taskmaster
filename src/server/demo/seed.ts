@@ -205,8 +205,14 @@ function seedPastWeek(tx: Tx, id: (username: string) => number, start: Date, now
   const settled = settlePeriod(tx, tata, week.id, shown, settleAt, DEFAULT_PERIOD_DEFAULTS)
   if (!settled.ok) throw new Error(`Demo seed: settle: ${settled.error}`)
   const rejectAt = new Date(now.getTime() - HOUR / 2)
-  const glass = doChore(tx, tata, id('mladsi'), 'Vynést sklo', 4, rejectAt)
-  const rejected = rejectTask(tx, tata, glass, 'Nedodělané', rejectAt)
+  const glass = doChore(tx, tata, id('mladsi'), 'Vynést sklo a plasty do kontejneru', 4, rejectAt)
+  const rejected = rejectTask(
+    tx,
+    tata,
+    glass,
+    'Sklo zůstalo v tašce u dveří, vynes ho prosím až dolů do kontejneru.',
+    rejectAt,
+  )
   if (!rejected.ok) throw new Error(`Demo seed: reject "Vynést sklo": ${rejected.error}`)
 }
 

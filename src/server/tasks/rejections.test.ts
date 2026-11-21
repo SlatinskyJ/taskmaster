@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { auditLog } from '~/server/db/schema'
 import { plus, reservedTask, SAT, week } from '~/server/settlement/testing'
 import { completeTask, rejectTask } from './lifecycle'
 import { rejectionsSince } from './rejections'
@@ -47,6 +48,25 @@ describe('rejectionsSince', () => {
     doneAndRejected(f, a, plus(since, -1))
     doneAndRejected(f, b, since)
     expect(rejectionsSince(f.db, since).map((r) => r.taskId)).toEqual([b])
+  })
+
+  it('skips an entry with no earner (none can be rejected today; kept safe for old rows)', () => {
+    const f = week()
+    const id = reservedTask(f, f.starsi, 7)
+    f.db
+      .insert(auditLog)
+      .values({
+        at: plus(SAT, H).toISOString(),
+        actorKind: 'user',
+        actorUserId: f.tata,
+        action: 'task.rejected',
+        entityType: 'task',
+        entityId: String(id),
+        before: JSON.stringify({ score: 7, earnerId: null }),
+        after: null,
+      })
+      .run()
+    expect(rejectionsSince(f.db, SAT)).toEqual([])
   })
 
   it('is empty with no rejections', () => {

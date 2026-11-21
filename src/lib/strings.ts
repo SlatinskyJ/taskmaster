@@ -302,7 +302,6 @@ export const cs = {
     thisWeek: 'Tento týden',
     history: 'Historie',
     carried: (points: string) => `Z minula převedeno ${points}`,
-    levels: (lower: number, upper: number) => `spodní ${String(lower)} · horní ${String(upper)}`,
     happened: 'Co se tento týden stalo',
     noItems: 'Tento týden zatím nic hotového.',
     noPeriod: 'Týden ještě nezačal.',
@@ -310,6 +309,9 @@ export const cs = {
     total: 'Celkem',
     deducted: 'odečteno',
     carry: 'převod',
+    /** Under a rejected item: the chore is back with the boy (spec §5.5). */
+    returnedToMe: 'Vráceno tobě.',
+    returnedTo: (name: string) => `Vráceno: ${name}.`,
   },
   admin: {
     title: 'Správa',

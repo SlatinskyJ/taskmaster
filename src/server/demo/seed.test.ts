@@ -97,7 +97,7 @@ describe('demo seed (#62)', () => {
         ],
       ],
       // Rejected (#45), so back to Mladší's reservation.
-      ['Vynést sklo', 'reserved', 4, []],
+      ['Vynést sklo a plasty do kontejneru', 'reserved', 4, []],
     ])
     expect(all.find((t) => t.title.startsWith('Vyluxovat'))?.reservedBy?.name).toBe('Starší')
   })
@@ -281,7 +281,14 @@ describe('demo seed (#62)', () => {
         name(r.earnerId),
         r.reason,
       ]),
-    ).toEqual([['Vynést sklo', 4, 'mladsi', 'Nedodělané']])
+    ).toEqual([
+      [
+        'Vynést sklo a plasty do kontejneru',
+        4,
+        'mladsi',
+        'Sklo zůstalo v tašce u dveří, vynes ho prosím až dolů do kontejneru.',
+      ],
+    ])
   })
 
   it('the audit log is in time order (#45)', () => {

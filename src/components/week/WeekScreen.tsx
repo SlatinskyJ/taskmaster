@@ -6,7 +6,7 @@ import { TaskRow } from '~/components/tasks/TaskRow'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { cs, formatPoints } from '~/lib/strings'
 import { cn } from '~/lib/utils'
-import type { HistoryWeek, Week, WeekTaker } from '~/server/settlement/functions'
+import type { HistoryWeek, Week, WeekItem, WeekTaker } from '~/server/settlement/functions'
 import { historyLine, itemChip, itemMeta } from './weekView'
 
 // Týden (#45, UI doc §7.1 TWeek): Tento týden / Historie. The server already filtered the data
@@ -87,16 +87,16 @@ function TakerWeek({ taker, week, named }: { taker: WeekTaker; week: Week; named
           />
         )}
         {!levels && (
-          <p className="num text-lg font-bold">
+          <p
+            className="num text-lg font-bold"
+            aria-label={`${String(taker.confirmed)} ${cs.points.confirmed} + ${String(taker.pending)} ${cs.points.pending}`}
+          >
             <span className="text-state-confirmed-text">{taker.confirmed} ✔</span>
             <span className="text-muted"> + </span>
             <span className="text-state-pending-text">{taker.pending} ⏳</span>
           </p>
         )}
-        <p className="text-meta text-muted">
-          {cs.week.carried(formatPoints(taker.carriedIn))}
-          {levels && ` · ${cs.week.levels(levels.lower, levels.upper)}`}
-        </p>
+        <p className="text-meta text-muted">{cs.week.carried(formatPoints(taker.carriedIn))}</p>
       </div>
       {week.period && (
         <section className="grid gap-2">
@@ -113,7 +113,7 @@ function TakerWeek({ taker, week, named }: { taker: WeekTaker; week: Week; named
                     state={itemChip(item)}
                     points={item.score}
                     meta={itemMeta(item)}
-                    detail={item.reason ?? undefined}
+                    detail={rejectionLine(item, named ? taker.name : null)}
                   />
                 </li>
               ))}
@@ -123,6 +123,13 @@ function TakerWeek({ taker, week, named }: { taker: WeekTaker; week: Week; named
       )}
     </li>
   )
+}
+
+/** Under a rejected item: the giver's reason, then that it went back to the boy. */
+export function rejectionLine(item: WeekItem, takerName: string | null): string | undefined {
+  if (item.status !== 'rejected') return undefined
+  const back = takerName === null ? cs.week.returnedToMe : cs.week.returnedTo(takerName)
+  return item.reason ? `${item.reason} ${back}` : back
 }
 
 function HistoryCard({ week, named }: { week: HistoryWeek; named: boolean }) {

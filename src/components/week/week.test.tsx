@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { cs } from '~/lib/strings'
 import { takerWeek, week } from './fixtures'
-import { WeekBody, WeekScreen } from './WeekScreen'
+import { rejectionLine, WeekBody, WeekScreen } from './WeekScreen'
 import type { WeekTab } from './WeekScreen'
 
 // Týden (#45): every state of both tabs, rendered statically.
@@ -30,10 +30,12 @@ describe('Tento týden', () => {
     expect(out).toMatch(/<span class="text-state-pending-text">2(<!-- -->)? ⏳<\/span>/)
   })
 
-  it('the week range, carried-in points and levels', () => {
+  it('the week range and carried-in points; the levels only on the bar', () => {
     const out = html(takerWeek(), 'this', 'taker')
     expect(out).toContain('21. 11. – 29. 11.')
-    expect(out).toContain('Z minula převedeno 8 bodů · spodní 50 · horní 100')
+    expect(out).toContain('Z minula převedeno 8 bodů</p>')
+    expect(out).toMatch(/spodní(<!-- -->)? (<!-- -->)?50/)
+    expect(out).not.toContain('spodní 50 · horní 100')
   })
 
   it('items: state chips, the day, a rejection with its reason', () => {
@@ -43,8 +45,12 @@ describe('Tento týden', () => {
     expect(out).toContain(cs.state.confirmed)
     expect(out).toContain(cs.state.pending)
     expect(out).toContain(cs.state.rejected)
-    expect(out).toContain('nádobí zůstalo v dřezu')
+    expect(out).toContain('nádobí zůstalo v dřezu Vráceno tobě.')
     expect(out).toContain('út 24. 11.')
+  })
+
+  it('a giver reads whom a rejected chore went back to', () => {
+    expect(html()).toContain('nádobí zůstalo v dřezu Vráceno: Starší.')
   })
 
   it('no items yet', () => {
@@ -58,6 +64,7 @@ describe('Tento týden', () => {
     expect(out).toMatch(/<span class="text-state-confirmed-text">112(<!-- -->)? ✔<\/span>/)
     expect(out).toContain('Z minula převedeno 8 bodů')
     expect(out).not.toContain(cs.week.happened)
+    expect(out).toContain('aria-label="112 potvrzeno + 2 čeká"')
   })
 })
 
@@ -89,5 +96,20 @@ describe('WeekScreen', () => {
     expect(out).toContain(cs.week.thisWeek)
     expect(out).toContain(cs.week.history)
     expect(out).toContain('data-taker="3"')
+  })
+})
+
+describe('rejectionLine', () => {
+  const base = takerWeek().takers[0]?.items[2]
+  if (!base) throw new Error('fixture')
+  it('reason, then whom it went back to', () => {
+    expect(rejectionLine(base, null)).toBe('nádobí zůstalo v dřezu Vráceno tobě.')
+    expect(rejectionLine(base, 'Starší')).toBe('nádobí zůstalo v dřezu Vráceno: Starší.')
+  })
+  it('without a reason only the return', () => {
+    expect(rejectionLine({ ...base, reason: null }, null)).toBe('Vráceno tobě.')
+  })
+  it('nothing for other items', () => {
+    expect(rejectionLine({ ...base, status: 'confirmed' }, null)).toBeUndefined()
   })
 })

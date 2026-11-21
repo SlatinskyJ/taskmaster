@@ -80,7 +80,11 @@ function runStep(
   })
 }
 
-/** What a task's lifecycle audit entries store as `before` and `after` (read by ./rejections). */
+/**
+ * What a task's lifecycle audit entries store as `before` and `after` (read by ./rejections).
+ * A stored contract: audit rows never change, so never rename or drop a key here (`score`,
+ * `earnerId` are read back from old rows); only add new ones.
+ */
 export type TaskAuditView = ReturnType<typeof auditView>
 
 function auditView(row: TaskRow) {
