@@ -86,6 +86,12 @@ describe('Domů', () => {
     expect(html).toContain('Jiná cena')
   })
 
+  it('a chore already waiting on the brother is not listed again under Opakované úkoly', () => {
+    const html = render({ id: 4, role: 'taker', displayName: 'Starší' }, [dishes])
+    expect(html).toContain('Táta nabízí 4')
+    expect(html).not.toContain('Opakované úkoly')
+  })
+
   it('a parent sees the bid to answer and no recurring list', () => {
     const html = render({ id: 2, role: 'giver', displayName: 'Táta' }, [])
     expect(html).toContain('Mladší chce 5')
