@@ -9,6 +9,8 @@ node_modules
 .vinxi
 dist
 coverage
+/reports/
+/.stryker-tmp/
 *.db
 *.db-shm
 *.db-wal
