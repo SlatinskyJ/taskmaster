@@ -78,7 +78,17 @@ Write the panel into the PR body: `Judges: Rules, Architecture, Tests`. If the c
 
 ## 3. Run a round
 
-Bump the phase's counter in the PR body (`Plan round: N/5` or `Review round: N/5`). Make a fresh, empty folder outside the repo for this round (`<scratch>/judges-pr<n>-<phase>-r<N>/`). Spawn one subagent per judge, all at once (Agent tool, model Opus, effort medium, until Jakub changes it). Each prompt holds only:
+Bump the phase's counter in the PR body (`Plan round: N/5` or `Review round: N/5`). Make a fresh, empty folder outside the repo for this round (`<scratch>/judges-pr<n>-<phase>-r<N>/`). Spawn one subagent per judge, all at once (Agent tool). Model and effort per judge, from a dry-run test against real reviews (2026-11-21):
+
+| Judge | Plan rounds | Code rounds |
+| --- | --- | --- |
+| Ops | Sonnet, medium | Sonnet, medium |
+| Security | Sonnet, medium | Opus, medium |
+| Rules, Architecture, Tests, UX | Opus, medium | Opus, medium |
+
+The same in round 2 and later: a smaller model or a lower effort missed the regressions a fix brings in. Change this table only when Jakub says so.
+
+Each prompt holds only:
 
 ```
 Load the skill judge-<name> and follow it.
