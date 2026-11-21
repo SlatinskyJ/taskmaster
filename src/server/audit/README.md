@@ -28,3 +28,4 @@ const task = withAudit(
 - `at` defaults to the server clock; never pass a time that came from a request.
 - New action type: add it to `actions.ts`. Never rename or remove one; old rows keep it.
 - The table is append-only: DB triggers reject `UPDATE` and `DELETE`. There is no code path to edit or delete entries.
+- Reading: `entityLog(db, entityType, entityId)` returns one entity's entries, oldest first (e.g. a task's history, #36). Map what a screen needs from it; never send `before` / `after` to a client as they are.

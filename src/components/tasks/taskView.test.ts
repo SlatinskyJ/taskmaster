@@ -33,6 +33,7 @@ const view = (over: Partial<TaskView>): TaskView => ({
   completedAt: null,
   earnerId: null,
   waitingFor: [],
+  scoreChange: null,
   ...over,
 })
 const b = (takerId: number, name: string, score: number) => ({ takerId, name, score })

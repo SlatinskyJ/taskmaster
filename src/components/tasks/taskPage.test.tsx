@@ -50,6 +50,7 @@ const reserved: TaskView = {
   completedAt: null,
   earnerId: null,
   waitingFor: [],
+  scoreChange: null,
 }
 
 function render(user: PageUser) {

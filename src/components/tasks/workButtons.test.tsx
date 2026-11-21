@@ -61,6 +61,7 @@ const view = (over: Partial<TaskView>): TaskView => ({
   completedAt: null,
   earnerId: null,
   waitingFor: [],
+  scoreChange: null,
   ...over,
 })
 

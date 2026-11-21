@@ -180,6 +180,7 @@ describe('WaitingForYou with templates (#37)', () => {
     completedAt: null,
     earnerId: null,
     waitingFor: [],
+    scoreChange: null,
   }
   const template = {
     id: 1,
@@ -237,6 +238,7 @@ describe('ToApprove', () => {
     completedAt: '2026-11-18T14:00:00.000Z',
     earnerId: 4,
     waitingFor: [],
+    scoreChange: null,
   }
 
   it('shows ✕ Zamítnout and ✓ Schválit as 44 px icon buttons, each with its own label, colour and icon', () => {
@@ -352,6 +354,7 @@ describe('TakerBoard Moje row (#148)', () => {
     bids: [],
     lowest: null,
     waitingFor: [],
+    scoreChange: null,
   }
   const doneButton = (html: string) =>
     buttons(html).find((b) => b.includes(`>${cs.work.done}<`)) ?? ''
