@@ -122,6 +122,19 @@ describe('commentableLines edge cases', () => {
     expect(commentableLines(d)).toEqual(new Map([['m.md', new Set([1, 2, 3])]]))
   })
 
+  it('reads a hunk header without line counts as one line each side', () => {
+    const d = [
+      'diff --git a/m.md b/m.md',
+      '--- a/m.md',
+      '+++ b/m.md',
+      '@@ -3 +3 @@',
+      '-old',
+      '+new',
+      '',
+    ].join('\n')
+    expect(commentableLines(d)).toEqual(new Map([['m.md', new Set([3])]]))
+  })
+
   it('reads a removed line starting with -- as content', () => {
     const d = [
       'diff --git a/m.md b/m.md',
