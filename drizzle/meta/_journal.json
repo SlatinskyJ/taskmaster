@@ -92,6 +92,13 @@
       "when": 1795018547773,
       "tag": "0012_template_thread",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1795290211369,
+      "tag": "0013_task_score_changes",
+      "breakpoints": true
     }
   ]
 }
