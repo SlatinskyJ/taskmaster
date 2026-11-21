@@ -93,6 +93,7 @@ export const cs = {
       sameScore: 'Tohle číslo už platí. Zvol jiné.',
       noBids: 'Zatím nikdo nic nenabídl.',
       noBid: 'Nejdřív nabídni svou cenu.',
+      templateNotAgreed: 'Tenhle opakovaný úkol ještě není domluvený.',
     },
   },
   /** Recurring templates (#37): GCreate recurring part, GTasks, TApprove (UI doc §7). */
@@ -196,6 +197,23 @@ export const cs = {
     /** Short weekday names, Sunday first (dates.ts `Weekday`). */
     weekdays: ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'],
     toast: { sent: 'Nabídka odeslána', agreed: 'Domluveno', agreedMine: 'Domluveno, úkol je tvůj' },
+  },
+  /**
+   * Score change of an agreed recurring template (spec §5.1): its price page and ways in. The
+   * stepper, send button and hints reuse `bids`.
+   */
+  templatePrice: {
+    history: 'Historie ceny',
+    noHistory: 'Zatím beze změny ceny.',
+    now: (score: number) => `Platí ${String(score)} b.`,
+    futureOnly: 'Nová cena platí jen pro nově vzniklé úkoly.',
+    /** A brother's Domů: agreed templates, each with "Jiná cena" (until Zapsat #38). */
+    recurring: 'Opakované úkoly',
+    change: 'Změnit cenu',
+    acceptOffer: (score: number) => `Přijmout ${String(score)}`,
+    acceptBid: (score: number, names: string) => `Přijmout ${String(score)} (${names})`,
+    /** Under every accept: only instances made later take the new score (§5.1). */
+    acceptHint: 'Nové úkoly budou za tolik bodů.',
   },
   /** Reserve, release, done, approve, reject (spec §5.4–§5.5). */
   work: {
