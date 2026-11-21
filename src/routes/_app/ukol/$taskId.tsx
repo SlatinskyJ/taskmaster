@@ -5,13 +5,9 @@ import { BidPanel } from '~/components/tasks/BidPanel'
 import { BidThread } from '~/components/tasks/BidThread'
 import { StateChip } from '~/components/tasks/StateChip'
 import { TaskWorkPanel } from '~/components/tasks/WorkButtons'
-import {
-  detailMeta,
-  parseTaskIdParam,
-  taskChipState,
-  waitingText,
-} from '~/components/tasks/taskView'
+import { detailMeta, taskChipState, waitingText } from '~/components/tasks/taskView'
 import { Card } from '~/components/ui/card'
+import { parseIdParam } from '~/lib/idParam'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { getTaskDetailFn } from '~/server/tasks/functions'
@@ -24,7 +20,7 @@ export const Route = createFileRoute('/_app/ukol/$taskId')({
     guardScreen(context.user.role, '/ukol/$taskId')
   },
   loader: async ({ params }) => {
-    const taskId = parseTaskIdParam(params.taskId)
+    const taskId = parseIdParam(params.taskId)
     // TanStack Router's notFound() is thrown by design; it is not an Error.
     // eslint-disable-next-line @typescript-eslint/only-throw-error
     if (taskId === null) throw notFound()

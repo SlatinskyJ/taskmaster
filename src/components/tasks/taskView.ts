@@ -172,13 +172,6 @@ export function threadTime(iso: string): string {
   return `${day} ${pad(t.hour)}:${pad(t.minute)}`
 }
 
-/** The task id from the URL: plain positive digits only, else null (→ not found). */
-export function parseTaskIdParam(raw: string): number | null {
-  if (!/^[1-9]\d*$/.test(raw)) return null
-  const n = Number(raw)
-  return Number.isSafeInteger(n) ? n : null
-}
-
 /** The toast after a bidding action succeeded, from the status the server returned. */
 export function toastFor(action: BidAction, status: TaskView['status'], me: Me): string {
   if (status === 'reserved' && me.role === 'taker') return cs.bids.toast.agreedMine

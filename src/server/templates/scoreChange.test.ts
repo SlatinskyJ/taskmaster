@@ -34,6 +34,15 @@ const count = (s: S) => ({
 })
 
 describe('template score change', () => {
+  it('each action returns the template row: old score after a bid or offer, new after an accept', () => {
+    const s = setup()
+    expect(must(bidOnTemplate(s.db, s.mladsi, s.id, 5, T1)).score).toBe(3)
+    expect(must(counterOnTemplate(s.db, s.tata, s.id, 4, T1)).score).toBe(3)
+    expect(must(acceptLowestBidOnTemplate(s.db, s.tata, s.id, 5, T2)).score).toBe(5)
+    must(counterOnTemplate(s.db, s.tata, s.id, 4, T2))
+    expect(must(acceptOfferOnTemplate(s.db, s.starsi, s.id, 4, T3)).score).toBe(4)
+  })
+
   it("a taker's bid is stored, the score stays", () => {
     const s = setup()
     must(bidOnTemplate(s.db, s.starsi, s.id, 5, T1))

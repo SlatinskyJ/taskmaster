@@ -9,7 +9,10 @@ export function taskErrorMessage(error: string): string {
     case 'invalid_score':
       return cs.tasks.errors.invalidScore
     case 'offer_changed':
+    case 'no_offer':
       return cs.tasks.errors.offerChanged
+    case 'not_agreed':
+      return cs.tasks.errors.templateNotAgreed
     case 'not_proposed':
     case 'not_found':
     case 'wrong_state':
