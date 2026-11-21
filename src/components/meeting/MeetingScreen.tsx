@@ -78,7 +78,8 @@ export function MeetingBody({
   const step = stepOf(meeting, ui)
   return (
     <div className="grid gap-4 px-4 pb-6">
-      <Steps step={step} />
+      {/* Nothing settled: the earlier steps are not shown as done. */}
+      <Steps step={step} skipped={step === 3 && !ui.result} />
       {meeting.period && !ui.result && (
         <p className="text-meta font-bold text-muted">
           {weekLabel(
@@ -104,12 +105,12 @@ export function MeetingBody({
   )
 }
 
-function Steps({ step }: { step: MeetingStep }) {
+function Steps({ step, skipped }: { step: MeetingStep; skipped: boolean }) {
   return (
     <ol className="grid grid-cols-3 gap-2" aria-label={cs.nav.meeting}>
       {cs.meeting.steps.map((label, i) => {
         const n = i + 1
-        const state = n < step ? 'done' : n === step ? 'current' : 'todo'
+        const state = n === step ? 'current' : n < step && !skipped ? 'done' : 'todo'
         return (
           <li
             key={label}

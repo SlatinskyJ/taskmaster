@@ -138,6 +138,7 @@ describe('step 3: Plánovat', () => {
   it("shows each taker's carry-over by takerId and the new week from the response", () => {
     const { html } = render(week(), done)
     expect(html).toMatch(/data-step="current".*Plánovat/s)
+    expect(html.match(/data-step="done"/g)).toHaveLength(2)
     expect(html).toContain('Vyúčtováno · ne 29. 11. 20:00')
     expect(html).toMatch(/Nový týden 29\. 11\. – 6\. 12\.<\/p>.*Hranice 50 \/ 100/s)
     expect(html).toMatch(/data-start="3".*Starší.*>30<.*data-start="4".*Mladší.*>47</s)
@@ -160,6 +161,7 @@ describe('step 3: Plánovat', () => {
   it('nothing to settle shows step 3 only', () => {
     const { html } = render({ period: null })
     expect(html).toContain('Teď není co vyúčtovat')
+    expect(html).not.toContain('data-step="done"')
     expect(html).not.toContain('Vyúčtováno')
     expect(html).not.toContain('Potvrdit vyúčtování')
   })
