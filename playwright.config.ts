@@ -59,6 +59,12 @@ export default defineConfig({
       use: { ...chromium, baseURL: `http://localhost:${String(OFF)}` },
     },
     {
+      // Týden (#45) only reads, so it shares the passkeys-off server.
+      name: 'week',
+      testMatch: 'week.spec.ts',
+      use: { ...chromium, baseURL: `http://localhost:${String(OFF)}` },
+    },
+    {
       name: 'meeting',
       testMatch: 'meeting.spec.ts',
       use: { ...chromium, baseURL: `http://localhost:${String(MEETING)}` },

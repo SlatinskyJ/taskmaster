@@ -3,7 +3,7 @@ import { cs } from '../src/lib/strings'
 import { passwordLogin } from './helpers'
 
 // The weekly meeting (#44) on the demo week: Táta approves the two waiting chores, settles the
-// week (Starší 112, Mladší 47) and lands on the plan step.
+// week (Starší 120 with last week's 8 carried, Mladší 47) and lands on the plan step.
 
 test('Táta runs the meeting: approve, settle, plan', async ({ page }) => {
   await passwordLogin(page, 'tata')
@@ -20,13 +20,13 @@ test('Táta runs the meeting: approve, settle, plan', async ({ page }) => {
   await page.getByRole('button', { name: m.next }).click()
 
   const starsi = page.locator('[data-taker]', { hasText: 'Starší' })
-  await expect(starsi).toContainText('114')
+  await expect(starsi).toContainText('122')
   await expect(starsi).toContainText(m.level.upper)
   await page.getByRole('button', { name: m.confirm }).click()
   await page.getByRole('button', { name: m.confirmYes, exact: true }).click()
 
   await expect(page.getByText(m.startWith)).toBeVisible()
-  await expect(page.locator('[data-start]', { hasText: 'Starší' })).toHaveText(/^Starší\s*14$/)
+  await expect(page.locator('[data-start]', { hasText: 'Starší' })).toHaveText(/^Starší\s*22$/)
   await expect(page.locator('[data-start]', { hasText: 'Mladší' })).toHaveText(/^Mladší\s*0$/)
   await expect(page.getByRole('link', { name: m.end })).toBeVisible()
 })

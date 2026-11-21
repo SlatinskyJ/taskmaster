@@ -16,7 +16,7 @@ export type WeekTab = 'this' | 'history'
 
 export function WeekScreen({ week, viewerRole }: { week: Week; viewerRole: 'taker' | 'giver' }) {
   return (
-    <Tabs defaultValue="this" className="px-4 pb-6">
+    <Tabs defaultValue="this">
       <TabsList>
         <TabsTrigger value="this">{cs.week.thisWeek}</TabsTrigger>
         <TabsTrigger value="history">{cs.week.history}</TabsTrigger>
