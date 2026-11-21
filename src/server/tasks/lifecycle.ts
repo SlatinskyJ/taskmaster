@@ -96,7 +96,7 @@ function auditView(row: TaskRow) {
 }
 
 /** A taker reserves an open task ("Rezervovat", spec §5.4). */
-export function reserveTask(db: Db, userId: number, taskId: number, now: Date = new Date()) {
+export function reserveTask(db: Db | Tx, userId: number, taskId: number, now: Date = new Date()) {
   return runStep(db, userId, taskId, 'task.reserved', reserveItem, now)
 }
 

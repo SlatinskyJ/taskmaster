@@ -4,7 +4,8 @@ import { requireRole } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
 import type { SettlementRow } from '~/server/db/schema'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
-import type { Period } from '~/domain'
+import type { Levels, Period } from '~/domain'
+import { toIsoUtc } from '~/domain/dates'
 import { getMeeting, settlePeriod } from './meeting'
 import type { Meeting, MeetingTaker, SettleError, ShownTotal } from './meeting'
 
@@ -45,15 +46,22 @@ export type SettleResult =
         deducted: number
         carryOver: number
       }[]
-      nextPeriodId: number | null
+      /** When the records were written (ISO UTC). */
+      settledAt: string
+      /** The week the confirm started, or null when the settled week had already ended. */
+      next: { id: number; startsAt: string; cutoffAt: string; levels: Levels } | null
     }
   | { ok: false; error: SettleError }
 
-/** What a confirm returns to the screen: the written records, nothing else. */
+/** What a confirm returns to the screen: the written records, their time and the next week. */
 export function settled(
   result: Result<{ records: SettlementRow[]; next: Period | null }, SettleError>,
 ): SettleResult {
   if (!result.ok) return result
+  const [first] = result.value.records
+  // settlePeriod refuses `no_takers`, so a success always wrote at least one record.
+  if (!first) throw new Error('settled without records')
+  const { next } = result.value
   return {
     ok: true,
     records: result.value.records.map((r) => ({
@@ -63,7 +71,13 @@ export function settled(
       deducted: r.deducted,
       carryOver: r.carryOver,
     })),
-    nextPeriodId: result.value.next?.id ?? null,
+    settledAt: first.settledAt,
+    next: next && {
+      id: next.id,
+      startsAt: toIsoUtc(next.startsAt),
+      cutoffAt: toIsoUtc(next.cutoffAt),
+      levels: next.levels,
+    },
   }
 }
 
