@@ -15,6 +15,7 @@ The image has no `sqlite3`, so use Node's built-in SQLite inside the running con
 ```sh
 docker exec <container> node --no-warnings -e "
   const db = new (require('node:sqlite').DatabaseSync)('/data/taskmaster.db')
+  db.exec('PRAGMA busy_timeout = 5000')
   db.exec(\"UPDATE feature_flags SET enabled = 1 WHERE key = 'recurring'\")
   console.table(db.prepare('SELECT key, enabled FROM feature_flags').all())"
 ```
@@ -23,4 +24,9 @@ With `sqlite3` on hand (dev: `.data/taskmaster.db`):
 `sqlite3 .data/taskmaster.db "UPDATE feature_flags SET enabled = 1 WHERE key = 'recurring'"`.
 
 `enabled` takes only `0` or `1` (a CHECK refuses anything else). A new switch: add its key to
-`Features` and `FEATURE_KEYS`, and seed its row in a new migration.
+`FEATURE_KEYS` and seed its row (off) in a new migration.
+
+Previews start from the same migrations, so every switch is off there too. A PR that finishes a
+feature and should show it on its preview turns the switch on in a new migration; that
+migration also turns it on in production when the PR merges, so it belongs in the PR that
+releases the feature.

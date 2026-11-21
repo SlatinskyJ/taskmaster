@@ -2,21 +2,20 @@
 // its code and routes; only its entry points are hidden. The values live in the database table
 // `feature_flags` (src/server/features); the app shell reads them on every page load and screens
 // get them as `context.features`. Turn a switch on when its issue lands.
-export interface Features {
-  /** Recurring templates: the Opakovaný kind, template lists, approvals and price changes (#38). */
-  recurring: boolean
-  /** Bottom-bar tabs whose screens are still placeholders. */
-  log: boolean
-  week: boolean
-  meeting: boolean
-}
-
+/** The switches, in the order the seed migration writes them. */
 export const FEATURE_KEYS = [
+  /** Recurring templates: the Opakovaný kind, template lists, approvals and price changes (#38). */
   'recurring',
+  /** Bottom-bar tabs whose screens are still placeholders. */
   'log',
   'week',
   'meeting',
-] as const satisfies readonly (keyof Features)[]
+] as const
+
+export type FeatureKey = (typeof FEATURE_KEYS)[number]
+
+/** One on/off per switch; a key added to FEATURE_KEYS is a key here too. */
+export type Features = Record<FeatureKey, boolean>
 
 /** Every switch off: what a switch with no row in the database reads as. */
 export const NO_FEATURES: Readonly<Features> = {

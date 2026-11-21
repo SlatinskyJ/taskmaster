@@ -136,6 +136,14 @@ describe('Domů', () => {
     )
   })
 
+  it('a parent with two kinds of item waiting gets no empty line', () => {
+    // One template approval and one price change: the counts add up, they don't cancel out.
+    const html = render({ id: 2, role: 'giver', displayName: 'Táta' }, [], {
+      waitingTemplates: [flowers],
+    })
+    expect(html).not.toContain('Teď na tebe nic nečeká.')
+  })
+
   it('a brother never gets the parent empty line', () => {
     const html = render({ id: 4, role: 'taker', displayName: 'Starší' }, [], { priceChanges: [] })
     expect(html).not.toContain('Teď na tebe nic nečeká.')

@@ -1,9 +1,9 @@
-import type { Features } from '~/lib/features'
+import type { FeatureKey, Features } from '~/lib/features'
 import { FEATURE_KEYS, NO_FEATURES } from '~/lib/features'
 import type { Db } from '~/server/db'
 import { featureFlags } from '~/server/db/schema'
 
-function isFeatureKey(key: string): key is keyof Features {
+function isFeatureKey(key: string): key is FeatureKey {
   return (FEATURE_KEYS as readonly string[]).includes(key)
 }
 
