@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# Taskmaster production deploy controller. Installed on the production host as the login shell
+# of the `deploy` user, so CI (over Tailscale SSH) can run only these commands:
+#
+#   deploy <sha7>      pulls ghcr.io/slatinskyj/taskmaster:sha-<sha7>, backs up the DB, restarts
+#                      the app on it and waits for healthy; rolls back to the previous image
+#                      (and the DB backup) if it doesn't come up
+#   status             prints the running image and its health
+#   version            prints a short hash of this script, to spot drift from the repo copy
+#
+# Contract with the `deploy prod` job in .github/workflows/ci.yml (change both together):
+#   success            exit 0, stdout `deployed: sha-<sha7>`
+#   refused up front   exit 1, nothing changed (bad input, pull failed, backup failed)
+#   failed after that  exit 1, the previous image and DB are back; details on stderr
+#
+# The app runs from Docker Compose in APP_DIR. compose.yaml reads the image from TM_IMAGE
+# (default ghcr.io/slatinskyj/taskmaster:main), so this script pins each deploy to its sha tag.
+# No host names live here.
+set -euo pipefail
+
+APP_DIR="${TM_APP_DIR:-/opt/taskmaster}"
+REPO=ghcr.io/slatinskyj/taskmaster
+SERVICE=taskmaster
+STATE_DIR="${HOME}/state"
+KEEP_BACKUPS=5
+HEALTH_WAIT=90
+
+die() { echo "error: $*" >&2; exit 1; }
+
+# Login-shell mode: sshd / Tailscale SSH call us as `tm-prod -c "<command>"`.
+if [[ "${1:-}" == "-c" ]]; then
+  read -r -a args <<<"${2:-}"
+  set -- "${args[@]}"
+fi
+
+compose() { (cd "$APP_DIR" && TM_IMAGE="$1" docker compose "${@:2}"); }
+container() { (cd "$APP_DIR" && docker compose ps -q "$SERVICE"); }
+current_image() { cat "${STATE_DIR}/current" 2>/dev/null || echo "${REPO}:main"; }
+
+health() {
+  local id
+  id=$(container)
+  [[ -n "$id" ]] || { echo none; return; }
+  docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$id"
+}
+
+wait_healthy() {
+  local status=
+  for _ in $(seq 1 "$HEALTH_WAIT"); do
+    status=$(health)
+    [[ "$status" == healthy ]] && return 0
+    sleep 1
+  done
+  echo "health: ${status}" >&2
+  return 1
+}
+
+# Consistent online copy of the SQLite file, made inside the running app container (node:sqlite,
+# so no extra tools are needed). Kept on the data volume, newest KEEP_BACKUPS only.
+backup_db() {
+  local name=$1 id
+  id=$(container)
+  [[ -n "$id" ]] || { echo "no running app: nothing to back up" >&2; return 0; }
+  docker exec "$id" node --no-warnings -e '
+    const fs = require("node:fs"); const { DatabaseSync } = require("node:sqlite")
+    const src = "/data/taskmaster.db"; if (!fs.existsSync(src)) process.exit(0)
+    fs.mkdirSync("/data/backups", { recursive: true })
+    const q = String.fromCharCode(39) // SQL needs a single-quoted literal; the shell quoting cannot hold one
+    const db = new DatabaseSync(src)
+    db.exec(`VACUUM INTO ${q}/data/backups/${process.argv[1]}.db${q}`)
+    db.close()
+    const old = fs.readdirSync("/data/backups").filter((f) => f.startsWith("pre-")).sort().reverse()
+    for (const f of old.slice(Number(process.argv[2]))) fs.rmSync(`/data/backups/${f}`)
+  ' "$name" "$KEEP_BACKUPS"
+}
+
+# Puts the backup back over the live file. The app must be stopped (WAL files go with it).
+restore_db() {
+  local name=$1 image=$2
+  docker run --rm --network none -v "${PROJECT_VOLUME}:/data" --entrypoint sh "$image" -c "
+    [ -f /data/backups/${name}.db ] || exit 0
+    rm -f /data/taskmaster.db-wal /data/taskmaster.db-shm
+    cp /data/backups/${name}.db /data/taskmaster.db"
+}
+
+deploy() {
+  local sha=$1 image previous stamp
+  image="${REPO}:sha-${sha}"
+  previous=$(current_image)
+  # Preconditions first, so a refusal leaves the running app untouched.
+  docker pull -q "$image" >/dev/null || die "could not pull ${image}"
+  mkdir -p "$STATE_DIR"
+  stamp="pre-$(date -u +%Y%m%dT%H%M%SZ)-${sha}"
+  backup_db "$stamp" || die "database backup failed"
+
+  compose "$image" up -d --no-deps "$SERVICE" >&2
+  if wait_healthy; then
+    echo "$image" > "${STATE_DIR}/current"
+    docker image prune -f >/dev/null
+    echo "deployed: sha-${sha}"
+    return 0
+  fi
+
+  echo "rolling back to ${previous}" >&2
+  docker logs --tail 50 "$(container)" >&2 || true
+  compose "$previous" stop "$SERVICE" >&2
+  restore_db "$stamp" "$previous"
+  compose "$previous" up -d --no-deps "$SERVICE" >&2
+  wait_healthy || echo "WARNING: rollback is not healthy either" >&2
+  die "sha-${sha} did not become healthy; rolled back"
+}
+
+lock() { exec 9>"${HOME}/.tm-prod.lock"; flock 9; }
+
+# The named volume Compose created for /data (project `taskmaster`, volume `tm-data`).
+PROJECT_VOLUME="${TM_DATA_VOLUME:-taskmaster_tm-data}"
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  deploy)
+    [[ $# -eq 1 && "$1" =~ ^[0-9a-f]{7}$ ]] || die "usage: deploy <7-char commit sha>"
+    # One deploy at a time: a second CI run waits instead of racing the first.
+    lock; deploy "$1" ;;
+  status) echo "image: $(current_image)"; echo "health: $(health)" ;;
+  version) sha256sum "$(readlink -f "${BASH_SOURCE[0]}")" | cut -c1-12 ;;
+  *) die "unknown command '${cmd}'. Allowed: deploy, status, version" ;;
+esac
