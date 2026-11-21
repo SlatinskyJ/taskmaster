@@ -107,6 +107,35 @@ describe('commentableLines', () => {
   })
 })
 
+describe('commentableLines edge cases', () => {
+  it('reads an added line starting with ++ as content, not a file header', () => {
+    const d = [
+      'diff --git a/m.md b/m.md',
+      '--- a/m.md',
+      '+++ b/m.md',
+      '@@ -1,1 +1,3 @@',
+      ' a',
+      '+++ bold',
+      '+c',
+      '',
+    ].join('\n')
+    expect(commentableLines(d)).toEqual(new Map([['m.md', new Set([1, 2, 3])]]))
+  })
+
+  it('reads a removed line starting with -- as content', () => {
+    const d = [
+      'diff --git a/m.md b/m.md',
+      '--- a/m.md',
+      '+++ b/m.md',
+      '@@ -1,2 +1,1 @@',
+      '--- rule',
+      ' a',
+      '',
+    ].join('\n')
+    expect(commentableLines(d)).toEqual(new Map([['m.md', new Set([1])]]))
+  })
+})
+
 describe('combine', () => {
   it('builds one body with every judge in panel order', () => {
     const files = [judgeFile('Tests'), judgeFile('Rules'), judgeFile('Architecture')]
@@ -220,6 +249,17 @@ describe('combine', () => {
         body: 'Off the diff: `new.ts:1`\nrenamed file, off its hunk' + FOOTER,
       },
     ])
+  })
+
+  it('is a problem when the diff has no line to comment on', () => {
+    const files = [
+      judgeFile('Rules', { comments: [{ path: 'a.ts', line: 1, body: 'x' }] }),
+      judgeFile('Architecture'),
+      judgeFile('Tests'),
+    ]
+    const { problems, review } = combine(files, { panel: PANEL, headSha: SHA, diff: new Map() })
+    expect(problems).toEqual(['the PR diff has no line to comment on'])
+    expect(review.comments).toEqual([])
   })
 
   it('replies are passed through', () => {

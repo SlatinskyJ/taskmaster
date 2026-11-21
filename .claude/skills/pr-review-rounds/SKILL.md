@@ -139,7 +139,7 @@ Then:
 gh api repos/SlatinskyJ/taskmaster/pulls/<n>/ccr/review_threads --jq '[.[]|select(.resolved==false)]|length'
 ```
 
-Must print `0`. A thread whose last reply is the judge's `Fixed in …` / `Accepted` but still open (judge forgot): resolve it yourself (`POST .../pulls/<n>/ccr/comments/<first comment id>/resolve`). Never tell Jakub a PR is ready while this is above 0.
+Must print `0`. A thread whose last reply is the judge's `Fixed in …` / `Accepted` but still open (the resolve call failed, or the judge left out `resolve: true`): resolve it yourself (`POST .../pulls/<n>/ccr/comments/<first comment id>/resolve`). Never tell Jakub a PR is ready while this is above 0.
 
 Then:
 - Update the PR brief's review summary (rounds used, fixed, deferred issue links).

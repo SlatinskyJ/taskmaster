@@ -124,7 +124,25 @@ export function commentableLines(diff: string): Map<string, Set<number>> {
   const result = new Map<string, Set<number>>()
   let lines: Set<number> | null = null
   let next = 0
+  // Lines still to come in the current hunk, from its @@ header. Inside a hunk, a line like
+  // '+++ bold' is content, not a file header.
+  let oldLeft = 0
+  let newLeft = 0
   for (const text of diff.split('\n')) {
+    if (oldLeft > 0 || newLeft > 0) {
+      if (text.startsWith('-')) oldLeft -= 1
+      else if (text.startsWith('+')) {
+        lines?.add(next)
+        next += 1
+        newLeft -= 1
+      } else if (text.startsWith(' ')) {
+        lines?.add(next)
+        next += 1
+        oldLeft -= 1
+        newLeft -= 1
+      }
+      continue // '\ No newline at end of file' counts for neither side
+    }
     if (text.startsWith('diff --git ')) {
       lines = null
     } else if (text.startsWith('+++ ')) {
@@ -132,11 +150,10 @@ export function commentableLines(diff: string): Map<string, Set<number>> {
       lines = target.startsWith('b/') ? new Set<number>() : null // '/dev/null': deleted file
       if (lines) result.set(target.slice(2), lines)
     } else if (text.startsWith('@@ ')) {
-      const m = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(text)
-      next = m?.[1] ? Number(m[1]) : 0
-    } else if (lines && (text.startsWith('+') || text.startsWith(' '))) {
-      lines.add(next)
-      next += 1
+      const m = /^@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(text)
+      next = Number(m?.[2] ?? 0)
+      oldLeft = Number(m?.[1] ?? 1)
+      newLeft = Number(m?.[3] ?? 1)
     }
   }
   for (const [path, set] of result) if (set.size === 0) result.delete(path)

@@ -90,8 +90,10 @@ for (const reply of steps.replies) {
     '--jq',
     '.id',
   ])
-  if (reply.resolve) gh(['-X', 'POST', `${pulls}/ccr/comments/${reply.commentId}/resolve`])
+  // Recorded before the resolve: a rerun must not post the reply twice. A failed resolve
+  // shows up in the 0-open-threads check (pr-review-rounds §6).
   state.repliesDone.push(reply.commentId)
   writeFileSync(postedPath, JSON.stringify(state, null, 2))
+  if (reply.resolve) gh(['-X', 'POST', `${pulls}/ccr/comments/${reply.commentId}/resolve`])
   console.log(`Replied on ${reply.commentId}${reply.resolve ? ' and resolved it' : ''}`)
 }
