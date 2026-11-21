@@ -1,24 +1,25 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SettleResult } from '~/server/settlement/functions'
 import { pendingWeek, settledOk, week } from './fixtures'
-import { createConfirm, reduce, START, startingTotals, stepOf } from './meetingFlow'
+import { afterConfirm, createConfirm, reduce, START, startingTotals, stepOf } from './meetingFlow'
 import type { MeetingEvent, MeetingUi } from './meetingFlow'
 
 const names = [
   { id: 3, name: 'Starší' },
   { id: 4, name: 'Mladší' },
 ]
+const NEXT: MeetingEvent = { type: 'next', periodId: 1 }
 const run = (events: MeetingEvent[], from: MeetingUi = START) => events.reduce(reduce, from)
 
 describe('stepOf', () => {
   it('pending items show step 1, even after "Dál"', () => {
     expect(stepOf(pendingWeek(), START)).toBe(1)
-    expect(stepOf(pendingWeek(), run([{ type: 'next' }]))).toBe(1)
+    expect(stepOf(pendingWeek(), run([NEXT]))).toBe(1)
   })
 
   it('all clear stays on step 1 until "Dál: vyúčtovat", then step 2', () => {
     expect(stepOf(week(), START)).toBe(1)
-    expect(stepOf(week(), run([{ type: 'next' }]))).toBe(2)
+    expect(stepOf(week(), run([NEXT]))).toBe(2)
   })
 
   it('nothing to settle shows step 3 only', () => {
@@ -26,7 +27,7 @@ describe('stepOf', () => {
   })
 
   it('after a confirm the screen shows step 3 and never step 2', () => {
-    const ui = run([{ type: 'next' }, { type: 'ask' }, { type: 'sending' }])
+    const ui = run([NEXT, { type: 'ask' }, { type: 'sending' }])
     const done = reduce(ui, { type: 'answer', result: settledOk, names })
     // The reloaded meeting already offers the new week for step 2 (§5.8); the screen stays.
     expect(stepOf(week(), done)).toBe(3)
@@ -37,12 +38,13 @@ describe('stepOf', () => {
 
 describe('reduce', () => {
   it('Potvrdit asks, Vyúčtovat marks the call busy, the answer frees both', () => {
-    const asked = run([{ type: 'next' }, { type: 'ask' }])
-    expect(asked).toEqual({ ...START, advanced: true, asking: true })
+    const asked = run([NEXT, { type: 'ask' }])
+    expect(asked).toEqual({ ...START, advanced: true, periodId: 1, asking: true })
     const sending = reduce(asked, { type: 'sending' })
     expect(sending).toEqual({ ...asked, busy: true })
     expect(reduce(sending, { type: 'answer', result: settledOk, names })).toEqual({
       advanced: true,
+      periodId: 1,
       asking: false,
       busy: false,
       result: settledOk,
@@ -51,8 +53,60 @@ describe('reduce', () => {
   })
 })
 
+describe('another week after a reload starts at step 1 (ruling 2)', () => {
+  const advanced = run([NEXT])
+  const p = week().period
+  if (!p) throw new Error('no week')
+  const nextWeek = week({ period: { ...p, id: 2 } })
+
+  it('the week was settled elsewhere (already_settled), the reload shows the new week', () => {
+    const ui = reduce(advanced, {
+      type: 'answer',
+      result: { ok: false, error: 'already_settled' },
+      names,
+    })
+    expect(stepOf(week(), ui)).toBe(2)
+    expect(stepOf(nextWeek, ui)).toBe(1)
+  })
+
+  it('the answer was lost (failed), the reload shows the new week', () => {
+    expect(stepOf(nextWeek, reduce(advanced, { type: 'failed' }))).toBe(1)
+  })
+})
+
+describe('afterConfirm', () => {
+  const calls = () => {
+    const log: string[] = []
+    return {
+      log,
+      ui: {
+        success: (t: string) => log.push(`ok: ${t}`),
+        error: (t: string) => log.push(`error: ${t}`),
+        reload: () => {
+          log.push('reload')
+          return Promise.resolve()
+        },
+      },
+    }
+  }
+
+  it.each([
+    [settledOk, 'ok: Týden je vyúčtovaný'],
+    [
+      { ok: false, error: 'totals_changed' },
+      'error: Mezitím se změnily body. Zkontroluj je a potvrď znovu.',
+    ],
+    [{ ok: false, error: 'pending_items' }, 'error: Přibylo něco ke schválení.'],
+    [null, 'error: Vyúčtování se nepovedlo. Zkus to znovu.'],
+  ] as [SettleResult | null, string][])('%j → toast, then reload', async (result, toast) => {
+    const c = calls()
+    await afterConfirm(result, c.ui)
+    expect(c.log).toEqual([toast, 'reload'])
+  })
+})
+
 describe('reduce on a refusal', () => {
-  const asked = run([{ type: 'next' }, { type: 'ask' }, { type: 'sending' }])
+  const asked = run([NEXT, { type: 'ask' }, { type: 'sending' }])
   const refused = (error: string) =>
     reduce(asked, { type: 'answer', result: { ok: false, error } as SettleResult, names })
 

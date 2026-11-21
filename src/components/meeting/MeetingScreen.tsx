@@ -9,12 +9,12 @@ import { TaskRow } from '~/components/tasks/TaskRow'
 import { ToApprove } from '~/components/tasks/ToApprove'
 import { Button, buttonVariants } from '~/components/ui/button'
 import type { Level } from '~/domain'
-import { settleErrorMessage } from '~/lib/settleErrors'
 import { cs } from '~/lib/strings'
 import { cn } from '~/lib/utils'
 import { settlePeriodFn, type Meeting, type MeetingTaker } from '~/server/settlement/functions'
 import type { TaskView } from '~/server/tasks/functions'
 import {
+  afterConfirm,
   createConfirm,
   reduce,
   START,
@@ -41,12 +41,12 @@ export function MeetingScreen({ meeting, plan }: { meeting: Meeting; plan: reado
       createConfirm(
         (request) => settlePeriodFn(request),
         dispatch,
-        async (result) => {
-          if (!result) toast.error(cs.meeting.errors.generic)
-          else if (result.ok) toast.success(cs.meeting.settled)
-          else toast.error(settleErrorMessage(result.error))
-          await router.invalidate()
-        },
+        (result) =>
+          afterConfirm(result, {
+            success: (text) => toast.success(text),
+            error: (text) => toast.error(text),
+            reload: () => router.invalidate(),
+          }),
       ),
     [router],
   )
@@ -93,7 +93,7 @@ export function MeetingBody({
         <StepApprove
           meeting={meeting}
           onNext={() => {
-            dispatch({ type: 'next' })
+            dispatch({ type: 'next', periodId: meeting.period.id })
           }}
         />
       )}
@@ -185,7 +185,7 @@ function TakerCard({ taker, lower, upper }: { taker: MeetingTaker; lower: number
         </div>
         <div>
           <dt className="text-meta text-muted">{cs.meeting.deducted}</dt>
-          <dd className="num text-lg font-bold text-destructive">
+          <dd className={cn('num text-lg font-bold', taker.deducted > 0 && 'text-destructive')}>
             {taker.deducted > 0 ? `−${String(taker.deducted)}` : '0'}
           </dd>
         </div>
@@ -349,10 +349,11 @@ function StepPlan({
         </ul>
       )}
       <div className="grid gap-2">
-        <Link to="/ukoly/novy" className={buttonVariants({ variant: 'primary', size: 'lg' })}>
+        {/* As M3Plan: adding a task is the side action, ending the meeting the main one. */}
+        <Link to="/ukoly/novy" className={buttonVariants({ variant: 'ghost', size: 'lg' })}>
           {cs.meeting.newTask}
         </Link>
-        <Link to="/" className={buttonVariants({ variant: 'ghost', size: 'lg' })}>
+        <Link to="/" className={buttonVariants({ variant: 'primary', size: 'lg' })}>
           {cs.meeting.end}
         </Link>
       </div>

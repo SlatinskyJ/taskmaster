@@ -1,3 +1,5 @@
+import { settleErrorMessage } from '~/lib/settleErrors'
+import { cs } from '~/lib/strings'
 import type { Meeting, SettleResult } from '~/server/settlement/functions'
 
 // The meeting screen's state (#44, spec §5.9), framework-free so every step change is tested.
@@ -12,6 +14,12 @@ export type MeetingStep = 1 | 2 | 3
 export interface MeetingUi {
   /** The giver left step 1 with "Dál: vyúčtovat". */
   advanced: boolean
+  /**
+   * The week he left step 1 for. A reload that shows another week (it was settled elsewhere,
+   * or a confirm's answer was lost) starts at step 1 again, so the screen never leads into
+   * settling the brand-new week (ruling 2).
+   */
+  periodId: number | null
   /** The second tap: "Vyúčtovat týden?" is showing. */
   asking: boolean
   /** A confirm is on its way to the server. */
@@ -24,6 +32,7 @@ export interface MeetingUi {
 
 export const START: MeetingUi = {
   advanced: false,
+  periodId: null,
   asking: false,
   busy: false,
   result: null,
@@ -32,12 +41,12 @@ export const START: MeetingUi = {
 
 export function stepOf(meeting: Meeting, ui: MeetingUi): MeetingStep {
   if (ui.result || !meeting.period) return 3
-  if (meeting.pending.length > 0 || !ui.advanced) return 1
+  if (meeting.pending.length > 0 || !ui.advanced || ui.periodId !== meeting.period.id) return 1
   return 2
 }
 
 export type MeetingEvent =
-  | { type: 'next' }
+  | { type: 'next'; periodId: number }
   | { type: 'ask' }
   | { type: 'back' }
   | { type: 'sending' }
@@ -47,7 +56,7 @@ export type MeetingEvent =
 export function reduce(ui: MeetingUi, event: MeetingEvent): MeetingUi {
   switch (event.type) {
     case 'next':
-      return { ...ui, advanced: true }
+      return { ...ui, advanced: true, periodId: event.periodId }
     case 'ask':
       return { ...ui, asking: true }
     case 'back':
@@ -117,4 +126,19 @@ export function startingTotals(ui: MeetingUi): { id: number; name: string; carry
     const carryOver = byId.get(t.id)
     return carryOver === undefined ? [] : [{ id: t.id, name: t.name, carryOver }]
   })
+}
+
+/** After a confirm: the toast for its answer, then a reload (always, so step 2 is never stale). */
+export async function afterConfirm(
+  result: SettleResult | null,
+  ui: {
+    success: (text: string) => void
+    error: (text: string) => void
+    reload: () => Promise<void>
+  },
+): Promise<void> {
+  if (!result) ui.error(cs.meeting.errors.generic)
+  else if (result.ok) ui.success(cs.meeting.settled)
+  else ui.error(settleErrorMessage(result.error))
+  await ui.reload()
 }

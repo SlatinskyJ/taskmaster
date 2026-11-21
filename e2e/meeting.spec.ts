@@ -26,7 +26,7 @@ test('Táta runs the meeting: approve, settle, plan', async ({ page }) => {
   await page.getByRole('button', { name: m.confirmYes, exact: true }).click()
 
   await expect(page.getByText(m.startWith)).toBeVisible()
-  await expect(page.locator('[data-start]', { hasText: 'Starší' })).toContainText('14')
-  await expect(page.locator('[data-start]', { hasText: 'Mladší' })).toContainText('0')
+  await expect(page.locator('[data-start]', { hasText: 'Starší' })).toHaveText(/^Starší\s*14$/)
+  await expect(page.locator('[data-start]', { hasText: 'Mladší' })).toHaveText(/^Mladší\s*0$/)
   await expect(page.getByRole('link', { name: m.end })).toBeVisible()
 })

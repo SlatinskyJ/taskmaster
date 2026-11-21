@@ -58,7 +58,7 @@ const press = (label: string) => {
   if (!b?.onClick) throw new Error(`no button ${label}`)
   b.onClick()
 }
-const step2: MeetingUi = { ...START, advanced: true }
+const step2: MeetingUi = { ...START, advanced: true, periodId: 1 }
 const done = reduce(START, { type: 'answer', result: settledOk, names })
 
 describe('step 1: Schválit', () => {
@@ -70,6 +70,10 @@ describe('step 1: Schválit', () => {
     expect(html).toContain('Hotová práce do neděle 29. 11. 20:00.')
     expect(html).toContain('22. 11. – 29. 11.')
     expect(pressed.get('Zbývá schválit: 2')?.disabled).toBe(true)
+    expect(html).not.toContain('data-step="done"')
+    expect(html).not.toContain('data-taker')
+    expect(html).not.toContain('Úkoly na tento týden')
+    expect(html).not.toContain('Potvrdit vyúčtování')
   })
 
   it('approving the last pending item unlocks step 2', () => {
@@ -78,7 +82,7 @@ describe('step 1: Schválit', () => {
     expect(html).toContain('Vše vyřízeno')
     expect(pressed.get('Dál: vyúčtovat')?.disabled).toBe(false)
     press('Dál: vyúčtovat')
-    expect(dispatch).toHaveBeenCalledWith({ type: 'next' })
+    expect(dispatch).toHaveBeenCalledWith({ type: 'next', periodId: 1 })
   })
 })
 
@@ -101,6 +105,12 @@ describe('step 2: Vyúčtovat', () => {
     expect(html).toMatch(/data-taker="4".*Mladší.*Bez kapesného.*47.*>0<.*47/s)
     expect(html).toContain('Chyběly 3 body. Nic nepropadá, 47 bodů jde do dalšího týdne.')
     expect(html).toContain('Vyúčtování je konečné. Opravit ho může jen správce.')
+    expect(html).toMatch(
+      /data-step="done".*Schválit.*data-step="current".*Vyúčtovat.*data-step="todo".*Plánovat/s,
+    )
+    expect(html).not.toContain('Ke schválení')
+    expect(html).not.toContain('Úkoly na tento týden')
+    expect(html).not.toContain('Začínají s')
   })
 
   it('confirm asks first; Zpět sends nothing', () => {
@@ -163,6 +173,7 @@ describe('step 3: Plánovat', () => {
     expect(html).toContain('Teď není co vyúčtovat')
     expect(html).not.toContain('data-step="done"')
     expect(html).not.toContain('Vyúčtováno')
+    expect(html).not.toContain('Začínají s')
     expect(html).not.toContain('Potvrdit vyúčtování')
   })
 
@@ -183,6 +194,8 @@ describe('step 3: Plánovat', () => {
     const { html } = render(week(), done, plan)
     expect(html).toMatch(/href="\/ukol\/21".*Umýt auto.*Mladší chce 20.*Odpovědět/s)
     expect(html).toMatch(/href="\/ukol\/22".*Vynést koš.*Rezervoval Starší/s)
+    expect(html.match(/Odpovědět/g)).toHaveLength(1)
+    expect(html).not.toContain('data-taker')
     expect(html).toMatch(/href="\/ukoly\/novy">\+ Nový úkol/)
     expect(html).toMatch(/href="\/">Ukončit schůzku/)
   })
