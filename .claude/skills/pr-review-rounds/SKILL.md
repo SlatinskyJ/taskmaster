@@ -78,7 +78,7 @@ Write the panel into the PR body: `Judges: Rules, Architecture, Tests`. If the c
 
 ## 3. Run a round
 
-Bump the phase's counter in the PR body (`Plan round: N/5` or `Review round: N/5`). Spawn one subagent per judge, all at once (Agent tool, model Opus, effort medium, until Jakub changes it). Each prompt holds only:
+Bump the phase's counter in the PR body (`Plan round: N/5` or `Review round: N/5`). Make a fresh, empty folder outside the repo for this round (`<scratch>/judges-pr<n>-<phase>-r<N>/`). Spawn one subagent per judge, all at once (Agent tool, model Opus, effort medium, until Jakub changes it). Each prompt holds only:
 
 ```
 Load the skill judge-<name> and follow it.
@@ -90,17 +90,28 @@ Panel: <judges>.
 [Code phase, UX judge only] Screenshots: <folder>.
 [Round 2+] Your open findings and my replies: <links to your threads>. Last commit you reviewed: <sha>.
 [Judge added after round 1] First review: review the whole diff.
+Findings file: <folder>/<judge>.json
 ```
 
 Never add your own reasoning, worries or explanations. Judges must read the plan or the code cold. In the code phase a judge gets no plan: not the file, not its path, not "as the plan says".
 
-A judge that returns `NOT STARTED` hit the gate in the judge contract: a plan file is still on the branch, or the PR has no approved plan. Fix that first. The round did not count.
+**Post once, after the last judge.** Judges post nothing to GitHub; each writes its findings file. Wait until every judge you spawned this round has returned. Then run, once:
+
+```bash
+node scripts/post-judge-review.ts --dir <folder> --pr <n> --panel <the judges of this round, comma-separated>
+```
+
+It posts every finding as one review (one REST create call), then the judges' thread replies and resolves, and prints the review URL. It posts nothing when a judge's file is missing or bad, a file names a judge not in `--panel`, or a judge reviewed a commit that is not the PR head. Then rerun only that judge into the same folder (after a push: every judge of the round, into a new folder), and run the script again. Never post a partial round and never post findings by hand. A rerun after a failed reply call is safe: `posted.json` in the folder records what already went out.
+
+While judges run, push nothing and change nothing in the checkout they read.
+
+A judge that returns `NOT STARTED` hit the gate in the judge contract: a plan file is still on the branch, or the PR has no approved plan. It wrote no file, so the script posts nothing. Fix that first. The round did not count.
 
 ## 4. Answer every thread
 
 | Finding | Your action | Thread |
 | --- | --- | --- |
-| `blocker` / `should-fix` you agree with | fix (plan phase: change the plan), push, reply `Fixed in <sha>` | judge resolves next round |
+| `blocker` / `should-fix` you agree with | fix (plan phase: change the plan), push, reply `Fixed in <sha>` | the judge resolves it next round (its reply goes out through the script) |
 | `blocker` / `should-fix` you disagree with | reply `Won't fix: <reason>` | stays open for the judge |
 | `nit` | take it or reply `Skipped` | you resolve |
 | `pre-existing` | open a GitHub issue labelled `follow-up`, reply with its link | you resolve |
@@ -166,6 +177,8 @@ How: add the label `needs-jakub` to the PR, post one PR comment that mentions `@
 | Deleting the plan once it is approved | It stays on the branch until the build is done (section 1, code phase) |
 | Building from what you remember of the plan | Reread the plan file and the ledger, above all after a compaction |
 | Telling a code-phase judge what the plan said | Judges read the code cold |
+| Posting while a judge still runs, or a judge posting itself | Wait for every judge, then one `post-judge-review.ts` run |
+| Committing or pushing while judges run | Wait; a judge's `commit` must be the PR head |
 | Screenshots only of the screens that look good, or with short task names | Every changed screen and state, at 360 px, with a long task name |
 | Fixing `pre-existing` findings inside the PR | Issue + link |
 | Pinging Jakub after each round | Only at exit or escalation |
