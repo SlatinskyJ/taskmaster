@@ -8,7 +8,6 @@ import { lowestText, taskChipState } from '~/components/tasks/taskView'
 import { TaskRow } from '~/components/tasks/TaskRow'
 import { ToApprove } from '~/components/tasks/ToApprove'
 import { Button, buttonVariants } from '~/components/ui/button'
-import type { Level } from '~/domain'
 import { cs } from '~/lib/strings'
 import { cn } from '~/lib/utils'
 import { settlePeriodFn, type Meeting, type MeetingTaker } from '~/server/settlement/functions'
@@ -24,7 +23,8 @@ import {
   type MeetingStep,
   type MeetingUi,
 } from './meetingFlow'
-import { dayTime, levelLabel, shortfall, untilLabel, weekLabel } from './meetingView'
+import { dayTime, levelBadgeClass, levelLabel, weekLabel } from '~/components/period/periodView'
+import { shortfall, untilLabel } from './meetingView'
 
 type Week = Extract<Meeting, { period: object }>
 
@@ -159,12 +159,6 @@ function StepApprove({ meeting, onNext }: { meeting: Week; onNext: () => void })
   )
 }
 
-const LEVEL_BADGE: Record<Level, string> = {
-  upper: 'bg-state-confirmed/15 text-state-confirmed-text',
-  lower: 'bg-state-open/15 text-state-open-text',
-  none: 'bg-state-cancelled/15 text-state-cancelled-text',
-}
-
 function TakerCard({ taker, lower, upper }: { taker: MeetingTaker; lower: number; upper: number }) {
   const line = shortfall(taker.total, lower)
   return (
@@ -172,7 +166,10 @@ function TakerCard({ taker, lower, upper }: { taker: MeetingTaker; lower: number
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="min-w-0 text-row font-bold break-words">{taker.name}</span>
         <span
-          className={cn('rounded-full px-2.5 py-0.5 text-chip font-bold', LEVEL_BADGE[taker.level])}
+          className={cn(
+            'rounded-full px-2.5 py-0.5 text-chip font-bold',
+            levelBadgeClass(taker.level),
+          )}
         >
           {levelLabel(taker.level)}
         </span>

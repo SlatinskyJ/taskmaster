@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { defineConfig, devices } from '@playwright/test'
 
-// Browser tests against the built server (`pnpm build` first). Four servers on fresh, empty
+// Browser tests against the built server (`pnpm build` first). Five servers on fresh, empty
 // data folders seeded with the demo family: one with passkeys on (localhost), one with them
-// off, as on every preview, one for the task page flows (#36) and one for the weekly meeting. Locally, point PW_CHROMIUM_PATH at a Chromium if Playwright's own
+// off, as on every preview, one for the task page flows (#36), one for the weekly meeting and one for Týden. Locally, point PW_CHROMIUM_PATH at a Chromium if Playwright's own
 // is not installed.
 
 const ON = 3100
@@ -14,6 +14,8 @@ const OFF = 3101
 const TASKS = 3102
 /** The weekly meeting (#44): its own server, as settling changes the demo week for good. */
 const MEETING = 3103
+/** Týden (#45): its own server, so other specs' approvals never change its numbers. */
+const WEEK = 3104
 
 // The off server's data folder, shared with its spec (which adds a passkey row directly).
 // Playwright loads this file again in each worker; the env var keeps the folder the same.
@@ -61,6 +63,11 @@ export default defineConfig({
       use: { ...chromium, baseURL: `http://localhost:${String(OFF)}` },
     },
     {
+      name: 'week',
+      testMatch: 'week.spec.ts',
+      use: { ...chromium, baseURL: `http://localhost:${String(WEEK)}` },
+    },
+    {
       name: 'tasks',
       testMatch: 'task-page.spec.ts',
       use: { ...chromium, baseURL: `http://localhost:${String(TASKS)}` },
@@ -79,5 +86,6 @@ export default defineConfig({
     server(OFF, { DATA_DIR: process.env.TM_E2E_OFF_DATA_DIR }),
     server(TASKS, {}),
     server(MEETING, {}),
+    server(WEEK, {}),
   ],
 })

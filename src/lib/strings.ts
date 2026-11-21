@@ -371,6 +371,25 @@ export const cs = {
       generic: 'Vyúčtování se nepovedlo. Zkus to znovu.',
     },
   },
+  /** Týden (#45): this week and the settled weeks. */
+  week: {
+    myTitle: 'Můj týden',
+    thisWeek: 'Tento týden',
+    history: 'Historie',
+    carried: (points: string) => `Z minula převedeno ${points}`,
+    /** An ended week no meeting has settled yet: its points, apart from this week's. */
+    unsettled: (points: string) => `Z minulého týdne čeká na poradu: ${points}`,
+    happened: 'Co se tento týden stalo',
+    noItems: 'Tento týden zatím nic hotového.',
+    noPeriod: 'Týden ještě nezačal.',
+    noHistory: 'Zatím žádné vyúčtování.',
+    total: 'Celkem',
+    deducted: 'odečteno',
+    carry: 'převod',
+    /** Under a rejected item: the chore is back with the boy (spec §5.5). */
+    returnedToMe: 'Vráceno tobě.',
+    returnedTo: (name: string) => `Vráceno: ${name}.`,
+  },
   admin: {
     title: 'Správa',
     people: 'Lidé',

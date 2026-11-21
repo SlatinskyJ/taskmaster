@@ -8,8 +8,12 @@ import type { Levels, Period } from '~/domain'
 import { toIsoUtc } from '~/domain/dates'
 import { getMeeting, settlePeriod } from './meeting'
 import type { Meeting, MeetingTaker, SettleError, ShownTotal } from './meeting'
+import { getWeek } from './week'
+import type { HistoryRecord, HistoryWeek, Viewer, Week, WeekItem, WeekTaker } from './week'
+import type { CurrentUser } from '~/server/auth/sessions'
 
 export type { Meeting, MeetingTaker, SettleError }
+export type { HistoryRecord, HistoryWeek, Week, WeekItem, WeekTaker }
 
 // Server functions for the weekly meeting (#44). Giver only: the guard here, and the domain's
 // `settle` again inside (`not_a_giver`). The giver is always the signed-in user, never input.
@@ -101,3 +105,13 @@ export const settlePeriodFn = createServerFn({ method: 'POST' })
       ),
     ),
   )
+
+/** The week's viewer is always the signed-in user: id and role, nothing else. */
+export function viewerOf(user: CurrentUser): Viewer {
+  return { id: user.id, role: user.role }
+}
+
+// Týden (#45): takers and givers. getWeek filters to the viewer's own data for a taker.
+export const getWeekFn = createServerFn({ method: 'GET' })
+  .middleware([requireRole('taker', 'giver')])
+  .handler(({ context }): Week => getWeek(getDb(), viewerOf(context.user), new Date()))

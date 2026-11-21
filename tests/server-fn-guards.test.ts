@@ -54,6 +54,7 @@ const EXPECTED_ROLES: Record<string, string> = {
   listPasskeyCountsFn: 'admin',
   removeUserPasskeysFn: 'admin',
   getMeetingFn: 'giver',
+  getWeekFn: 'taker,giver',
   settlePeriodFn: 'giver',
   getPointsFn: 'giver,taker',
 }
