@@ -251,6 +251,8 @@ export const cs = {
     greeting: 'Ahoj',
     /** "Čeká na tebe (2)" (UI doc §6 [call]: always at the top of Domů). */
     waiting: 'Čeká na tebe',
+    /** GHome: offers still waiting for a brother's yes (#41). */
+    waitingOnTakers: 'Čeká na kluky',
   },
   admin: {
     title: 'Správa',
@@ -376,6 +378,8 @@ export const cs = {
     missingLower: (n: number) => `Do spodní hranice chybí ${formatPoints(n)}.`,
     missingUpper: (n: number) => `Do horní hranice chybí ${formatPoints(n)}.`,
     upperDone: 'Horní hranice splněna!',
+    /** GHome: every taker's points this week (#41). */
+    takersTitle: 'Kluci tento týden',
   },
   /** Effects, UI doc §4. */
   effects: {
