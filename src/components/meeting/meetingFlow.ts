@@ -92,12 +92,12 @@ export function createConfirm(
   let inFlight = false
   return async (meeting) => {
     const request = settleRequest(meeting)
-    if (inFlight || !request) return
+    if (inFlight || !request || !meeting.period) return
+    const names = meeting.takers.map((t) => ({ id: t.id, name: t.name }))
     inFlight = true
     dispatch({ type: 'sending' })
     try {
       const result = await send(request)
-      const names = meeting.period ? meeting.takers.map((t) => ({ id: t.id, name: t.name })) : []
       dispatch({ type: 'answer', result, names })
       await after(result)
     } catch {

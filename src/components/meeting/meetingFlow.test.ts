@@ -35,6 +35,22 @@ describe('stepOf', () => {
   })
 })
 
+describe('reduce', () => {
+  it('Potvrdit asks, Vyúčtovat marks the call busy, the answer frees both', () => {
+    const asked = run([{ type: 'next' }, { type: 'ask' }])
+    expect(asked).toEqual({ ...START, advanced: true, asking: true })
+    const sending = reduce(asked, { type: 'sending' })
+    expect(sending).toEqual({ ...asked, busy: true })
+    expect(reduce(sending, { type: 'answer', result: settledOk, names })).toEqual({
+      advanced: true,
+      asking: false,
+      busy: false,
+      result: settledOk,
+      names,
+    })
+  })
+})
+
 describe('reduce on a refusal', () => {
   const asked = run([{ type: 'next' }, { type: 'ask' }, { type: 'sending' }])
   const refused = (error: string) =>
@@ -146,6 +162,15 @@ describe('startingTotals', () => {
       { id: 3, name: 'Starší', carryOver: 30 },
       { id: 4, name: 'Mladší', carryOver: 47 },
     ])
+  })
+
+  it('a taker without a record is left out', () => {
+    const ui = reduce(START, {
+      type: 'answer',
+      result: { ...settledOk, records: settledOk.records.slice(1) },
+      names,
+    })
+    expect(startingTotals(ui)).toEqual([{ id: 3, name: 'Starší', carryOver: 30 }])
   })
 
   it('nothing before a confirm', () => {
