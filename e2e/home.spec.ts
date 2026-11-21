@@ -2,10 +2,12 @@ import { expect, test, type Page } from '@playwright/test'
 import { cs } from '../src/lib/strings'
 import { passwordLogin } from './helpers'
 
-// Taker Domů (#40) on the demo seed, through the built server: the points card comes from
+// Taker Domů (#40) and parent Domů and Úkoly (#41) on the demo seed, through the built server: the points card comes from
 // getPointsFn and the real database, and Hotovo on an open task needs no reservation.
 
 test.use({ viewport: { width: 360, height: 800 } })
+// One seeded database for the whole file: the parent's test continues from the boys' tests.
+test.describe.configure({ mode: 'serial' })
 
 const bar = (page: Page) => page.locator('[data-slot="points-bar"]').first()
 
@@ -30,4 +32,40 @@ test('the brother’s points are not on his Domů', async ({ page }) => {
   await expect(bar(page)).toHaveAttribute('aria-label', /^55 bodů potvrzeno, 0 čeká/)
   await expect(page.getByText('Do horní hranice chybí 45 bodů.')).toBeVisible()
   await expect(page.locator('[data-slot="points-bar"]')).toHaveCount(1)
+})
+
+test('a parent sees both boys’ points, approves the last completion and sees Úkoly by state', async ({
+  page,
+}) => {
+  await passwordLogin(page, 'tata')
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByText(cs.points.takersTitle)).toBeVisible()
+  const bars = page.locator('[data-slot="points-bar"]')
+  await expect(bars).toHaveCount(2)
+  await expect(bars.nth(0)).toHaveAttribute('aria-label', /^40 bodů potvrzeno, 17 čeká/)
+  await expect(bars.nth(1)).toHaveAttribute('aria-label', /^55 bodů potvrzeno, 0 čeká/)
+  const waitingOnBoys = page.getByRole('region', { name: /Čeká na kluky/ })
+  await expect(waitingOnBoys.getByText('Uklidit sklep')).toBeVisible()
+
+  const approve = (title: string) =>
+    page
+      .getByRole('listitem')
+      .filter({ hasText: title })
+      .getByRole('button', { name: cs.work.approve })
+  await approve('Vytřít podlahu v kuchyni').click()
+  await expect(page.locator('.animate-float-up', { hasText: '+12' })).toBeVisible()
+  await expect(bars.nth(0)).toHaveAttribute('aria-label', /^52 bodů potvrzeno, 5 čeká/)
+  // The last one: "Ke schválení" goes away, and the +5 still floats (the app-wide layer).
+  await approve('Umýt okna v obýváku i v ložnici').click()
+  await expect(page.locator('.animate-float-up', { hasText: '+5' })).toBeVisible()
+  await expect(page.getByText(cs.work.toApprove, { exact: false })).toHaveCount(0)
+  await expect(bars.nth(0)).toHaveAttribute('aria-label', /^57 bodů potvrzeno, 0 čeká/)
+
+  await page.goto('/ukoly')
+  const labels = await page.locator('[id^="group-"]').allTextContents()
+  expect(labels.map((l) => l.replace(/ \(\d+\)$/, ''))).toEqual([
+    cs.tasks.groupProposed,
+    cs.state.reserved,
+    cs.state.confirmed,
+  ])
 })

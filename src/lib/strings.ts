@@ -63,6 +63,8 @@ export const cs = {
   },
   /** One-time tasks (#33): GTasks, GCreate, TApprove (UI doc §7). */
   tasks: {
+    /** Úkoly group of proposed tasks, negotiating ones included (#41). */
+    groupProposed: 'Návrhy a vyjednávání',
     new: '+ Nový',
     empty: 'Zatím žádné úkoly.',
     createTitle: 'Nový úkol',
@@ -253,6 +255,8 @@ export const cs = {
     waiting: 'Čeká na tebe',
     /** A parent's Domů with nothing to answer (UI doc §8). */
     giverEmpty: 'Teď na tebe nic nečeká.',
+    /** GHome: offers still waiting for a brother's yes (#41). */
+    waitingOnTakers: 'Čeká na kluky',
   },
   admin: {
     title: 'Správa',
@@ -378,6 +382,8 @@ export const cs = {
     missingLower: (n: number) => `Do spodní hranice chybí ${formatPoints(n)}.`,
     missingUpper: (n: number) => `Do horní hranice chybí ${formatPoints(n)}.`,
     upperDone: 'Horní hranice splněna!',
+    /** GHome: every taker's points this week (#41). */
+    takersTitle: 'Kluci tento týden',
   },
   /** Effects, UI doc §4. */
   effects: {

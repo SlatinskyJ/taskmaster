@@ -9,6 +9,7 @@ import {
   type TaskView,
 } from '~/server/tasks/functions'
 import { TakerBoard } from './TakerBoard'
+import { ToApprove } from './ToApprove'
 import { pointsFloat } from './pointsFloat'
 import { DoneButton, TaskWorkPanel } from './WorkButtons'
 
@@ -41,6 +42,8 @@ vi.mock('~/components/ui/button', async (original) => {
   }
 })
 vi.mock('~/server/tasks/functions', () => ({
+  approveTaskFn: vi.fn(),
+  rejectTaskFn: vi.fn(),
   completeTaskFn: vi.fn(),
   releaseTaskFn: vi.fn(),
   reserveTaskFn: vi.fn(),
@@ -263,5 +266,16 @@ describe('the "+N" float after Hotovo (UI doc §4)', () => {
   it('floats nothing for actions that carry no points or no element', () => {
     expect(pointsFloat({ status: 'reserved' }, { confetti: button })).toBeNull()
     expect(pointsFloat({ status: 'confirmed' }, { confetti: null, float: 5 })).toBeNull()
+  })
+})
+
+describe('✓ Schválit floats the points (UI doc §4 "Confirmed", #41)', () => {
+  it('asks for the task score to float where it was tapped', () => {
+    action.busy = null
+    action.run.mockClear()
+    const el = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 44, height: 44 }) }
+    renderToStaticMarkup(<ToApprove items={[view({ status: 'done_unconfirmed', score: 12 })]} />)
+    action.pressed.get(cs.work.approve)?.onClick?.({ currentTarget: el })
+    expect(action.run.mock.calls[0]?.[3]).toEqual({ confetti: el, float: 12 })
   })
 })
