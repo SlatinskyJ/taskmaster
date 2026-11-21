@@ -20,6 +20,7 @@ export const task = (over: Partial<TaskView>): TaskView => ({
   completedAt: '2026-11-28T10:00:00.000Z',
   earnerId: 3,
   waitingFor: [],
+  scoreChange: null,
   ...over,
 })
 

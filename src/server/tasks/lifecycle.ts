@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import {
   approveCompletion,
   byPerson,
+  cancelItem,
   completeItem,
   findPerson,
   rejectCompletion,
@@ -19,6 +20,7 @@ import { tasks } from '~/server/db/schema'
 import type { TaskRow } from '~/server/db/schema'
 import { listPeople } from '~/server/users/people'
 import { saveItem, toItem } from './item'
+import { discardStaleChange } from './scoreChange'
 import { reopenOffer } from './tasks'
 
 // The work flow of a one-time task (spec §5.4–§5.6): reserve, release, mark done, approve,
@@ -66,8 +68,9 @@ function runStep(
     if (!next.ok) return next
     const { row: stepped, accepted, closed } = saveItem(tx, row, next.value, {}, now)
     const saved = opts.extra ? opts.extra(tx, row, stepped, people) : stepped
+    const actor = { kind: 'user', userId } as const
     writeAudit(tx, {
-      actor: { kind: 'user', userId },
+      actor,
       action,
       entityType: 'task',
       entityId: taskId,
@@ -76,6 +79,9 @@ function runStep(
       reason: opts.reason,
       at: now,
     })
+    // A score change in flight ends once the task can't change score any more (spec §5.2);
+    // logged after the step that ends it, so the history reads cause, then effect.
+    discardStaleChange(tx, saved, actor, people, now)
     return ok(saved)
   })
 }
@@ -149,6 +155,39 @@ export function approveTask(db: Db | Tx, userId: number, taskId: number, now: Da
   )
 }
 
+/** A trimmed reason, or none when blank; `null` when too long. */
+function reasonOf(reason: string | undefined): { text: string | undefined } | null {
+  const text = reason?.trim() ?? ''
+  if (text.length > REASON_MAX) return null
+  return { text: text.length > 0 ? text : undefined }
+}
+
+/**
+ * A giver cancels a task not yet completed (spec §5.6 [call]), with an optional reason that
+ * everyone sees in the history. It stays a row (spec §5.10); a proposed task's thread closes.
+ */
+export function cancelTask(
+  db: Db | Tx,
+  userId: number,
+  taskId: number,
+  reason: string | undefined,
+  now: Date = new Date(),
+): Result<TaskRow, LifecycleActionError> {
+  const why = reasonOf(reason)
+  if (!why) return fail('reason_too_long')
+  return runStep(
+    db,
+    userId,
+    taskId,
+    'task.cancelled',
+    (item, actor) => cancelItem(item, actor),
+    now,
+    {
+      reason: why.text,
+    },
+  )
+}
+
 /**
  * A giver rejects a pending completion with an optional reason (spec §5.5): back to the same
  * taker's reservation if it was reserved, otherwise open. The reason goes to the audit entry.
@@ -160,8 +199,8 @@ export function rejectTask(
   reason: string | undefined,
   now: Date = new Date(),
 ): Result<TaskRow, LifecycleActionError> {
-  const text = reason?.trim() ?? ''
-  if (text.length > REASON_MAX) return fail('reason_too_long')
+  const why = reasonOf(reason)
+  if (!why) return fail('reason_too_long')
   return runStep(
     db,
     userId,
@@ -169,8 +208,6 @@ export function rejectTask(
     'task.rejected',
     (item, actor) => rejectCompletion(item, actor),
     now,
-    {
-      reason: text.length > 0 ? text : undefined,
-    },
+    { reason: why.text },
   )
 }

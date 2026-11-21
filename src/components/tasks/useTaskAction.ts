@@ -5,7 +5,11 @@ import { burstConfetti } from '~/components/effects/confetti'
 import { showFloat } from '~/components/effects/floatStore'
 import { cs } from '~/lib/strings'
 import { taskErrorMessage } from '~/lib/taskErrors'
-import type { LifecycleActionResult, TaskActionResult } from '~/server/tasks/functions'
+import type {
+  LifecycleActionResult,
+  ScoreChangeActionResult,
+  TaskActionResult,
+} from '~/server/tasks/functions'
 import type { TemplateActionResult } from '~/server/templates/functions'
 import { pointsFloat } from './pointsFloat'
 
@@ -19,17 +23,24 @@ export function useTaskAction() {
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
 
-  async function run<R extends LifecycleActionResult | TaskActionResult | TemplateActionResult>(
+  async function run<
+    R extends
+      LifecycleActionResult | TaskActionResult | TemplateActionResult | ScoreChangeActionResult,
+  >(
     key: string,
     action: () => Promise<R>,
     success: (r: Extract<R, { ok: true }>) => string,
-    opts: { confetti?: Element | null; float?: number } = {},
+    opts: {
+      confetti?: Element | null
+      float?: number
+      errorMessage?: (error: string) => string
+    } = {},
   ): Promise<boolean> {
     setBusy(key)
     try {
       const result = await action()
       if (!result.ok) {
-        toast.error(taskErrorMessage(result.error))
+        toast.error((opts.errorMessage ?? taskErrorMessage)(result.error))
         await router.invalidate()
         return false
       }

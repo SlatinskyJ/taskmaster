@@ -6,9 +6,11 @@ import {
   acceptOffer,
   approveTask,
   approveTaskOffer,
+  cancelTask,
   completeTask,
   createTask,
   placeBid,
+  proposeTaskScoreChange,
   rejectTask,
   reserveTask,
 } from '~/server/tasks'
@@ -114,6 +116,30 @@ export function seedDemo(
     )
     step('bid 10', placeBid(tx, id('starsi'), vacuum.id, 10, now))
     step('take 8', acceptOffer(tx, id('starsi'), vacuum.id, 8, now))
+    // #36: an open task with Táta's new price waiting for the brothers, and a cancelled one
+    // with its reason in the history.
+    const rake = step(
+      'offer "Shrabat listí na zahradě"',
+      createTask(
+        tx,
+        id('tata'),
+        { title: 'Shrabat listí na zahradě', score: 10, approvalRequired: true },
+        now,
+      ),
+    )
+    step('agree 10', approveTaskOffer(tx, id('mladsi'), rake.id, 10, now))
+    step('new price 12', proposeTaskScoreChange(tx, id('tata'), rake.id, 12, now))
+    const windows = step(
+      'offer "Umýt okna v kuchyni"',
+      createTask(
+        tx,
+        id('tata'),
+        { title: 'Umýt okna v kuchyni', score: 6, approvalRequired: true },
+        now,
+      ),
+    )
+    step('agree 6', approveTaskOffer(tx, id('starsi'), windows.id, 6, now))
+    step('cancel', cancelTask(tx, id('tata'), windows.id, 'Udělá to firma.', now))
     seedPoints(tx, id, step, now)
     seedTemplates(tx, ids, now)
     seedWeek(tx, id, now)

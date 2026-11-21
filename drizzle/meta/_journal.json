@@ -113,6 +113,13 @@
       "when": 1795292161030,
       "tag": "0015_settlements_final",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1795302373620,
+      "tag": "0016_task_score_changes",
+      "breakpoints": true
     }
   ]
 }

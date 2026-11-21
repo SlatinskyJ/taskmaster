@@ -8,8 +8,23 @@ import type { ThreadEntry } from '~/server/threadEntry'
 import type { TaskDetail, TaskError, TaskView } from './tasks'
 
 export type { TaskDetail, TaskError, TaskView, ThreadEntry }
+export type { HistoryEntry } from './history'
+export type { ScoreChangeView } from './tasks'
 import type { LifecycleActionError } from './lifecycle'
-import { approveTask, completeTask, rejectTask, releaseTask, reserveTask } from './lifecycle'
+import {
+  approveTask,
+  cancelTask,
+  completeTask,
+  rejectTask,
+  releaseTask,
+  reserveTask,
+} from './lifecycle'
+import type { ScoreChangeError } from './scoreChange'
+import {
+  approveTaskScoreChange,
+  declineTaskScoreChange,
+  proposeTaskScoreChange,
+} from './scoreChange'
 import { acceptLowestTaskBid, acceptOffer, counterOffer, placeBid } from './bidding'
 import {
   approveTaskOffer,
@@ -18,6 +33,7 @@ import {
   listBidsToAnswer,
   listBoard,
   listPendingCompletions,
+  listScoreChangesWaiting,
   listPlanTasks,
   listTasks,
   pendingApprovals,
@@ -83,6 +99,15 @@ export function parseAcceptBid(data: unknown): {
 } {
   return { ...parseApproval(data), bidders: bidders(record(data).bidders, 1) }
 }
+
+/** A price-change answer: the task and the change the person saw. */
+export function parseChangeAnswer(data: unknown): { taskId: number; changeId: number } {
+  const { taskId, changeId } = record(data)
+  return { taskId: int(taskId), changeId: int(changeId) }
+}
+
+/** A price-change proposal: the task and the new score. */
+export const parseChangeProposal = (data: unknown) => parseApproval(data)
 
 /** A giver's counter: the takers he saw bidding exactly that number (0 to 50). */
 export function parseCounter(data: unknown): { taskId: number; score: number; bidders: number[] } {
@@ -175,7 +200,7 @@ export type LifecycleActionResult =
 
 export type { LifecycleActionError }
 
-function parseReject(data: unknown): { taskId: number; reason?: string } {
+export function parseReject(data: unknown): { taskId: number; reason?: string } {
   const { taskId, reason } = record(data)
   if (reason !== undefined && typeof reason !== 'string') throw new Error('Invalid input')
   return { taskId: int(taskId), reason }
@@ -222,3 +247,50 @@ export const rejectTaskFn = createServerFn({ method: 'POST' })
   .handler(({ data, context }) =>
     done(rejectTask(getDb(), context.user.id, data.taskId, data.reason)),
   )
+
+/** A giver cancels a task not yet completed, with an optional reason (spec §5.6 [call]). */
+export const cancelTaskFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('giver')])
+  .validator(parseReject)
+  .handler(({ data, context }) =>
+    done(cancelTask(getDb(), context.user.id, data.taskId, data.reason)),
+  )
+
+// ── Changing an agreed score (#36, spec §5.2) ───────────────────────────────────────────
+
+export type ScoreChangeActionResult =
+  { ok: true; id: number; status: TaskView['status'] } | { ok: false; error: ScoreChangeError }
+
+export type { ScoreChangeError }
+
+function changed(result: Result<TaskRow, ScoreChangeError>): ScoreChangeActionResult {
+  return result.ok ? { ok: true, id: result.value.id, status: result.value.status } : result
+}
+
+/** Open: any party; reserved: its taker or a giver. */
+export const proposeTaskScoreChangeFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('giver', 'taker')])
+  .validator(parseChangeProposal)
+  .handler(({ data, context }) =>
+    changed(proposeTaskScoreChange(getDb(), context.user.id, data.taskId, data.score)),
+  )
+
+export const approveTaskScoreChangeFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('giver', 'taker')])
+  .validator(parseChangeAnswer)
+  .handler(({ data, context }) =>
+    changed(approveTaskScoreChange(getDb(), context.user.id, data.taskId, data.changeId)),
+  )
+
+/** Nesouhlasím (someone it waits for) or Stáhnout návrh (the proposer). */
+export const declineTaskScoreChangeFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('giver', 'taker')])
+  .validator(parseChangeAnswer)
+  .handler(({ data, context }) =>
+    changed(declineTaskScoreChange(getDb(), context.user.id, data.taskId, data.changeId)),
+  )
+
+/** "Čeká na tebe": price changes waiting for this person. */
+export const listScoreChangesWaitingFn = createServerFn({ method: 'GET' })
+  .middleware([requireRole('giver', 'taker')])
+  .handler(({ context }): TaskView[] => listScoreChangesWaiting(getDb(), context.user.id))

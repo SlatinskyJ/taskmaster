@@ -64,6 +64,14 @@ describe('demo seed (#62)', () => {
       ['task.bid_placed', 'user'],
       ['task.score_approved', 'user'],
       ['task.agreed', 'user'],
+      ['task.created', 'user'],
+      ['task.score_approved', 'user'],
+      ['task.agreed', 'user'],
+      ['task.score_change_proposed', 'user'],
+      ['task.created', 'user'],
+      ['task.score_approved', 'user'],
+      ['task.agreed', 'user'],
+      ['task.cancelled', 'user'],
       // #40: five tasks done (four of them approved), one left open, each agreed on one yes.
       ...[true, true, false, true, true].flatMap((approved) => [
         ['task.created', 'user'],
@@ -112,6 +120,15 @@ describe('demo seed (#62)', () => {
       ['Vynést sklo a plasty do kontejneru', 'reserved', 4, []],
     ])
     expect(all.find((t) => t.title.startsWith('Vyluxovat'))?.reservedBy?.name).toBe('Starší')
+    // #36: Táta's new price 12 waits for the brothers; the cancelled task keeps its reason.
+    expect(
+      listTasks(db).find((t) => t.title === 'Shrabat listí na zahradě')?.scoreChange,
+    ).toMatchObject({
+      score: 12,
+      waitingFor: [{ name: 'Starší' }, { name: 'Mladší' }],
+    })
+    const cancelled = db.select().from(auditLog).where(eq(auditLog.action, 'task.cancelled')).get()
+    expect(cancelled?.reason).toBe('Udělá to firma.')
   })
 
   it('gives both brothers points (#40 + #44 week): confirmed and waiting, plus an open task', () => {
@@ -122,7 +139,10 @@ describe('demo seed (#62)', () => {
       ['Mladší', 152, 3],
     ])
     const open = listTasks(db).filter((t) => t.status === 'open')
-    expect(open.map((t) => [t.title, t.score])).toEqual([['Umýt okna v obýváku i v ložnici', 5]])
+    expect(open.map((t) => [t.title, t.score])).toEqual([
+      ['Umýt okna v obýváku i v ložnici', 5],
+      ['Shrabat listí na zahradě', 10],
+    ])
   })
 
   it('demo login works for every role', async () => {
