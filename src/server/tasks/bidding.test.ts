@@ -7,7 +7,13 @@ import { updateUser } from '~/server/users/manage'
 import { acceptLowestTaskBid, acceptOffer, counterOffer, placeBid } from './bidding'
 import { saveItem, toItem } from './item'
 import { completeTask, releaseTask, reserveTask } from './lifecycle'
-import { approveTaskOffer, getTaskDetail, listBidsToAnswer, pendingApprovals } from './tasks'
+import {
+  approveTaskOffer,
+  getTaskDetail,
+  listBidsToAnswer,
+  listTasks,
+  pendingApprovals,
+} from './tasks'
 import {
   addGiver,
   addTaker,
@@ -627,6 +633,27 @@ describe('first agreement wins (spec §5.2; issue "Done when")', () => {
 })
 
 describe('what screens get (PR B)', () => {
+  it('waitingFor: the brothers while nobody said yes (a bid is no yes), [] once agreed', () => {
+    const f = family()
+    const id = car(f)
+    const both = [
+      { id: f.starsi, name: 'Starší' },
+      { id: f.mladsi, name: 'Mladší' },
+    ]
+    const view = () => listTasks(f.db).find((t) => t.id === id)
+    expect(view()?.waitingFor).toEqual(both)
+    must(placeBid(f.db, f.starsi, id, 25, T1))
+    expect(view()?.waitingFor).toEqual(both)
+    must(approveTaskOffer(f.db, f.starsi, id, 18, T2))
+    expect(view()).toMatchObject({ status: 'open', waitingFor: [] })
+    const other = car(f)
+    must(placeBid(f.db, f.mladsi, other, 22, T1))
+    must(acceptOffer(f.db, f.mladsi, other, 18, T2))
+    expect(listTasks(f.db).find((t) => t.id === other)).toMatchObject({
+      status: 'reserved',
+      waitingFor: [],
+    })
+  })
   it('a proposed task carries its offering giver and open bids, lowest first', () => {
     const f = family()
     const id = car(f)
@@ -685,6 +712,10 @@ describe('what screens get (PR B)', () => {
         completedBy: null,
         completedAt: null,
         earnerId: null,
+        waitingFor: [
+          { id: f.starsi, name: 'Starší' },
+          { id: f.mladsi, name: 'Mladší' },
+        ],
       },
       thread: [
         {

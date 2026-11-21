@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { parseAcceptBid, parseCounter } from './functions'
+import { fail, ok } from '~/domain/result'
+import type { TaskRow } from '~/server/db/schema'
+import { answered, parseAcceptBid, parseCounter } from './functions'
 
 // Input checks of the bidding server functions (Security: no empty, huge or repeated bidders
 // list, no score above TASK_SCORE_MAX).
@@ -53,5 +55,18 @@ describe('bidding inputs', () => {
       'Invalid input',
     )
     expect(() => parseCounter({ taskId: 1, score: 20 })).toThrow('Invalid input')
+  })
+})
+
+describe('answered (what every task action returns to a screen)', () => {
+  it.each(['proposed', 'open', 'reserved'] as const)(
+    '%s row → only ok, id and status',
+    (status) => {
+      const row = { id: 7, status, title: 'Umýt auto', score: 18 } as unknown as TaskRow
+      expect(answered(ok(row))).toEqual({ ok: true, id: 7, status })
+    },
+  )
+  it('a refusal passes through unchanged', () => {
+    expect(answered(fail('offer_changed'))).toEqual({ ok: false, error: 'offer_changed' })
   })
 })
