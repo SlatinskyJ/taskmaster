@@ -223,6 +223,9 @@ describe('TakerBoard Volné row when idle (#40)', () => {
     renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
     expect(action.pressed.get(cs.work.reserve)?.disabled).toBe(false)
     expect(action.pressed.get(cs.work.done)?.disabled).toBe(false)
+    expect(
+      count(renderToStaticMarkup(<TakerBoard items={[open]} me={3} />), 'aria-busy="true"'),
+    ).toBe(0)
     action.busy = 'reserve-7'
     const html = renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
     expect(html).toMatch(
