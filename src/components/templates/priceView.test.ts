@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { Me } from '~/components/tasks/taskView'
 import type { TemplateView } from '~/server/templates/functions'
-import { priceButtons, priceMeta, priceSend, priceToast, stepperStart } from './priceView'
+import {
+  priceButtons,
+  priceMeta,
+  priceSend,
+  priceToast,
+  stepperStart,
+  templateChip,
+} from './priceView'
 
 // What the template price page offers and sends (spec §5.1, runs like bidding §5.2). Demo
 // numbers: "Vyndat myčku" agreed at 3, Mladší bids 5, Táta offers 4.
@@ -165,5 +172,13 @@ describe('priceToast', () => {
   it('a change someone else agreed meanwhile does not read as mine', () => {
     // The page showed 3; Starší accepted 4 meanwhile; Mladší's bid of 6 only opens a new change.
     expect(priceToast(call('bid', 6), ok(4))).toBe('Nabídka odeslána')
+  })
+})
+
+describe('templateChip', () => {
+  it('proposed, a change in flight, or agreed', () => {
+    expect(templateChip(proposed)).toEqual({ state: 'proposed' })
+    expect(templateChip(demo)).toEqual({ state: 'negotiating' })
+    expect(templateChip(base)).toEqual({ state: 'confirmed', label: 'Platí' })
   })
 })

@@ -19,6 +19,7 @@ import { Route as AppTydenRouteImport } from './routes/_app/tyden'
 import { Route as AppZapsatRouteImport } from './routes/_app/zapsat'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as DevUiRouteImport } from './routes/dev/ui'
+import { Route as AppSablonaTemplateIdRouteImport } from './routes/_app/sablona/$templateId'
 import { Route as AppUkolTaskIdRouteImport } from './routes/_app/ukol/$taskId'
 import { Route as AppUkolyIndexRouteImport } from './routes/_app/ukoly/index'
 import { Route as AppUkolyNovyRouteImport } from './routes/_app/ukoly/novy'
@@ -72,6 +73,11 @@ const DevUiRoute = DevUiRouteImport.update({
   path: '/dev/ui',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppSablonaTemplateIdRoute = AppSablonaTemplateIdRouteImport.update({
+  id: '/sablona/$templateId',
+  path: '/sablona/$templateId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppUkolTaskIdRoute = AppUkolTaskIdRouteImport.update({
   id: '/ukol/$taskId',
   path: '/ukol/$taskId',
@@ -98,6 +104,7 @@ export interface FileRoutesByFullPath {
   '/zapsat': typeof AppZapsatRoute
   '/api/health': typeof ApiHealthRoute
   '/dev/ui': typeof DevUiRoute
+  '/sablona/$templateId': typeof AppSablonaTemplateIdRoute
   '/ukol/$taskId': typeof AppUkolTaskIdRoute
   '/ukoly/novy': typeof AppUkolyNovyRoute
   '/ukoly/': typeof AppUkolyIndexRoute
@@ -112,6 +119,7 @@ export interface FileRoutesByTo {
   '/api/health': typeof ApiHealthRoute
   '/dev/ui': typeof DevUiRoute
   '/': typeof AppIndexRoute
+  '/sablona/$templateId': typeof AppSablonaTemplateIdRoute
   '/ukol/$taskId': typeof AppUkolTaskIdRoute
   '/ukoly/novy': typeof AppUkolyNovyRoute
   '/ukoly': typeof AppUkolyIndexRoute
@@ -128,6 +136,7 @@ export interface FileRoutesById {
   '/api/health': typeof ApiHealthRoute
   '/dev/ui': typeof DevUiRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/sablona/$templateId': typeof AppSablonaTemplateIdRoute
   '/_app/ukol/$taskId': typeof AppUkolTaskIdRoute
   '/_app/ukoly/novy': typeof AppUkolyNovyRoute
   '/_app/ukoly/': typeof AppUkolyIndexRoute
@@ -144,6 +153,7 @@ export interface FileRouteTypes {
     | '/zapsat'
     | '/api/health'
     | '/dev/ui'
+    | '/sablona/$templateId'
     | '/ukol/$taskId'
     | '/ukoly/novy'
     | '/ukoly/'
@@ -158,6 +168,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/dev/ui'
     | '/'
+    | '/sablona/$templateId'
     | '/ukol/$taskId'
     | '/ukoly/novy'
     | '/ukoly'
@@ -173,6 +184,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/dev/ui'
     | '/_app/'
+    | '/_app/sablona/$templateId'
     | '/_app/ukol/$taskId'
     | '/_app/ukoly/novy'
     | '/_app/ukoly/'
@@ -257,6 +269,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevUiRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/sablona/$templateId': {
+      id: '/_app/sablona/$templateId'
+      path: '/sablona/$templateId'
+      fullPath: '/sablona/$templateId'
+      preLoaderRoute: typeof AppSablonaTemplateIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/ukol/$taskId': {
       id: '/_app/ukol/$taskId'
       path: '/ukol/$taskId'
@@ -288,6 +307,7 @@ interface AppRouteChildren {
   AppTydenRoute: typeof AppTydenRoute
   AppZapsatRoute: typeof AppZapsatRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppSablonaTemplateIdRoute: typeof AppSablonaTemplateIdRoute
   AppUkolTaskIdRoute: typeof AppUkolTaskIdRoute
   AppUkolyNovyRoute: typeof AppUkolyNovyRoute
   AppUkolyIndexRoute: typeof AppUkolyIndexRoute
@@ -300,6 +320,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppTydenRoute: AppTydenRoute,
   AppZapsatRoute: AppZapsatRoute,
   AppIndexRoute: AppIndexRoute,
+  AppSablonaTemplateIdRoute: AppSablonaTemplateIdRoute,
   AppUkolTaskIdRoute: AppUkolTaskIdRoute,
   AppUkolyNovyRoute: AppUkolyNovyRoute,
   AppUkolyIndexRoute: AppUkolyIndexRoute,

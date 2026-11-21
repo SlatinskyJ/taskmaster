@@ -1,5 +1,6 @@
 import type { Me } from '~/components/tasks/taskView'
 import { cs } from '~/lib/strings'
+import type { ItemStateKey } from '~/lib/strings'
 import type { TemplateActionResult, TemplateView } from '~/server/templates/functions'
 
 // What a template's price page offers and sends (#138, spec §5.1; runs like bidding §5.2).
@@ -103,4 +104,11 @@ export function priceMeta(t: TemplateView, me: Me): string | null {
  */
 export function priceToast(call: PriceCall, result: Extract<TemplateActionResult, { ok: true }>) {
   return result.score === call.data.score ? cs.bids.toast.agreed : cs.bids.toast.sent
+}
+
+/** The chip of a template: proposed, negotiating while a change is in flight, else "Platí". */
+export function templateChip(t: TemplateView): { state: ItemStateKey; label?: string } {
+  if (t.status === 'proposed') return { state: 'proposed' }
+  if (t.change) return { state: 'negotiating' }
+  return { state: 'confirmed', label: cs.templates.activeChip }
 }

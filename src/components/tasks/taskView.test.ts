@@ -6,7 +6,7 @@ import {
   detailMeta,
   lowestText,
   myBid,
-  parseTaskIdParam,
+  parseIdParam,
   sendButton,
   taskChipState,
   threadTime,
@@ -206,7 +206,7 @@ describe('taskView', () => {
   })
   it('task id in the URL: plain positive digits only', () => {
     expect(
-      ['7', '0', '-1', '1.5', 'abc', '1e3', ' 7', '9007199254740993'].map(parseTaskIdParam),
+      ['7', '0', '-1', '1.5', 'abc', '1e3', ' 7', '9007199254740993'].map(parseIdParam),
     ).toEqual([7, null, null, null, null, null, null, null])
   })
   it('toasts: mine, agreed, approved, sent', () => {
