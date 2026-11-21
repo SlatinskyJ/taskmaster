@@ -84,6 +84,9 @@ describe('Úkoly grouped by state (#41)', () => {
       labels.join(' / '),
     ).toBe(true)
     expect([...at].sort((a, b) => a - b)).toEqual(at)
+    // Each group is a region named by its label.
+    expect(html).toContain('<section class="grid gap-2" aria-labelledby="group-reserved">')
+    expect(html).toMatch(/<h2[^>]*id="group-reserved"[^>]*>Rezervováno/)
   })
 
   it('keeps each row’s action and says who an offer waits for', () => {

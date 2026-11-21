@@ -217,7 +217,11 @@ describe('Giver Domů (GHome, #41)', () => {
         lowest: { score: 22, bidders: [{ id: 5, name: 'Mladší' }] },
       }),
     ],
-    tasks: [task({ id: 4, title: 'Uklidit sklep', waitingFor: boys })],
+    tasks: [
+      task({ id: 4, title: 'Uklidit sklep', waitingFor: boys }),
+      // Waits for Táta himself: "Čeká na tebe" has it, so "Čeká na kluky" must not.
+      task({ id: 5, title: 'Taky pro Tátu', waitingFor: [...boys, { id: 2, name: 'Táta' }] }),
+    ],
     points: {
       levels: { lower: 50, upper: 100 },
       takers: [
@@ -243,6 +247,8 @@ describe('Giver Domů (GHome, #41)', () => {
     expect(at(cs.work.toApprove)).toBeLessThan(at(cs.bids.toAnswer))
     expect(at(cs.bids.toAnswer)).toBeLessThan(at('Čeká na kluky'))
     expect(html).toContain('Čeká se na: Starší nebo Mladší')
+    expect(html).toContain(`${cs.home.waitingOnTakers} (1)`)
+    expect(html).not.toContain('Taky pro Tátu')
     expect(html.split('data-slot="points-bar"')).toHaveLength(3)
   })
 

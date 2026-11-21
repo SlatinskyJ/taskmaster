@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearFloat, currentFloat, showFloat, subscribeFloat } from './floatStore'
 
+const effects = vi.hoisted(() => ({ enabled: true }))
+vi.mock('~/lib/effects', () => ({ effectsEnabled: () => effects.enabled }))
+
 const rect = { left: 10, top: 20, width: 30, height: 40 }
 
 describe('floatStore (UI doc §4 "+N")', () => {
   beforeEach(() => {
+    effects.enabled = true
     const f = currentFloat()
     if (f) clearFloat(f.key)
   })
@@ -34,6 +38,12 @@ describe('floatStore (UI doc §4 "+N")', () => {
     clearFloat(old)
     expect(currentFloat()?.points).toBe(8)
     clearFloat(old + 1)
+    expect(currentFloat()).toBeNull()
+  })
+
+  it('stores nothing with effects off, so no stale +N replays once they are back on', () => {
+    effects.enabled = false
+    showFloat({ points: 5, tone: 'pending', rect })
     expect(currentFloat()).toBeNull()
   })
 })

@@ -1,3 +1,5 @@
+import { effectsEnabled } from '~/lib/effects'
+
 // The one "+N" on screen (UI doc §4), app-wide: the tap that starts it often unmounts its row,
 // section or panel on the reload that follows, so the float lives here and FloatLayer shows it.
 
@@ -17,8 +19,12 @@ function notify() {
   for (const fn of listeners) fn()
 }
 
-/** Start a float; a fresh key re-mounts it, so a second tap plays again. */
+/**
+ * Start a float; a fresh key re-mounts it, so a second tap plays again. With effects off
+ * (Efekty switch or reduced motion) nothing is stored: it would never play, so never clear.
+ */
 export function showFloat(f: Omit<PointsFloat, 'key'>): void {
+  if (!effectsEnabled()) return
   lastKey += 1
   current = { ...f, key: lastKey }
   notify()

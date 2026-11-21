@@ -4,7 +4,10 @@ import { FloatLayer } from './FloatLayer'
 import { clearFloat, currentFloat, showFloat } from './floatStore'
 
 const effects = vi.hoisted(() => ({ enabled: true }))
-vi.mock('~/lib/effects', () => ({ useEffectsEnabled: () => effects.enabled }))
+vi.mock('~/lib/effects', () => ({
+  useEffectsEnabled: () => effects.enabled,
+  effectsEnabled: () => true,
+}))
 
 describe('FloatLayer (UI doc §4)', () => {
   beforeEach(() => {
