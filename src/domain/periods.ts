@@ -54,6 +54,8 @@ export interface PeriodDefaults {
 }
 
 export const DEFAULT_LENGTH_DAYS = 7
+/** Default levels (Jakub 2026-11-21: week 1 runs on lower 50, upper 100). */
+export const DEFAULT_LEVELS: Levels = { lower: 50, upper: 100 }
 /** [call] Sunday 18:00 Europe/Prague (spec §5.8). */
 export const DEFAULT_CUTOFF: CutoffTime = { weekday: 0, hour: 18, minute: 0 }
 

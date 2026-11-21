@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { MyPoints } from '~/components/points/MyPoints'
 import { Placeholder } from '~/components/shell/Placeholder'
 import { Screen } from '~/components/shell/Screen'
 import { BidsToAnswer } from '~/components/tasks/BidsToAnswer'
@@ -14,6 +15,7 @@ import {
   listPendingApprovalsFn,
   listPendingCompletionsFn,
 } from '~/server/tasks/functions'
+import { getPointsFn } from '~/server/points/functions'
 import {
   listPendingTemplateApprovalsFn,
   listPendingTemplatePriceChangesFn,
@@ -38,6 +40,7 @@ export const Route = createFileRoute('/_app/')({
         recurring: await listTemplatesFn(),
         toApprove: [],
         bids: [],
+        points: await getPointsFn(),
       }
     }
     return {
@@ -48,18 +51,21 @@ export const Route = createFileRoute('/_app/')({
       recurring: [],
       toApprove: await listPendingCompletionsFn(),
       bids: await listBidsToAnswerFn(),
+      points: null,
     }
   },
   component: Home,
 })
 
-// "Čeká na tebe" first, then the work lists; the rest of the home screens comes with #40, #41.
+// A taker's points card first (it belongs to the header, spec §7 sketch), then "Čeká na tebe",
+// then the work lists. The giver's home comes with #41.
 function Home() {
   const { user } = Route.useRouteContext()
-  const { waiting, waitingTemplates, priceChanges, board, recurring, toApprove, bids } =
+  const { waiting, waitingTemplates, priceChanges, board, recurring, toApprove, bids, points } =
     Route.useLoaderData()
   return (
     <Screen title={`${cs.home.greeting}, ${user.displayName}!`} user={user}>
+      {points && <MyPoints points={points} me={user.id} />}
       <WaitingForYou
         items={waiting}
         templates={waitingTemplates}
