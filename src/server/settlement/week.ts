@@ -14,6 +14,8 @@ import { takersOf } from './meeting'
 // Týden (#45, spec §5.7–§5.9): this week and the settled weeks. A taker sees only himself; a
 // giver sees every active taker (§5.7). The filter is here, on the server, and default-deny:
 // everyone only for a giver. Read-only.
+// `unsettled` is the ledger total minus this week's bar. When #47/#36 add adjustments to the
+// ledger, they must land in `confirmed` here, or they would read as "waiting for the meeting".
 
 export interface WeekItem {
   taskId: number
