@@ -11,24 +11,27 @@ import {
 import type {
   NewTemplate,
   TemplateChangeView,
+  TemplateDetail,
   TemplateError,
-  TemplateHistoryEntry,
   TemplateView,
 } from './templates'
 import {
   approveTemplateScore,
   createTemplate,
+  getTemplateDetail,
   listTemplates,
   pendingTemplateApprovals,
-  templateHistory,
+  pendingTemplatePriceChanges,
 } from './templates'
 
-export type { NewTemplate, TemplateChangeView, TemplateError, TemplateHistoryEntry, TemplateView }
+export type { NewTemplate, TemplateChangeView, TemplateDetail, TemplateError, TemplateView }
 
 // Server functions for recurring templates (#37). Roles are checked here (guards) and again by
 // the domain rules inside (`not_a_giver`, `not_a_party`).
 
-export type TemplateActionResult = { ok: true; id: number } | { ok: false; error: TemplateError }
+/** On success, `score` is the template's score after the action (moved only by an agreement). */
+export type TemplateActionResult =
+  { ok: true; id: number; score: number } | { ok: false; error: TemplateError }
 
 /** A giver proposes a new recurring template (spec §5.1). */
 export const createTemplateFn = createServerFn({ method: 'POST' })
@@ -36,7 +39,7 @@ export const createTemplateFn = createServerFn({ method: 'POST' })
   .validator(parseNewTemplate)
   .handler(({ data, context }): TemplateActionResult => {
     const result = createTemplate(getDb(), context.user.id, data)
-    return result.ok ? { ok: true, id: result.value.id } : result
+    return result.ok ? { ok: true, id: result.value.id, score: result.value.score } : result
   })
 
 /** A giver or taker approves the template score they were shown (spec §3). */
@@ -45,7 +48,7 @@ export const approveTemplateScoreFn = createServerFn({ method: 'POST' })
   .validator(parseApproval)
   .handler(({ data, context }): TemplateActionResult => {
     const result = approveTemplateScore(getDb(), context.user.id, data.templateId, data.score)
-    return result.ok ? { ok: true, id: result.value.id } : result
+    return result.ok ? { ok: true, id: result.value.id, score: result.value.score } : result
   })
 
 /** Templates for the Úkoly screen: every one for a giver, agreed ones for a taker. */
@@ -63,7 +66,7 @@ export const bidTemplateScoreFn = createServerFn({ method: 'POST' })
   .validator(parseApproval)
   .handler(({ data, context }): TemplateActionResult => {
     const result = bidOnTemplate(getDb(), context.user.id, data.templateId, data.score)
-    return result.ok ? { ok: true, id: result.value.id } : result
+    return result.ok ? { ok: true, id: result.value.id, score: result.value.score } : result
   })
 
 /** A giver counters with a new offer to every taker (at the lowest bid it accepts it). */
@@ -72,7 +75,7 @@ export const counterTemplateScoreFn = createServerFn({ method: 'POST' })
   .validator(parseApproval)
   .handler(({ data, context }): TemplateActionResult => {
     const result = counterOnTemplate(getDb(), context.user.id, data.templateId, data.score)
-    return result.ok ? { ok: true, id: result.value.id } : result
+    return result.ok ? { ok: true, id: result.value.id, score: result.value.score } : result
   })
 
 /** A giver accepts the lowest bid he saw. */
@@ -81,7 +84,7 @@ export const acceptTemplateBidFn = createServerFn({ method: 'POST' })
   .validator(parseApproval)
   .handler(({ data, context }): TemplateActionResult => {
     const result = acceptLowestBidOnTemplate(getDb(), context.user.id, data.templateId, data.score)
-    return result.ok ? { ok: true, id: result.value.id } : result
+    return result.ok ? { ok: true, id: result.value.id, score: result.value.score } : result
   })
 
 /** A taker accepts the giver side's offer he saw. */
@@ -90,14 +93,21 @@ export const acceptTemplateOfferFn = createServerFn({ method: 'POST' })
   .validator(parseApproval)
   .handler(({ data, context }): TemplateActionResult => {
     const result = acceptOfferOnTemplate(getDb(), context.user.id, data.templateId, data.score)
-    return result.ok ? { ok: true, id: result.value.id } : result
+    return result.ok ? { ok: true, id: result.value.id, score: result.value.score } : result
   })
 
-/** Every offer and bid of a template's score changes, for its detail screen. */
-export const getTemplateHistoryFn = createServerFn({ method: 'GET' })
+/** A template's price page: the template and every offer and bid, or null (not found). */
+export const getTemplateDetailFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
   .validator(parseTemplateId)
-  .handler(({ data }): TemplateHistoryEntry[] => templateHistory(getDb(), data.templateId))
+  .handler(({ data, context }): TemplateDetail | null =>
+    getTemplateDetail(getDb(), data.templateId, context.user.id),
+  )
+
+/** "Čeká na tebe": agreed templates whose score change waits for this person's side. */
+export const listPendingTemplatePriceChangesFn = createServerFn({ method: 'GET' })
+  .middleware([requireRole('giver', 'taker')])
+  .handler(({ context }): TemplateView[] => pendingTemplatePriceChanges(getDb(), context.user.id))
 
 /** "Čeká na tebe": proposed templates waiting for this person's approval. */
 export const listPendingTemplateApprovalsFn = createServerFn({ method: 'GET' })
