@@ -1,7 +1,14 @@
 import { hashSync } from '@node-rs/argon2'
 import type { Db } from '~/server/db'
 import { users } from '~/server/db/schema'
-import { acceptOffer, createTask, placeBid } from '~/server/tasks'
+import {
+  acceptOffer,
+  approveTask,
+  approveTaskOffer,
+  completeTask,
+  createTask,
+  placeBid,
+} from '~/server/tasks'
 import type { Tx } from '~/server/audit'
 import { approveTemplateScoreIn, createTemplateIn } from '~/server/templates/templates'
 import type { NewTemplate } from '~/server/templates/templates'
@@ -22,7 +29,8 @@ import type { NewUser } from '~/server/users'
 // Grows with features: each feature PR adds its sample data here (tasks in every state, a
 // template, an open period, a past settlement), in the same transaction, through the real
 // actions. So far (#34): "Umýt auto" in negotiation (Táta offers 18, Starší bids 25, Mladší 22)
-// and "Uklidit sklep", a plain offer of 10 with no bids.
+// and "Uklidit sklep", a plain offer of 10 with no bids. #40: done and confirmed tasks for both
+// brothers' points, and an open task (see seedPoints).
 
 /** Known on purpose: previews are tailnet-only and hold no real data. Never used in production. */
 export const DEMO_PASSWORD = 'demo1234'
@@ -96,9 +104,42 @@ export function seedDemo(
     )
     step('bid 10', placeBid(tx, id('starsi'), vacuum.id, 10, now))
     step('take 8', acceptOffer(tx, id('starsi'), vacuum.id, 8, now))
+    seedPoints(tx, id, step, now)
     seedTemplates(tx, ids, now)
     return { kind: 'seeded', usernames: DEMO_USERS.map((u) => u.username) } as const
   })
+}
+
+type Step = <T>(what: string, r: { ok: true; value: T } | { ok: false; error: string }) => T
+
+/**
+ * Points for both brothers (#40), so Domů's bar shows both cases: Starší 40 confirmed + 12
+ * pending (below spodní 50), Mladší 55 confirmed (past it). Plus an open task with a long name
+ * for the Volné row with Rezervovat + Hotovo.
+ */
+function seedPoints(tx: Tx, id: (username: string) => number, step: Step, now: Date): void {
+  const agreed = (title: string, score: number) => {
+    const task = step(
+      `offer "${title}"`,
+      createTask(tx, id('tata'), { title, score, approvalRequired: true }, now),
+    )
+    for (const taker of ['starsi', 'mladsi']) {
+      const r = step(`approve "${title}"`, approveTaskOffer(tx, id(taker), task.id, score, now))
+      if (r.status !== 'proposed') break
+    }
+    return task.id
+  }
+  const done = (title: string, score: number, taker: string, confirm: boolean) => {
+    const taskId = agreed(title, score)
+    step(`done "${title}"`, completeTask(tx, id(taker), taskId, now))
+    if (confirm) step(`approve "${title}"`, approveTask(tx, id('tata'), taskId, now))
+  }
+  done('Vynést tříděný odpad', 15, 'starsi', true)
+  done('Uklidit pokoj', 25, 'starsi', true)
+  done('Vytřít podlahu v kuchyni', 12, 'starsi', false)
+  done('Umýt nádobí', 30, 'mladsi', true)
+  done('Pověsit prádlo', 25, 'mladsi', true)
+  agreed('Umýt okna v obýváku i v ložnici', 5)
 }
 
 /**
