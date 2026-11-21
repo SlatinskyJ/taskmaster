@@ -57,3 +57,8 @@ export function parseApproval(data: unknown): { templateId: number; score: numbe
   const { templateId, score } = record(data)
   return { templateId: int(templateId), score: int(score) }
 }
+
+export function parseTemplateId(data: unknown): { templateId: number } {
+  const { templateId } = record(data)
+  return { templateId: int(templateId) }
+}

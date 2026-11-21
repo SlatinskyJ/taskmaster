@@ -35,7 +35,7 @@ export const cs = {
   notFound: {
     message: 'Tahle stránka neexistuje.',
   },
-  /** Login screen (UI doc §7.4). The passkey button comes with #29. */
+  /** Login screen (UI doc §7.4). Passkey texts are under `passkeys`. */
   login: {
     title: 'Přihlášení',
     /** Accounts come from the admin only (spec §6). */
@@ -90,6 +90,9 @@ export const cs = {
       reservedByOther: 'Tenhle úkol si už vzal někdo jiný.',
       notAllowed: 'Tohle teď udělat nemůžeš.',
       reasonTooLong: (max: number) => `Důvod je moc dlouhý (nejvýš ${String(max)} znaků).`,
+      sameScore: 'Tohle číslo už platí. Zvol jiné.',
+      noBids: 'Zatím nikdo nic nenabídl.',
+      noBid: 'Nejdřív nabídni svou cenu.',
     },
   },
   /** Recurring templates (#37): GCreate recurring part, GTasks, TApprove (UI doc §7). */
@@ -148,6 +151,51 @@ export const cs = {
       invalidDeadline: 'Termín nedává smysl. Zkontroluj ho.',
       alreadyApproved: 'Souhlas už máš zapsaný.',
     },
+  },
+  /** Bidding on a one-time task (#34): the task page TTask / GBid and its ways in. */
+  bids: {
+    thread: 'Vyjednávání',
+    /** "Táta nabízí 18", "Starší chce 25"; my own: "Ty nabízíš 18", "Ty chceš 25". */
+    offers: 'nabízí',
+    wants: 'chce',
+    /** Several takers at one bid: "Starší, Mladší chtějí 22". */
+    wantMany: 'chtějí',
+    youOffer: 'Ty nabízíš',
+    youWant: 'Ty chceš',
+    /** Me in a row's short line: "Táta 20 · ty 25". */
+    you: 'ty',
+    yours: 'Je to tvoje',
+    replaced: 'změněno',
+    accepted: 'přijato',
+    closed: 'uzavřeno',
+    /** Who said yes to the current offer: "Souhlasí: Táta ✓". */
+    agreed: 'Souhlasí',
+    /** Who the offer still waits for: "Čeká se na: Starší nebo Mladší" (any one of them is enough). */
+    waitingFor: 'Čeká se na',
+    or: 'nebo',
+    /** Me after "na": "Čeká se na: tebe nebo Mladší". */
+    youAcc: 'tebe',
+    approveHint: 'Úkol bude volný pro všechny.',
+    take: (score: number) => `Beru za ${String(score)}`,
+    takeHint: 'Úkol bude tvůj.',
+    otherPrice: 'Chci jinou cenu',
+    newOffer: 'Nová nabídka',
+    send: 'Nabídnout',
+    sendHint: 'Nová nabídka pro všechny.',
+    /** Under a brother's send button. */
+    bidHint: 'Nabídka půjde rodičům.',
+    acceptBid: (score: number, name: string) => `Přijmout ${String(score)} (${name})`,
+    acceptBidHint: (name: string) => `Úkol bude rezervovaný pro ${name}.`,
+    acceptTie: (score: number) => `Přijmout ${String(score)}`,
+    tieHint: 'Stejnou cenu chce víc lidí. Úkol bude volný.',
+    yourBid: 'Tvoje nabídka',
+    toAnswer: 'Vyjednávání',
+    answer: 'Odpovědět',
+    otherPriceShort: 'Jiná cena',
+    open: 'Otevřít',
+    /** Short weekday names, Sunday first (dates.ts `Weekday`). */
+    weekdays: ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'],
+    toast: { sent: 'Nabídka odeslána', agreed: 'Domluveno', agreedMine: 'Domluveno, úkol je tvůj' },
   },
   /** Reserve, release, done, approve, reject (spec §5.4–§5.5). */
   work: {
@@ -228,6 +276,57 @@ export const cs = {
       notAdmin: 'Na tohle nemáš práva.',
     },
   },
+  /**
+   * Passkeys (spec §11, UI doc §7.4/§7.5, #29). One name for the feature everywhere:
+   * "přihlášení otiskem / obličejem". Only the admin's count says "klíč".
+   */
+  passkeys: {
+    loginButton: 'Přihlásit otiskem / obličejem',
+    /** Under the button (Login mockup): a first login has no passkey yet. */
+    hint: 'První přihlášení nebo nový telefon? Použij heslo.',
+    or: 'nebo heslem',
+    unknown: 'Přihlášení otiskem tu už neplatí. Přihlas se heslem.',
+    offerTitle: 'Přihlásit otiskem / obličejem',
+    offerText:
+      'Příště se přihlásíš jedním dotykem, bez hesla. Funguje s Face ID, otiskem prstu nebo zámkem telefonu.',
+    /** Passkey mockup: the reassurance under the offer. */
+    offerSafe: 'Obličej ani otisk neopustí tvůj telefon. Heslo zadáš jen na novém telefonu.',
+    offerSet: 'Nastavit',
+    offerLater: 'Teď ne',
+    added: 'Hotovo. Příště stačí otisk nebo obličej.',
+    already: 'Tohle zařízení už přihlášení otiskem má.',
+    section: 'Přihlášení otiskem / obličejem',
+    addHere: 'Přidat toto zařízení',
+    addedOn: (date: string) => `Přidáno ${date}`,
+    lastUsed: (date: string) => `Naposledy ${date}`,
+    neverUsed: 'Zatím nepoužito',
+    /** The passkey this browser added (Profile mockup: "Zapnuto na tomto telefonu"). */
+    thisDevice: 'Toto zařízení',
+    remove: 'Odebrat',
+    cancel: 'Zrušit',
+    removeConfirmTitle: (device: string, date: string) =>
+      `Odebrat přihlášení: ${device}, přidáno ${date}?`,
+    removeConfirmText: 'Na tom zařízení se pak přihlásíš heslem.',
+    removed: 'Odebráno.',
+    empty: 'Zatím žádné. Přidej toto zařízení.',
+    /** The device a passkey was added on, guessed from the browser (server: deviceKind.ts). */
+    device: {
+      iphone: 'iPhone',
+      ipad: 'iPad',
+      android: 'Android',
+      mac: 'Mac',
+      windows: 'Windows',
+      linux: 'Linux',
+      other: 'Jiné zařízení',
+    },
+    admin: {
+      removeAll: 'Odebrat klíče',
+      confirmTitle: (name: string) => `Odebrat klíče: ${name}?`,
+      /** Security judge, PR #132: removing passkeys leaves open sessions alone. */
+      confirmText: 'Telefon tím neodhlásíš. Odhlásí ho až nové heslo.',
+      removed: 'Klíče odebrány.',
+    },
+  },
   roles: {
     taker: 'Bere úkoly',
     giver: 'Zadává úkoly',
@@ -285,6 +384,13 @@ export function plural(n: number, forms: PluralForms): string {
   if (abs === 1) return forms.one
   if (abs >= 2 && abs <= 4) return forms.few
   return forms.many
+}
+
+export const keyWords: PluralForms = { one: 'klíč', few: 'klíče', many: 'klíčů' }
+
+/** `1 klíč`, `3 klíče`, `5 klíčů`: the admin's passkey count on Správa. */
+export function formatKeys(n: number): string {
+  return `${String(n)} ${plural(n, keyWords)}`
 }
 
 /** `5 bodů`, `1 bod`, `-3 body`. */

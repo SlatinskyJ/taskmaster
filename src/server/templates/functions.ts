@@ -1,16 +1,29 @@
 import { createServerFn } from '@tanstack/react-start'
 import { requireRole } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
-import { parseApproval, parseNewTemplate } from './parse'
-import type { NewTemplate, TemplateError, TemplateView } from './templates'
+import { parseApproval, parseNewTemplate, parseTemplateId } from './parse'
+import {
+  acceptLowestBidOnTemplate,
+  acceptOfferOnTemplate,
+  bidOnTemplate,
+  counterOnTemplate,
+} from './scoreChange'
+import type {
+  NewTemplate,
+  TemplateChangeView,
+  TemplateError,
+  TemplateHistoryEntry,
+  TemplateView,
+} from './templates'
 import {
   approveTemplateScore,
   createTemplate,
   listTemplates,
   pendingTemplateApprovals,
+  templateHistory,
 } from './templates'
 
-export type { NewTemplate, TemplateError, TemplateView }
+export type { NewTemplate, TemplateChangeView, TemplateError, TemplateHistoryEntry, TemplateView }
 
 // Server functions for recurring templates (#37). Roles are checked here (guards) and again by
 // the domain rules inside (`not_a_giver`, `not_a_party`).
@@ -35,10 +48,56 @@ export const approveTemplateScoreFn = createServerFn({ method: 'POST' })
     return result.ok ? { ok: true, id: result.value.id } : result
   })
 
-/** Every template, for the giver's Úkoly screen. */
+/** Templates for the Úkoly screen: every one for a giver, agreed ones for a taker. */
 export const listTemplatesFn = createServerFn({ method: 'GET' })
+  .middleware([requireRole('giver', 'taker')])
+  .handler(({ context }): TemplateView[] => listTemplates(getDb(), context.user.id))
+
+// ── Score change of an agreed template (spec §5.1) ──────────────────────────────────────
+// `score` is always the number the person saw: a bid or counter to put, or the lowest bid / the
+// offer to accept. A number that moved meanwhile is refused (`offer_changed`).
+
+/** A taker bids a new score for an agreed template. */
+export const bidTemplateScoreFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('taker')])
+  .validator(parseApproval)
+  .handler(({ data, context }): TemplateActionResult => {
+    const result = bidOnTemplate(getDb(), context.user.id, data.templateId, data.score)
+    return result.ok ? { ok: true, id: result.value.id } : result
+  })
+
+/** A giver counters with a new offer to every taker (at the lowest bid it accepts it). */
+export const counterTemplateScoreFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver')])
-  .handler((): TemplateView[] => listTemplates(getDb()))
+  .validator(parseApproval)
+  .handler(({ data, context }): TemplateActionResult => {
+    const result = counterOnTemplate(getDb(), context.user.id, data.templateId, data.score)
+    return result.ok ? { ok: true, id: result.value.id } : result
+  })
+
+/** A giver accepts the lowest bid he saw. */
+export const acceptTemplateBidFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('giver')])
+  .validator(parseApproval)
+  .handler(({ data, context }): TemplateActionResult => {
+    const result = acceptLowestBidOnTemplate(getDb(), context.user.id, data.templateId, data.score)
+    return result.ok ? { ok: true, id: result.value.id } : result
+  })
+
+/** A taker accepts the giver side's offer he saw. */
+export const acceptTemplateOfferFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('taker')])
+  .validator(parseApproval)
+  .handler(({ data, context }): TemplateActionResult => {
+    const result = acceptOfferOnTemplate(getDb(), context.user.id, data.templateId, data.score)
+    return result.ok ? { ok: true, id: result.value.id } : result
+  })
+
+/** Every offer and bid of a template's score changes, for its detail screen. */
+export const getTemplateHistoryFn = createServerFn({ method: 'GET' })
+  .middleware([requireRole('giver', 'taker')])
+  .validator(parseTemplateId)
+  .handler(({ data }): TemplateHistoryEntry[] => templateHistory(getDb(), data.templateId))
 
 /** "Čeká na tebe": proposed templates waiting for this person's approval. */
 export const listPendingTemplateApprovalsFn = createServerFn({ method: 'GET' })

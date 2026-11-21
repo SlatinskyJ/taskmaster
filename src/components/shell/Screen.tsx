@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { ChevronLeft } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { buttonVariants } from '~/components/ui/button'
-import type { AppPath } from '~/lib/nav'
+import type { StaticAppPath } from '~/lib/nav'
 import { cs } from '~/lib/strings'
 import { Avatar } from './Avatar'
 
@@ -21,7 +21,7 @@ export function Screen({
 }: {
   title: ReactNode
   user: { id: number; displayName: string }
-  back?: AppPath
+  back?: StaticAppPath
   action?: ReactNode
   children: ReactNode
 }) {
@@ -37,7 +37,10 @@ export function Screen({
             <ChevronLeft aria-hidden="true" />
           </Link>
         )}
-        <h1 className="min-w-0 flex-1 font-display text-title leading-tight font-bold">{title}</h1>
+        {/* A long task name as the title wraps to two lines, then is cut (#34). */}
+        <h1 className="line-clamp-2 min-w-0 flex-1 font-display text-title leading-tight font-bold break-words">
+          {title}
+        </h1>
         {action}
         <Link to="/profil" aria-label={cs.profile.open} className="rounded-full">
           <Avatar userId={user.id} name={user.displayName} />

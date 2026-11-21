@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppKlicRouteImport } from './routes/_app/klic'
 import { Route as AppProfilRouteImport } from './routes/_app/profil'
 import { Route as AppSchuzkaRouteImport } from './routes/_app/schuzka'
 import { Route as AppSpravaRouteImport } from './routes/_app/sprava'
@@ -19,6 +20,7 @@ import { Route as AppTydenRouteImport } from './routes/_app/tyden'
 import { Route as AppZapsatRouteImport } from './routes/_app/zapsat'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as DevUiRouteImport } from './routes/dev/ui'
+import { Route as AppUkolTaskIdRouteImport } from './routes/_app/ukol/$taskId'
 import { Route as AppUkolyIndexRouteImport } from './routes/_app/ukoly/index'
 import { Route as AppUkolyNovyRouteImport } from './routes/_app/ukoly/novy'
 
@@ -34,6 +36,11 @@ const LoginRoute = LoginRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppKlicRoute = AppKlicRouteImport.update({
+  id: '/klic',
+  path: '/klic',
   getParentRoute: () => AppRoute,
 } as any)
 const AppProfilRoute = AppProfilRouteImport.update({
@@ -71,6 +78,11 @@ const DevUiRoute = DevUiRouteImport.update({
   path: '/dev/ui',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppUkolTaskIdRoute = AppUkolTaskIdRouteImport.update({
+  id: '/ukol/$taskId',
+  path: '/ukol/$taskId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppUkolyIndexRoute = AppUkolyIndexRouteImport.update({
   id: '/ukoly/',
   path: '/ukoly/',
@@ -85,6 +97,7 @@ const AppUkolyNovyRoute = AppUkolyNovyRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
+  '/klic': typeof AppKlicRoute
   '/profil': typeof AppProfilRoute
   '/schuzka': typeof AppSchuzkaRoute
   '/sprava': typeof AppSpravaRoute
@@ -92,11 +105,13 @@ export interface FileRoutesByFullPath {
   '/zapsat': typeof AppZapsatRoute
   '/api/health': typeof ApiHealthRoute
   '/dev/ui': typeof DevUiRoute
+  '/ukol/$taskId': typeof AppUkolTaskIdRoute
   '/ukoly/novy': typeof AppUkolyNovyRoute
   '/ukoly/': typeof AppUkolyIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/klic': typeof AppKlicRoute
   '/profil': typeof AppProfilRoute
   '/schuzka': typeof AppSchuzkaRoute
   '/sprava': typeof AppSpravaRoute
@@ -105,6 +120,7 @@ export interface FileRoutesByTo {
   '/api/health': typeof ApiHealthRoute
   '/dev/ui': typeof DevUiRoute
   '/': typeof AppIndexRoute
+  '/ukol/$taskId': typeof AppUkolTaskIdRoute
   '/ukoly/novy': typeof AppUkolyNovyRoute
   '/ukoly': typeof AppUkolyIndexRoute
 }
@@ -112,6 +128,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/_app/klic': typeof AppKlicRoute
   '/_app/profil': typeof AppProfilRoute
   '/_app/schuzka': typeof AppSchuzkaRoute
   '/_app/sprava': typeof AppSpravaRoute
@@ -120,6 +137,7 @@ export interface FileRoutesById {
   '/api/health': typeof ApiHealthRoute
   '/dev/ui': typeof DevUiRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/ukol/$taskId': typeof AppUkolTaskIdRoute
   '/_app/ukoly/novy': typeof AppUkolyNovyRoute
   '/_app/ukoly/': typeof AppUkolyIndexRoute
 }
@@ -128,6 +146,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/klic'
     | '/profil'
     | '/schuzka'
     | '/sprava'
@@ -135,11 +154,13 @@ export interface FileRouteTypes {
     | '/zapsat'
     | '/api/health'
     | '/dev/ui'
+    | '/ukol/$taskId'
     | '/ukoly/novy'
     | '/ukoly/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/klic'
     | '/profil'
     | '/schuzka'
     | '/sprava'
@@ -148,12 +169,14 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/dev/ui'
     | '/'
+    | '/ukol/$taskId'
     | '/ukoly/novy'
     | '/ukoly'
   id:
     | '__root__'
     | '/_app'
     | '/login'
+    | '/_app/klic'
     | '/_app/profil'
     | '/_app/schuzka'
     | '/_app/sprava'
@@ -162,6 +185,7 @@ export interface FileRouteTypes {
     | '/api/health'
     | '/dev/ui'
     | '/_app/'
+    | '/_app/ukol/$taskId'
     | '/_app/ukoly/novy'
     | '/_app/ukoly/'
   fileRoutesById: FileRoutesById
@@ -194,6 +218,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/klic': {
+      id: '/_app/klic'
+      path: '/klic'
+      fullPath: '/klic'
+      preLoaderRoute: typeof AppKlicRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/profil': {
@@ -245,6 +276,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevUiRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_app/ukol/$taskId': {
+      id: '/_app/ukol/$taskId'
+      path: '/ukol/$taskId'
+      fullPath: '/ukol/$taskId'
+      preLoaderRoute: typeof AppUkolTaskIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/ukoly/': {
       id: '/_app/ukoly/'
       path: '/ukoly'
@@ -263,23 +301,27 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppKlicRoute: typeof AppKlicRoute
   AppProfilRoute: typeof AppProfilRoute
   AppSchuzkaRoute: typeof AppSchuzkaRoute
   AppSpravaRoute: typeof AppSpravaRoute
   AppTydenRoute: typeof AppTydenRoute
   AppZapsatRoute: typeof AppZapsatRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppUkolTaskIdRoute: typeof AppUkolTaskIdRoute
   AppUkolyNovyRoute: typeof AppUkolyNovyRoute
   AppUkolyIndexRoute: typeof AppUkolyIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppKlicRoute: AppKlicRoute,
   AppProfilRoute: AppProfilRoute,
   AppSchuzkaRoute: AppSchuzkaRoute,
   AppSpravaRoute: AppSpravaRoute,
   AppTydenRoute: AppTydenRoute,
   AppZapsatRoute: AppZapsatRoute,
   AppIndexRoute: AppIndexRoute,
+  AppUkolTaskIdRoute: AppUkolTaskIdRoute,
   AppUkolyNovyRoute: AppUkolyNovyRoute,
   AppUkolyIndexRoute: AppUkolyIndexRoute,
 }

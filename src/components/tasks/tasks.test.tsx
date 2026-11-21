@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { PointsBar } from '~/components/points/PointsBar'
@@ -21,6 +22,12 @@ vi.mock('~/server/tasks/functions', () => ({
   completeTaskFn: vi.fn(),
   releaseTaskFn: vi.fn(),
   reserveTaskFn: vi.fn(),
+}))
+vi.mock('./bidCalls', () => ({ callBid: vi.fn(), BID_CALLS: {} }))
+// WaitingForYou's task rows link to the task page (#34); a plain <a> stands in for the router.
+vi.mock('@tanstack/react-router', () => ({
+  useRouter: () => ({ invalidate: vi.fn() }),
+  Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
 }))
 
 const buttons = (html: string) => html.match(/<button[\s\S]*?<\/button>/g) ?? []
@@ -161,6 +168,7 @@ describe('WaitingForYou with templates (#37)', () => {
     completedBy: null,
     completedAt: null,
     earnerId: null,
+    waitingFor: [],
   }
   const template = {
     id: 1,
@@ -172,10 +180,13 @@ describe('WaitingForYou with templates (#37)', () => {
     approvedBy: ['Táta'],
     schedule: { days: [0, 1, 2, 3, 4, 5, 6] as (0 | 1 | 2 | 3 | 4 | 5 | 6)[], time: '18:00' },
     deadline: { dayOffset: 1, due: '07:00', graceMinutes: 120 },
+    change: null,
   }
 
   it('counts tasks and templates and shows the full template detail', () => {
-    const html = renderToStaticMarkup(<WaitingForYou items={[task]} templates={[template]} />)
+    const html = renderToStaticMarkup(
+      <WaitingForYou items={[task]} templates={[template]} me={{ id: 3, role: 'taker' }} />,
+    )
     expect(html).toContain(`${cs.home.waiting} (2)`)
     expect(html).toContain(
       'Po, Út, St, Čt, Pá, So, Ne v 18:00 · do dalšího dne 7:00 (+2 h) · schvaluje rodič · Souhlasí: Táta',
@@ -184,7 +195,11 @@ describe('WaitingForYou with templates (#37)', () => {
   })
 
   it('renders nothing when nothing waits', () => {
-    expect(renderToStaticMarkup(<WaitingForYou items={[]} templates={[]} />)).toBe('')
+    expect(
+      renderToStaticMarkup(
+        <WaitingForYou items={[]} templates={[]} me={{ id: 3, role: 'taker' }} />,
+      ),
+    ).toBe('')
   })
 })
 
@@ -205,6 +220,7 @@ describe('ToApprove', () => {
     completedBy: { id: 4, name: 'Mladší' },
     completedAt: '2026-11-18T14:00:00.000Z',
     earnerId: 4,
+    waitingFor: [],
   }
 
   it('shows ✕ Zamítnout and ✓ Schválit as 44 px icon buttons, each with its own label, colour and icon', () => {
@@ -253,6 +269,7 @@ describe('TakerBoard Moje row (#148)', () => {
     approverIds: [],
     bids: [],
     lowest: null,
+    waitingFor: [],
   }
   const doneButton = (html: string) =>
     buttons(html).find((b) => b.includes(`>${cs.work.done}<`)) ?? ''
@@ -313,7 +330,7 @@ describe('TakerBoard Moje row (#148)', () => {
   })
 })
 
-/** Walks a React element tree (props and children, not rendered) for the element(s) with this aria-label; `index` picks one of several. */
+/** Walks a React element tree (props, children and hook-free components, not rendered) for the element(s) with this aria-label; `index` picks one of several. */
 function findByLabel(node: unknown, label: string, index?: number): { onClick: () => void } {
   const found: { onClick: () => void }[] = []
   const walk = (n: unknown): void => {
@@ -323,6 +340,13 @@ function findByLabel(node: unknown, label: string, index?: number): { onClick: (
     }
     if (n === null || typeof n !== 'object' || !('props' in n)) return
     const props = (n as { props: Record<string, unknown> }).props
+    // Hook-free components (TaskRow, WorkButtons, Button) are expanded so their DOM elements are
+    // found; their output already holds whatever of their props they render.
+    const type = (n as { type?: unknown }).type
+    if (typeof type === 'function') {
+      walk((type as (p: unknown) => unknown)(props))
+      return
+    }
     if (props['aria-label'] === label) found.push(props as unknown as { onClick: () => void })
     Object.values(props).forEach(walk)
   }

@@ -3,6 +3,7 @@ import {
   approveTemplate,
   findPerson,
   isValidScore,
+  liveTemplateBook,
   missingRoles,
   proposeTemplate,
   resolveTemplate,
@@ -28,10 +29,11 @@ import type { Db } from '~/server/db'
 import { templates, templateScoreApprovals, users } from '~/server/db/schema'
 import type { TemplateRow, TemplateStatus } from '~/server/db/schema'
 import { listPeople } from '~/server/users/people'
+import { openRows, threadOf } from './thread'
 
 // Recurring templates and their first score agreement (spec §5.1, §5.3). The rules live in
 // src/domain (agreement + templates); this module loads the rows, asks the domain, and writes
-// the result with its audit entries in one transaction. Score changes after agreement: #138.
+// the result with its audit entries in one transaction. Score changes after agreement: ./scoreChange.
 
 export type TemplateError = AgreementError | TemplateDefinitionError | 'invalid_title' | 'not_found'
 
@@ -70,9 +72,24 @@ function approvers(db: Db | Tx, templateId: number): number[] {
     .map((r) => r.userId)
 }
 
-/** The domain's view: stored `active` is the domain's `agreed`. */
-function agreementOf(db: Db | Tx, row: TemplateRow): TemplateAgreement {
-  if (row.status === 'active') return { status: 'agreed', score: row.score, change: null }
+/**
+ * The domain's view: stored `active` is the domain's `agreed`, with the score change in flight
+ * read from the open thread rows (null when none are open).
+ */
+export function agreementOf(db: Db | Tx, row: TemplateRow): TemplateAgreement {
+  if (row.status === 'active') {
+    const rows = openRows(db, row.id)
+    if (rows.length === 0) return { status: 'agreed', score: row.score, change: null }
+    const offer = rows.find((r) => r.side === 'giver')
+    return {
+      status: 'agreed',
+      score: row.score,
+      change: {
+        offer: offer ? { score: offer.score, proposedBy: offer.userId } : null,
+        bids: rows.filter((r) => r.side === 'taker').map((r) => ({ by: r.userId, score: r.score })),
+      },
+    }
+  }
   return {
     status: 'proposed',
     proposal: { score: row.score, proposedBy: row.createdBy, approvedBy: approvers(db, row.id) },
@@ -246,6 +263,34 @@ export interface TemplateView {
   schedule: { days: Weekday[]; time: string | null } | null
   /** `due` is Prague `HH:MM`. */
   deadline: { dayOffset: number; due: string; graceMinutes: number } | null
+  /** Agreed with a score change in flight (spec §5.1), else null. */
+  change: TemplateChangeView | null
+}
+
+/** A score change as screens show it: current takers' bids only (live), lowest first. */
+export interface TemplateChangeView {
+  offer: { score: number; byName: string } | null
+  bids: { takerId: number; name: string; score: number }[]
+  /** The lowest live bid: what a giver's accept sends back. Null with no bids. */
+  lowest: number | null
+}
+
+function changeView(
+  db: Db | Tx,
+  row: TemplateRow,
+  people: Person[],
+  name: (id: number) => string,
+): TemplateChangeView | null {
+  const agreement = agreementOf(db, row)
+  if (agreement.status !== 'agreed' || !agreement.change) return null
+  const { offer, bids } = liveTemplateBook(agreement.change, people)
+  // Bids are oldest first; a stable sort keeps that order among equal scores.
+  const live = [...bids].sort((a, b) => a.score - b.score)
+  return {
+    offer: offer ? { score: offer.score, byName: name(offer.proposedBy) } : null,
+    bids: live.map((b) => ({ takerId: b.by, name: name(b.by), score: b.score })),
+    lowest: live[0]?.score ?? null,
+  }
 }
 
 function views(db: Db | Tx, rows: TemplateRow[]): TemplateView[] {
@@ -257,6 +302,8 @@ function views(db: Db | Tx, rows: TemplateRow[]): TemplateView[] {
       .all()
       .map((u) => [u.id, u.name]),
   )
+  const people = listPeople(db)
+  const name = (id: number) => names.get(id) ?? ''
   return rows.map((t) => ({
     id: t.id,
     title: t.title,
@@ -271,12 +318,53 @@ function views(db: Db | Tx, rows: TemplateRow[]): TemplateView[] {
       t.dueDayOffset === null || t.dueTime === null || t.graceMinutes === null
         ? null
         : { dayOffset: t.dueDayOffset, due: t.dueTime, graceMinutes: t.graceMinutes },
+    change: changeView(db, t, people, name),
   }))
 }
 
-/** Every template, newest first (the giver's Úkoly screen). */
-export function listTemplates(db: Db | Tx): TemplateView[] {
-  return views(db, db.select().from(templates).orderBy(desc(templates.id)).all())
+/**
+ * Templates for the Úkoly screen, newest first. A giver sees every template; anyone else only
+ * agreed ones (proposed ones reach takers through "Čeká na tebe").
+ */
+export function listTemplates(db: Db | Tx, viewerId: number): TemplateView[] {
+  const viewer = findPerson(listPeople(db), viewerId)
+  const query = db.select().from(templates)
+  const rows =
+    viewer?.role === 'giver'
+      ? query.orderBy(desc(templates.id)).all()
+      : query.where(eq(templates.status, 'active')).orderBy(desc(templates.id)).all()
+  return views(db, rows)
+}
+
+/** One entry of a template's score change history (spec §5.1: every bid is kept). */
+export interface TemplateHistoryEntry {
+  side: 'giver' | 'taker'
+  name: string
+  score: number
+  /** UTC ISO instant the number was put. */
+  at: string
+  /** Null while open. */
+  closedAs: 'replaced' | 'accepted' | 'closed' | null
+}
+
+/** Every offer and bid ever made on this template's score changes, oldest first. */
+export function templateHistory(db: Db | Tx, templateId: number): TemplateHistoryEntry[] {
+  const rows = threadOf(db, templateId)
+  if (rows.length === 0) return []
+  const names = new Map(
+    db
+      .select({ id: users.id, name: users.displayName })
+      .from(users)
+      .all()
+      .map((u) => [u.id, u.name]),
+  )
+  return rows.map((r) => ({
+    side: r.side,
+    name: names.get(r.userId) ?? '',
+    score: r.score,
+    at: r.createdAt,
+    closedAs: r.closedAs,
+  }))
 }
 
 /**

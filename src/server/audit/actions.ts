@@ -33,6 +33,8 @@ export const AUDIT_ACTIONS = [
   'template.created',
   'template.score_approved',
   'template.score_change_proposed',
+  'template.bid_placed',
+  'template.score_countered',
   'template.score_changed',
   'template.agreed',
   'template.updated',
