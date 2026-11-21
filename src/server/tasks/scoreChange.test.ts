@@ -244,9 +244,21 @@ describe('a change in flight is discarded once the task cannot change score', ()
     must(proposeTaskScoreChange(f.db, f.starsi, id, 20, T2))
     must(approveTaskScoreChange(f.db, mama, id, changeId(f, id), T2))
     expect(row(f.db, id)).toMatchObject({ score: 20, reservedGiverId: mama })
+    expect(lastAudit(f.db)?.action).toBe('task.score_changed')
+    expect(json(lastAudit(f.db)?.before)).toEqual({ score: 18, reservedGiverId: f.tata })
+    expect(json(lastAudit(f.db)?.after)).toMatchObject({ score: 20, reservedGiverId: mama })
     must(releaseTask(f.db, f.starsi, id, T3))
     const detail = getTaskDetail(f.db, id)
     expect(detail?.task).toMatchObject({ status: 'proposed', score: 20, approverIds: [mama] })
+  })
+
+  it('a tap reservation at a new price names no giver, and the log says only the score', () => {
+    const f = family()
+    const id = reservedTask(f)
+    must(proposeTaskScoreChange(f.db, f.tata, id, 20, T2))
+    must(approveTaskScoreChange(f.db, f.starsi, id, changeId(f, id), T2))
+    expect(row(f.db, id)).toMatchObject({ score: 20, reservedVia: 'tap', reservedGiverId: null })
+    expect(json(lastAudit(f.db)?.before)).toEqual({ score: 18 })
   })
 
   it('a tap reservation released back to open keeps the change', () => {

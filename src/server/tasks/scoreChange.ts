@@ -124,8 +124,12 @@ export function approveTaskScoreChange(
       action: 'task.score_changed',
       entityType: 'task',
       entityId: taskId,
-      before: { score: task.score },
-      after: { changeId, score },
+      // A bid-won reservation's giver moves with the score (see above): logged both sides.
+      before:
+        giverId === null
+          ? { score: task.score }
+          : { score: task.score, reservedGiverId: task.reservedGiverId },
+      after: giverId === null ? { changeId, score } : { changeId, score, reservedGiverId: giverId },
       at: now,
     })
     return ok(row)
