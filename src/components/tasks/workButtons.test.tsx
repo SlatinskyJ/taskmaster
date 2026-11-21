@@ -9,7 +9,8 @@ import {
   type TaskView,
 } from '~/server/tasks/functions'
 import { TakerBoard } from './TakerBoard'
-import { TaskWorkPanel } from './WorkButtons'
+import { pointsFloat } from './pointsFloat'
+import { DoneButton, TaskWorkPanel } from './WorkButtons'
 
 // Hotovo and Uvolnit (#150), on the task page and the Domů row, rendered statically. The action
 // hook and the server functions are stubbed as in bidPanel.test.tsx; Button records each label's
@@ -107,7 +108,7 @@ describe('TaskWorkPanel (task page)', () => {
     action.pressed.get(cs.work.done)?.onClick?.({ currentTarget: el })
     const [key, fn, success, opts] = lastRun()
     expect(key).toBe('done-1')
-    expect(opts).toEqual({ confetti: el })
+    expect(opts).toEqual({ confetti: el, float: 8 })
     void fn()
     expect(completeTaskFn).toHaveBeenCalledWith({ data: { taskId: 1 } })
     expect(success({ ok: true, status: 'confirmed' })).toBe(cs.work.toast.done)
@@ -201,7 +202,7 @@ describe('TakerBoard Volné row (Domů, #40)', () => {
     action.pressed.get(cs.work.done)?.onClick?.({ currentTarget: el })
     const [key, fn, , opts] = lastRun()
     expect(key).toBe('done-7')
-    expect(opts).toEqual({ confetti: el })
+    expect(opts).toEqual({ confetti: el, float: 8 })
     void fn()
     expect(completeTaskFn).toHaveBeenCalledWith({ data: { taskId: 7 } })
     expect(reserveTaskFn).not.toHaveBeenCalled()
@@ -212,5 +213,52 @@ describe('TakerBoard Volné row (Domů, #40)', () => {
     renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
     expect(action.pressed.get(cs.work.reserve)?.disabled).toBe(true)
     expect(action.pressed.get(cs.work.done)?.disabled).toBe(true)
+  })
+})
+
+describe('TakerBoard Volné row when idle (#40)', () => {
+  const open = view({ id: 7, title: 'Zalít květiny', status: 'open', reservedBy: null })
+
+  it('both buttons are enabled while nothing runs, and only the tapped one is aria-busy', () => {
+    renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
+    expect(action.pressed.get(cs.work.reserve)?.disabled).toBe(false)
+    expect(action.pressed.get(cs.work.done)?.disabled).toBe(false)
+    action.busy = 'reserve-7'
+    const html = renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
+    expect(html).toMatch(
+      new RegExp(
+        `aria-label="${cs.work.reserve}"[^>]*aria-busy="true"|aria-busy="true"[^>]*aria-label="${cs.work.reserve}"`,
+      ),
+    )
+    expect(count(html, 'aria-busy="true"')).toBe(1)
+  })
+})
+
+describe('the "+N" float after Hotovo (UI doc §4)', () => {
+  const button = { getBoundingClientRect: () => ({ left: 10, top: 20, width: 80, height: 44 }) }
+
+  it('Hotovo asks for its score to float', () => {
+    renderToStaticMarkup(<DoneButton task={{ id: 7, score: 5 }} busy={null} run={action.run} />)
+    action.pressed.get(cs.work.done)?.onClick?.({ currentTarget: button })
+    expect(lastRun()[3]).toEqual({ confetti: button, float: 5 })
+  })
+
+  it('floats in the pending colour where the button was, when it waits for approval', () => {
+    expect(pointsFloat({ status: 'done_unconfirmed' }, { confetti: button, float: 5 })).toEqual({
+      points: 5,
+      tone: 'pending',
+      rect: { left: 10, top: 20, width: 80, height: 44 },
+    })
+  })
+
+  it('floats green when the points count at once', () => {
+    expect(pointsFloat({ status: 'confirmed' }, { confetti: button, float: 5 })?.tone).toBe(
+      'confirmed',
+    )
+  })
+
+  it('floats nothing for actions that carry no points or no element', () => {
+    expect(pointsFloat({ status: 'reserved' }, { confetti: button })).toBeNull()
+    expect(pointsFloat({ status: 'confirmed' }, { confetti: null, float: 5 })).toBeNull()
   })
 })

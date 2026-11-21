@@ -72,7 +72,7 @@ export function seedDemo(
       ids.set(person.username, created.value.id)
     }
     const id = (username: string) => ids.get(username) ?? 0
-    const step = <T>(what: string, r: { ok: true; value: T } | { ok: false; error: string }) => {
+    const step: Step = (what, r) => {
       if (!r.ok) throw new Error(`Demo seed: ${what}: ${r.error}`)
       return r.value
     }

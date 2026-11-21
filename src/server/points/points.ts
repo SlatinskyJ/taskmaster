@@ -1,5 +1,6 @@
 import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { DEFAULT_LEVELS } from '~/domain/periods'
+import type { Role } from '~/domain/parties'
 import type { LedgerEntry, Levels } from '~/domain/settlement'
 import { runningTotal } from '~/domain/settlement'
 import type { Tx } from '~/server/audit'
@@ -13,7 +14,9 @@ import { tasks, users } from '~/server/db/schema'
 // entries are completions (confirmed one-time tasks with an earner). Owners of the rest:
 //   - #44 (weekly meeting) adds `settlement` entries, the points each settlement deducted;
 //   - #48 (corrections, adjustments) adds `adjustment` entries;
-//   - #42 (periods) takes `levels` from the current period instead of DEFAULT_LEVELS.
+//   - #42 (periods) takes `levels` from the current period instead of DEFAULT_LEVELS;
+//   - #38 (recurring instances, their own table) adds a completion entry per confirmed instance
+//     and their done, unconfirmed ones to pending.
 // `pending` is the sum of the taker's done, unconfirmed tasks. A task a giver did himself has
 // no earner and counts for nobody.
 
@@ -61,4 +64,11 @@ export function takerPoints(db: Db | Tx): PointsOverview {
       pending: pending.get(t.id) ?? 0,
     })),
   }
+}
+
+/** What one person may see (spec §5.7): a taker only his own row, a giver every taker. */
+export function pointsView(db: Db | Tx, viewer: { id: number; role: Role }): PointsOverview {
+  const overview = takerPoints(db)
+  if (viewer.role !== 'taker') return overview
+  return { ...overview, takers: overview.takers.filter((t) => t.id === viewer.id) }
 }

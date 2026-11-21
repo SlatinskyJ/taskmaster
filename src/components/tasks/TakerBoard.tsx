@@ -1,4 +1,5 @@
 import { Bookmark } from 'lucide-react'
+import { FloatingPoints } from '~/components/effects/FloatingPoints'
 import { EmptyState } from '~/components/EmptyState'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
@@ -12,12 +13,12 @@ import { DoneButton, WorkButtons } from './WorkButtons'
 /**
  * A taker's work on Domů (UI doc §7.1): "Moje" (reserved by me, or done and waiting for
  * approval) and "Volné" (open). An open task can be marked done without reserving it (spec
- * §5.5, #40). On both rows the main action, Hotovo, keeps its label and the other one is a
+ * §5.4, #40). On both rows the main action, Hotovo, keeps its label and the other one is a
  * 44 px icon button (↶ Uvolnit on "Moje", Rezervovat on "Volné"), so a long name and the chip
  * read in full at 360 px (mockup Main, #148). The task page keeps both labelled.
  */
 export function TakerBoard({ items, me }: { items: readonly TaskView[]; me: number }) {
-  const { busy, run } = useTaskAction()
+  const { busy, run, float } = useTaskAction()
   const mine = items.filter(
     (t) => t.reservedBy?.id === me || (t.status === 'done_unconfirmed' && t.earnerId === me),
   )
@@ -86,6 +87,22 @@ export function TakerBoard({ items, me }: { items: readonly TaskView[]; me: numb
           </ul>
         )}
       </section>
+      {float && (
+        // The "+N" after Hotovo floats where the boy tapped (UI doc §4), fixed to the screen,
+        // since the row itself moves to "Moje" when the board reloads.
+        <div
+          aria-hidden
+          className="pointer-events-none fixed z-50"
+          style={{
+            left: float.rect.left,
+            top: float.rect.top,
+            width: float.rect.width,
+            height: float.rect.height,
+          }}
+        >
+          <FloatingPoints key={float.key} points={float.points} tone={float.tone} />
+        </div>
+      )}
     </>
   )
 }

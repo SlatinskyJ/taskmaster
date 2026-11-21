@@ -166,6 +166,7 @@ describe('Domů loader', () => {
       recurring: [],
       toApprove: ['toApprove'],
       bids: ['bids'],
+      points: null,
     })
   })
 })

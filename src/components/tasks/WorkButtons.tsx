@@ -8,14 +8,14 @@ import { useTaskAction } from './useTaskAction'
 
 export type Run = ReturnType<typeof useTaskAction>['run']
 
-/** Hotovo for one task: the main action, with confetti; the toast says whether it waits. */
+/** Hotovo for one task: the main action, with confetti and its "+N"; the toast says whether it waits. */
 export function DoneButton({
   task,
   busy,
   run,
   wide = false,
 }: {
-  task: Pick<TaskView, 'id'>
+  task: Pick<TaskView, 'id' | 'score'>
   busy: string | null
   run: Run
   wide?: boolean
@@ -32,7 +32,7 @@ export function DoneButton({
           doneKey,
           () => completeTaskFn({ data: { taskId: task.id } }),
           (r) => (r.status === 'confirmed' ? cs.work.toast.done : cs.work.toast.pending),
-          { confetti: e.currentTarget },
+          { confetti: e.currentTarget, float: task.score },
         )
       }}
     >
@@ -53,7 +53,7 @@ export function WorkButtons({
   run,
   wide = false,
 }: {
-  task: Pick<TaskView, 'id'>
+  task: Pick<TaskView, 'id' | 'score'>
   busy: string | null
   run: Run
   wide?: boolean

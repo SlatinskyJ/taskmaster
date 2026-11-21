@@ -15,9 +15,12 @@ test('taker sees his points and marks an open task done', async ({ page }) => {
   await expect(bar(page)).toHaveAttribute('aria-label', /^40 bodů potvrzeno, 12 čeká/)
   await expect(page.getByText('Do spodní hranice chybí 10 bodů.')).toBeVisible()
 
+  // Nothing floats on first load; the "+5" shows where Hotovo was tapped.
+  await expect(page.locator('.animate-float-up')).toHaveCount(0)
   const row = page.getByRole('listitem').filter({ hasText: 'Umýt okna v obýváku i v ložnici' })
   await row.getByRole('button', { name: cs.work.done, exact: true }).click()
   await expect(page.getByText(cs.work.toast.pending)).toBeVisible()
+  await expect(page.locator('.animate-float-up', { hasText: '+5' })).toBeVisible()
   await expect(bar(page)).toHaveAttribute('aria-label', /^40 bodů potvrzeno, 17 čeká/)
 })
 

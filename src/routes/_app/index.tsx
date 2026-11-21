@@ -51,6 +51,7 @@ export const Route = createFileRoute('/_app/')({
       recurring: [],
       toApprove: await listPendingCompletionsFn(),
       bids: await listBidsToAnswerFn(),
+      points: null,
     }
   },
   component: Home,
@@ -60,9 +61,8 @@ export const Route = createFileRoute('/_app/')({
 // then the work lists. The giver's home comes with #41.
 function Home() {
   const { user } = Route.useRouteContext()
-  const data = Route.useLoaderData()
-  const { waiting, waitingTemplates, priceChanges, board, recurring, toApprove, bids } = data
-  const points = 'points' in data ? data.points : undefined
+  const { waiting, waitingTemplates, priceChanges, board, recurring, toApprove, bids, points } =
+    Route.useLoaderData()
   return (
     <Screen title={`${cs.home.greeting}, ${user.displayName}!`} user={user}>
       {points && <MyPoints points={points} me={user.id} />}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { approveTask, approveTaskOffer, completeTask, createTask } from '~/server/tasks'
 import { T0, T1, T2, T3, family, must, type Family } from '~/server/tasks/testing'
-import { pointsView } from './functions'
+import { pointsView } from './points'
 
 // What getPointsFn returns to whom (spec §5.7): its handler is exactly `pointsView`.
 
