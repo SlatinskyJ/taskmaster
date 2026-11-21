@@ -40,6 +40,14 @@ describe('demo seed (#62)', () => {
       ['task.bid_placed', 'user'],
       ['task.score_approved', 'user'],
       ['task.agreed', 'user'],
+      ['task.created', 'user'],
+      ['task.score_approved', 'user'],
+      ['task.agreed', 'user'],
+      ['task.score_change_proposed', 'user'],
+      ['task.created', 'user'],
+      ['task.score_approved', 'user'],
+      ['task.agreed', 'user'],
+      ['task.cancelled', 'user'],
     ])
   })
 
@@ -50,6 +58,8 @@ describe('demo seed (#62)', () => {
     expect(
       all.map((t) => [t.title, t.status, t.score, t.bids.map((b) => [b.name, b.score])]),
     ).toEqual([
+      ['Umýt okna v kuchyni', 'cancelled', 6, []],
+      ['Shrabat listí na zahradě', 'open', 10, []],
       ['Vyluxovat celý obývák a chodbu', 'reserved', 8, []],
       ['Uklidit sklep', 'proposed', 10, []],
       [
@@ -63,6 +73,13 @@ describe('demo seed (#62)', () => {
       ],
     ])
     expect(all.find((t) => t.status === 'reserved')?.reservedBy?.name).toBe('Starší')
+    // #36: Táta's new price 12 waits for the brothers; the cancelled task keeps its reason.
+    expect(all.find((t) => t.status === 'open')?.scoreChange).toMatchObject({
+      score: 12,
+      waitingFor: [{ name: 'Starší' }, { name: 'Mladší' }],
+    })
+    const cancelled = db.select().from(auditLog).where(eq(auditLog.action, 'task.cancelled')).get()
+    expect(cancelled?.reason).toBe('Udělá to firma.')
   })
 
   it('demo login works for every role', async () => {

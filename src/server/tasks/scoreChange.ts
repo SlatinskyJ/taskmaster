@@ -49,7 +49,7 @@ function answeredChange(
 
 /** A party proposes a new score for an agreed task: open → any party; reserved → its taker or a giver. */
 export function proposeTaskScoreChange(
-  db: Db,
+  db: Db | Tx,
   userId: number,
   taskId: number,
   score: number,
@@ -85,7 +85,7 @@ export function proposeTaskScoreChange(
 
 /** Someone the change needs says yes; once it is agreed the task takes the new score. */
 export function approveTaskScoreChange(
-  db: Db,
+  db: Db | Tx,
   userId: number,
   taskId: number,
   changeId: number,
@@ -128,7 +128,7 @@ export function approveTaskScoreChange(
 
 /** The proposer withdraws the change, or someone it waits for declines it. The old score stays. */
 export function declineTaskScoreChange(
-  db: Db,
+  db: Db | Tx,
   userId: number,
   taskId: number,
   changeId: number,

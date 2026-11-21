@@ -46,7 +46,7 @@ type Step = (
  * show the final state.
  */
 function runStep(
-  db: Db,
+  db: Db | Tx,
   userId: number,
   taskId: number,
   action: AuditAction,
@@ -159,7 +159,7 @@ function reasonOf(reason: string | undefined): { text: string | undefined } | nu
  * everyone sees in the history. It stays a row (spec §5.10); a proposed task's thread closes.
  */
 export function cancelTask(
-  db: Db,
+  db: Db | Tx,
   userId: number,
   taskId: number,
   reason: string | undefined,

@@ -199,7 +199,7 @@ export function createTask(
  * Once a giver and a taker have approved, the task is open.
  */
 export function approveTaskOffer(
-  db: Db,
+  db: Db | Tx,
   userId: number,
   taskId: number,
   score: number,
