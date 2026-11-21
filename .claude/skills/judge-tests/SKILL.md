@@ -30,25 +30,24 @@ Read `.claude/skills/pr-review-rounds/judge-contract.md` first. It defines your 
 
 ## Prove a gap with a mutant
 
-A missing test is a claim until you show a bug that gets through. In a code round, for each gap you would file as `should-fix`:
+A missing test is a claim until a mutant shows a bug that gets through. In a code round, CI mutates the `src/` files the PR changes (job `mutation`, StrykerJS). Read its report; do not edit code or run mutants yourself.
 
-1. Work in your own worktree, never the shared checkout (other judges run tests there at the same time): `git worktree add <scratch>/tests-judge-<pr> origin/<branch>`, then `pnpm install --frozen-lockfile` in it once. Steps 2 to 5 happen there.
-2. Break the one line the missing test should guard: drop the check, flip `<` to `<=`, return the unfiltered row, move the write out of the transaction.
-3. Run the test files that cover it: `pnpm vitest run <files>`.
-4. All pass → the mutant survived, and the gap is real. A test fails → the code is covered: no finding.
-5. `git checkout -- <file>` in the worktree before the next mutant. When you finish: `git worktree remove --force <scratch>/tests-judge-<pr>`.
+1. Find the job for the PR head: `gh api "repos/SlatinskyJ/taskmaster/commits/<head sha>/check-runs?check_name=mutation" --jq '.check_runs[0] | .id, .status, .conclusion'`. Still running → wait and check again (it can take up to 45 min). Failed or missing → say so in the summary; every gap is then by reading, so a `nit`.
+2. Read the report: `gh api repos/SlatinskyJ/taskmaster/actions/jobs/<id>/logs`, the lines between `=== mutation report ===` and `=== end mutation report ===`. Each line is `<file>:<line>:<column> <mutator>: <original> → <replacement>`; `(no test)` means no test runs that line at all.
+3. Each survivor on a line the PR changed is a gap candidate. Drop equivalent mutants (the change can't alter behaviour, e.g. the text of a log or error message nobody asserts). A survivor on a line the PR did not change is `pre-existing`.
+4. A killed mutant means the line is covered: no finding.
 
 The `Failure:` line in this lane has this shape:
 
 ```
-Failure: <file>:<line> <the change you made> → <N> tests pass (<test files>); <what a person or the data would then see>
+Failure: <file>:<line> <mutator>: <original> → <replacement> survives (mutation job <job id>); <what a person or the data would then see>
 ```
 
-A gap you ran no mutant for is a `nit`.
+A gap no mutant in the report shows is a `nit`.
 
 Gaps that one new test (or one test setup) would close are one finding, placed at the most serious of them, with the other mutants listed in its `Failure:` line.
 
-Start your review's one-sentence summary with the count: `Mutants: <n> run, <k> survived. <most important point>`. Claim "covered" only for lines whose mutant you ran and saw fail; for the rest say "by reading".
+Start your review's one-sentence summary with the count: `Mutants: <n> in report, <k> survive on changed lines. <most important point>`. Claim "covered" only for lines whose mutants the report shows killed; for the rest say "by reading".
 
 ## In a plan round
 
@@ -81,7 +80,7 @@ A bug you found while reading tests goes to Rules if Rules is on the panel. Your
 
 ## Common mistakes
 
-- Filing a gap from reading alone. Run the mutant; half of the gaps that look open are covered by a test in another file.
+- Filing a gap from reading alone. Check the report; half of the gaps that look open are covered by a test in another file.
 - Asking for a coverage percentage. Ask for the specific missing case.
 - Asking for tests of code the PR didn't touch. That is `pre-existing`.
 - Raising a new `should-fix` each round for a smaller and smaller bug. The table above decides, not the round.

@@ -30,7 +30,15 @@ export const domainForbiddenImports = [
 ]
 
 export default defineConfig(
-  globalIgnores(['.output/', '.nitro/', '.tanstack/', 'coverage/', 'src/routeTree.gen.ts']),
+  globalIgnores([
+    '.output/',
+    '.nitro/',
+    '.tanstack/',
+    'coverage/',
+    'reports/',
+    '.stryker-tmp/',
+    'src/routeTree.gen.ts',
+  ]),
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
   tseslint.configs.stylisticTypeChecked,

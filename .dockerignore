@@ -4,6 +4,8 @@ node_modules
 .nitro
 .tanstack
 coverage
+reports
+.stryker-tmp
 *.db
 *.db-*
 .env
