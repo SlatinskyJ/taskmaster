@@ -2,9 +2,16 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ButtonModule from '~/components/ui/button'
 import { cs } from '~/lib/strings'
-import { completeTaskFn, releaseTaskFn, type TaskView } from '~/server/tasks/functions'
+import {
+  completeTaskFn,
+  releaseTaskFn,
+  reserveTaskFn,
+  type TaskView,
+} from '~/server/tasks/functions'
 import { TakerBoard } from './TakerBoard'
-import { TaskWorkPanel } from './WorkButtons'
+import { ToApprove } from './ToApprove'
+import { pointsFloat } from './pointsFloat'
+import { DoneButton, TaskWorkPanel } from './WorkButtons'
 
 // Hotovo and Uvolnit (#150), on the task page and the Domů row, rendered statically. The action
 // hook and the server functions are stubbed as in bidPanel.test.tsx; Button records each label's
@@ -35,6 +42,8 @@ vi.mock('~/components/ui/button', async (original) => {
   }
 })
 vi.mock('~/server/tasks/functions', () => ({
+  approveTaskFn: vi.fn(),
+  rejectTaskFn: vi.fn(),
   completeTaskFn: vi.fn(),
   releaseTaskFn: vi.fn(),
   reserveTaskFn: vi.fn(),
@@ -74,6 +83,7 @@ beforeEach(() => {
   action.pressed.clear()
   vi.mocked(completeTaskFn).mockReset()
   vi.mocked(releaseTaskFn).mockReset()
+  vi.mocked(reserveTaskFn).mockReset()
 })
 
 describe('TaskWorkPanel (task page)', () => {
@@ -101,7 +111,7 @@ describe('TaskWorkPanel (task page)', () => {
     action.pressed.get(cs.work.done)?.onClick?.({ currentTarget: el })
     const [key, fn, success, opts] = lastRun()
     expect(key).toBe('done-1')
-    expect(opts).toEqual({ confetti: el })
+    expect(opts).toEqual({ confetti: el, float: 8 })
     void fn()
     expect(completeTaskFn).toHaveBeenCalledWith({ data: { taskId: 1 } })
     expect(success({ ok: true, status: 'confirmed' })).toBe(cs.work.toast.done)
@@ -151,5 +161,121 @@ describe('TakerBoard Moje row (Domů)', () => {
     expect(html).toContain('Vynést koše')
     action.pressed.get(cs.work.release)?.onClick?.({ currentTarget: null })
     expect(lastRun()[0]).toBe('release-1')
+  })
+})
+
+describe('TakerBoard Volné row (Domů, #40)', () => {
+  const open = view({
+    id: 7,
+    title: 'Umýt okna v obýváku i v ložnici',
+    status: 'open',
+    reservedBy: null,
+  })
+
+  it('an open row has icon Rezervovat, then Hotovo, both 44 px', () => {
+    const html = renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
+    expect(html).toContain('Umýt okna v obýváku i v ložnici')
+    expect(count(html, `aria-label="${cs.work.reserve}"`)).toBe(1)
+    expect(count(html, `>${cs.work.reserve}<`)).toBe(0)
+    expect(html.indexOf(`aria-label="${cs.work.reserve}"`)).toBeLessThan(
+      html.indexOf(`>${cs.work.done}<`),
+    )
+    expect(html).toMatch(
+      new RegExp(
+        `aria-label="${cs.work.reserve}"[^>]*title="${cs.work.reserve}"|title="${cs.work.reserve}"[^>]*aria-label="${cs.work.reserve}"`,
+      ),
+    )
+    expect(html).toContain('size-tap')
+  })
+
+  it('Rezervovat reserves, it does not complete', () => {
+    renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
+    action.pressed.get(cs.work.reserve)?.onClick?.({ currentTarget: null })
+    const [key, fn, success] = lastRun()
+    expect(key).toBe('reserve-7')
+    void fn()
+    expect(reserveTaskFn).toHaveBeenCalledWith({ data: { taskId: 7 } })
+    expect(completeTaskFn).not.toHaveBeenCalled()
+    expect(success({ ok: true, status: 'reserved' })).toBe(cs.work.toast.reserved)
+  })
+
+  it('Hotovo completes the open task with confetti, without reserving it', () => {
+    renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
+    const el = { tag: 'button' }
+    action.pressed.get(cs.work.done)?.onClick?.({ currentTarget: el })
+    const [key, fn, , opts] = lastRun()
+    expect(key).toBe('done-7')
+    expect(opts).toEqual({ confetti: el, float: 8 })
+    void fn()
+    expect(completeTaskFn).toHaveBeenCalledWith({ data: { taskId: 7 } })
+    expect(reserveTaskFn).not.toHaveBeenCalled()
+  })
+
+  it('both are disabled while anything on the board runs', () => {
+    action.busy = 'done-1'
+    renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
+    expect(action.pressed.get(cs.work.reserve)?.disabled).toBe(true)
+    expect(action.pressed.get(cs.work.done)?.disabled).toBe(true)
+  })
+})
+
+describe('TakerBoard Volné row when idle (#40)', () => {
+  const open = view({ id: 7, title: 'Zalít květiny', status: 'open', reservedBy: null })
+
+  it('both buttons are enabled while nothing runs, and only the tapped one is aria-busy', () => {
+    renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
+    expect(action.pressed.get(cs.work.reserve)?.disabled).toBe(false)
+    expect(action.pressed.get(cs.work.done)?.disabled).toBe(false)
+    expect(
+      count(renderToStaticMarkup(<TakerBoard items={[open]} me={3} />), 'aria-busy="true"'),
+    ).toBe(0)
+    action.busy = 'reserve-7'
+    const html = renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
+    expect(html).toMatch(
+      new RegExp(
+        `aria-label="${cs.work.reserve}"[^>]*aria-busy="true"|aria-busy="true"[^>]*aria-label="${cs.work.reserve}"`,
+      ),
+    )
+    expect(count(html, 'aria-busy="true"')).toBe(1)
+  })
+})
+
+describe('the "+N" float after Hotovo (UI doc §4)', () => {
+  const button = { getBoundingClientRect: () => ({ left: 10, top: 20, width: 80, height: 44 }) }
+
+  it('Hotovo asks for its score to float', () => {
+    renderToStaticMarkup(<DoneButton task={{ id: 7, score: 5 }} busy={null} run={action.run} />)
+    action.pressed.get(cs.work.done)?.onClick?.({ currentTarget: button })
+    expect(lastRun()[3]).toEqual({ confetti: button, float: 5 })
+  })
+
+  it('floats in the pending colour where the button was, when it waits for approval', () => {
+    expect(pointsFloat({ status: 'done_unconfirmed' }, { confetti: button, float: 5 })).toEqual({
+      points: 5,
+      tone: 'pending',
+      rect: { left: 10, top: 20, width: 80, height: 44 },
+    })
+  })
+
+  it('floats green when the points count at once', () => {
+    expect(pointsFloat({ status: 'confirmed' }, { confetti: button, float: 5 })?.tone).toBe(
+      'confirmed',
+    )
+  })
+
+  it('floats nothing for actions that carry no points or no element', () => {
+    expect(pointsFloat({ status: 'reserved' }, { confetti: button })).toBeNull()
+    expect(pointsFloat({ status: 'confirmed' }, { confetti: null, float: 5 })).toBeNull()
+  })
+})
+
+describe('✓ Schválit floats the points (UI doc §4 "Confirmed", #41)', () => {
+  it('asks for the task score to float where it was tapped', () => {
+    action.busy = null
+    action.run.mockClear()
+    const el = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 44, height: 44 }) }
+    renderToStaticMarkup(<ToApprove items={[view({ status: 'done_unconfirmed', score: 12 })]} />)
+    action.pressed.get(cs.work.approve)?.onClick?.({ currentTarget: el })
+    expect(action.run.mock.calls[0]?.[3]).toEqual({ confetti: el, float: 12 })
   })
 })
