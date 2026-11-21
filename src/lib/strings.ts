@@ -63,6 +63,8 @@ export const cs = {
   },
   /** One-time tasks (#33): GTasks, GCreate, TApprove (UI doc §7). */
   tasks: {
+    /** Úkoly group of proposed tasks, negotiating ones included (#41). */
+    groupProposed: 'Návrhy a vyjednávání',
     new: '+ Nový',
     empty: 'Zatím žádné úkoly.',
     createTitle: 'Nový úkol',
