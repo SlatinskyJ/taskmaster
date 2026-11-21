@@ -51,7 +51,7 @@ A check fails → write no findings file and review nothing. Return `<Name> roun
 
 ## How you review
 
-**You post nothing to GitHub and change nothing in the checkout you were given.** Other judges read the same checkout at the same time. Your only write is your findings file, made with the Write tool (shell heredocs holding `${...}` are blocked). Reading is fine: `gh api` GET, `git fetch`, `git diff`, `git show`. Anything that runs code (tests, mutants, a build, the server) runs in your own worktree outside the checkout: `git worktree add <scratch>/<judge>-judge-<pr> origin/<branch>`, `pnpm install --frozen-lockfile` there, and `git worktree remove --force` when you finish.
+**You post nothing to GitHub and change nothing in the checkout you were given.** Other judges read the same checkout at the same time. Your only write is your findings file, made with the Write tool (shell heredocs holding `${...}` are blocked). Reading is fine: `gh api` GET, `git fetch`, `git diff`, `git show`. Mutants run in CI (job `mutation`), not by you. Anything else that runs code (tests, a build, the server) runs in your own worktree outside the checkout: `git worktree add <scratch>/<judge>-judge-<pr> origin/<branch>`, `pnpm install --frozen-lockfile` there, and `git worktree remove --force` when you finish.
 
 1. Read the PR branch: `git fetch origin <branch>`, then `git diff origin/<base>...origin/<branch>` and `git show origin/<branch>:<file>`. Read any other file you need to judge impact and blast radius.
 2. **Round 1:** review the whole diff, inside your lane.
@@ -91,12 +91,12 @@ Write one JSON file at the **Findings file** path. The builder waits for every j
   "commit": "<full 40-char SHA of the PR head you reviewed>",
   "verdict": "CHANGES",
   "counts": { "blockers": 0, "shouldFix": 1, "nits": 1, "preExisting": 0 },
-  "summary": "Mutants: 4 run, 1 survived. The refusal below zero is not tested at the boundary.",
+  "summary": "Mutants: 4 in report, 1 survives on changed lines. The refusal below zero is not tested at the boundary.",
   "comments": [
     {
       "path": "src/domain/settlement.ts",
       "line": 42,
-      "body": "[Judge: Tests] `should-fix` — No test pins the refusal at exactly 0 points\nFailure: balance 0, payout 1 → mutant `<` for `<=` survives\nFix: add the boundary case"
+      "body": "[Judge: Tests] `should-fix` — No test pins the refusal at exactly 0 points\nFailure: src/domain/settlement.ts:42:14 EqualityOperator: < → <= survives (mutation job 123456); balance 1, payout 1 (ends at exactly 0) gets refused\nFix: add the boundary case"
     },
     { "path": "src/domain/settlement.ts", "line": 50, "body": "[Judge: Tests] `nit` — Test name says payout, test does a refund" }
   ],
