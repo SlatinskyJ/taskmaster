@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { approveOutcome, approveTemplate } from '~/components/templates/actions'
+import { priceMeta } from '~/components/templates/priceView'
 import { Button, buttonVariants } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
 import { templateDetail } from '~/lib/templateText'
@@ -22,21 +23,25 @@ import { useTaskAction } from './useTaskAction'
  * A task row stays short and the task page explains (#34): without my bid, "Souhlasím" and a
  * link "Jiná cena" to the page; with my bid only "Otevřít", because picking between "Beru" and
  * "Souhlasím" needs both hints, which a row has no room for.
+ * A price change of an agreed template (#138) waiting for this person's side links to its page.
  */
 export function WaitingForYou({
   items,
   templates = [],
+  priceChanges,
   me,
 }: {
   items: readonly TaskView[]
   templates?: readonly TemplateView[]
+  /** Required, so a screen can't forget it: price changes waiting for this person's side. */
+  priceChanges: readonly TemplateView[]
   me: Me
 }) {
   const router = useRouter()
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const action = useTaskAction()
   const anyBusy = busyKey !== null || action.busy !== null
-  const count = items.length + templates.length
+  const count = items.length + templates.length + priceChanges.length
   if (count === 0) return null
 
   async function approve(
@@ -135,6 +140,25 @@ export function WaitingForYou({
               meta={cs.templates.recurringMeta}
               detail={templateDetail(t)}
               action={approveButton(`template-${String(t.id)}`, () => approveTemplate(t))}
+            />
+          </li>
+        ))}
+        {priceChanges.map((t) => (
+          <li key={`price-${String(t.id)}`}>
+            <TaskRow
+              name={t.title}
+              state="negotiating"
+              points={t.score}
+              meta={priceMeta(t, me)}
+              action={
+                <Link
+                  to="/sablona/$templateId"
+                  params={{ templateId: String(t.id) }}
+                  className={buttonVariants({ variant: 'ghost' })}
+                >
+                  {cs.bids.answer}
+                </Link>
+              }
             />
           </li>
         ))}

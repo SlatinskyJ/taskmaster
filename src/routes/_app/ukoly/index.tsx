@@ -5,6 +5,7 @@ import { Screen } from '~/components/shell/Screen'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { lowestText, taskChipState } from '~/components/tasks/taskView'
 import { TaskRow } from '~/components/tasks/TaskRow'
+import { TemplateRow } from '~/components/templates/TemplateRow'
 import { useTaskAction } from '~/components/tasks/useTaskAction'
 import { Button, buttonVariants } from '~/components/ui/button'
 import {
@@ -18,9 +19,8 @@ import {
 } from '~/components/ui/dialog'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
-import { templateDetail } from '~/lib/templateText'
 import { completeTaskFn, listTasksFn, releaseTaskFn, type TaskView } from '~/server/tasks/functions'
-import { listTemplatesFn, type TemplateView } from '~/server/templates/functions'
+import { listTemplatesFn } from '~/server/templates/functions'
 
 // Úkoly: all one-time tasks by state, givers only (UI doc §7.2 GTasks). A giver can release a
 // reservation or mark an open task done themselves (spec §5.4–§5.5). Recurring templates are
@@ -172,20 +172,5 @@ function Tasks() {
         </DialogContent>
       </Dialog>
     </Screen>
-  )
-}
-
-/** A template on Úkoly: proposed ones wait for agreement, active ones "Platí" (green). */
-function TemplateRow({ template: t }: { template: TemplateView }) {
-  const active = t.status === 'active'
-  return (
-    <TaskRow
-      name={t.title}
-      state={active ? 'confirmed' : 'proposed'}
-      stateLabel={active ? cs.templates.activeChip : undefined}
-      points={t.score}
-      meta={active ? cs.templates.recurringMeta : cs.tasks.waitingForTaker}
-      detail={templateDetail(t)}
-    />
   )
 }

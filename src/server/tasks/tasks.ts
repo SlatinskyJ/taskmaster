@@ -23,6 +23,7 @@ import type { Actor, Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { taskScoreApprovals, tasks, users } from '~/server/db/schema'
 import type { TaskRow } from '~/server/db/schema'
+import type { ThreadEntry } from '~/server/threadEntry'
 import { listPeople } from '~/server/users/people'
 import { saveItem, toItem } from './item'
 import { addEntry, openBids, openOffer, threadOf } from './thread'
@@ -366,17 +367,6 @@ function views(db: Db | Tx, rows: TaskRow[]): TaskView[] {
         .map((p) => ({ id: p.id, name: name(p.id) })),
     }
   })
-}
-
-/** One row of a task's negotiation thread, as the detail screen shows it. */
-export interface ThreadEntry {
-  id: number
-  side: 'giver' | 'taker'
-  by: { id: number; name: string }
-  score: number
-  /** When it was made (UTC ISO). */
-  at: string
-  state: 'open' | 'replaced' | 'accepted' | 'closed'
 }
 
 export interface TaskDetail {

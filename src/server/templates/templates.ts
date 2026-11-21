@@ -28,6 +28,7 @@ import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { templates, templateScoreApprovals, users } from '~/server/db/schema'
 import type { TemplateRow, TemplateStatus } from '~/server/db/schema'
+import type { ThreadEntry } from '~/server/threadEntry'
 import { listPeople } from '~/server/users/people'
 import { openRows, threadOf } from './thread'
 
@@ -293,15 +294,18 @@ function changeView(
   }
 }
 
-function views(db: Db | Tx, rows: TemplateRow[]): TemplateView[] {
-  if (rows.length === 0) return []
-  const names = new Map(
+const nameMap = (db: Db | Tx) =>
+  new Map(
     db
       .select({ id: users.id, name: users.displayName })
       .from(users)
       .all()
       .map((u) => [u.id, u.name]),
   )
+
+function views(db: Db | Tx, rows: TemplateRow[]): TemplateView[] {
+  if (rows.length === 0) return []
+  const names = nameMap(db)
   const people = listPeople(db)
   const name = (id: number) => names.get(id) ?? ''
   return rows.map((t) => ({
@@ -336,35 +340,56 @@ export function listTemplates(db: Db | Tx, viewerId: number): TemplateView[] {
   return views(db, rows)
 }
 
-/** One entry of a template's score change history (spec §5.1: every bid is kept). */
-export interface TemplateHistoryEntry {
-  side: 'giver' | 'taker'
-  name: string
-  score: number
-  /** UTC ISO instant the number was put. */
-  at: string
-  /** Null while open. */
-  closedAs: 'replaced' | 'accepted' | 'closed' | null
+/** A template with its whole score change history (spec §5.1: every bid is kept). */
+export interface TemplateDetail {
+  template: TemplateView
+  thread: ThreadEntry[]
 }
 
-/** Every offer and bid ever made on this template's score changes, oldest first. */
-export function templateHistory(db: Db | Tx, templateId: number): TemplateHistoryEntry[] {
-  const rows = threadOf(db, templateId)
-  if (rows.length === 0) return []
-  const names = new Map(
-    db
-      .select({ id: users.id, name: users.displayName })
-      .from(users)
-      .all()
-      .map((u) => [u.id, u.name]),
-  )
-  return rows.map((r) => ({
-    side: r.side,
-    name: names.get(r.userId) ?? '',
-    score: r.score,
-    at: r.createdAt,
-    closedAs: r.closedAs,
+/**
+ * The price page of a template, or null: unknown id, or a proposed template for anyone but a
+ * giver (takers approve proposed ones from "Čeká na tebe").
+ */
+export function getTemplateDetail(
+  db: Db | Tx,
+  templateId: number,
+  viewerId: number,
+): TemplateDetail | null {
+  const row = db.select().from(templates).where(eq(templates.id, templateId)).get()
+  if (!row) return null
+  const viewer = findPerson(listPeople(db), viewerId)
+  if (row.status === 'proposed' && viewer?.role !== 'giver') return null
+  const [template] = views(db, [row])
+  if (!template) return null
+  const names = nameMap(db)
+  const thread = threadOf(db, templateId).map((e): ThreadEntry => ({
+    id: e.id,
+    side: e.side,
+    by: { id: e.userId, name: names.get(e.userId) ?? '' },
+    score: e.score,
+    at: e.createdAt,
+    state: e.closedAs ?? 'open',
   }))
+  return { template, thread }
+}
+
+/**
+ * "Čeká na tebe": agreed templates whose score change waits for this person's side. A taker
+ * when the givers' offer is open (any taker may accept it); a giver when live bids are open.
+ */
+export function pendingTemplatePriceChanges(db: Db | Tx, userId: number): TemplateView[] {
+  const me = findPerson(listPeople(db), userId)
+  if (!me || me.role === 'admin') return []
+  const role = me.role
+  const agreed = db
+    .select()
+    .from(templates)
+    .where(eq(templates.status, 'active'))
+    .orderBy(asc(templates.id))
+    .all()
+  return views(db, agreed).filter((t) =>
+    role === 'taker' ? t.change?.offer != null : (t.change?.bids.length ?? 0) > 0,
+  )
 }
 
 /**

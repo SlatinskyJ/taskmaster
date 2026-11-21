@@ -10,6 +10,9 @@ import { TaskRow } from './TaskRow'
 import { TakerBoard } from './TakerBoard'
 import { WaitingForYou } from './WaitingForYou'
 import { ToApprove } from './ToApprove'
+import { RecurringList } from '~/components/templates/RecurringList'
+import { TemplateRow } from '~/components/templates/TemplateRow'
+import type { TemplateView } from '~/server/templates/functions'
 
 // The task lists need the router (useTaskAction) and server functions; neither runs in a static render.
 const action = vi.hoisted(() => ({ busy: null as string | null, run: vi.fn() }))
@@ -27,7 +30,15 @@ vi.mock('./bidCalls', () => ({ callBid: vi.fn(), BID_CALLS: {} }))
 // WaitingForYou's task rows link to the task page (#34); a plain <a> stands in for the router.
 vi.mock('@tanstack/react-router', () => ({
   useRouter: () => ({ invalidate: vi.fn() }),
-  Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
+  Link: ({
+    to,
+    params,
+    children,
+  }: {
+    to: string
+    params?: Record<string, string>
+    children: ReactNode
+  }) => <a href={to.replace(/\$(\w+)/, (_, k: string) => params?.[k] ?? '')}>{children}</a>,
 }))
 
 const buttons = (html: string) => html.match(/<button[\s\S]*?<\/button>/g) ?? []
@@ -185,7 +196,12 @@ describe('WaitingForYou with templates (#37)', () => {
 
   it('counts tasks and templates and shows the full template detail', () => {
     const html = renderToStaticMarkup(
-      <WaitingForYou items={[task]} templates={[template]} me={{ id: 3, role: 'taker' }} />,
+      <WaitingForYou
+        priceChanges={[]}
+        items={[task]}
+        templates={[template]}
+        me={{ id: 3, role: 'taker' }}
+      />,
     )
     expect(html).toContain(`${cs.home.waiting} (2)`)
     expect(html).toContain(
@@ -197,7 +213,7 @@ describe('WaitingForYou with templates (#37)', () => {
   it('renders nothing when nothing waits', () => {
     expect(
       renderToStaticMarkup(
-        <WaitingForYou items={[]} templates={[]} me={{ id: 3, role: 'taker' }} />,
+        <WaitingForYou priceChanges={[]} items={[]} templates={[]} me={{ id: 3, role: 'taker' }} />,
       ),
     ).toBe('')
   })
@@ -249,6 +265,72 @@ describe('ToApprove', () => {
     expect(byLabel(html, cs.work.approve)).toMatch(/<button[^>]*disabled/)
     expect(byLabel(html, cs.work.approve)).toMatch(/<button[^>]*aria-busy="true"/)
     expect(byLabel(html, cs.work.reject)).not.toContain('aria-busy="true"')
+  })
+})
+
+// Ways into a template's price page (#138). Demo dishwasher: agreed at 3, Mladší bids 5, Táta
+// offers 4.
+describe('template price change: ways in', () => {
+  const dishes: TemplateView = {
+    id: 9,
+    title: 'Vyndat myčku',
+    status: 'active',
+    score: 3,
+    approvalRequired: true,
+    createdByName: 'Táta',
+    approvedBy: [],
+    schedule: null,
+    deadline: null,
+    change: {
+      offer: { score: 4, byName: 'Táta' },
+      bids: [{ takerId: 5, name: 'Mladší', score: 5 }],
+      lowest: 5,
+    },
+  }
+  const plain: TemplateView = { ...dishes, change: null }
+
+  it('"Čeká na tebe" for a brother: the offer, Odpovědět to the page, counted', () => {
+    const html = renderToStaticMarkup(
+      <WaitingForYou items={[]} priceChanges={[dishes]} me={{ id: 4, role: 'taker' }} />,
+    )
+    expect(html).toContain(`${cs.home.waiting} (1)`)
+    expect(html).toContain('Vyndat myčku')
+    expect(html).toContain('Táta nabízí 4')
+    expect(html).toContain('<a href="/sablona/9">Odpovědět</a>')
+  })
+
+  it('"Čeká na tebe" for a parent: the bid to answer, not his own offer', () => {
+    const html = renderToStaticMarkup(
+      <WaitingForYou items={[]} priceChanges={[dishes]} me={{ id: 2, role: 'giver' }} />,
+    )
+    expect(html).toContain('Mladší chce 5')
+    expect(html).not.toContain('Táta nabízí 4')
+  })
+
+  it("a brother's Opakované úkoly: agreed ones with Jiná cena; nothing when empty", () => {
+    const html = renderToStaticMarkup(<RecurringList items={[plain]} waiting={[]} />)
+    expect(html).toContain('Opakované úkoly')
+    expect(html).toContain('<a href="/sablona/9">Jiná cena</a>')
+    expect(renderToStaticMarkup(<RecurringList items={[]} waiting={[]} />)).toBe('')
+    // Already in "Čeká na tebe": not listed twice.
+    expect(renderToStaticMarkup(<RecurringList items={[plain]} waiting={[dishes]} />)).toBe('')
+    expect(
+      renderToStaticMarkup(
+        <RecurringList items={[{ ...plain, status: 'proposed' }]} waiting={[]} />,
+      ),
+    ).toBe('')
+  })
+
+  it('Úkoly: Odpovědět with bids open, else Změnit cenu; no link while proposed', () => {
+    expect(renderToStaticMarkup(<TemplateRow template={dishes} />)).toContain(
+      '<a href="/sablona/9">Odpovědět</a>',
+    )
+    expect(renderToStaticMarkup(<TemplateRow template={plain} />)).toContain(
+      '<a href="/sablona/9">Změnit cenu</a>',
+    )
+    expect(
+      renderToStaticMarkup(<TemplateRow template={{ ...plain, status: 'proposed' }} />),
+    ).not.toContain('<a ')
   })
 })
 

@@ -16,6 +16,7 @@ export const APP_PATHS = [
   '/sprava',
   '/klic',
   '/ukol/$taskId',
+  '/sablona/$templateId',
 ] as const
 export type AppPath = (typeof APP_PATHS)[number]
 /** Paths a link can name without params: the bottom bar and back buttons. */
@@ -34,6 +35,8 @@ export const SCREEN_ROLES: Readonly<Record<AppPath, readonly Role[]>> = {
   '/klic': ['taker', 'giver', 'admin'],
   /** One task's page with its bid thread: TTask for a brother, GBid for a parent (#34). */
   '/ukol/$taskId': ['taker', 'giver'],
+  /** A recurring template's price page: its score change and history (#138). */
+  '/sablona/$templateId': ['taker', 'giver'],
 }
 
 /** Full screens without the bottom bar: the passkey offer after login (Passkey mockup). */

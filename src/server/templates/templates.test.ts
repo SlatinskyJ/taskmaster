@@ -8,9 +8,10 @@ import type { NewTemplate } from './templates'
 import {
   approveTemplateScore,
   createTemplate,
+  getTemplateDetail,
   listTemplates,
   pendingTemplateApprovals,
-  templateHistory,
+  pendingTemplatePriceChanges,
 } from './templates'
 import { acceptOfferOnTemplate, bidOnTemplate, counterOnTemplate } from './scoreChange'
 
@@ -332,7 +333,7 @@ describe('reads', () => {
     })
   })
 
-  it('the history keeps every offer and bid with names and closings', () => {
+  it('the detail keeps every offer and bid with names and closings, oldest first', () => {
     const { db, tata, starsi, mladsi } = family()
     const id = must(createTemplate(db, tata, DISHES, T0)).id
     must(approveTemplateScore(db, starsi, id, DISHES.score, T0))
@@ -340,11 +341,83 @@ describe('reads', () => {
     must(bidOnTemplate(db, mladsi, id, 6, T1))
     must(counterOnTemplate(db, tata, id, 5, T1))
     must(acceptOfferOnTemplate(db, starsi, id, 5, T2))
-    expect(templateHistory(db, id)).toEqual([
-      { side: 'taker', name: 'Mladší', score: 7, at: T1.toISOString(), closedAs: 'replaced' },
-      { side: 'taker', name: 'Mladší', score: 6, at: T1.toISOString(), closedAs: 'closed' },
-      { side: 'giver', name: 'Táta', score: 5, at: T1.toISOString(), closedAs: 'accepted' },
+    const detail = getTemplateDetail(db, id, starsi)
+    expect(detail?.template).toEqual(listTemplates(db, tata)[0])
+    expect(detail?.template.change).toBeNull()
+    const at = T1.toISOString()
+    const entry = (by: number, name: string, score: number, state: string) => ({
+      id: expect.any(Number) as number,
+      side: by === tata ? 'giver' : 'taker',
+      by: { id: by, name },
+      score,
+      at,
+      state,
+    })
+    expect(detail?.thread).toEqual([
+      entry(mladsi, 'Mladší', 7, 'replaced'),
+      entry(mladsi, 'Mladší', 6, 'closed'),
+      entry(tata, 'Táta', 5, 'accepted'),
     ])
-    expect(listTemplates(db, tata)[0]?.change).toBeNull()
+  })
+})
+
+describe('template detail (price page)', () => {
+  it('a taker gets an agreed template, not a proposed one; a giver gets both', () => {
+    const { db, tata, starsi } = family()
+    const id = must(createTemplate(db, tata, DISHES, T0)).id
+    expect(getTemplateDetail(db, id, starsi)).toBeNull()
+    expect(getTemplateDetail(db, id, tata)).toEqual({
+      template: listTemplates(db, tata)[0],
+      thread: [],
+    })
+    must(approveTemplateScore(db, starsi, id, DISHES.score, T0))
+    expect(getTemplateDetail(db, id, starsi)?.template.status).toBe('active')
+  })
+
+  it('an unknown id gives null', () => {
+    const { db, tata } = family()
+    expect(getTemplateDetail(db, 999, tata)).toBeNull()
+  })
+})
+
+describe('"Čeká na tebe": template price changes', () => {
+  function agreed() {
+    const f = family()
+    const id = must(createTemplate(f.db, f.tata, DISHES, T0)).id
+    must(approveTemplateScore(f.db, f.starsi, id, DISHES.score, T0))
+    const ids = (userId: number) => pendingTemplatePriceChanges(f.db, userId).map((t) => t.id)
+    return { ...f, id, ids }
+  }
+
+  it('an open offer waits for every taker, live bids for every giver', () => {
+    const f = agreed()
+    must(bidOnTemplate(f.db, f.mladsi, f.id, 5, T1))
+    must(counterOnTemplate(f.db, f.tata, f.id, 4, T1))
+    expect(f.ids(f.starsi)).toEqual([f.id])
+    expect(f.ids(f.mladsi)).toEqual([f.id])
+    expect(f.ids(f.tata)).toEqual([f.id])
+    expect(f.ids(f.mama)).toEqual([f.id])
+    expect(f.ids(f.admin)).toEqual([])
+  })
+
+  it('only an offer: takers yes, givers no', () => {
+    const f = agreed()
+    must(counterOnTemplate(f.db, f.tata, f.id, 4, T1))
+    expect(f.ids(f.starsi)).toEqual([f.id])
+    expect(f.ids(f.tata)).toEqual([])
+  })
+
+  it('only bids: givers yes, takers no', () => {
+    const f = agreed()
+    must(bidOnTemplate(f.db, f.mladsi, f.id, 5, T1))
+    expect(f.ids(f.tata)).toEqual([f.id])
+    expect(f.ids(f.starsi)).toEqual([])
+    expect(f.ids(f.mladsi)).toEqual([])
+  })
+
+  it('no change or a proposed template: nobody', () => {
+    const f = agreed()
+    must(createTemplate(f.db, f.tata, { ...DISHES, title: 'Vynést koš' }, T0))
+    for (const who of [f.tata, f.mama, f.starsi, f.mladsi]) expect(f.ids(who)).toEqual([])
   })
 })
