@@ -1,3 +1,4 @@
+import { Undo2 } from 'lucide-react'
 import { Button } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
 import { cn } from '~/lib/utils'
@@ -10,7 +11,8 @@ type Run = ReturnType<typeof useTaskAction>['run']
 /**
  * Hotovo and Uvolnit for the brother who has the task (spec §5.4, §5.5), on his Domů row and on
  * the task page (#150). `busy` and `run` come from the caller, so a whole board shares one busy
- * state. `wide` (the page): Hotovo is the main action, full width, Uvolnit under it.
+ * state. `wide` (the page): Hotovo is the main action, full width, Uvolnit under it. On a row,
+ * ↶ Uvolnit is a 44 px icon button so the name and chip read in full at 360 px (#148).
  */
 export function WorkButtons({
   task,
@@ -48,6 +50,8 @@ export function WorkButtons({
     <Button
       key="release"
       variant="ghost"
+      size={wide ? 'default' : 'icon'}
+      aria-label={wide ? undefined : cs.work.release}
       disabled={busy !== null}
       aria-busy={busy === releaseKey}
       className={cn(wide && 'w-full')}
@@ -59,11 +63,11 @@ export function WorkButtons({
         )
       }}
     >
-      {cs.work.release}
+      {wide ? cs.work.release : <Undo2 aria-hidden="true" />}
     </Button>
   )
   return (
-    <div className={wide ? 'grid gap-2' : 'flex gap-1.5'}>
+    <div className={wide ? 'grid gap-2' : 'flex gap-2'}>
       {wide ? [done, release] : [release, done]}
     </div>
   )
