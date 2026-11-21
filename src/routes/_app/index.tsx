@@ -1,10 +1,12 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { EmptyState } from '~/components/EmptyState'
 import { Screen } from '~/components/shell/Screen'
 import { BidsToAnswer } from '~/components/tasks/BidsToAnswer'
 import { TakerBoard } from '~/components/tasks/TakerBoard'
 import { RecurringList } from '~/components/templates/RecurringList'
 import { ToApprove } from '~/components/tasks/ToApprove'
 import { WaitingForYou } from '~/components/tasks/WaitingForYou'
+import { buttonVariants } from '~/components/ui/button'
 import { FEATURES } from '~/lib/features'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
@@ -58,12 +60,21 @@ function Home() {
   const { user } = Route.useRouteContext()
   const { waiting, waitingTemplates, priceChanges, board, recurring, toApprove, bids } =
     Route.useLoaderData()
+  const shownTemplates = FEATURES.recurring ? waitingTemplates : []
+  const shownPriceChanges = FEATURES.recurring ? priceChanges : []
+  const giverIdle =
+    waiting.length +
+      shownTemplates.length +
+      shownPriceChanges.length +
+      toApprove.length +
+      bids.length ===
+    0
   return (
     <Screen title={`${cs.home.greeting}, ${user.displayName}!`} user={user}>
       <WaitingForYou
         items={waiting}
-        templates={FEATURES.recurring ? waitingTemplates : []}
-        priceChanges={FEATURES.recurring ? priceChanges : []}
+        templates={shownTemplates}
+        priceChanges={shownPriceChanges}
         me={{ id: user.id, role: user.role }}
       />
       {user.role === 'taker' ? (
@@ -75,6 +86,17 @@ function Home() {
         <>
           <ToApprove items={toApprove} />
           <BidsToAnswer items={bids} />
+          {giverIdle && (
+            <EmptyState
+              action={
+                <Link to="/ukoly/novy" className={buttonVariants({ variant: 'primary' })}>
+                  {cs.tasks.createTitle}
+                </Link>
+              }
+            >
+              {cs.home.giverEmpty}
+            </EmptyState>
+          )}
         </>
       )}
     </Screen>

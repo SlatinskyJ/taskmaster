@@ -100,8 +100,13 @@ function Tasks() {
   )
   return (
     <Screen title={cs.nav.tasks} user={user} action={newButton}>
-      <section className="grid gap-2" aria-labelledby="one-time-label">
-        <SectionLabel id="one-time-label">{cs.templates.oneTimeSection}</SectionLabel>
+      <section
+        className="grid gap-2"
+        aria-labelledby={FEATURES.recurring ? 'one-time-label' : undefined}
+      >
+        {FEATURES.recurring && (
+          <SectionLabel id="one-time-label">{cs.templates.oneTimeSection}</SectionLabel>
+        )}
         {list.length === 0 ? (
           <EmptyState>{cs.tasks.empty}</EmptyState>
         ) : (

@@ -99,6 +99,51 @@ describe('Domů', () => {
     expect(html).not.toContain('Mladší chce 5')
   })
 
+  it('a parent with nothing to answer gets one line and the way to Nový úkol', () => {
+    page.user = { id: 2, role: 'giver', displayName: 'Táta' }
+    page.data = {
+      waiting: [],
+      waitingTemplates: [],
+      priceChanges: [],
+      board: [],
+      recurring: [],
+      toApprove: [],
+      bids: [],
+    }
+    const Page = (Route as unknown as { component: () => ReactNode }).component
+    const html = renderToStaticMarkup(<Page />)
+    expect(html).toContain('Teď na tebe nic nečeká.')
+    expect(html).toContain('Nový úkol')
+  })
+
+  it('a parent with only a hidden price change still gets the empty line at launch', () => {
+    features.recurring = false
+    expect(render({ id: 2, role: 'giver', displayName: 'Táta' }, [])).toContain(
+      'Teď na tebe nic nečeká.',
+    )
+  })
+
+  it('a parent with a price change waiting gets no empty line', () => {
+    expect(render({ id: 2, role: 'giver', displayName: 'Táta' }, [])).not.toContain(
+      'Teď na tebe nic nečeká.',
+    )
+  })
+
+  it('a brother never gets the parent empty line', () => {
+    page.user = { id: 4, role: 'taker', displayName: 'Starší' }
+    page.data = {
+      waiting: [],
+      waitingTemplates: [],
+      priceChanges: [],
+      board: [],
+      recurring: [],
+      toApprove: [],
+      bids: [],
+    }
+    const Page = (Route as unknown as { component: () => ReactNode }).component
+    expect(renderToStaticMarkup(<Page />)).not.toContain('Teď na tebe nic nečeká.')
+  })
+
   it('has no "Tady brzy něco bude" line', () => {
     const html = render({ id: 4, role: 'taker', displayName: 'Starší' }, [])
     expect(html).not.toContain('Tady brzy něco bude')
