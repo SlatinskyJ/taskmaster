@@ -44,7 +44,7 @@ type Step = (
  * show the final state.
  */
 function runStep(
-  db: Db,
+  db: Db | Tx,
   userId: number,
   taskId: number,
   action: AuditAction,
@@ -126,12 +126,12 @@ export function releaseTask(db: Db, userId: number, taskId: number, now: Date = 
  * Someone marks the task done ("Hotovo", spec §5.5). A taker: pending if approval is required,
  * else confirmed. A giver ("Hotovo bez bodů"): closed with no points and no approval step.
  */
-export function completeTask(db: Db, userId: number, taskId: number, now: Date = new Date()) {
+export function completeTask(db: Db | Tx, userId: number, taskId: number, now: Date = new Date()) {
   return runStep(db, userId, taskId, 'task.completed', completeItem, now)
 }
 
 /** A giver approves a pending completion: the points are confirmed (spec §5.5). */
-export function approveTask(db: Db, userId: number, taskId: number, now: Date = new Date()) {
+export function approveTask(db: Db | Tx, userId: number, taskId: number, now: Date = new Date()) {
   return runStep(
     db,
     userId,
