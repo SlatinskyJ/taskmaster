@@ -85,6 +85,13 @@
       "when": 1795018341069,
       "tag": "0011_task_thread_first_offers",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1795018547773,
+      "tag": "0012_template_thread",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { templates, templateScoreApprovals, users } from './schema'
+import { templates, templateScoreApprovals, templateThread, users } from './schema'
 import { createTestDb } from './testing'
 
 // The DB backs up the domain's checks (spec §5.3): a template row that makes no sense can't be
@@ -81,5 +81,94 @@ describe('templates table', () => {
     const row = { templateId: id, userId: giver, score: 4, approvedAt: AT }
     db.insert(templateScoreApprovals).values(row).run()
     expect(() => db.insert(templateScoreApprovals).values(row).run()).toThrow(/UNIQUE|PRIMARY/)
+  })
+})
+
+describe('template_thread table (spec §5.1)', () => {
+  function thread() {
+    const { db, giver, valid } = setup()
+    const templateId = db
+      .insert(templates)
+      .values({ ...valid, status: 'active' })
+      .returning()
+      .get().id
+    const taker = db
+      .insert(users)
+      .values({
+        username: 'starsi',
+        displayName: 'Starší',
+        role: 'taker',
+        createdAt: AT,
+        updatedAt: AT,
+      })
+      .returning()
+      .get().id
+    const row = (userId: number, side: 'giver' | 'taker', score: number) => ({
+      templateId,
+      userId,
+      side,
+      score,
+      createdAt: AT,
+    })
+    return { db, giver, taker, row }
+  }
+
+  it('holds one open offer per template', () => {
+    const { db, giver, row } = thread()
+    db.insert(templateThread)
+      .values(row(giver, 'giver', 4))
+      .run()
+    expect(() =>
+      db
+        .insert(templateThread)
+        .values(row(giver, 'giver', 5))
+        .run(),
+    ).toThrow(/UNIQUE/)
+  })
+
+  it('holds one open bid per taker', () => {
+    const { db, taker, row } = thread()
+    db.insert(templateThread)
+      .values(row(taker, 'taker', 4))
+      .run()
+    expect(() =>
+      db
+        .insert(templateThread)
+        .values(row(taker, 'taker', 5))
+        .run(),
+    ).toThrow(/UNIQUE/)
+  })
+
+  it('keeps closed rows beside a new open one', () => {
+    const { db, taker, row } = thread()
+    db.insert(templateThread)
+      .values({ ...row(taker, 'taker', 4), closedAt: AT, closedAs: 'replaced' })
+      .run()
+    db.insert(templateThread)
+      .values(row(taker, 'taker', 5))
+      .run()
+    expect(db.select().from(templateThread).all()).toHaveLength(2)
+  })
+
+  it('refuses a half-closed row, an unknown closing and a score below 1', () => {
+    const { db, taker, row } = thread()
+    expect(() =>
+      db
+        .insert(templateThread)
+        .values({ ...row(taker, 'taker', 4), closedAs: 'replaced' })
+        .run(),
+    ).toThrow(/CHECK/)
+    expect(() =>
+      db
+        .insert(templateThread)
+        .values({ ...row(taker, 'taker', 4), closedAt: AT, closedAs: 'nope' as 'closed' })
+        .run(),
+    ).toThrow(/CHECK/)
+    expect(() =>
+      db
+        .insert(templateThread)
+        .values(row(taker, 'taker', 0))
+        .run(),
+    ).toThrow(/CHECK/)
   })
 })

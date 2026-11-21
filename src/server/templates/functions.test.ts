@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseNewTemplate } from './parse'
+import { parseNewTemplate, parseTemplateId } from './parse'
 
 const VALID = {
   title: 'Vynést koše',
@@ -49,5 +49,20 @@ describe('parseNewTemplate (input types only; ranges are the domain)', () => {
   it('throws on a non-object body', () => {
     expect(() => parseNewTemplate(null)).toThrow('Invalid input')
     expect(() => parseNewTemplate('x')).toThrow('Invalid input')
+  })
+})
+
+describe('parseTemplateId', () => {
+  it('accepts a whole-number id', () => {
+    expect(parseTemplateId({ templateId: 3 })).toEqual({ templateId: 3 })
+  })
+
+  it.each([
+    ['a string', { templateId: '1' }],
+    ['a fraction', { templateId: 1.5 }],
+    ['no id', {}],
+    ['null', null],
+  ])('refuses %s', (_, body) => {
+    expect(() => parseTemplateId(body)).toThrow('Invalid input')
   })
 })
