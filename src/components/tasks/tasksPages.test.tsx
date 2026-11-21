@@ -4,15 +4,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TemplateView } from '~/server/templates/functions'
 
 // Úkoly and Nový úkol rendered through their routes, so the launch switch for recurring
-// templates (src/lib/features.ts) is tested where it is read. Lives here, not in src/routes,
+// templates (the app shell's `context.features`) is tested where it is read. Lives here, not in src/routes,
 // because the router generator treats every file there as a route.
 const page = vi.hoisted((): { data: Record<string, unknown> } => ({ data: {} }))
 const features = vi.hoisted(() => ({ recurring: true, log: true, week: true, meeting: true }))
-vi.mock('~/lib/features', () => ({ FEATURES: features }))
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (opts: Record<string, unknown>) => ({
     ...opts,
-    useRouteContext: () => ({ user: { id: 2, role: 'giver', displayName: 'Táta' } }),
+    useRouteContext: () => ({ user: { id: 2, role: 'giver', displayName: 'Táta' }, features }),
     useLoaderData: () => page.data,
   }),
   redirect: vi.fn(),

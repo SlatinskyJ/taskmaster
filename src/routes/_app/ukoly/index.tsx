@@ -17,7 +17,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '~/components/ui/dialog'
-import { FEATURES } from '~/lib/features'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { completeTaskFn, listTasksFn, releaseTaskFn, type TaskView } from '~/server/tasks/functions'
@@ -35,7 +34,7 @@ export const Route = createFileRoute('/_app/ukoly/')({
 })
 
 function Tasks() {
-  const { user } = Route.useRouteContext()
+  const { user, features } = Route.useRouteContext()
   const { list, templates } = Route.useLoaderData()
   const { busy, run } = useTaskAction()
   // "Hotovo bez bodů" can't be undone, so it asks first (UI doc §5).
@@ -102,9 +101,9 @@ function Tasks() {
     <Screen title={cs.nav.tasks} user={user} action={newButton}>
       <section
         className="grid gap-2"
-        aria-labelledby={FEATURES.recurring ? 'one-time-label' : undefined}
+        aria-labelledby={features.recurring ? 'one-time-label' : undefined}
       >
-        {FEATURES.recurring && (
+        {features.recurring && (
           <SectionLabel id="one-time-label">{cs.templates.oneTimeSection}</SectionLabel>
         )}
         {list.length === 0 ? (
@@ -126,7 +125,7 @@ function Tasks() {
           </ul>
         )}
       </section>
-      {FEATURES.recurring && (
+      {features.recurring && (
         <section className="grid gap-2" aria-labelledby="templates-label">
           <SectionLabel id="templates-label">{cs.templates.section}</SectionLabel>
           {templates.length === 0 ? (

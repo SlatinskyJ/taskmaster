@@ -8,7 +8,6 @@ import { RecurringList } from '~/components/templates/RecurringList'
 import { ToApprove } from '~/components/tasks/ToApprove'
 import { WaitingForYou } from '~/components/tasks/WaitingForYou'
 import { buttonVariants } from '~/components/ui/button'
-import { FEATURES } from '~/lib/features'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import {
@@ -62,11 +61,11 @@ export const Route = createFileRoute('/_app/')({
 // A taker's points card first (it belongs to the header, spec §7 sketch), then "Čeká na tebe",
 // then the work lists. The giver's home comes with #41.
 function Home() {
-  const { user } = Route.useRouteContext()
+  const { user, features } = Route.useRouteContext()
   const { waiting, waitingTemplates, priceChanges, board, recurring, toApprove, bids, points } =
     Route.useLoaderData()
-  const shownTemplates = FEATURES.recurring ? waitingTemplates : []
-  const shownPriceChanges = FEATURES.recurring ? priceChanges : []
+  const shownTemplates = features.recurring ? waitingTemplates : []
+  const shownPriceChanges = features.recurring ? priceChanges : []
   const giverIdle =
     waiting.length +
       shownTemplates.length +
@@ -86,7 +85,7 @@ function Home() {
       {user.role === 'taker' ? (
         <>
           <TakerBoard items={board} me={user.id} />
-          {FEATURES.recurring && <RecurringList items={recurring} waiting={priceChanges} />}
+          {features.recurring && <RecurringList items={recurring} waiting={priceChanges} />}
         </>
       ) : (
         <>

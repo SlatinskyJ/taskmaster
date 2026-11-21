@@ -19,7 +19,7 @@ const page = vi.hoisted(() => {
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (opts: Record<string, unknown>) => ({
     ...opts,
-    useRouteContext: () => ({ user: page.user }),
+    useRouteContext: () => ({ user: page.user, features }),
     useLoaderData: () => page.data,
   }),
   redirect: vi.fn(),
@@ -27,9 +27,8 @@ vi.mock('@tanstack/react-router', () => ({
   useRouterState: () => ({ location: { pathname: '/' } }),
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
 }))
-// Launch switches (src/lib/features.ts): all on unless a test turns one off.
+// Launch switches (the app shell's `context.features`): all on unless a test turns one off.
 const features = vi.hoisted(() => ({ recurring: true, log: true, week: true, meeting: true }))
-vi.mock('~/lib/features', () => ({ FEATURES: features }))
 vi.mock('./useTaskAction', () => ({ useTaskAction: () => ({ busy: null, run: vi.fn() }) }))
 vi.mock('./bidCalls', () => ({ callBid: vi.fn(), BID_CALLS: {} }))
 // The loader's server calls, each returning a marker so the test can see where it went.

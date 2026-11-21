@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { ROLES } from '~/domain/parties'
 import { landingPath } from './landing'
-import { ALL_FEATURES } from './features'
+import { ALL_FEATURES, NO_FEATURES } from './features'
 import { APP_PATHS, canSee, navItems, showsBar } from './nav'
 import { cs } from './strings'
 
@@ -23,9 +23,9 @@ describe('navItems (UI doc §6)', () => {
     ])
   })
 
-  it('launch: Zapsat, Týden and Schůzka are hidden until their issues land', () => {
-    expect(navItems('taker').map((i) => cs.nav[i.key])).toEqual(['Domů'])
-    expect(navItems('giver').map((i) => cs.nav[i.key])).toEqual(['Domů', 'Úkoly'])
+  it('launch (every switch off): Zapsat, Týden and Schůzka are hidden', () => {
+    expect(navItems('taker', NO_FEATURES).map((i) => cs.nav[i.key])).toEqual(['Domů'])
+    expect(navItems('giver', NO_FEATURES).map((i) => cs.nav[i.key])).toEqual(['Domů', 'Úkoly'])
   })
 
   it('each placeholder tab follows its own switch', () => {
@@ -45,7 +45,7 @@ describe('navItems (UI doc §6)', () => {
   })
 
   it('admin has no bar', () => {
-    expect(navItems('admin')).toEqual([])
+    expect(navItems('admin', ALL_FEATURES)).toEqual([])
   })
 
   it.each(ROLES)('every %s nav target is a screen that role may see', (role) => {
@@ -97,7 +97,7 @@ describe('showsBar', () => {
   })
 
   it('a single tab is no bar: a launch taker has only Domů', () => {
-    expect(showsBar('taker', '/')).toBe(false)
-    expect(showsBar('giver', '/')).toBe(true)
+    expect(showsBar('taker', '/', NO_FEATURES)).toBe(false)
+    expect(showsBar('giver', '/', NO_FEATURES)).toBe(true)
   })
 })

@@ -1,5 +1,5 @@
 import type { Role } from '~/domain/parties'
-import { FEATURES, type Features } from './features'
+import type { Features } from './features'
 
 // Who sees which screen, and the bottom bar per role (UI doc §6). Framework-free so the whole
 // matrix is unit-tested. Server functions still check roles themselves (src/server/auth/guards);
@@ -56,7 +56,7 @@ const WEEK: NavItem = { to: '/tyden', key: 'week' }
 
 /** Taker: Domů / Zapsat / Týden. Giver: Domů / Úkoly / Schůzka / Týden. Admin: no bar.
  * Tabs whose feature is switched off (src/lib/features.ts) are left out. */
-export function navItems(role: Role, features: Readonly<Features> = FEATURES): readonly NavItem[] {
+export function navItems(role: Role, features: Readonly<Features>): readonly NavItem[] {
   return allNavItems(role).filter((i) => {
     const feature = TAB_FEATURE[i.key]
     return feature === undefined || features[feature]
@@ -86,10 +86,6 @@ export function canSee(role: Role, path: AppPath): boolean {
 }
 
 /** Whether the app shell shows the bottom bar on this screen: not for a single tab. */
-export function showsBar(
-  role: Role,
-  pathname: string,
-  features: Readonly<Features> = FEATURES,
-): boolean {
+export function showsBar(role: Role, pathname: string, features: Readonly<Features>): boolean {
   return navItems(role, features).length > 1 && !BARLESS_PATHS.some((p) => p === pathname)
 }

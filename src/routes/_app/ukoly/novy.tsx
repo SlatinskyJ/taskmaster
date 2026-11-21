@@ -10,7 +10,6 @@ import { RecurringFields } from '~/components/templates/RecurringFields'
 import { Button } from '~/components/ui/button'
 import { Card } from '~/components/ui/card'
 import { Input } from '~/components/ui/input'
-import { FEATURES } from '~/lib/features'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { taskErrorMessage } from '~/lib/taskErrors'
@@ -33,7 +32,7 @@ const KINDS: readonly [ItemKind, string][] = [
 ]
 
 function NewTask() {
-  const { user } = Route.useRouteContext()
+  const { user, features } = Route.useRouteContext()
   const router = useRouter()
   const [kind, setKind] = useState<ItemKind>('one_time')
   const [title, setTitle] = useState('')
@@ -70,7 +69,7 @@ function NewTask() {
           void submit()
         }}
       >
-        {FEATURES.recurring && (
+        {features.recurring && (
           <div className="grid grid-cols-2 gap-1 rounded-card bg-track p-1">
             {KINDS.map(([k, label]) => (
               <button
