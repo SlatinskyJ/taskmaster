@@ -87,7 +87,8 @@ export function parseCounter(data: unknown): { taskId: number; score: number; bi
   return { ...parseApproval(data), bidders: bidders(record(data).bidders, 0) }
 }
 
-function answered(result: Result<TaskRow, TaskError>): TaskActionResult {
+/** What every task action returns to a screen: only ok, id and status, or the refusal. */
+export function answered(result: Result<TaskRow, TaskError>): TaskActionResult {
   return result.ok ? { ok: true, id: result.value.id, status: result.value.status } : result
 }
 

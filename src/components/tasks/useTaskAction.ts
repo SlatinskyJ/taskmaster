@@ -4,17 +4,17 @@ import { toast } from 'sonner'
 import { burstConfetti } from '~/components/effects/confetti'
 import { cs } from '~/lib/strings'
 import { taskErrorMessage } from '~/lib/taskErrors'
-import type { LifecycleActionResult } from '~/server/tasks/functions'
+import type { LifecycleActionResult, TaskActionResult } from '~/server/tasks/functions'
 
-/** One work-flow action from a task row: busy state, toast, confetti, and a reload. */
+/** One task action (work flow or bidding) from a row or the task page: busy state, toast, confetti, and a reload. */
 export function useTaskAction() {
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
 
-  async function run(
+  async function run<R extends LifecycleActionResult | TaskActionResult>(
     key: string,
-    action: () => Promise<LifecycleActionResult>,
-    success: (r: Extract<LifecycleActionResult, { ok: true }>) => string,
+    action: () => Promise<R>,
+    success: (r: Extract<R, { ok: true }>) => string,
     opts: { confetti?: Element | null } = {},
   ): Promise<boolean> {
     setBusy(key)
@@ -25,7 +25,7 @@ export function useTaskAction() {
         await router.invalidate()
         return false
       }
-      toast.success(success(result))
+      toast.success(success(result as Extract<R, { ok: true }>))
       if (opts.confetti !== undefined) burstConfetti(opts.confetti)
       await router.invalidate()
       return true

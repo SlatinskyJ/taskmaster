@@ -1,0 +1,77 @@
+import { Button } from '~/components/ui/button'
+import { cs } from '~/lib/strings'
+import { cn } from '~/lib/utils'
+import { completeTaskFn, releaseTaskFn, type TaskView } from '~/server/tasks/functions'
+import { canWorkOn, type Me } from './taskView'
+import { useTaskAction } from './useTaskAction'
+
+type Run = ReturnType<typeof useTaskAction>['run']
+
+/**
+ * Hotovo and Uvolnit for the brother who has the task (spec §5.4, §5.5), on his Domů row and on
+ * the task page (#150). `busy` and `run` come from the caller, so a whole board shares one busy
+ * state. `wide` (the page): Hotovo is the main action, full width, Uvolnit under it.
+ */
+export function WorkButtons({
+  task,
+  busy,
+  run,
+  wide = false,
+}: {
+  task: Pick<TaskView, 'id'>
+  busy: string | null
+  run: Run
+  wide?: boolean
+}) {
+  const doneKey = `done-${String(task.id)}`
+  const releaseKey = `release-${String(task.id)}`
+  const done = (
+    <Button
+      key="done"
+      variant="ok"
+      disabled={busy !== null}
+      aria-busy={busy === doneKey}
+      className={cn(wide && 'w-full')}
+      onClick={(e) => {
+        void run(
+          doneKey,
+          () => completeTaskFn({ data: { taskId: task.id } }),
+          (r) => (r.status === 'confirmed' ? cs.work.toast.done : cs.work.toast.pending),
+          { confetti: e.currentTarget },
+        )
+      }}
+    >
+      {cs.work.done}
+    </Button>
+  )
+  const release = (
+    <Button
+      key="release"
+      variant="ghost"
+      disabled={busy !== null}
+      aria-busy={busy === releaseKey}
+      className={cn(wide && 'w-full')}
+      onClick={() => {
+        void run(
+          releaseKey,
+          () => releaseTaskFn({ data: { taskId: task.id } }),
+          () => cs.work.toast.released,
+        )
+      }}
+    >
+      {cs.work.release}
+    </Button>
+  )
+  return (
+    <div className={wide ? 'grid gap-2' : 'flex gap-1.5'}>
+      {wide ? [done, release] : [release, done]}
+    </div>
+  )
+}
+
+/** The task page's Hotovo and Uvolnit: nothing unless this person reserved the task. */
+export function TaskWorkPanel({ task, me }: { task: TaskView; me: Me }) {
+  const { busy, run } = useTaskAction()
+  if (!canWorkOn(task, me)) return null
+  return <WorkButtons task={task} busy={busy} run={run} wide />
+}

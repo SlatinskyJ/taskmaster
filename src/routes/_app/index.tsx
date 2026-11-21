@@ -1,12 +1,14 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { Placeholder } from '~/components/shell/Placeholder'
 import { Screen } from '~/components/shell/Screen'
+import { BidsToAnswer } from '~/components/tasks/BidsToAnswer'
 import { TakerBoard } from '~/components/tasks/TakerBoard'
 import { ToApprove } from '~/components/tasks/ToApprove'
 import { WaitingForYou } from '~/components/tasks/WaitingForYou'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import {
+  listBidsToAnswerFn,
   listBoardFn,
   listPendingApprovalsFn,
   listPendingCompletionsFn,
@@ -22,9 +24,15 @@ export const Route = createFileRoute('/_app/')({
     const waiting = await listPendingApprovalsFn()
     const waitingTemplates = await listPendingTemplateApprovalsFn()
     if (context.user.role === 'taker') {
-      return { waiting, waitingTemplates, board: await listBoardFn(), toApprove: [] }
+      return { waiting, waitingTemplates, board: await listBoardFn(), toApprove: [], bids: [] }
     }
-    return { waiting, waitingTemplates, board: [], toApprove: await listPendingCompletionsFn() }
+    return {
+      waiting,
+      waitingTemplates,
+      board: [],
+      toApprove: await listPendingCompletionsFn(),
+      bids: await listBidsToAnswerFn(),
+    }
   },
   component: Home,
 })
@@ -32,14 +40,21 @@ export const Route = createFileRoute('/_app/')({
 // "Čeká na tebe" first, then the work lists; the rest of the home screens comes with #40, #41.
 function Home() {
   const { user } = Route.useRouteContext()
-  const { waiting, waitingTemplates, board, toApprove } = Route.useLoaderData()
+  const { waiting, waitingTemplates, board, toApprove, bids } = Route.useLoaderData()
   return (
     <Screen title={`${cs.home.greeting}, ${user.displayName}!`} user={user}>
-      <WaitingForYou items={waiting} templates={waitingTemplates} />
+      <WaitingForYou
+        items={waiting}
+        templates={waitingTemplates}
+        me={{ id: user.id, role: user.role }}
+      />
       {user.role === 'taker' ? (
         <TakerBoard items={board} me={user.id} />
       ) : (
-        <ToApprove items={toApprove} />
+        <>
+          <ToApprove items={toApprove} />
+          <BidsToAnswer items={bids} />
+        </>
       )}
       <Placeholder />
     </Screen>

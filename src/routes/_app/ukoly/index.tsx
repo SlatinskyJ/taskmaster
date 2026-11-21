@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { EmptyState } from '~/components/EmptyState'
 import { Screen } from '~/components/shell/Screen'
 import { SectionLabel } from '~/components/shell/SectionLabel'
+import { lowestText, taskChipState } from '~/components/tasks/taskView'
 import { TaskRow } from '~/components/tasks/TaskRow'
 import { useTaskAction } from '~/components/tasks/useTaskAction'
 import { Button, buttonVariants } from '~/components/ui/button'
@@ -16,7 +17,7 @@ import {
   DialogTitle,
 } from '~/components/ui/dialog'
 import { guardScreen } from '~/lib/screenGuard'
-import { cs, type ItemStateKey } from '~/lib/strings'
+import { cs } from '~/lib/strings'
 import { templateDetail } from '~/lib/templateText'
 import { completeTaskFn, listTasksFn, releaseTaskFn, type TaskView } from '~/server/tasks/functions'
 import { listTemplatesFn, type TemplateView } from '~/server/templates/functions'
@@ -32,16 +33,6 @@ export const Route = createFileRoute('/_app/ukoly/')({
   component: Tasks,
 })
 
-/** Lifecycle status (spec §5.6) → the chip's state (UI doc §2.2). */
-const STATE: Record<TaskView['status'], ItemStateKey> = {
-  proposed: 'proposed',
-  open: 'open',
-  reserved: 'reserved',
-  done_unconfirmed: 'pending',
-  confirmed: 'confirmed',
-  cancelled: 'cancelled',
-}
-
 function Tasks() {
   const { user } = Route.useRouteContext()
   const { list, templates } = Route.useLoaderData()
@@ -50,13 +41,25 @@ function Tasks() {
   const [closing, setClosing] = useState<TaskView | null>(null)
 
   function meta(t: TaskView) {
-    if (t.status === 'proposed') return cs.tasks.waitingForTaker
+    if (t.status === 'proposed') return t.lowest ? undefined : cs.tasks.waitingForTaker
     if (t.status === 'reserved' && t.reservedBy) return `${cs.work.reservedBy} ${t.reservedBy.name}`
     if (t.completedBy) return `${cs.work.doneBy} ${t.completedBy.name}`
     return undefined
   }
 
   function action(t: TaskView) {
+    if (t.status === 'proposed') {
+      // The way into the negotiation (#34): a 44 px button, like Domů's.
+      return (
+        <Link
+          to="/ukol/$taskId"
+          params={{ taskId: String(t.id) }}
+          className={buttonVariants({ variant: 'ghost' })}
+        >
+          {t.bids.length > 0 ? cs.bids.answer : cs.bids.open}
+        </Link>
+      )
+    }
     if (t.status === 'reserved') {
       return (
         <Button
@@ -106,9 +109,10 @@ function Tasks() {
               <li key={t.id}>
                 <TaskRow
                   name={t.title}
-                  state={STATE[t.status]}
+                  state={taskChipState(t)}
                   points={t.score}
                   meta={meta(t)}
+                  detail={t.lowest ? lowestText(t.lowest) : undefined}
                   action={action(t)}
                 />
               </li>

@@ -1,7 +1,7 @@
 import { hashSync } from '@node-rs/argon2'
 import type { Db } from '~/server/db'
 import { users } from '~/server/db/schema'
-import { createTask, placeBid } from '~/server/tasks'
+import { acceptOffer, createTask, placeBid } from '~/server/tasks'
 import type { Tx } from '~/server/audit'
 import { approveTemplateScoreIn, createTemplateIn } from '~/server/templates/templates'
 import type { NewTemplate } from '~/server/templates/templates'
@@ -83,6 +83,19 @@ export function seedDemo(
         now,
       ),
     )
+    // Reserved to Starší through a bidder's yes ("Beru za 8"), so his Domů row and the task page
+    // show Hotovo and Uvolnit (#150). A long name, as the 360 px screens are checked with one.
+    const vacuum = step(
+      'offer "Vyluxovat celý obývák a chodbu"',
+      createTask(
+        tx,
+        id('tata'),
+        { title: 'Vyluxovat celý obývák a chodbu', score: 8, approvalRequired: true },
+        now,
+      ),
+    )
+    step('bid 10', placeBid(tx, id('starsi'), vacuum.id, 10, now))
+    step('take 8', acceptOffer(tx, id('starsi'), vacuum.id, 8, now))
     seedTemplates(tx, ids, now)
     return { kind: 'seeded', usernames: DEMO_USERS.map((u) => u.username) } as const
   })
