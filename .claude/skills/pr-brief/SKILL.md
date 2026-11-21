@@ -61,6 +61,8 @@ Diagrams: load the `artifact-diagramming` skill. Code snippets: real code trimme
 
 Screenshots: Playwright against the dev server, viewport 390×844, light theme, `deviceScaleFactor: 2`. Dark theme too only when the PR changes the theme or tokens. Seed realistic Czech task names.
 
+A screenshot shows exactly what a phone shows: one 390×844 screen, never the whole page. Use `page.screenshot()` with no `fullPage` (or `fullPage: false`), so every file is 780×1688 px; never `fullPage: true`, never an element screenshot taller than the screen. When the part that matters sits below the fold, scroll to it (`locator.scrollIntoViewIfNeeded()` or `window.scrollTo`) and take another 390×844 screenshot of that spot. Check each file's size before you publish it; one that is not 780×1688 is retaken.
+
 Screenshots on the page keep their natural aspect ratio, big enough to read. Put every screenshot `<figure>` inside one grid; give each `<img>` its real `width`/`height` attributes and this CSS:
 
 ```css
