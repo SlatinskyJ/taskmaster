@@ -2,11 +2,12 @@ import { Minus, Plus } from 'lucide-react'
 import { sectionLabelClass } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
+import { TASK_SCORE_MAX } from '~/lib/taskLimits'
 import { ScoreDial } from './ScoreDial'
 
 /** Everyday chores go for 2–5 points, weekly goals are 10–15 (Jakub 2026-11-18). */
 export const START_SCORE = 3
-const MAX_SCORE = 999
+const MAX_SCORE = TASK_SCORE_MAX
 /** One tap to a common value; the bigger ones are for one-off jobs. */
 const QUICK_PICKS = [2, 5, 10, 20] as const
 

@@ -9,3 +9,6 @@ export function normaliseTitle(title: string): string | null {
 
 /** Longest reason a giver can give when rejecting a completion. */
 export const REASON_MAX = 200
+
+/** Highest score a task, an offer or a bid may carry. Shared by the server's checks and the forms. */
+export const TASK_SCORE_MAX = 999

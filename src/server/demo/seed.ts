@@ -1,6 +1,7 @@
 import { hashSync } from '@node-rs/argon2'
 import type { Db } from '~/server/db'
 import { users } from '~/server/db/schema'
+import { createTask, placeBid } from '~/server/tasks'
 import type { Tx } from '~/server/audit'
 import { approveTemplateScoreIn, createTemplateIn } from '~/server/templates/templates'
 import type { NewTemplate } from '~/server/templates/templates'
@@ -18,7 +19,9 @@ import type { NewUser } from '~/server/users'
 // does). All tested.
 //
 // Grows with features: each feature PR adds its sample data here (tasks in every state, a
-// template, an open period, a past settlement), in the same transaction.
+// template, an open period, a past settlement), in the same transaction, through the real
+// actions. So far (#34): "Umýt auto" in negotiation (Táta offers 18, Starší bids 25, Mladší 22)
+// and "Uklidit sklep", a plain offer of 10 with no bids.
 
 /** Known on purpose: previews are tailnet-only and hold no real data. Never used in production. */
 export const DEMO_PASSWORD = 'demo1234'
@@ -59,6 +62,26 @@ export function seedDemo(
         throw new Error(`Demo seed: cannot create "${person.username}": ${created.error}`)
       ids.set(person.username, created.value.id)
     }
+    const id = (username: string) => ids.get(username) ?? 0
+    const step = <T>(what: string, r: { ok: true; value: T } | { ok: false; error: string }) => {
+      if (!r.ok) throw new Error(`Demo seed: ${what}: ${r.error}`)
+      return r.value
+    }
+    const car = step(
+      'offer "Umýt auto"',
+      createTask(tx, id('tata'), { title: 'Umýt auto', score: 18, approvalRequired: true }, now),
+    )
+    step('bid 25', placeBid(tx, id('starsi'), car.id, 25, now))
+    step('bid 22', placeBid(tx, id('mladsi'), car.id, 22, now))
+    step(
+      'offer "Uklidit sklep"',
+      createTask(
+        tx,
+        id('tata'),
+        { title: 'Uklidit sklep', score: 10, approvalRequired: true },
+        now,
+      ),
+    )
     seedTemplates(tx, ids, now)
     return { kind: 'seeded', usernames: DEMO_USERS.map((u) => u.username) } as const
   })
