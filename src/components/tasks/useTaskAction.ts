@@ -4,7 +4,11 @@ import { toast } from 'sonner'
 import { burstConfetti } from '~/components/effects/confetti'
 import { cs } from '~/lib/strings'
 import { taskErrorMessage } from '~/lib/taskErrors'
-import type { LifecycleActionResult, TaskActionResult } from '~/server/tasks/functions'
+import type {
+  LifecycleActionResult,
+  ScoreChangeActionResult,
+  TaskActionResult,
+} from '~/server/tasks/functions'
 import type { TemplateActionResult } from '~/server/templates/functions'
 
 /** One task action (work flow or bidding) from a row or the task page: busy state, toast, confetti, and a reload. */
@@ -12,17 +16,20 @@ export function useTaskAction() {
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
 
-  async function run<R extends LifecycleActionResult | TaskActionResult | TemplateActionResult>(
+  async function run<
+    R extends
+      LifecycleActionResult | TaskActionResult | TemplateActionResult | ScoreChangeActionResult,
+  >(
     key: string,
     action: () => Promise<R>,
     success: (r: Extract<R, { ok: true }>) => string,
-    opts: { confetti?: Element | null } = {},
+    opts: { confetti?: Element | null; errorMessage?: (error: string) => string } = {},
   ): Promise<boolean> {
     setBusy(key)
     try {
       const result = await action()
       if (!result.ok) {
-        toast.error(taskErrorMessage(result.error))
+        toast.error((opts.errorMessage ?? taskErrorMessage)(result.error))
         await router.invalidate()
         return false
       }

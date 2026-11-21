@@ -199,6 +199,7 @@ describe('WaitingForYou with templates (#37)', () => {
     const html = renderToStaticMarkup(
       <WaitingForYou
         priceChanges={[]}
+        taskPriceChanges={[]}
         items={[task]}
         templates={[template]}
         me={{ id: 3, role: 'taker' }}
@@ -214,7 +215,13 @@ describe('WaitingForYou with templates (#37)', () => {
   it('renders nothing when nothing waits', () => {
     expect(
       renderToStaticMarkup(
-        <WaitingForYou priceChanges={[]} items={[]} templates={[]} me={{ id: 3, role: 'taker' }} />,
+        <WaitingForYou
+          priceChanges={[]}
+          taskPriceChanges={[]}
+          items={[]}
+          templates={[]}
+          me={{ id: 3, role: 'taker' }}
+        />,
       ),
     ).toBe('')
   })
@@ -293,7 +300,12 @@ describe('template price change: ways in', () => {
 
   it('"Čeká na tebe" for a brother: the offer, Odpovědět to the page, counted', () => {
     const html = renderToStaticMarkup(
-      <WaitingForYou items={[]} priceChanges={[dishes]} me={{ id: 4, role: 'taker' }} />,
+      <WaitingForYou
+        items={[]}
+        priceChanges={[dishes]}
+        taskPriceChanges={[]}
+        me={{ id: 4, role: 'taker' }}
+      />,
     )
     expect(html).toContain(`${cs.home.waiting} (1)`)
     expect(html).toContain('Vyndat myčku')
@@ -301,9 +313,54 @@ describe('template price change: ways in', () => {
     expect(html).toContain('<a href="/sablona/9">Odpovědět</a>')
   })
 
+  it('"Čeká na tebe": a new price of a one-time task, Odpovědět to its page, counted (#36)', () => {
+    const task: TaskView = {
+      id: 7,
+      title: 'Vyluxovat celý obývák a chodbu',
+      status: 'open',
+      score: 10,
+      approvalRequired: true,
+      createdByName: 'Táta',
+      offeredByName: null,
+      approvedBy: [],
+      approverIds: [],
+      bids: [],
+      lowest: null,
+      reservedBy: null,
+      completedBy: null,
+      completedAt: null,
+      earnerId: null,
+      waitingFor: [],
+      scoreChange: {
+        id: 3,
+        score: 12,
+        proposedBy: { id: 2, name: 'Táta' },
+        approvedBy: [{ id: 2, name: 'Táta' }],
+        waitingFor: [{ id: 4, name: 'Starší' }],
+      },
+    }
+    const html = renderToStaticMarkup(
+      <WaitingForYou
+        items={[]}
+        priceChanges={[]}
+        taskPriceChanges={[task]}
+        me={{ id: 4, role: 'taker' }}
+      />,
+    )
+    expect(html).toContain(`${cs.home.waiting} (1)`)
+    expect(html).toContain('Vyluxovat celý obývák a chodbu')
+    expect(html).toContain('Nová cena: 10 → 12 b')
+    expect(html).toContain('<a href="/ukol/7">Odpovědět</a>')
+  })
+
   it('"Čeká na tebe" for a parent: the bid to answer, not his own offer', () => {
     const html = renderToStaticMarkup(
-      <WaitingForYou items={[]} priceChanges={[dishes]} me={{ id: 2, role: 'giver' }} />,
+      <WaitingForYou
+        items={[]}
+        priceChanges={[dishes]}
+        taskPriceChanges={[]}
+        me={{ id: 2, role: 'giver' }}
+      />,
     )
     expect(html).toContain('Mladší chce 5')
     expect(html).not.toContain('Táta nabízí 4')

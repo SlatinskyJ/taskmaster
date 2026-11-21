@@ -34,6 +34,7 @@ vi.mock('~/server/tasks/functions', () => ({
   listBoardFn: vi.fn(() => Promise.resolve(['board'])),
   listPendingCompletionsFn: vi.fn(() => Promise.resolve(['toApprove'])),
   listBidsToAnswerFn: vi.fn(() => Promise.resolve(['bids'])),
+  listScoreChangesWaitingFn: vi.fn(() => Promise.resolve(['taskPriceChanges'])),
 }))
 vi.mock('~/server/templates/functions', () => ({
   listPendingTemplateApprovalsFn: vi.fn(() => Promise.resolve(['waitingTemplates'])),
@@ -68,6 +69,7 @@ function render(user: PageUser, recurring: TemplateView[]) {
     waiting: [],
     waitingTemplates: [],
     priceChanges: [dishes],
+    taskPriceChanges: [],
     board: [],
     recurring,
     toApprove: [],
@@ -109,6 +111,7 @@ describe('Domů loader', () => {
       waiting: ['waiting'],
       waitingTemplates: ['waitingTemplates'],
       priceChanges: ['priceChanges'],
+      taskPriceChanges: ['taskPriceChanges'],
       board: ['board'],
       recurring: ['recurring'],
       toApprove: [],
@@ -121,6 +124,7 @@ describe('Domů loader', () => {
       waiting: ['waiting'],
       waitingTemplates: ['waitingTemplates'],
       priceChanges: ['priceChanges'],
+      taskPriceChanges: ['taskPriceChanges'],
       board: [],
       recurring: [],
       toApprove: ['toApprove'],

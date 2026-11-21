@@ -247,6 +247,77 @@ export const cs = {
       rejected: 'Zamítnuto',
     },
   },
+  /** Changing the price of an agreed one-time task (#36, spec §5.2): GTask, TApprove. */
+  taskPrice: {
+    change: 'Změnit cenu',
+    /** Under "Změnit cenu" on a reserved task: who has to agree ("Stačí souhlas: Starší"). */
+    needs: (name: string) => `Stačí souhlas: ${name}`,
+    /** The giver side, as a taker on a reserved task sees it. */
+    parent: 'rodič',
+    needsOpen: 'Platí, až souhlasí rodič i jeden z kluků',
+    drawerText: (score: number) =>
+      `Nová cena platí, až ji potvrdí druhá strana. Do té doby zůstává ${String(score)} b.`,
+    send: (score: number) => `Navrhnout ${String(score)} b`,
+    pending: 'Návrh nové ceny',
+    agree: 'Souhlasím',
+    disagree: 'Nesouhlasím',
+    withdraw: 'Stáhnout návrh',
+    oldStays: (score: number) => `Dokud se nedomluvíte, platí ${String(score)} b.`,
+    disagreeHint: (score: number) => `Nesouhlas návrh zavře, dál platí ${String(score)} b.`,
+    withdrawHint: (score: number) => `Dál platí ${String(score)} b.`,
+    /** "Čeká na tebe" row: "Nová cena: 18 → 20 b". */
+    rowMeta: (from: number, to: number) => `Nová cena: ${String(from)} → ${String(to)} b`,
+    toast: {
+      proposed: 'Návrh odeslán',
+      agreed: 'Cena změněna',
+      approved: 'Souhlas zapsán',
+      declined: 'Návrh zamítnut',
+      withdrawn: 'Návrh stažen',
+    },
+    errors: {
+      notInvolved: 'Tohle rozhodují jiní.',
+      changePending: 'O nové ceně se už jedná. Obnov stránku.',
+      noChange: 'Návrh už neplatí. Obnov stránku.',
+      scoreFrozen: 'Úkol je hotový, cenu už měnit nejde.',
+      notAgreed: 'Úkol se zase vyjednává. Obnov stránku.',
+    },
+  },
+  /** A giver cancels a task (#36, spec §5.6): GTask and its Dialog. */
+  cancelTask: {
+    action: 'Zrušit úkol',
+    hint: 'Zůstane v historii jako zrušený',
+    title: 'Zrušit úkol?',
+    body: 'Úkol zmizí ze seznamů, ale zůstane v historii. Vrátit to nejde.',
+    reason: 'Důvod (uvidí ho všichni)',
+    confirm: 'Zrušit úkol',
+    back: 'Zpět',
+    done: 'Úkol zrušen',
+  },
+  /** A task's history (#36, GTask): "so 21. 11. 10:12 · Táta: nový úkol za 8 b". */
+  history: {
+    title: 'Historie',
+    you: 'ty',
+    created: (n: number) => `nový úkol za ${String(n)} b`,
+    countered: (n: number) => `nabídka ${String(n)} b`,
+    bid: (n: number) => `chce ${String(n)} b`,
+    bidAccepted: (n: number) => `přijato ${String(n)} b`,
+    approved: (n: number) => `souhlas s ${String(n)} b`,
+    agreed: (n: number) => `domluveno za ${String(n)} b`,
+    agreedReserved: (n: number, name: string) => `domluveno za ${String(n)} b · rezervace: ${name}`,
+    reserved: 'rezervace',
+    released: 'uvolněno',
+    completed: 'hotovo',
+    completionApproved: 'schváleno',
+    rejected: 'vráceno',
+    cancelled: 'zrušeno',
+    changeProposed: (n: number) => `návrh nové ceny ${String(n)} b`,
+    changeApproved: (n: number) => `souhlas s novou cenou ${String(n)} b`,
+    changeDeclined: (n: number) => `nesouhlas s novou cenou ${String(n)} b`,
+    changeWithdrawn: 'návrh ceny stažen',
+    changed: (n: number) => `nová cena ${String(n)} b`,
+    changeDiscarded: (n: number) => `návrh ceny ${String(n)} b propadl`,
+    other: 'změna',
+  },
   home: {
     greeting: 'Ahoj',
     /** "Čeká na tebe (2)" (UI doc §6 [call]: always at the top of Domů). */

@@ -13,6 +13,7 @@ import {
   listBoardFn,
   listPendingApprovalsFn,
   listPendingCompletionsFn,
+  listScoreChangesWaitingFn,
 } from '~/server/tasks/functions'
 import {
   listPendingTemplateApprovalsFn,
@@ -29,11 +30,13 @@ export const Route = createFileRoute('/_app/')({
     const waiting = await listPendingApprovalsFn()
     const waitingTemplates = await listPendingTemplateApprovalsFn()
     const priceChanges = await listPendingTemplatePriceChangesFn()
+    const taskPriceChanges = await listScoreChangesWaitingFn()
     if (context.user.role === 'taker') {
       return {
         waiting,
         waitingTemplates,
         priceChanges,
+        taskPriceChanges,
         board: await listBoardFn(),
         recurring: await listTemplatesFn(),
         toApprove: [],
@@ -44,6 +47,7 @@ export const Route = createFileRoute('/_app/')({
       waiting,
       waitingTemplates,
       priceChanges,
+      taskPriceChanges,
       board: [],
       recurring: [],
       toApprove: await listPendingCompletionsFn(),
@@ -56,14 +60,23 @@ export const Route = createFileRoute('/_app/')({
 // "Čeká na tebe" first, then the work lists; the rest of the home screens comes with #40, #41.
 function Home() {
   const { user } = Route.useRouteContext()
-  const { waiting, waitingTemplates, priceChanges, board, recurring, toApprove, bids } =
-    Route.useLoaderData()
+  const {
+    waiting,
+    waitingTemplates,
+    priceChanges,
+    taskPriceChanges,
+    board,
+    recurring,
+    toApprove,
+    bids,
+  } = Route.useLoaderData()
   return (
     <Screen title={`${cs.home.greeting}, ${user.displayName}!`} user={user}>
       <WaitingForYou
         items={waiting}
         templates={waitingTemplates}
         priceChanges={priceChanges}
+        taskPriceChanges={taskPriceChanges}
         me={{ id: user.id, role: user.role }}
       />
       {user.role === 'taker' ? (

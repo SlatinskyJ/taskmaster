@@ -8,6 +8,8 @@ import type { ThreadEntry } from '~/server/threadEntry'
 import type { TaskDetail, TaskError, TaskView } from './tasks'
 
 export type { TaskDetail, TaskError, TaskView, ThreadEntry }
+export type { HistoryEntry } from './history'
+export type { ScoreChangeView } from './tasks'
 import type { LifecycleActionError } from './lifecycle'
 import {
   approveTask,

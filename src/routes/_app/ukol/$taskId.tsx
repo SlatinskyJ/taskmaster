@@ -3,7 +3,10 @@ import { Screen } from '~/components/shell/Screen'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { BidPanel } from '~/components/tasks/BidPanel'
 import { BidThread } from '~/components/tasks/BidThread'
+import { CancelTask } from '~/components/tasks/CancelTask'
+import { ScoreChangePanel } from '~/components/tasks/ScoreChangePanel'
 import { StateChip } from '~/components/tasks/StateChip'
+import { TaskHistory } from '~/components/tasks/TaskHistory'
 import { TaskWorkPanel } from '~/components/tasks/WorkButtons'
 import { detailMeta, taskChipState, waitingText } from '~/components/tasks/taskView'
 import { Card } from '~/components/ui/card'
@@ -12,9 +15,10 @@ import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { getTaskDetailFn } from '~/server/tasks/functions'
 
-// One task's page (#34): TTask for a brother, GBid for a parent (UI doc §7). The state, the
-// whole bid thread, and what this person can do now: bid, or Hotovo and Uvolnit for the brother
-// who has the task (#150). Reserve stays on Domů.
+// One task's page (#34): TTask for a brother, GBid / GTask for a parent (UI doc §7). The state,
+// what this person can do now (bid; Hotovo and Uvolnit for the brother who has the task, #150;
+// a new price, a giver's cancel, #36), the bid thread and the task's history. Reserve stays
+// on Domů.
 export const Route = createFileRoute('/_app/ukol/$taskId')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/ukol/$taskId')
@@ -34,7 +38,7 @@ export const Route = createFileRoute('/_app/ukol/$taskId')({
 
 function TaskPage() {
   const { user } = Route.useRouteContext()
-  const { task, thread } = Route.useLoaderData()
+  const { task, thread, history } = Route.useLoaderData()
   const me = { id: user.id, role: user.role }
   const meta = detailMeta(task, me)
   const waiting = waitingText(task, me)
@@ -59,11 +63,14 @@ function TaskPage() {
         )}
       </Card>
       <TaskWorkPanel task={task} me={me} />
+      <ScoreChangePanel key={`price-${String(task.score)}`} task={task} me={me} />
+      <CancelTask task={task} me={me} />
       <section className="grid gap-2" aria-labelledby="thread-label">
         <SectionLabel id="thread-label">{cs.bids.thread}</SectionLabel>
         <BidThread entries={thread} me={user.id} />
       </section>
       <BidPanel key={`${String(task.score)}-${String(thread.length)}`} task={task} me={me} />
+      <TaskHistory entries={history} meId={user.id} />
     </Screen>
   )
 }

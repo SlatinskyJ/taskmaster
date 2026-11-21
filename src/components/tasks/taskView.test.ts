@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { TaskView } from '~/server/tasks/functions'
+import { cs } from '~/lib/strings'
 import {
   bidButtons,
+  canProposeChange,
   canWorkOn,
+  changeAnswer,
+  changeHint,
   detailMeta,
   lowestText,
   myBid,
@@ -232,5 +236,47 @@ describe('taskView', () => {
     for (const status of ['open', 'proposed', 'done_unconfirmed', 'confirmed'] as const)
       expect(canWorkOn({ ...mine, status }, STARSI)).toBe(false)
     expect(canWorkOn(view({ status: 'reserved', reservedBy: null }), STARSI)).toBe(false)
+  })
+})
+
+describe('price change (#36)', () => {
+  const TATA = { id: 2, role: 'giver' } as const
+  const change = {
+    id: 7,
+    score: 20,
+    proposedBy: { id: 2, name: 'Táta' },
+    approvedBy: [{ id: 2, name: 'Táta' }],
+    waitingFor: [{ id: 3, name: 'Starší' }],
+  }
+  const STARSI = { id: 3, role: 'taker' } as const
+  const MLADSI = { id: 4, role: 'taker' } as const
+  const ADMIN = { id: 1, role: 'admin' } as const
+  const reserved = { status: 'reserved' as const, reservedBy: { id: 3, name: 'Starší' } }
+
+  it('canProposeChange: who may start a change in each state', () => {
+    const open = { status: 'open' as const, reservedBy: null, scoreChange: null }
+    expect(canProposeChange(open, TATA)).toBe(true)
+    expect(canProposeChange(open, MLADSI)).toBe(true)
+    expect(canProposeChange(open, ADMIN)).toBe(false)
+    expect(canProposeChange({ ...reserved, scoreChange: null }, TATA)).toBe(true)
+    expect(canProposeChange({ ...reserved, scoreChange: null }, STARSI)).toBe(true)
+    expect(canProposeChange({ ...reserved, scoreChange: null }, MLADSI)).toBe(false)
+    expect(canProposeChange({ ...open, scoreChange: change }, TATA)).toBe(false)
+    for (const status of ['proposed', 'done_unconfirmed', 'confirmed', 'cancelled'] as const) {
+      expect(canProposeChange({ ...open, status }, TATA)).toBe(false)
+    }
+  })
+
+  it('changeAnswer: proposer withdraws, who it waits for answers, others nothing', () => {
+    expect(changeAnswer({ scoreChange: change }, TATA)).toBe('withdraw')
+    expect(changeAnswer({ scoreChange: change }, STARSI)).toBe('answer')
+    expect(changeAnswer({ scoreChange: change }, MLADSI)).toBe('none')
+    expect(changeAnswer({ scoreChange: null }, STARSI)).toBe('none')
+  })
+
+  it('changeHint names who has to agree', () => {
+    expect(changeHint(reserved, TATA)).toBe('Stačí souhlas: Starší')
+    expect(changeHint(reserved, STARSI)).toBe('Stačí souhlas: rodič')
+    expect(changeHint({ status: 'open', reservedBy: null }, TATA)).toBe(cs.taskPrice.needsOpen)
   })
 })

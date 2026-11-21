@@ -41,3 +41,27 @@ export function taskErrorMessage(error: string): string {
       return cs.login.failed
   }
 }
+
+/**
+ * Czech message for a refused price change or cancel (#36). Stale screens get one-time-task
+ * wording here; the rest falls back to `taskErrorMessage`.
+ */
+export function scoreChangeErrorMessage(error: string): string {
+  switch (error) {
+    case 'not_involved':
+      return cs.taskPrice.errors.notInvolved
+    case 'change_pending':
+      return cs.taskPrice.errors.changePending
+    case 'no_change':
+    case 'offer_changed':
+      return cs.taskPrice.errors.noChange
+    case 'score_frozen':
+      return cs.taskPrice.errors.scoreFrozen
+    case 'not_agreed':
+      return cs.taskPrice.errors.notAgreed
+    case 'not_changeable':
+      return cs.tasks.errors.gone
+    default:
+      return taskErrorMessage(error)
+  }
+}

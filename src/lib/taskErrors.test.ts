@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { cs } from './strings'
-import { taskErrorMessage } from './taskErrors'
+import { scoreChangeErrorMessage, taskErrorMessage } from './taskErrors'
 
 describe('taskErrorMessage', () => {
   it.each([
@@ -25,5 +25,21 @@ describe('taskErrorMessage', () => {
     ['not_agreed', 'Tenhle opakovaný úkol ještě není domluvený.'],
   ])('%s → Czech message', (code, message) => {
     expect(taskErrorMessage(code)).toBe(message)
+  })
+})
+
+describe('scoreChangeErrorMessage', () => {
+  it.each([
+    ['not_involved', cs.taskPrice.errors.notInvolved],
+    ['change_pending', cs.taskPrice.errors.changePending],
+    ['no_change', cs.taskPrice.errors.noChange],
+    ['offer_changed', cs.taskPrice.errors.noChange],
+    ['score_frozen', cs.taskPrice.errors.scoreFrozen],
+    ['not_agreed', cs.taskPrice.errors.notAgreed],
+    ['not_changeable', cs.tasks.errors.gone],
+    ['wrong_state', cs.tasks.errors.gone],
+    ['not_a_giver', cs.tasks.errors.notAllowed],
+  ])('%s', (code, message) => {
+    expect(scoreChangeErrorMessage(code)).toBe(message)
   })
 })
