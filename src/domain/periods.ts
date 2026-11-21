@@ -211,6 +211,24 @@ export function canSettle(period: PeriodSpan, now: Date): boolean {
 }
 
 /**
+ * The period the meeting settles (spec §5.8, §5.9 step 1). `periods` oldest first, `settled`
+ * the ids that have settlement records. The oldest ended period without a settlement comes
+ * first (a missed or late meeting; weeks are never skipped); only when every ended period is
+ * settled, the running one, if it can be settled now. `undefined` = nothing to settle.
+ */
+export function periodToSettle<P extends Period>(
+  periods: readonly P[],
+  settled: ReadonlySet<PeriodId>,
+  now: Date,
+): P | undefined {
+  const t = now.getTime()
+  const ended = periods.find((p) => periodEnd(p).getTime() <= t && !settled.has(p.id))
+  if (ended) return ended
+  const running = periods.find((p) => isRunning(p, now))
+  return running && !settled.has(running.id) && canSettle(running, now) ? running : undefined
+}
+
+/**
  * Settling ends the running period at `at` (spec §5.8). The next period starts at `at`, with its
  * cutoff from that start and the default length (Sunday 20:00 → the next Sunday 23:59), or the
  * agreed change for it. Refused unless startsAt < at < cutoffAt and the period has not ended.
