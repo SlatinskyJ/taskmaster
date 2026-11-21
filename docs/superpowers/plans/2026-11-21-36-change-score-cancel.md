@@ -124,6 +124,7 @@
   - reserved: Mladší proposes → `fail('not_involved')`; admin proposes → `fail('not_a_party')`.
   - proposed task → `fail('not_agreed')`; done task → `fail('score_frozen')`; same score → `fail('same_score')`; second proposal while one is open → `fail('change_pending')`; score 0 → `fail('invalid_score')`; unknown task → `fail('not_found')`.
   - stale id: approve with an old change id after a withdraw + new proposal → `fail('offer_changed')`; with none open → `fail('no_change')`.
+  - Jakub's rule at the server: open task, Starší proposed 15; Mladší declines → `fail('not_involved')`, change still open, no new audit row.
   - decline by Mladší on open → change `declined`, score unchanged, audit `task.score_change_declined`; proposer → `withdrawn`; then a new proposal is allowed.
   - discard: change open, Starší completes (reserved) → change `discarded`, audit order `task.score_change_discarded` before `task.completed`; bid-won release back to proposed → discarded; tap release reserved → open keeps the change open.
   - rollback: with the audit write failing (same technique as `lifecycle.test.ts:173`), approve-to-agreement leaves score 18, change open, no approval row; propose leaves no change row; discard during complete leaves task reserved and change open.
