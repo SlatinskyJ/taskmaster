@@ -67,18 +67,20 @@
   - `levelLabel(level: Level): string` → `Horní hranice` / `Spodní hranice` / `Bez kapesného`.
   - `shortfall(total: number, lower: number): string | null` → only for 0 < total < lower: the missing points with verb agreement, then the carry with `formatPoints`: 1 → `"Chyběl 1 bod. Nic nepropadá, 49 bodů jde do dalšího týdne."`, 2–4 → `"Chyběly 3 body. Nic nepropadá, 47 bodů jde do dalšího týdne."`, 5+ → `"Chybělo 47 bodů. Nic nepropadá, 3 body jdou do dalšího týdne."` (verb `jde` for 1 and 5+, `jdou` for 2–4); else null.
   - `settleErrorMessage(error: SettleError): string` in `src/lib/settleErrors.ts` (Ruling 4).
-  - `dayTime(iso: string): string` → `"ne 29. 11. 20:00"` (Prague; for "Vyúčtováno" and the pending hint's week end).
-- Strings `cs.meeting`: `title` (existing `cs.nav.meeting`), `steps: ['Schválit', 'Vyúčtovat', 'Plánovat']`, `pendingHint: (end) => 'Hotová práce do <end>. Dokud tu něco zbývá, nejde vyúčtovat.'` (end = `dayTime(endsAt)`), `levelsLabel: 'Hranice'`, `planEmpty: 'Na tento týden zatím nic. Přidej úkol.'`, `allClear: 'Vše vyřízeno'`, `allClearHint: 'Můžeš vyúčtovat týden.'`, `next: 'Dál: vyúčtovat'`, `left: (n) => 'Zbývá schválit: n'`, `levels: 'hranice'`, `total: 'Celkem'`, `deducted: 'Odečte se'`, `carry: 'Převádí se'`, `final: 'Vyúčtování je konečné. Opravit ho může jen správce.'`, `confirm: 'Potvrdit vyúčtování'`, dialog `confirmTitle: 'Vyúčtovat týden?'`, `confirmYes: 'Vyúčtovat'`, `settledAt: 'Vyúčtováno'`, `newWeek: 'Nový týden'`, `startWith: 'Začínají s'`, `planTasks: 'Úkoly na tento týden'`, `newTask: '+ Nový úkol'`, `end: 'Ukončit schůzku'`, `nothing: 'Teď není co vyúčtovat'`, `toast.settled: 'Týden je vyúčtovaný'`, the error texts.
+  - `untilLabel(iso: string): string` → `"neděle 29. 11. 23:59"` (Prague; day name in the genitive after "do": pondělí, úterý, středy, čtvrtka, pátku, soboty, neděle; for the pending hint).
+  - `dayTime(iso: string): string` → `"ne 29. 11. 20:00"` (Prague; for "Vyúčtováno").
+- Strings `cs.meeting`: `title` (existing `cs.nav.meeting`), `steps: ['Schválit', 'Vyúčtovat', 'Plánovat']`, `pendingHint: (end) => 'Hotová práce do <end>. Dokud tu něco zbývá, nejde vyúčtovat.'` (end = `untilLabel(endsAt)`, so the hint reads "do neděle 29. 11. 23:59"; a full day name, because the short `ne` reads as "not"), `levelsLabel: 'Hranice'`, `planEmpty: 'Na tento týden zatím nic. Přidej úkol.'`, `allClear: 'Vše vyřízeno'`, `allClearHint: 'Můžeš vyúčtovat týden.'`, `next: 'Dál: vyúčtovat'`, `left: (n) => 'Zbývá schválit: n'`, `levels: 'hranice'`, `total: 'Celkem'`, `deducted: 'Odečte se'`, `carry: 'Převádí se'`, `final: 'Vyúčtování je konečné. Opravit ho může jen správce.'`, `confirm: 'Potvrdit vyúčtování'`, dialog `confirmTitle: 'Vyúčtovat týden?'`, `confirmYes: 'Vyúčtovat'`, `settledAt: 'Vyúčtováno'`, `newWeek: 'Nový týden'`, `stillRunning: 'Tento týden běží dál'`, `startWith: 'Začínají s'`, `planTasks: 'Úkoly na tento týden'`, `newTask: '+ Nový úkol'`, `end: 'Ukončit schůzku'`, `nothing: 'Teď není co vyúčtovat'`, `toast.settled: 'Týden je vyúčtovaný'`, the error texts.
 
-- [ ] Tests: `weekLabel` for P1 (22. 11. – 29. 11.), `week label for an ended week uses its end` (ended early at Sun 20:00 → same day), across a month end (29. 11. – 6. 12.), an end at Sun 23:59 Prague = Sun 22:59 UTC but a start at Mon 00:30 Prague = Sun 23:30 UTC (Prague day wins), the October DST week (18. 10. – 25. 10.); `levelLabel` all three; `shortfall` 49 → 1 bod / 47 → 3 body / 3 → 47 bodů / 0 → null / 50 (= lower) → null / 130 → null; `dayTime` in winter and summer time; every `SettleError` maps to a distinct non-empty string.
+- [ ] Tests: `weekLabel` for P1 (22. 11. – 29. 11.), `week label for an ended week uses its end` (ended early at Sun 20:00 → same day), across a month end (29. 11. – 6. 12.), an end at Sun 23:59 Prague = Sun 22:59 UTC but a start at Mon 00:30 Prague = Sun 23:30 UTC (Prague day wins), the October DST week (18. 10. – 25. 10.); `levelLabel` all three; `shortfall` 49 → 1 bod / 47 → 3 body / 3 → 47 bodů / 0 → null / 50 (= lower) → null / 130 → null; `dayTime` and `untilLabel` in winter and summer time; every `SettleError` maps to a distinct non-empty string.
 - [ ] Run → FAIL; implement; run → PASS; commit `"Meeting labels and helpers"`.
 
 ### Task 3: Meeting screen
 
 **Files:**
 - Create: `src/components/meeting/MeetingScreen.tsx` (steps bar, step 1 = existing `ToApprove` with the hint, step 2 = a card per taker with `PointsBar` (confirmed = total, pending 0), level badge, three numbers, shortfall line; final note; confirm button + dialog; step 3 = new week card, plan tasks with `TaskRow`, buttons), `src/components/meeting/meeting.test.tsx`
-- Modify: `src/routes/_app/schuzka.tsx` (loader: `getMeetingFn()` and `listPlanTasksFn()`; render `Meeting`)
+- Modify: `src/routes/_app/schuzka.tsx` (loader: `getMeetingFn()` and `listPlanTasksFn()`; render `MeetingScreen`)
 - Modify: `src/lib/features.ts` only if present (Global Constraints)
+- Modify: `playwright.config.ts`: a third project `meeting` (`testMatch: 'meeting.spec.ts'`) with its own server on port 3102 and its own fresh data folder, so settling the demo week never touches the passkeys specs' databases
 
 **Interfaces:**
 - Consumes: `getMeetingFn`, `settlePeriodFn`, `SettleResult`, `Meeting` (#168), `listPlanTasksFn`, `ToApprove`, `TaskRow`, `PointsBar`, `Dialog`, `Button`.
@@ -94,6 +96,7 @@
   - `confirm runs once` (double click → one call; button disabled while busy)
   - `after a confirm the screen shows step 3 and never step 2` (even after rerender with a meeting for the new week)
   - `step 3 shows each taker's carry-over by takerId and the new week from the response` (records returned in the opposite order of the takers; carry-overs land on the right names; week 29. 11. – 6. 12., Hranice 50 / 100, Vyúčtováno ne 29. 11. 20:00 from `settledAt`)
+  - `a confirm with next null shows the week still running` (response `next: null` → "Tento týden běží dál", no week dates or levels, carry-overs still shown, no crash)
   - `totals_changed reloads and stays on step 2` (toast text, `router.invalidate` called; rerender with new totals → the screen shows them and the next confirm sends them)
   - `pending_items goes back to step 1`; `already_settled shows its toast`
   - `nothing to settle shows step 3 only`
@@ -107,7 +110,7 @@
 
 **Files:**
 - Modify: `src/server/demo/seed.ts` (+ `seed.test.ts`): through the real actions, at `now` minus a few hours, Starší completes and Táta approves tasks worth 112, Mladší 47 ("Vyndat myčku", "Uklidit koupelnu", …), and one completion of each boy stays pending ("Zalít kytky" 2, "Vynést tříděný" 3). The roller then starts the week at boot; the meeting shows step 1 with 2 items, then step 2 as in M2Settle.
-- Screenshots (Playwright, dev server with `TASKMASTER_ENV=preview` on a fresh `DATA_DIR`, logged in as `tata`): `schuzka-giver-pending` (with a long task name), `schuzka-giver-allclear`, `schuzka-giver-settle`, `schuzka-giver-confirm`, `schuzka-giver-totalschanged` (toast), `schuzka-giver-plan`, `schuzka-giver-plan-empty`, `schuzka-giver-nothing`, each at 360 and 390 px, light; one dark of step 2. Folder outside the repo.
+- Screenshots (Playwright, dev server with `TASKMASTER_ENV=preview` on a fresh `DATA_DIR`, logged in as `tata`): `schuzka-giver-pending` (with a long task name), `schuzka-giver-allclear`, `schuzka-giver-settle`, `schuzka-giver-confirm`, `schuzka-giver-totalschanged` (toast), `schuzka-giver-plan`, `schuzka-giver-plan-empty`, `schuzka-giver-still-running` (confirm with `next: null`), `schuzka-giver-nothing`, each at 360 and 390 px, light; one dark of step 2. Folder outside the repo.
 
 - [ ] Seed test: `demo seed gives a meeting with 2 pending items and totals 112 / 47` (roll a period on the seeded DB, then `getMeeting`). Run → FAIL; implement; PASS; commit `"Demo: a week ready for the meeting"`.
 - [ ] Take and look at every screenshot.
