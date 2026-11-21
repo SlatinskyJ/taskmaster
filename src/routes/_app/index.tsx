@@ -69,7 +69,7 @@ function Home() {
       {user.role === 'taker' ? (
         <>
           <TakerBoard items={board} me={user.id} />
-          <RecurringList items={recurring} />
+          <RecurringList items={recurring} waiting={priceChanges} />
         </>
       ) : (
         <>

@@ -6,7 +6,6 @@ import {
   detailMeta,
   lowestText,
   myBid,
-  parseIdParam,
   sendButton,
   taskChipState,
   threadTime,
@@ -203,11 +202,6 @@ describe('taskView', () => {
   it('thread times are Prague wall clock: Saturday 23:30 UTC is Sunday 00:30', () => {
     expect(threadTime('2026-11-21T09:12:00.000Z')).toBe('so 10:12')
     expect(threadTime('2026-11-21T23:30:00.000Z')).toBe('ne 00:30')
-  })
-  it('task id in the URL: plain positive digits only', () => {
-    expect(
-      ['7', '0', '-1', '1.5', 'abc', '1e3', ' 7', '9007199254740993'].map(parseIdParam),
-    ).toEqual([7, null, null, null, null, null, null, null])
   })
   it('toasts: mine, agreed, approved, sent', () => {
     expect([

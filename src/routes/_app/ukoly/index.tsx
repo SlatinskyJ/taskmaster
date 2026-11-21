@@ -174,5 +174,3 @@ function Tasks() {
     </Screen>
   )
 }
-
-/** A template on Úkoly: proposed ones wait for agreement, active ones "Platí" (green). */

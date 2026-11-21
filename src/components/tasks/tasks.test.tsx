@@ -308,13 +308,17 @@ describe('template price change: ways in', () => {
   })
 
   it("a brother's Opakované úkoly: agreed ones with Jiná cena; nothing when empty", () => {
-    const html = renderToStaticMarkup(<RecurringList items={[plain]} />)
+    const html = renderToStaticMarkup(<RecurringList items={[plain]} waiting={[]} />)
     expect(html).toContain('Opakované úkoly')
     expect(html).toContain('<a href="/sablona/9">Jiná cena</a>')
-    expect(renderToStaticMarkup(<RecurringList items={[]} />)).toBe('')
-    expect(renderToStaticMarkup(<RecurringList items={[{ ...plain, status: 'proposed' }]} />)).toBe(
-      '',
-    )
+    expect(renderToStaticMarkup(<RecurringList items={[]} waiting={[]} />)).toBe('')
+    // Already in "Čeká na tebe": not listed twice.
+    expect(renderToStaticMarkup(<RecurringList items={[plain]} waiting={[dishes]} />)).toBe('')
+    expect(
+      renderToStaticMarkup(
+        <RecurringList items={[{ ...plain, status: 'proposed' }]} waiting={[]} />,
+      ),
+    ).toBe('')
   })
 
   it('Úkoly: Odpovědět with bids open, else Změnit cenu; no link while proposed', () => {
