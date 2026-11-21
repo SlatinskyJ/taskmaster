@@ -1,7 +1,15 @@
 import { hashSync } from '@node-rs/argon2'
 import type { Db } from '~/server/db'
 import { users } from '~/server/db/schema'
-import { acceptOffer, createTask, placeBid } from '~/server/tasks'
+import {
+  acceptOffer,
+  approveTask,
+  approveTaskOffer,
+  completeTask,
+  createTask,
+  placeBid,
+  reserveTask,
+} from '~/server/tasks'
 import type { Tx } from '~/server/audit'
 import { approveTemplateScoreIn, createTemplateIn } from '~/server/templates/templates'
 import type { NewTemplate } from '~/server/templates/templates'
@@ -22,7 +30,8 @@ import type { NewUser } from '~/server/users'
 // Grows with features: each feature PR adds its sample data here (tasks in every state, a
 // template, an open period, a past settlement), in the same transaction, through the real
 // actions. So far (#34): "Umýt auto" in negotiation (Táta offers 18, Starší bids 25, Mladší 22)
-// and "Uklidit sklep", a plain offer of 10 with no bids.
+// and "Uklidit sklep", a plain offer of 10 with no bids. #44: a week of done chores, so the
+// meeting has something to approve (2 items) and to settle (Starší 112, Mladší 47).
 
 /** Known on purpose: previews are tailnet-only and hold no real data. Never used in production. */
 export const DEMO_PASSWORD = 'demo1234'
@@ -97,6 +106,7 @@ export function seedDemo(
     step('bid 10', placeBid(tx, id('starsi'), vacuum.id, 10, now))
     step('take 8', acceptOffer(tx, id('starsi'), vacuum.id, 8, now))
     seedTemplates(tx, ids, now)
+    seedWeek(tx, id, now)
     return { kind: 'seeded', usernames: DEMO_USERS.map((u) => u.username) } as const
   })
 }
@@ -136,6 +146,44 @@ function seedTemplates(tx: Tx, ids: Map<string, number>, now: Date): void {
   if (!bid.ok) throw new Error(`Demo seed: bid on "${dishes.title}": ${bid.error}`)
   const offer = counterOnTemplateIn(tx, tata, dishes.id, 4, now)
   if (!offer.ok) throw new Error(`Demo seed: offer on "${dishes.title}": ${offer.error}`)
+}
+
+/** Done this week (#44): approved, so they count, except the last one of each boy. */
+const DEMO_WEEK: readonly { by: string; title: string; score: number; approved: boolean }[] = [
+  { by: 'starsi', title: 'Uklidit koupelnu', score: 40, approved: true },
+  { by: 'starsi', title: 'Posekat trávu', score: 50, approved: true },
+  { by: 'starsi', title: 'Vysát auto', score: 22, approved: true },
+  { by: 'mladsi', title: 'Uklidit pokoj', score: 25, approved: true },
+  { by: 'mladsi', title: 'Zamést terasu', score: 12, approved: true },
+  { by: 'mladsi', title: 'Vynést papír', score: 10, approved: true },
+  { by: 'starsi', title: 'Zalít kytky', score: 2, approved: false },
+  { by: 'mladsi', title: 'Vynést tříděný', score: 3, approved: false },
+]
+
+function seedWeek(tx: Tx, id: (username: string) => number, now: Date): void {
+  const tata = id('tata')
+  for (const chore of DEMO_WEEK) {
+    const boy = id(chore.by)
+    const fail = (what: string, error: string) =>
+      new Error(`Demo seed: ${what} "${chore.title}": ${error}`)
+    const made = createTask(
+      tx,
+      tata,
+      { title: chore.title, score: chore.score, approvalRequired: true },
+      now,
+    )
+    if (!made.ok) throw fail('offer', made.error)
+    const steps = [
+      () => approveTaskOffer(tx, boy, made.value.id, chore.score, now),
+      () => reserveTask(tx, boy, made.value.id, now),
+      () => completeTask(tx, boy, made.value.id, now),
+      ...(chore.approved ? [() => approveTask(tx, tata, made.value.id, now)] : []),
+    ]
+    for (const step of steps) {
+      const r = step()
+      if (!r.ok) throw fail('step', r.error)
+    }
+  }
 }
 
 export function describeDemo(outcome: DemoOutcome): string | null {
