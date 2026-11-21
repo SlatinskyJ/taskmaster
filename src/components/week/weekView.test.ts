@@ -18,11 +18,8 @@ describe('itemMeta', () => {
     expect(itemMeta(item({ status: 'done_unconfirmed' }))).toBe('st 25. 11.')
   })
 
-  it('a rejection shows its reason after the day', () => {
-    expect(itemMeta(item({ status: 'rejected', reason: 'Nedodělané' }))).toBe(
-      'st 25. 11. · Nedodělané',
-    )
-    expect(itemMeta(item({ status: 'rejected' }))).toBe('st 25. 11.')
+  it('a rejection: the day it was rejected, the reason is not in the meta', () => {
+    expect(itemMeta(item({ status: 'rejected', reason: 'Nedodělané' }))).toBe('st 25. 11.')
   })
 })
 

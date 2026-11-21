@@ -16,10 +16,9 @@ export function itemChip(item: WeekItem): ItemStateKey {
   return CHIP[item.status]
 }
 
-/** "st 25. 11.", and for a rejection with a reason "st 25. 11. · Nedodělané". */
+/** "st 25. 11.": the day it was done (a rejection: the day it was rejected). */
 export function itemMeta(item: WeekItem): string {
-  const day = dayLabel(item.at)
-  return item.reason ? `${day} · ${item.reason}` : day
+  return dayLabel(item.at)
 }
 
 /** "Celkem 108 · odečteno 100 · převod 8". */
