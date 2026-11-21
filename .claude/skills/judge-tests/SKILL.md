@@ -32,11 +32,11 @@ Read `.claude/skills/pr-review-rounds/judge-contract.md` first. It defines your 
 
 A missing test is a claim until you show a bug that gets through. In a code round, for each gap you would file as `should-fix`:
 
-1. `pnpm install --frozen-lockfile` in your checkout if `node_modules` is missing.
+1. Work in your own worktree, never the shared checkout (other judges run tests there at the same time): `git worktree add <scratch>/tests-judge-<pr> origin/<branch>`, then `pnpm install --frozen-lockfile` in it once. Steps 2 to 5 happen there.
 2. Break the one line the missing test should guard: drop the check, flip `<` to `<=`, return the unfiltered row, move the write out of the transaction.
 3. Run the test files that cover it: `pnpm vitest run <files>`.
 4. All pass → the mutant survived, and the gap is real. A test fails → the code is covered: no finding.
-5. `git checkout -- <file>` before the next mutant. Leave the checkout clean when you finish.
+5. `git checkout -- <file>` in the worktree before the next mutant. When you finish: `git worktree remove --force <scratch>/tests-judge-<pr>`.
 
 The `Failure:` line in this lane has this shape:
 

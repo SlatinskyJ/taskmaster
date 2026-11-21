@@ -33,7 +33,7 @@ Everything in `src/server/plugins/` and what it calls runs on every start, befor
 | Does the order matter? | A step reads what a later step creates |
 | Does it need a setting? | A missing or wrong value is silent; the start log should say what is off, without printing a secret |
 
-A PR that changes the start code shows the start log of a first and a second start in its brief, or you run them yourself: `pnpm build && DATA_DIR=<tmp> node .output/server/index.mjs`, twice.
+A PR that changes the start code shows the start log of a first and a second start in its brief, or you run them yourself, in your own worktree (never the shared checkout; the build writes `.output/` and `src/routeTree.gen.ts`): `git worktree add <scratch>/ops-judge-<pr> origin/<branch>`, `pnpm install --frozen-lockfile`, then `pnpm build && DATA_DIR=<tmp> node .output/server/index.mjs`, twice; `git worktree remove --force <scratch>/ops-judge-<pr>` when done.
 
 ### Preview host
 

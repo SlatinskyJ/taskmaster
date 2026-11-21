@@ -10,6 +10,7 @@ Every judge follows this file. Your own judge skill only defines your **lane**.
 - Code phase: link to the PR brief (artifact); the UX judge also gets a folder of 360 px screenshots
 - The spec: `docs/superpowers/specs/2026-11-16-taskmaster-design.md`
 - Round 2+: your own earlier findings, the builder's replies, and the commit SHA you last reviewed
+- **Findings file**: `<folder>/<judge>.json`, a path outside the repo. Your review goes there, not to GitHub (see Output).
 
 You never get the builder's reasoning. Judge the code, not the intent.
 
@@ -39,16 +40,20 @@ The plan file is gone from the branch. You judge the code cold, against the spec
 # 1. no plan file in the diff: must print nothing
 git diff --name-only origin/<base>...HEAD -- docs/superpowers/plans/
 # 2. each judge's last plan-round verdict: at least one line, every line APPROVE
-gh api 'repos/SlatinskyJ/taskmaster/pulls/<n>/reviews?per_page=100' --jq '[.[].body|select(test("^\\[Judge: \\w+\\] Plan round"))|capture("^\\[Judge: (?<j>\\w+)\\] Plan round (?<r>\\d) — (?<v>\\w+)")]|group_by(.j)|map(max_by(.r))|.[]|"\(.j) \(.v)"'
+gh api 'repos/SlatinskyJ/taskmaster/pulls/<n>/reviews?per_page=100' --jq '[.[].body|split("\n")[]|select(test("^\\[Judge: \\w+\\] Plan round"))|capture("^\\[Judge: (?<j>\\w+)\\] Plan round (?<r>\\d) — (?<v>\\w+)")]|group_by(.j)|map(max_by(.r))|.[]|"\(.j) \(.v)"'
 ```
 
 A judge that joined the panel only for the code phase has no line in check 2; that is fine. Check 2 is skipped when the PR body says `Plan: none (ad-hoc)` or `Plan: none (Dependabot)` and has no `Closes #` line.
 
-A check fails → post nothing and review nothing. Return `<Name> round 1: NOT STARTED, plan file still on the branch` or `<Name> round 1: NOT STARTED, no approved plan`.
+Check 2 reads every line of every review body: one combined review holds a verdict line for each judge.
+
+A check fails → write no findings file and review nothing. Return `<Name> round 1: NOT STARTED, plan file still on the branch` or `<Name> round 1: NOT STARTED, no approved plan`.
 
 ## How you review
 
-1. Check out the PR branch. Read the diff against the base. Read any other file you need to judge impact and blast radius.
+**You post nothing to GitHub and change nothing in the checkout you were given.** Other judges read the same checkout at the same time. Your only write is your findings file, made with the Write tool (shell heredocs holding `${...}` are blocked). Reading is fine: `gh api` GET, `git fetch`, `git diff`, `git show`. Anything that runs code (tests, mutants, a build, the server) runs in your own worktree outside the checkout: `git worktree add <scratch>/<judge>-judge-<pr> origin/<branch>`, `pnpm install --frozen-lockfile` there, and `git worktree remove --force` when you finish.
+
+1. Read the PR branch: `git fetch origin <branch>`, then `git diff origin/<base>...origin/<branch>` and `git show origin/<branch>:<file>`. Read any other file you need to judge impact and blast radius.
 2. **Round 1:** review the whole diff, inside your lane.
 3. **Round 2+:** review only (a) whether each of your open findings is fixed, and (b) the diff since the commit you last reviewed. Nothing else.
 4. **Caused by this PR:** a finding must come from lines this PR adds or changes, or from existing code that this PR now breaks or misuses. Anything else is `pre-existing`.
@@ -76,40 +81,51 @@ A trap is never a `blocker`. It is a `should-fix` when fixing it later costs mor
 
 ## Output: exactly this shape
 
-Post one GitHub review (event `COMMENT`; the account can't approve or request changes on its own PR) using the GitHub MCP tools: `pull_request_review_write` method `create`, then `add_comment_to_pending_review` per finding, then `pull_request_review_write` method `submit_pending`.
+Write one JSON file at the **Findings file** path. The builder waits for every judge on the panel, then posts all files as one GitHub review (one REST create call, event `COMMENT`) with `scripts/post-judge-review.ts`, and then sends your thread replies. A file it can't read, or a SHA that is not the PR head, stops the whole round from posting, so get the shape right:
 
-**Review body:**
-
+```json
+{
+  "judge": "Tests",
+  "phase": "code",
+  "round": 1,
+  "commit": "<full 40-char SHA of the PR head you reviewed>",
+  "verdict": "CHANGES",
+  "counts": { "blockers": 0, "shouldFix": 1, "nits": 1, "preExisting": 0 },
+  "summary": "Mutants: 4 run, 1 survived. The refusal below zero is not tested at the boundary.",
+  "comments": [
+    {
+      "path": "src/domain/settlement.ts",
+      "line": 42,
+      "body": "[Judge: Tests] `should-fix` — No test pins the refusal at exactly 0 points\nFailure: balance 0, payout 1 → mutant `<` for `<=` survives\nFix: add the boundary case"
+    },
+    { "path": "src/domain/settlement.ts", "line": 50, "body": "[Judge: Tests] `nit` — Test name says payout, test does a refund" }
+  ],
+  "replies": [{ "commentId": 4652419500, "body": "Fixed in 1a2b3c4", "resolve": true }]
+}
 ```
-[Judge: <Name>] <Round | Plan round> <N> — <APPROVE | CHANGES>
-Blockers <n> · Should-fix <n> · Nits <n> · Pre-existing <n>
-<One sentence: the most important point, or "No issues in my lane.">
 
----
-_Generated by [Claude Code](https://claude.ai/code)_
-```
+- `judge`: your name as on the panel line. `phase`, `round`: from the builder's prompt. `commit`: `git rev-parse origin/<branch>` after your fetch.
+- `verdict`: `APPROVE` = zero open `blocker` or `should-fix` findings (new ones plus your old threads still open). Otherwise `CHANGES`. It must match `counts`.
+- `summary`: your one sentence, the most important point, or "No issues in my lane." The script builds your header line (`[Judge: <Name>] <Round | Plan round> <N> — <verdict>`) and the count line from these fields. The GitHub footer is added by the script; don't write it.
+- Use the Write tool for the file. Put newlines in a body as `\n`.
 
-`APPROVE` = you have zero open `blocker` or `should-fix` findings. Otherwise `CHANGES`.
-
-**Each inline comment** (on the exact file and line):
+**Each comment** (`comments`, on the exact file and new-side line):
 
 ```
 [Judge: <Name>] `<severity>` — <one-line claim>
 Failure: <input or state> → <wrong result>
 Spec: §<x.y>
 Fix: <one line>
-
----
-_Generated by [Claude Code](https://claude.ai/code)_
 ```
 
 - `Failure:` only for blocker and should-fix. `Spec:` only when a spec rule applies. `Fix:` is optional.
-- One finding per comment. Each finding appears once: inline, not repeated in the review body.
+- One finding per comment. Each finding appears once: as a comment, not repeated in the summary.
 - `nit` and `pre-existing`: the first line only.
-- Round 2+, on your own old thread: reply `Fixed in <sha>`, `Accepted`, or `Still open: <new evidence>`.
-- After `Fixed in <sha>` or `Accepted`, **resolve the thread** (`gh api -X POST repos/SlatinskyJ/taskmaster/pulls/<n>/ccr/comments/<first comment id>/resolve`). The ruleset blocks merge while any thread is open. Leave it open only with `Still open`.
+- Comment on a line the PR diff adds or keeps as context. A finding elsewhere still goes in `comments` with its real path and line: the script moves it onto a line it can post on and writes `Off the diff: <path>:<line>` above it, so it still gets a thread.
+
+**Round 2+**, on your own old threads (`replies`, `commentId` = the thread's first comment id): `Fixed in <sha>` or `Accepted` with `resolve: true` (the ruleset blocks merge while a thread is open), or `Still open: <new evidence>` with `resolve: false`.
 - A thread the builder already resolved (a `nit` taken or skipped): leave it resolved. Reply on it only when a fix the builder claims is wrong.
 
 ## What you return to the builder
 
-One line per judge: `<Name> <plan round | round> <N>: <APPROVE|CHANGES>, <review URL>`.
+One line: `<Name> <plan round | round> <N>: <APPROVE|CHANGES>, findings in <path>`. Or `NOT STARTED, <reason>` with no file written.
