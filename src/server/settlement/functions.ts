@@ -1,0 +1,78 @@
+import { createServerFn } from '@tanstack/react-start'
+import type { Result } from '~/domain/result'
+import { requireRole } from '~/server/auth/guards'
+import { getDb } from '~/server/db'
+import type { SettlementRow } from '~/server/db/schema'
+import type { Period } from '~/domain'
+import { getMeeting, settlePeriod } from './meeting'
+import type { Meeting, MeetingTaker, SettleError, ShownTotal } from './meeting'
+
+export type { Meeting, MeetingTaker, SettleError }
+
+// Server functions for the weekly meeting (#44). Giver only: the guard here, and the domain's
+// `settle` again inside (`not_a_giver`). The giver is always the signed-in user, never input.
+
+/** At most this many shown totals: far more than a family has takers. */
+const SHOWN_MAX = 20
+
+function int(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value)) throw new Error('Invalid input')
+  return value
+}
+
+export function parseSettle(data: unknown): { periodId: number; shown: ShownTotal[] } {
+  if (typeof data !== 'object' || data === null) throw new Error('Invalid input')
+  const { periodId, shown } = data as Record<string, unknown>
+  if (!Array.isArray(shown) || shown.length > SHOWN_MAX) throw new Error('Invalid input')
+  return {
+    periodId: int(periodId),
+    shown: shown.map((s: unknown) => {
+      if (typeof s !== 'object' || s === null) throw new Error('Invalid input')
+      const { takerId, total } = s as Record<string, unknown>
+      return { takerId: int(takerId), total: int(total) }
+    }),
+  }
+}
+
+export type SettleResult =
+  | {
+      ok: true
+      records: {
+        takerId: number
+        totalBefore: number
+        level: SettlementRow['level']
+        deducted: number
+        carryOver: number
+      }[]
+      nextPeriodId: number | null
+    }
+  | { ok: false; error: SettleError }
+
+/** What a confirm returns to the screen: the written records, nothing else. */
+export function settled(
+  result: Result<{ records: SettlementRow[]; next: Period | null }, SettleError>,
+): SettleResult {
+  if (!result.ok) return result
+  return {
+    ok: true,
+    records: result.value.records.map((r) => ({
+      takerId: r.takerId,
+      totalBefore: r.totalBefore,
+      level: r.level,
+      deducted: r.deducted,
+      carryOver: r.carryOver,
+    })),
+    nextPeriodId: result.value.next?.id ?? null,
+  }
+}
+
+export const getMeetingFn = createServerFn({ method: 'GET' })
+  .middleware([requireRole('giver')])
+  .handler((): Meeting => getMeeting(getDb(), new Date()))
+
+export const settlePeriodFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('giver')])
+  .validator(parseSettle)
+  .handler(({ data, context }) =>
+    settled(settlePeriod(getDb(), context.user.id, data.periodId, data.shown, new Date())),
+  )
