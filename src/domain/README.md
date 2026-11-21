@@ -16,7 +16,8 @@ ESLint enforces this. Server functions are thin wrappers that call into this fol
 - Bidding (`bidding.ts`) works on the one-time task's agreement. When it returns `open`, call
   `markAgreed(item, null)`; when it returns `reserved`, call `markAgreed(item, { takerId, giverId })`.
   `bids.ts` holds the raw bid book; it is internal (not exported from `index.ts`), so callers go
-  through the checked actions.
+  through the checked actions. The one exception is the read `lowestBid`, so a view shows the same
+  lowest bid that `acceptLowestBid` checks against.
 - Periods (`periods.ts`) build the chain of periods and say which period an instant falls in
   (`periodAt`, half-open: exactly at the cutoff is the next period). A scheduler job calls
   `periodsToStart` at each cutoff, then `lapsePeriodSettings` on proposals for the period that

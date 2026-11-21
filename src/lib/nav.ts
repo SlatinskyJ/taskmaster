@@ -15,8 +15,11 @@ export const APP_PATHS = [
   '/profil',
   '/sprava',
   '/klic',
+  '/ukol/$taskId',
 ] as const
 export type AppPath = (typeof APP_PATHS)[number]
+/** Paths a link can name without params: the bottom bar and back buttons. */
+export type StaticAppPath = Exclude<AppPath, `${string}$${string}`>
 
 /** Roles allowed on each screen. Profile is everyone's; Správa is the admin's only screen. */
 export const SCREEN_ROLES: Readonly<Record<AppPath, readonly Role[]>> = {
@@ -29,6 +32,8 @@ export const SCREEN_ROLES: Readonly<Record<AppPath, readonly Role[]>> = {
   '/profil': ['taker', 'giver', 'admin'],
   '/sprava': ['admin'],
   '/klic': ['taker', 'giver', 'admin'],
+  /** One task's page with its bid thread: TTask for a brother, GBid for a parent (#34). */
+  '/ukol/$taskId': ['taker', 'giver'],
 }
 
 /** Full screens without the bottom bar: the passkey offer after login (Passkey mockup). */
@@ -37,7 +42,7 @@ export const BARLESS_PATHS: readonly AppPath[] = ['/klic']
 export type NavKey = 'home' | 'log' | 'week' | 'tasks' | 'meeting'
 
 export interface NavItem {
-  to: AppPath
+  to: StaticAppPath
   /** Key into `cs.nav` and the icon map. */
   key: NavKey
 }

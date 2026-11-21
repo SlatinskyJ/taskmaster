@@ -1,0 +1,122 @@
+import { eq } from 'drizzle-orm'
+import type { Item, Reservation } from '~/domain'
+import { parseIsoUtc, toIsoUtc } from '~/domain/dates'
+import type { Tx } from '~/server/audit'
+import { tasks } from '~/server/db/schema'
+import type { TaskRow } from '~/server/db/schema'
+import { closeThread } from './thread'
+
+// A one-time task row and the domain's `Item` (src/domain/lifecycle.ts), both ways, and the one
+// place that writes a task's state: every lifecycle step and every agreement saves through
+// `saveItem`, so a task that leaves `proposed` always closes its negotiation thread.
+
+/** The domain's view of a task row. Only states past agreement have lifecycle meaning here. */
+export function toItem(row: TaskRow): Item {
+  const base = {
+    origin: 'one_time',
+    approvalRequired: row.approvalRequired,
+    deadline: null,
+  } as const
+  const reservation = reservationOf(row)
+  switch (row.status) {
+    case 'proposed':
+    case 'open':
+    case 'cancelled':
+      return { ...base, status: row.status }
+    case 'reserved':
+      if (!reservation) throw new Error(`task ${String(row.id)} reserved without a taker`)
+      return { ...base, status: 'reserved', reservation }
+    case 'done_unconfirmed':
+    case 'confirmed': {
+      if (row.completedBy === null || row.completedAt === null) {
+        throw new Error(`task ${String(row.id)} completed without completion data`)
+      }
+      const completion = {
+        completedBy: row.completedBy,
+        completedAt: parseIsoUtc(row.completedAt),
+        earner: row.earnerId,
+        reservation,
+      }
+      return { ...base, status: row.status, completion }
+    }
+  }
+}
+
+function reservationOf(row: TaskRow): Reservation | null {
+  if (row.reservedBy === null) return null
+  if (row.reservedVia === 'bid' && row.reservedGiverId !== null) {
+    return { takerId: row.reservedBy, via: 'bid', giverId: row.reservedGiverId }
+  }
+  return { takerId: row.reservedBy, via: 'tap' }
+}
+
+/** Column values for an item's state. Reservation columns double as the completion's snapshot. */
+export function columnsOf(item: Item) {
+  const none = {
+    reservedBy: null,
+    reservedVia: null,
+    reservedGiverId: null,
+    completedBy: null,
+    completedAt: null,
+    earnerId: null,
+  }
+  const res = (r: Reservation | null) =>
+    r
+      ? {
+          reservedBy: r.takerId,
+          reservedVia: r.via,
+          reservedGiverId: r.via === 'bid' ? r.giverId : null,
+        }
+      : { reservedBy: null, reservedVia: null, reservedGiverId: null }
+  switch (item.status) {
+    case 'proposed':
+    case 'open':
+    case 'cancelled':
+      return { status: item.status, ...none }
+    case 'reserved':
+      return { status: item.status, ...none, ...res(item.reservation) }
+    case 'done_unconfirmed':
+    case 'confirmed':
+      return {
+        status: item.status,
+        ...res(item.completion.reservation),
+        completedBy: item.completion.completedBy,
+        completedAt: toIsoUtc(item.completion.completedAt),
+        earnerId: item.completion.earner,
+      }
+    case 'expired':
+    case 'rejected':
+      throw new Error(`one-time tasks never become ${item.status}`)
+  }
+}
+
+/** Extra columns a save may set besides the item's state. */
+export interface SaveOptions {
+  set?: { score?: number; agreedAt?: string | null; offerRound?: number }
+  /** Thread rows the task was agreed at, closed as `accepted` when it leaves `proposed`. */
+  accepted?: readonly number[]
+}
+
+/**
+ * Saves `item` as the task's new state (plus `opts.set` and `updatedAt`). When the task leaves
+ * `proposed`, its thread closes: `opts.accepted` as accepted, every other open row as closed.
+ */
+export function saveItem(
+  tx: Tx,
+  before: TaskRow,
+  item: Item,
+  opts: SaveOptions,
+  now: Date,
+): { row: TaskRow; accepted: number[]; closed: number[] } {
+  const row = tx
+    .update(tasks)
+    .set({ ...columnsOf(item), ...opts.set, updatedAt: toIsoUtc(now) })
+    .where(eq(tasks.id, before.id))
+    .returning()
+    .get()
+  const leftProposed = before.status === 'proposed' && item.status !== 'proposed'
+  const ended = leftProposed
+    ? closeThread(tx, before.id, opts.accepted ?? [], now)
+    : { accepted: [], closed: [] }
+  return { row, ...ended }
+}

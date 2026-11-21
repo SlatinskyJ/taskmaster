@@ -1,9 +1,11 @@
 import { hashSync } from '@node-rs/argon2'
 import type { Db } from '~/server/db'
 import { users } from '~/server/db/schema'
+import { acceptOffer, createTask, placeBid } from '~/server/tasks'
 import type { Tx } from '~/server/audit'
 import { approveTemplateScoreIn, createTemplateIn } from '~/server/templates/templates'
 import type { NewTemplate } from '~/server/templates/templates'
+import { bidOnTemplateIn, counterOnTemplateIn } from '~/server/templates/scoreChange'
 import { createUser } from '~/server/users'
 import type { NewUser } from '~/server/users'
 
@@ -18,7 +20,9 @@ import type { NewUser } from '~/server/users'
 // does). All tested.
 //
 // Grows with features: each feature PR adds its sample data here (tasks in every state, a
-// template, an open period, a past settlement), in the same transaction.
+// template, an open period, a past settlement), in the same transaction, through the real
+// actions. So far (#34): "Umýt auto" in negotiation (Táta offers 18, Starší bids 25, Mladší 22)
+// and "Uklidit sklep", a plain offer of 10 with no bids.
 
 /** Known on purpose: previews are tailnet-only and hold no real data. Never used in production. */
 export const DEMO_PASSWORD = 'demo1234'
@@ -59,12 +63,48 @@ export function seedDemo(
         throw new Error(`Demo seed: cannot create "${person.username}": ${created.error}`)
       ids.set(person.username, created.value.id)
     }
+    const id = (username: string) => ids.get(username) ?? 0
+    const step = <T>(what: string, r: { ok: true; value: T } | { ok: false; error: string }) => {
+      if (!r.ok) throw new Error(`Demo seed: ${what}: ${r.error}`)
+      return r.value
+    }
+    const car = step(
+      'offer "Umýt auto"',
+      createTask(tx, id('tata'), { title: 'Umýt auto', score: 18, approvalRequired: true }, now),
+    )
+    step('bid 25', placeBid(tx, id('starsi'), car.id, 25, now))
+    step('bid 22', placeBid(tx, id('mladsi'), car.id, 22, now))
+    step(
+      'offer "Uklidit sklep"',
+      createTask(
+        tx,
+        id('tata'),
+        { title: 'Uklidit sklep', score: 10, approvalRequired: true },
+        now,
+      ),
+    )
+    // Reserved to Starší through a bidder's yes ("Beru za 8"), so his Domů row and the task page
+    // show Hotovo and Uvolnit (#150). A long name, as the 360 px screens are checked with one.
+    const vacuum = step(
+      'offer "Vyluxovat celý obývák a chodbu"',
+      createTask(
+        tx,
+        id('tata'),
+        { title: 'Vyluxovat celý obývák a chodbu', score: 8, approvalRequired: true },
+        now,
+      ),
+    )
+    step('bid 10', placeBid(tx, id('starsi'), vacuum.id, 10, now))
+    step('take 8', acceptOffer(tx, id('starsi'), vacuum.id, 8, now))
     seedTemplates(tx, ids, now)
     return { kind: 'seeded', usernames: DEMO_USERS.map((u) => u.username) } as const
   })
 }
 
-/** Two templates (#37): the bins wait for a boy's yes, the dishwasher is agreed. */
+/**
+ * Two templates (#37): the bins wait for a boy's yes, the dishwasher is agreed, with a score
+ * change in flight (#138).
+ */
 const DEMO_TEMPLATES: readonly NewTemplate[] = [
   {
     title: 'Vynést koše',
@@ -89,6 +129,13 @@ function seedTemplates(tx: Tx, ids: Map<string, number>, now: Date): void {
   if (!dishes) return
   const agreed = approveTemplateScoreIn(tx, starsi, dishes.id, dishes.score, now)
   if (!agreed.ok) throw new Error(`Demo seed: approve "${dishes.title}": ${agreed.error}`)
+  // A score change in flight (#138): Mladší bids 5, Táta offers 4.
+  const mladsi = ids.get('mladsi')
+  if (mladsi === undefined) throw new Error('Demo seed: family incomplete')
+  const bid = bidOnTemplateIn(tx, mladsi, dishes.id, 5, now)
+  if (!bid.ok) throw new Error(`Demo seed: bid on "${dishes.title}": ${bid.error}`)
+  const offer = counterOnTemplateIn(tx, tata, dishes.id, 4, now)
+  if (!offer.ok) throw new Error(`Demo seed: offer on "${dishes.title}": ${offer.error}`)
 }
 
 export function describeDemo(outcome: DemoOutcome): string | null {

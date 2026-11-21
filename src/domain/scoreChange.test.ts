@@ -165,9 +165,55 @@ describe('template score change runs like bidding (spec §5.1)', () => {
   })
 
   it('nothing is agreed until someone accepts: bids and offers leave the score in force', () => {
-    const t = tcounter(tbid(dishwasher(), OLDER, 7), DAD, 7)
+    const t = tcounter(tbid(dishwasher(), OLDER, 7), DAD, 6)
     expect(value(scoreForNewInstance(t))).toBe(5)
     expect(resolveTemplate(t, family)).toBe(t)
+  })
+
+  it('a giver countering at exactly the lowest open bid accepts it (spec §5.1, §5.2)', () => {
+    const t = tbid(dishwasher(), OLDER, 4)
+    expect(value(counterTemplateScore(t, family, DAD, 4))).toEqual({
+      status: 'agreed',
+      score: 4,
+      change: null,
+    })
+  })
+
+  it('a counter at a tie at the lowest accepts', () => {
+    const t = tbid(tbid(dishwasher(), OLDER, 4), YOUNGER, 4)
+    expect(value(counterTemplateScore(t, family, DAD, 4))).toEqual({
+      status: 'agreed',
+      score: 4,
+      change: null,
+    })
+  })
+
+  it('a counter at a higher bid is only a new offer', () => {
+    const t = tcounter(tbid(tbid(dishwasher(), OLDER, 4), YOUNGER, 6), DAD, 6)
+    expect(t).toEqual({
+      status: 'agreed',
+      score: 5,
+      change: {
+        bids: [
+          { by: OLDER, score: 4 },
+          { by: YOUNGER, score: 6 },
+        ],
+        offer: { score: 6, proposedBy: DAD },
+      },
+    })
+    expect(value(acceptTemplateOffer(t, family, YOUNGER, 6))).toEqual({
+      status: 'agreed',
+      score: 6,
+      change: null,
+    })
+  })
+
+  it("a counter at a deactivated taker's bid is only a new offer", () => {
+    const t = tbid(dishwasher(), OLDER, 4)
+    const noOlder = deactivate(family, OLDER)
+    const countered = value(counterTemplateScore(t, noOlder, DAD, 4))
+    expect(countered).toMatchObject({ status: 'agreed', score: 5 })
+    expect(countered.status === 'agreed' && countered.change?.offer?.score).toBe(4)
   })
 
   it('a new bid drops bids of people who left', () => {

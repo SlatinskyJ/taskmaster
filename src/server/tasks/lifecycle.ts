@@ -8,8 +8,7 @@ import {
   releaseReservation,
   reserveItem,
 } from '~/domain'
-import type { Item, LifecycleError, Person, Reservation } from '~/domain'
-import { toIsoUtc, parseIsoUtc } from '~/domain/dates'
+import type { Item, LifecycleError, Person } from '~/domain'
 import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
 import type { AuditAction, Tx } from '~/server/audit'
@@ -19,96 +18,18 @@ import type { Db } from '~/server/db'
 import { tasks } from '~/server/db/schema'
 import type { TaskRow } from '~/server/db/schema'
 import { listPeople } from '~/server/users/people'
+import { saveItem, toItem } from './item'
 import { reopenOffer } from './tasks'
 
 // The work flow of a one-time task (spec §5.4–§5.6): reserve, release, mark done, approve,
-// reject. The lifecycle rules live in src/domain/lifecycle.ts; this module maps a task row to
-// the domain's `Item` and back, and writes the change with its audit entry in one transaction.
+// reject. The lifecycle rules live in src/domain/lifecycle.ts; this module runs a step on the
+// task's `Item` (./item) and saves it through `saveItem`, the one writer of a task's state, with
+// its audit entry in one transaction.
 // Recurring instances (#38) reuse the same domain functions with their own table.
 
 export type LifecycleActionError = LifecycleError | 'not_found' | 'reason_too_long'
 
 export const REASON_MAX = REASON_LIMIT
-
-/** The domain's view of a task row. Only states past agreement have lifecycle meaning here. */
-export function toItem(row: TaskRow): Item {
-  const base = {
-    origin: 'one_time',
-    approvalRequired: row.approvalRequired,
-    deadline: null,
-  } as const
-  const reservation = reservationOf(row)
-  switch (row.status) {
-    case 'proposed':
-    case 'open':
-    case 'cancelled':
-      return { ...base, status: row.status }
-    case 'reserved':
-      if (!reservation) throw new Error(`task ${String(row.id)} reserved without a taker`)
-      return { ...base, status: 'reserved', reservation }
-    case 'done_unconfirmed':
-    case 'confirmed': {
-      if (row.completedBy === null || row.completedAt === null) {
-        throw new Error(`task ${String(row.id)} completed without completion data`)
-      }
-      const completion = {
-        completedBy: row.completedBy,
-        completedAt: parseIsoUtc(row.completedAt),
-        earner: row.earnerId,
-        reservation,
-      }
-      return { ...base, status: row.status, completion }
-    }
-  }
-}
-
-function reservationOf(row: TaskRow): Reservation | null {
-  if (row.reservedBy === null) return null
-  if (row.reservedVia === 'bid' && row.reservedGiverId !== null) {
-    return { takerId: row.reservedBy, via: 'bid', giverId: row.reservedGiverId }
-  }
-  return { takerId: row.reservedBy, via: 'tap' }
-}
-
-/** Column values for an item's state. Reservation columns double as the completion's snapshot. */
-function columnsOf(item: Item) {
-  const none = {
-    reservedBy: null,
-    reservedVia: null,
-    reservedGiverId: null,
-    completedBy: null,
-    completedAt: null,
-    earnerId: null,
-  }
-  const res = (r: Reservation | null) =>
-    r
-      ? {
-          reservedBy: r.takerId,
-          reservedVia: r.via,
-          reservedGiverId: r.via === 'bid' ? r.giverId : null,
-        }
-      : { reservedBy: null, reservedVia: null, reservedGiverId: null }
-  switch (item.status) {
-    case 'proposed':
-    case 'open':
-    case 'cancelled':
-      return { status: item.status, ...none }
-    case 'reserved':
-      return { status: item.status, ...none, ...res(item.reservation) }
-    case 'done_unconfirmed':
-    case 'confirmed':
-      return {
-        status: item.status,
-        ...res(item.completion.reservation),
-        completedBy: item.completion.completedBy,
-        completedAt: toIsoUtc(item.completion.completedAt),
-        earnerId: item.completion.earner,
-      }
-    case 'expired':
-    case 'rejected':
-      throw new Error(`one-time tasks never become ${item.status}`)
-  }
-}
 
 type Step = (
   item: Item,
@@ -143,12 +64,7 @@ function runStep(
     if (!person) return fail('not_allowed')
     const next = step(toItem(row), byPerson(person), now)
     if (!next.ok) return next
-    const stepped = tx
-      .update(tasks)
-      .set({ ...columnsOf(next.value), updatedAt: toIsoUtc(now) })
-      .where(eq(tasks.id, taskId))
-      .returning()
-      .get()
+    const { row: stepped, accepted, closed } = saveItem(tx, row, next.value, {}, now)
     const saved = opts.extra ? opts.extra(tx, row, stepped, people) : stepped
     writeAudit(tx, {
       actor: { kind: 'user', userId },
@@ -156,7 +72,7 @@ function runStep(
       entityType: 'task',
       entityId: taskId,
       before: auditView(row),
-      after: auditView(saved),
+      after: { ...auditView(saved), accepted, closed },
       reason: opts.reason,
       at: now,
     })

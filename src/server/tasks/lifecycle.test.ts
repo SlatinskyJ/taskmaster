@@ -12,6 +12,8 @@ import {
   reserveTask,
 } from './lifecycle'
 import { approveTaskOffer, createTask, listBoard, listPendingCompletions } from './tasks'
+import { offerInStep, thread } from './testing'
+import { threadOf } from './thread'
 
 const T0 = new Date('2026-11-17T10:00:00.000Z')
 const T1 = new Date('2026-11-17T11:00:00.000Z')
@@ -92,6 +94,8 @@ describe('reserve and release (spec §5.4)', () => {
       reservedVia: 'tap',
     })
     expect(lastAudit(f.db)).toMatchObject({ action: 'task.reserved', actorUserId: f.starsi })
+    // A step that does not leave `proposed` closes no thread rows, and says so.
+    expect(json(lastAudit(f.db)?.after)).toMatchObject({ accepted: [], closed: [] })
     expect(reserveTask(f.db, f.mladsi, id, T1)).toEqual({ ok: false, error: 'wrong_state' })
     expect(completeTask(f.db, f.mladsi, id, T1)).toEqual({ ok: false, error: 'reserved_by_other' })
   })
@@ -146,7 +150,16 @@ describe('reserve and release (spec §5.4)', () => {
     // The giver's renewed approval is logged by the system, then the release shows the final state.
     const [renewed, released] = f.db.select().from(auditLog).all().slice(-2)
     expect(renewed).toMatchObject({ action: 'task.score_approved', actorKind: 'system' })
-    expect(json(renewed?.after)).toEqual({ userId: f.tata, score: 12, offerRound: 2 })
+    // The giver's re-offer joins the thread and carries the task's score.
+    const reOffer = threadOf(f.db, id).at(-1)
+    expect(thread(f.db, id).at(-1)).toEqual(['giver', f.tata, 12, null])
+    expect(offerInStep(f.db, id)).toBe(true)
+    expect(json(renewed?.after)).toEqual({
+      userId: f.tata,
+      score: 12,
+      offerRound: 2,
+      entryId: reOffer?.id,
+    })
     expect(released).toMatchObject({ action: 'task.released', actorUserId: f.mladsi })
     expect(json(released?.before)).toMatchObject({ status: 'reserved', offerRound: 1 })
     expect(json(released?.after)).toMatchObject({

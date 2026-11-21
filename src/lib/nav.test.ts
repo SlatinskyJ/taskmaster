@@ -38,11 +38,16 @@ describe('canSee', () => {
     '/profil': 'taker giver admin',
     '/sprava': 'admin',
     '/klic': 'taker giver admin',
+    '/ukol/$taskId': 'taker giver',
   }
 
   it.each(APP_PATHS)('%s is visible to exactly its roles', (path) => {
     const allowed = ROLES.filter((r) => canSee(r, path)).join(' ')
     expect(allowed).toBe(matrix[path])
+  })
+
+  it('the task page is for brothers and parents, not the admin (#34)', () => {
+    expect(ROLES.filter((r) => canSee(r, '/ukol/$taskId'))).toEqual(['taker', 'giver'])
   })
 
   it.each(ROLES)('%s may see its landing page', (role) => {

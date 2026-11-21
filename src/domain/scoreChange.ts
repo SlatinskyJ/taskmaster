@@ -19,7 +19,8 @@ import { fail, ok } from './result'
 // Templates (Jakub 2026-11-17): a change runs like bidding. Takers bid; the first bid starts the
 // change; each taker has one open bid (re-bid replaces it). The giver side doesn't bid: it
 // counters with one offer to every taker (and may start a change that way). It ends only by a
-// person's action: a giver accepts the lowest taker bid, or a taker accepts the giver's offer.
+// person's action: a giver accepts the lowest taker bid (or counters at exactly it), or a taker
+// accepts the giver's offer.
 // Nobody is reserved anything. The old score stays in force until then, and only instances
 // created afterwards get the new score.
 //
@@ -60,7 +61,10 @@ export function bidTemplateScore(
   return ok({ ...template, change: { ...change, bids: placeBid(change, takerId, score).bids } })
 }
 
-/** A giver counters (or starts a change) with one new offer to every taker; it replaces the last. */
+/**
+ * A giver counters (or starts a change) with one new offer to every taker; it replaces the last.
+ * At exactly the lowest live bid it accepts that bid instead: the template is agreed at it.
+ */
 export function counterTemplateScore(
   template: TemplateAgreement,
   people: readonly Person[],
@@ -72,6 +76,11 @@ export function counterTemplateScore(
   if (!isValidScore(score)) return fail('invalid_score')
   const change = template.change ?? NO_CHANGE
   if (score === template.score || score === change.offer?.score) return fail('same_score')
+  // A counter at exactly the lowest live bid accepts it (spec §5.2, Jakub 2026-11-18; §5.1: the
+  // giver side accepts the lowest bid). At a higher bid it is a plain new offer.
+  if (lowestBid(liveTemplateBook(change, people))?.score === score) {
+    return ok({ status: 'agreed', score, change: null })
+  }
   return ok({ ...template, change: { ...change, offer: { score, proposedBy: giverId } } })
 }
 
