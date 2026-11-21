@@ -145,6 +145,20 @@ export function waitingText(task: TaskView, me: Me): string | null {
   return `${cs.bids.waitingFor}: ${who.join(` ${cs.bids.or} `)}`
 }
 
+/**
+ * GHome "Čeká na kluky" (#41): offers with no bid yet that still wait only for the boys. One
+ * waiting for this parent is in "Čeká na tebe"; one with bids is in "Vyjednávání".
+ */
+export function waitingOnTakers(list: readonly TaskView[], me: Me): TaskView[] {
+  return list.filter(
+    (t) =>
+      t.status === 'proposed' &&
+      t.bids.length === 0 &&
+      t.waitingFor.length > 0 &&
+      !t.waitingFor.some((p) => p.id === me.id),
+  )
+}
+
 export function lowestText(lowest: NonNullable<TaskView['lowest']>): string {
   const verb = lowest.bidders.length === 1 ? cs.bids.wants : cs.bids.wantMany
   return `${names(lowest.bidders)} ${verb} ${String(lowest.score)}`

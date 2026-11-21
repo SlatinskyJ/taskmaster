@@ -54,6 +54,7 @@ export const AUDIT_ACTIONS = [
   'instance.cancelled',
   // Periods and default settings (§5.8)
   'period.created',
+  'period.ended',
   'period.proposal_created',
   'period.proposal_approved',
   'period.proposal_rejected',

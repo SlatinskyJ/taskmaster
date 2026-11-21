@@ -52,6 +52,9 @@ const EXPECTED_ROLES: Record<string, string> = {
   removeMyPasskeyFn: 'any',
   listPasskeyCountsFn: 'admin',
   removeUserPasskeysFn: 'admin',
+  getMeetingFn: 'giver',
+  settlePeriodFn: 'giver',
+  getPointsFn: 'giver,taker',
 }
 
 const SRC = join(import.meta.dirname, '..', 'src')

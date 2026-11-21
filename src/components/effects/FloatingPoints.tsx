@@ -11,10 +11,13 @@ export function FloatingPoints({
   points,
   tone,
   className,
+  onDone,
 }: {
   points: number
   tone: 'pending' | 'confirmed'
   className?: string
+  /** Called once the float has played. */
+  onDone?: () => void
 }) {
   const enabled = useEffectsEnabled()
   const [done, setDone] = useState(false)
@@ -24,6 +27,7 @@ export function FloatingPoints({
       aria-hidden
       onAnimationEnd={() => {
         setDone(true)
+        onDone?.()
       }}
       className={cn(
         'pointer-events-none absolute -top-2 right-4 z-10 animate-float-up num text-2xl font-bold',

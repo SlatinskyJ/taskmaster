@@ -1,4 +1,5 @@
 import { createFileRoute, Outlet, redirect, useLocation } from '@tanstack/react-router'
+import { FloatLayer } from '~/components/effects/FloatLayer'
 import { BottomNav } from '~/components/shell/BottomNav'
 import { showsBar } from '~/lib/nav'
 import { cn } from '~/lib/utils'
@@ -18,7 +19,7 @@ export const Route = createFileRoute('/_app')({
   component: AppLayout,
 })
 
-/** The app shell: the screen, then the role's bottom bar (UI doc §6). */
+/** The app shell: the screen, the "+N" layer (UI doc §4), then the role's bottom bar (UI doc §6). */
 function AppLayout() {
   const { user } = Route.useRouteContext()
   const { pathname } = useLocation()
@@ -26,6 +27,7 @@ function AppLayout() {
   return (
     <div className={cn('min-h-dvh', hasBar && 'pb-[calc(4.5rem+env(safe-area-inset-bottom))]')}>
       <Outlet />
+      <FloatLayer />
       {hasBar && <BottomNav role={user.role} />}
     </div>
   )

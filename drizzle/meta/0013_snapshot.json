@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9eee8fc7-cd56-4805-a496-b8322421ad98",
+  "id": "44f66ec8-bf9f-4128-ab40-fd72c55960fe",
   "prevId": "50adb5e1-5854-4726-a84b-c8620e73bfca",
   "tables": {
     "audit_log": {
@@ -429,203 +429,6 @@
       },
       "uniqueConstraints": {},
       "checkConstraints": {}
-    },
-    "task_score_change_approvals": {
-      "name": "task_score_change_approvals",
-      "columns": {
-        "change_id": {
-          "name": "change_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "approved_at": {
-          "name": "approved_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "task_score_change_approvals_change_id_task_score_changes_id_fk": {
-          "name": "task_score_change_approvals_change_id_task_score_changes_id_fk",
-          "tableFrom": "task_score_change_approvals",
-          "tableTo": "task_score_changes",
-          "columnsFrom": [
-            "change_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "task_score_change_approvals_user_id_users_id_fk": {
-          "name": "task_score_change_approvals_user_id_users_id_fk",
-          "tableFrom": "task_score_change_approvals",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "task_score_change_approvals_change_id_user_id_pk": {
-          "columns": [
-            "change_id",
-            "user_id"
-          ],
-          "name": "task_score_change_approvals_change_id_user_id_pk"
-        }
-      },
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
-    "task_score_changes": {
-      "name": "task_score_changes",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "task_id": {
-          "name": "task_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "score": {
-          "name": "score",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "proposed_by": {
-          "name": "proposed_by",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "closed_at": {
-          "name": "closed_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "closed_as": {
-          "name": "closed_as",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "closed_by": {
-          "name": "closed_by",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "task_score_changes_open_idx": {
-          "name": "task_score_changes_open_idx",
-          "columns": [
-            "task_id"
-          ],
-          "isUnique": true,
-          "where": "closed_at IS NULL"
-        },
-        "task_score_changes_task_idx": {
-          "name": "task_score_changes_task_idx",
-          "columns": [
-            "task_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "task_score_changes_task_id_tasks_id_fk": {
-          "name": "task_score_changes_task_id_tasks_id_fk",
-          "tableFrom": "task_score_changes",
-          "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "task_score_changes_proposed_by_users_id_fk": {
-          "name": "task_score_changes_proposed_by_users_id_fk",
-          "tableFrom": "task_score_changes",
-          "tableTo": "users",
-          "columnsFrom": [
-            "proposed_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "task_score_changes_closed_by_users_id_fk": {
-          "name": "task_score_changes_closed_by_users_id_fk",
-          "tableFrom": "task_score_changes",
-          "tableTo": "users",
-          "columnsFrom": [
-            "closed_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "task_score_changes_score_check": {
-          "name": "task_score_changes_score_check",
-          "value": "\"task_score_changes\".\"score\" >= 1"
-        },
-        "task_score_changes_closed_check": {
-          "name": "task_score_changes_closed_check",
-          "value": "(\"task_score_changes\".\"closed_at\" IS NULL AND \"task_score_changes\".\"closed_as\" IS NULL) OR (\"task_score_changes\".\"closed_at\" IS NOT NULL AND \"task_score_changes\".\"closed_as\" IS NOT NULL AND \"task_score_changes\".\"closed_as\" IN ('agreed', 'declined', 'withdrawn', 'discarded'))"
-        }
-      }
     },
     "task_thread": {
       "name": "task_thread",
@@ -1560,6 +1363,86 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
+    },
+    "periods": {
+      "name": "periods",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "starts_at": {
+          "name": "starts_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoff_at": {
+          "name": "cutoff_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ended_at": {
+          "name": "ended_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lower_level": {
+          "name": "lower_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "upper_level": {
+          "name": "upper_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "periods_starts_at_idx": {
+          "name": "periods_starts_at_idx",
+          "columns": [
+            "starts_at"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "periods_span_check": {
+          "name": "periods_span_check",
+          "value": "\"periods\".\"cutoff_at\" > \"periods\".\"starts_at\""
+        },
+        "periods_levels_check": {
+          "name": "periods_levels_check",
+          "value": "\"periods\".\"lower_level\" >= 1 AND \"periods\".\"lower_level\" <= \"periods\".\"upper_level\""
+        },
+        "periods_ended_check": {
+          "name": "periods_ended_check",
+          "value": "\"periods\".\"ended_at\" IS NULL OR (\"periods\".\"ended_at\" > \"periods\".\"starts_at\" AND \"periods\".\"ended_at\" < \"periods\".\"cutoff_at\")"
+        }
+      }
     }
   },
   "views": {},

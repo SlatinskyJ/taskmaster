@@ -1,10 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { GiverHome } from '~/components/home/GiverHome'
+import { MyPoints } from '~/components/points/MyPoints'
 import { Placeholder } from '~/components/shell/Placeholder'
 import { Screen } from '~/components/shell/Screen'
-import { BidsToAnswer } from '~/components/tasks/BidsToAnswer'
 import { TakerBoard } from '~/components/tasks/TakerBoard'
 import { RecurringList } from '~/components/templates/RecurringList'
-import { ToApprove } from '~/components/tasks/ToApprove'
 import { WaitingForYou } from '~/components/tasks/WaitingForYou'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
@@ -14,7 +14,9 @@ import {
   listPendingApprovalsFn,
   listPendingCompletionsFn,
   listScoreChangesWaitingFn,
+  listTasksFn,
 } from '~/server/tasks/functions'
+import { getPointsFn } from '~/server/points/functions'
 import {
   listPendingTemplateApprovalsFn,
   listPendingTemplatePriceChangesFn,
@@ -41,6 +43,8 @@ export const Route = createFileRoute('/_app/')({
         recurring: await listTemplatesFn(),
         toApprove: [],
         bids: [],
+        tasks: [],
+        points: await getPointsFn(),
       }
     }
     return {
@@ -52,12 +56,15 @@ export const Route = createFileRoute('/_app/')({
       recurring: [],
       toApprove: await listPendingCompletionsFn(),
       bids: await listBidsToAnswerFn(),
+      tasks: await listTasksFn(),
+      points: await getPointsFn(),
     }
   },
   component: Home,
 })
 
-// "Čeká na tebe" first, then the work lists; the rest of the home screens comes with #40, #41.
+// A taker's points card first (it belongs to the header, spec §7 sketch), then "Čeká na tebe",
+// then the work lists. A parent's points overview sits under "Čeká na tebe" (GHome, #41).
 function Home() {
   const { user } = Route.useRouteContext()
   const {
@@ -69,9 +76,12 @@ function Home() {
     recurring,
     toApprove,
     bids,
+    tasks,
+    points,
   } = Route.useLoaderData()
   return (
     <Screen title={`${cs.home.greeting}, ${user.displayName}!`} user={user}>
+      {user.role === 'taker' && <MyPoints points={points} me={user.id} />}
       <WaitingForYou
         items={waiting}
         templates={waitingTemplates}
@@ -85,10 +95,13 @@ function Home() {
           <RecurringList items={recurring} waiting={priceChanges} />
         </>
       ) : (
-        <>
-          <ToApprove items={toApprove} />
-          <BidsToAnswer items={bids} />
-        </>
+        <GiverHome
+          points={points}
+          tasks={tasks}
+          toApprove={toApprove}
+          bids={bids}
+          me={{ id: user.id, role: user.role }}
+        />
       )}
       <Placeholder />
     </Screen>
