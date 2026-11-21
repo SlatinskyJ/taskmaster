@@ -15,6 +15,7 @@ import {
   endPeriodEarly,
   isRunning,
   periodEnd,
+  periodToSettle,
   approveDefaults,
   approvePeriodSettings,
   canSettle,
@@ -645,5 +646,68 @@ describe('Sunday 23:59 defaults (Jakub 2026-11-21, spec §5.8)', () => {
         { startsAt: at, cutoffAt: prague(2026, 12, 6, 23, 59), levels: D.levels },
       ])
     })
+  })
+})
+
+describe('periodToSettle (spec §5.8, §5.9 step 1)', () => {
+  const D = DEFAULT_PERIOD_DEFAULTS
+  const P1: Period = {
+    id: 1,
+    startsAt: prague(2026, 11, 22, 23, 59),
+    cutoffAt: prague(2026, 11, 29, 23, 59),
+    levels: D.levels,
+  }
+  const P2: Period = {
+    id: 2,
+    startsAt: P1.cutoffAt,
+    cutoffAt: prague(2026, 12, 6, 23, 59),
+    levels: D.levels,
+  }
+  const P3: Period = {
+    id: 3,
+    startsAt: P2.cutoffAt,
+    cutoffAt: prague(2026, 12, 13, 23, 59),
+    levels: D.levels,
+  }
+  const earlyAt = prague(2026, 11, 29, 20)
+  const P1ended: Period = { ...P1, endedAt: earlyAt }
+  const P2early: Period = { id: 2, startsAt: earlyAt, cutoffAt: P2.cutoffAt, levels: D.levels }
+  const none = new Set<number>()
+
+  it('Sunday meeting: settles the running week', () => {
+    expect(periodToSettle([P1], none, earlyAt)).toBe(P1)
+  })
+
+  it('missed Sunday: settles the ended week', () => {
+    expect(periodToSettle([P1, P2], none, prague(2026, 11, 30, 10))).toBe(P1)
+  })
+
+  it('between the cutoff and its roll: settles the ended week', () => {
+    expect(periodToSettle([P1], none, P1.cutoffAt)).toBe(P1)
+    expect(periodToSettle([P1], none, new Date(P1.cutoffAt.getTime() + 1000))).toBe(P1)
+  })
+
+  it('after an early end the next meeting settles the new week', () => {
+    expect(periodToSettle([P1ended, P2early], new Set([1]), prague(2026, 12, 6, 20))).toBe(P2early)
+  })
+
+  it('two missed weeks: the oldest first, then the next', () => {
+    const at = prague(2026, 12, 7, 10)
+    expect(periodToSettle([P1, P2, P3], none, at)).toBe(P1)
+    expect(periodToSettle([P1, P2, P3], new Set([1]), at)).toBe(P2)
+    expect(periodToSettle([P1, P2, P3], new Set([1, 2]), at)).toBe(P3)
+  })
+
+  it('nothing to settle', () => {
+    expect(periodToSettle([P1ended, P2early], new Set([1, 2]), prague(2026, 12, 1, 10))).toBe(
+      undefined,
+    )
+    expect(periodToSettle<Period>([], none, earlyAt)).toBeUndefined()
+  })
+
+  it("not at the running week's first instant", () => {
+    expect(periodToSettle([P1], none, P1.startsAt)).toBeUndefined()
+    // The instant right after a settlement: the new week has only just started.
+    expect(periodToSettle([P1ended, P2early], new Set([1]), earlyAt)).toBeUndefined()
   })
 })

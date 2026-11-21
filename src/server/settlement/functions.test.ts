@@ -1,0 +1,78 @@
+import { describe, expect, it } from 'vitest'
+import { fail, ok } from '~/domain/result'
+import type { SettlementRow } from '~/server/db/schema'
+import type { Period } from '~/domain'
+import { parseSettle, settled } from './functions'
+
+// Input checks and the response shape of the meeting server functions.
+
+const many = (n: number) => Array.from({ length: n }, (_, i) => ({ takerId: i + 1, total: 0 }))
+
+describe('parseSettle', () => {
+  it.each([
+    [
+      { periodId: 1, shown: [{ takerId: 3, total: 130 }] },
+      { periodId: 1, shown: [{ takerId: 3, total: 130 }] },
+    ],
+    [
+      { periodId: 1, shown: [] },
+      { periodId: 1, shown: [] },
+    ],
+    [
+      { periodId: 1, shown: many(20) },
+      { periodId: 1, shown: many(20) },
+    ],
+  ])('takes %j', (input, out) => {
+    expect(parseSettle(input)).toEqual(out)
+  })
+
+  it.each([
+    {},
+    null,
+    { periodId: '1', shown: [] },
+    { periodId: 1.5, shown: [] },
+    { periodId: 1 },
+    { periodId: 1, shown: 3 },
+    { periodId: 1, shown: many(21) },
+    { periodId: 1, shown: [null] },
+    { periodId: 1, shown: [{ takerId: 3, total: '5' }] },
+    { periodId: 1, shown: [{ takerId: 3.5, total: 5 }] },
+  ])('refuses %j', (input) => {
+    expect(() => parseSettle(input)).toThrow('Invalid input')
+  })
+
+  it('never takes a giver id from the input', () => {
+    expect(parseSettle({ periodId: 1, shown: [], giverId: 2 })).toEqual({ periodId: 1, shown: [] })
+  })
+})
+
+describe('settled (what a confirm returns to the screen)', () => {
+  it('only the record fields and the next period id', () => {
+    const row: SettlementRow = {
+      id: 9,
+      periodId: 1,
+      takerId: 3,
+      totalBefore: 130,
+      level: 'upper',
+      deducted: 100,
+      carryOver: 30,
+      settledBy: 2,
+      settledAt: '2026-11-29T19:00:00.000Z',
+    }
+    const next = { id: 2 } as Period
+    expect(settled(ok({ records: [row], next }))).toEqual({
+      ok: true,
+      records: [{ takerId: 3, totalBefore: 130, level: 'upper', deducted: 100, carryOver: 30 }],
+      nextPeriodId: 2,
+    })
+    expect(settled(ok({ records: [], next: null }))).toEqual({
+      ok: true,
+      records: [],
+      nextPeriodId: null,
+    })
+  })
+
+  it('a refusal passes through unchanged', () => {
+    expect(settled(fail('totals_changed'))).toEqual({ ok: false, error: 'totals_changed' })
+  })
+})
