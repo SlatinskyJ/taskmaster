@@ -4,13 +4,17 @@ import type { Person } from './parties'
 import type {
   DefaultsProposal,
   PeriodDefaults,
+  Period,
   PeriodError,
   PeriodSettingsProposal,
-  PeriodSpan,
 } from './periods'
 import {
   DEFAULT_CUTOFF,
   DEFAULT_LENGTH_DAYS,
+  DEFAULT_PERIOD_DEFAULTS,
+  endPeriodEarly,
+  isRunning,
+  periodEnd,
   approveDefaults,
   approvePeriodSettings,
   canSettle,
@@ -45,9 +49,11 @@ const family: Person[] = [
 ]
 const withMum: Person[] = [...family, { id: MUM, role: 'giver', active: true }]
 
+// The chain algorithm is tested with a Sunday 18:00 cutoff (any weekday and time works the
+// same). The real defaults (Sunday 23:59) have their own tests below.
 const DEFAULTS: PeriodDefaults = {
   lengthDays: DEFAULT_LENGTH_DAYS,
-  cutoff: DEFAULT_CUTOFF,
+  cutoff: { weekday: 0, hour: 18, minute: 0 },
   levels: { lower: 50, upper: 100 },
 }
 
@@ -68,16 +74,22 @@ function error<T>(result: Result<T, PeriodError>): PeriodError {
 }
 
 // Sun 2026-11-15 18:00 → Sun 2026-11-22 18:00, no DST.
-const WEEK: PeriodSpan = {
+const WEEK: Period = {
+  id: 1,
   startsAt: prague(2026, 11, 15, 18),
   cutoffAt: prague(2026, 11, 22, 18),
   levels: DEFAULTS.levels,
 }
 
 describe('default cutoff (spec §5.8)', () => {
-  it('defaults are 7 days, Sunday 18:00 Prague', () => {
+  it('defaults: 7 days, Sunday 23:59 Prague, levels 50/100 (Jakub 2026-11-21)', () => {
     expect(DEFAULT_LENGTH_DAYS).toBe(7)
-    expect(DEFAULT_CUTOFF).toEqual({ weekday: 0, hour: 18, minute: 0 })
+    expect(DEFAULT_CUTOFF).toEqual({ weekday: 0, hour: 23, minute: 59 })
+    expect(DEFAULT_PERIOD_DEFAULTS).toEqual({
+      lengthDays: 7,
+      cutoff: { weekday: 0, hour: 23, minute: 59 },
+      levels: { lower: 50, upper: 100 },
+    })
   })
 
   it('a period from Sunday 18:00 ends the next Sunday 18:00', () => {
@@ -177,21 +189,21 @@ describe('chain of periods (spec §5.8)', () => {
 
   it('an agreed change for exactly the next period wins over the defaults', () => {
     const settings = { cutoffAt: prague(2026, 11, 28, 12), levels: { lower: 40, upper: 80 } }
-    const agreed = agreedProposal(WEEK.cutoffAt, settings)
+    const agreed = agreedProposal(WEEK.id, settings)
     expect(nextPeriod(WEEK, DEFAULTS, agreed)).toEqual({ startsAt: WEEK.cutoffAt, ...settings })
   })
 
-  it('a proposal that is not agreed, or is for another start, is ignored', () => {
+  it('a proposal that is not agreed, or is for the period after another one, is ignored', () => {
     const settings = { cutoffAt: prague(2026, 11, 28, 12), levels: { lower: 40, upper: 80 } }
-    const pending = { ...agreedProposal(WEEK.cutoffAt, settings), status: 'pending' as const }
-    const elsewhere = agreedProposal(prague(2026, 11, 29, 18), settings)
+    const pending = { ...agreedProposal(WEEK.id, settings), status: 'pending' as const }
+    const elsewhere = agreedProposal(2, settings)
     expect(nextPeriod(WEEK, DEFAULTS, pending).levels).toEqual(DEFAULTS.levels)
     expect(nextPeriod(WEEK, DEFAULTS, elsewhere).levels).toEqual(DEFAULTS.levels)
   })
 
   it('after a one-off Saturday cutoff, the chain returns to Sunday 18:00', () => {
     const settings = { cutoffAt: prague(2026, 11, 28, 12), levels: DEFAULTS.levels }
-    const short = nextPeriod(WEEK, DEFAULTS, agreedProposal(WEEK.cutoffAt, settings))
+    const short = nextPeriod(WEEK, DEFAULTS, agreedProposal(WEEK.id, settings))
     expect(nextPeriod(short, DEFAULTS, null).cutoffAt).toEqual(prague(2026, 12, 6, 18))
   })
 
@@ -207,7 +219,7 @@ describe('chain of periods (spec §5.8)', () => {
   it('catches up over several missed cutoffs; an agreed change applies only to the first', () => {
     const settings = { cutoffAt: prague(2026, 11, 28, 12), levels: { lower: 40, upper: 80 } }
     const now = prague(2026, 12, 8, 9)
-    const started = periodsToStart(WEEK, now, DEFAULTS, agreedProposal(WEEK.cutoffAt, settings))
+    const started = periodsToStart(WEEK, now, DEFAULTS, agreedProposal(WEEK.id, settings))
     expect(started.map((p) => [p.startsAt, p.cutoffAt, p.levels])).toEqual([
       [prague(2026, 11, 22, 18), prague(2026, 11, 28, 12), { lower: 40, upper: 80 }],
       [prague(2026, 11, 28, 12), prague(2026, 12, 6, 18), DEFAULTS.levels],
@@ -215,12 +227,22 @@ describe('chain of periods (spec §5.8)', () => {
     ])
   })
 
-  it('a period has started from its first instant; settlement is allowed from the cutoff on', () => {
+  it('a period has started from its first instant', () => {
     expect(hasStarted(WEEK, plus(WEEK.startsAt, -1))).toBe(false)
     expect(hasStarted(WEEK, WEEK.startsAt)).toBe(true)
-    expect(canSettle(WEEK, plus(WEEK.cutoffAt, -1))).toBe(false)
-    expect(canSettle(WEEK, WEEK.cutoffAt)).toBe(true)
+  })
+
+  it('settlement is allowed from the start, before and after the cutoff; not once ended early', () => {
+    // Spec §5.8 (Jakub 2026-11-21): settling the running period ends it; a period that ended at
+    // its cutoff can be settled any time after.
+    expect(canSettle(WEEK, plus(WEEK.startsAt, -1))).toBe(false)
+    // The first instant: endPeriodEarly refuses it too (a period must have length).
+    expect(canSettle(WEEK, WEEK.startsAt)).toBe(false)
+    expect(canSettle(WEEK, plus(WEEK.startsAt, 1))).toBe(true)
+    expect(canSettle(WEEK, plus(WEEK.cutoffAt, -1))).toBe(true)
     expect(canSettle(WEEK, plus(WEEK.cutoffAt, 3 * 24 * HOUR))).toBe(true)
+    const ended = { ...WEEK, endedAt: prague(2026, 11, 22, 17) }
+    expect(canSettle(ended, prague(2026, 11, 22, 17, 30))).toBe(false)
   })
 })
 
@@ -286,11 +308,11 @@ describe('attribution across spring DST', () => {
 })
 
 function agreedProposal(
-  periodStartsAt: Date,
+  afterPeriodId: number,
   settings: PeriodSettingsProposal['settings'],
 ): PeriodSettingsProposal {
   return {
-    periodStartsAt,
+    afterPeriodId,
     settings,
     proposedBy: DAD,
     approvedBy: [DAD, OLDER, YOUNGER],
@@ -322,7 +344,8 @@ describe('per-period proposals (spec §5.8)', () => {
   const settings = { cutoffAt: prague(2026, 12, 5, 12), levels: { lower: 40, upper: 80 } }
 
   // The running period at the meeting: WEEK has ended, its successor runs until FOLLOWING_START.
-  const CURRENT: PeriodSpan = {
+  const CURRENT: Period = {
+    id: 2,
     startsAt: NEXT_START,
     cutoffAt: FOLLOWING_START,
     levels: DEFAULTS.levels,
@@ -332,7 +355,7 @@ describe('per-period proposals (spec §5.8)', () => {
 
   it('a giver proposes at the meeting; proposing counts as approving', () => {
     expect(value(propose())).toEqual({
-      periodStartsAt: FOLLOWING_START,
+      afterPeriodId: CURRENT.id,
       settings,
       proposedBy: DAD,
       approvedBy: [DAD],
@@ -350,7 +373,7 @@ describe('per-period proposals (spec §5.8)', () => {
   })
 
   it('targets the period after the running one', () => {
-    expect(value(propose()).periodStartsAt).toEqual(CURRENT.cutoffAt)
+    expect(value(propose()).afterPeriodId).toBe(CURRENT.id)
   })
 
   it('refused for a period that has already started (locked)', () => {
@@ -380,51 +403,58 @@ describe('per-period proposals (spec §5.8)', () => {
   })
 
   it('[call] once one is agreed for that period, no new proposal', () => {
-    const agreed = agreedProposal(FOLLOWING_START, settings)
+    const agreed = agreedProposal(CURRENT.id, settings)
     expect(error(propose(OLDER, [agreed]))).toBe('already_agreed')
   })
 
   it('agreed once both takers approve', () => {
     const p = value(propose())
-    const one = value(approvePeriodSettings(p, family, OLDER, NOW))
+    const one = value(approvePeriodSettings(p, family, OLDER, CURRENT, NOW))
     expect(one.status).toBe('pending')
-    const both = value(approvePeriodSettings(one, family, YOUNGER, NOW))
+    const both = value(approvePeriodSettings(one, family, YOUNGER, CURRENT, NOW))
     expect(both.status).toBe('agreed')
     expect(both.approvedBy).toEqual([DAD, OLDER, YOUNGER])
   })
 
   it('a taker-made proposal needs the other taker and a giver', () => {
     const p = value(propose(OLDER))
-    const takers = value(approvePeriodSettings(p, family, YOUNGER, NOW))
+    const takers = value(approvePeriodSettings(p, family, YOUNGER, CURRENT, NOW))
     expect(takers.status).toBe('pending')
-    expect(value(approvePeriodSettings(takers, family, DAD, NOW)).status).toBe('agreed')
+    expect(value(approvePeriodSettings(takers, family, DAD, CURRENT, NOW)).status).toBe('agreed')
   })
 
   it('the admin cannot approve; nobody approves twice', () => {
     const p = value(propose())
-    expect(error(approvePeriodSettings(p, family, JAKUB, NOW))).toBe('not_a_party')
-    expect(error(approvePeriodSettings(p, family, DAD, NOW))).toBe('already_approved')
+    expect(error(approvePeriodSettings(p, family, JAKUB, CURRENT, NOW))).toBe('not_a_party')
+    expect(error(approvePeriodSettings(p, family, DAD, CURRENT, NOW))).toBe('already_approved')
   })
 
   it('approvals after the period started are refused, and the proposal lapses', () => {
-    const p = value(approvePeriodSettings(value(propose()), family, OLDER, NOW))
-    expect(error(approvePeriodSettings(p, family, YOUNGER, FOLLOWING_START))).toBe(
+    const p = value(approvePeriodSettings(value(propose()), family, OLDER, CURRENT, NOW))
+    expect(error(approvePeriodSettings(p, family, YOUNGER, CURRENT, FOLLOWING_START))).toBe(
       'already_started',
     )
-    expect(lapsePeriodSettings(p, plus(FOLLOWING_START, -1)).status).toBe('pending')
-    expect(lapsePeriodSettings(p, FOLLOWING_START).status).toBe('lapsed')
+    expect(lapsePeriodSettings(p, CURRENT, plus(FOLLOWING_START, -1)).status).toBe('pending')
+    expect(lapsePeriodSettings(p, CURRENT, FOLLOWING_START).status).toBe('lapsed')
+  })
+
+  it('a closed proposal stays not_pending after its period started', () => {
+    const rejected = value(rejectPeriodProposal(value(propose()), family, YOUNGER))
+    expect(error(approvePeriodSettings(rejected, family, OLDER, CURRENT, FOLLOWING_START))).toBe(
+      'not_pending',
+    )
   })
 
   it('an agreed proposal does not lapse', () => {
-    const agreed = agreedProposal(FOLLOWING_START, settings)
-    expect(lapsePeriodSettings(agreed, FOLLOWING_START)).toBe(agreed)
+    const agreed = agreedProposal(CURRENT.id, settings)
+    expect(lapsePeriodSettings(agreed, CURRENT, FOLLOWING_START)).toBe(agreed)
   })
 
   it('[call] any party rejects and it closes', () => {
     const p = value(propose())
     const rejected = value(rejectPeriodProposal(p, family, YOUNGER))
     expect(rejected).toMatchObject({ status: 'rejected', closedBy: YOUNGER })
-    expect(error(approvePeriodSettings(rejected, family, OLDER, NOW))).toBe('not_pending')
+    expect(error(approvePeriodSettings(rejected, family, OLDER, CURRENT, NOW))).toBe('not_pending')
     expect(error(rejectPeriodProposal(p, family, JAKUB))).toBe('not_a_party')
   })
 
@@ -438,7 +468,7 @@ describe('per-period proposals (spec §5.8)', () => {
   })
 
   it('becomes agreed when the people list changes (approvals checked live)', () => {
-    const p = value(approvePeriodSettings(value(propose()), family, OLDER, NOW))
+    const p = value(approvePeriodSettings(value(propose()), family, OLDER, CURRENT, NOW))
     // YOUNGER no longer a taker (e.g. role changed): every remaining taker approved.
     const changed = family.map((x) => (x.id === YOUNGER ? { ...x, role: 'giver' as const } : x))
     expect(resolvePeriodProposal(p, family).status).toBe('pending')
@@ -488,5 +518,132 @@ describe('default settings (spec §5.8)', () => {
     expect(error(proposeDefaults(family, DAD, { ...DEFAULTS, lengthDays: -7 }, []))).toBe(
       'invalid_settings',
     )
+  })
+})
+
+describe('Sunday 23:59 defaults (Jakub 2026-11-21, spec §5.8)', () => {
+  const D = DEFAULT_PERIOD_DEFAULTS
+  // Sun 22 Nov 23:59 → Sun 29 Nov 23:59.
+  const RUNNING: Period = {
+    id: 7,
+    startsAt: prague(2026, 11, 22, 23, 59),
+    cutoffAt: prague(2026, 11, 29, 23, 59),
+    levels: D.levels,
+  }
+
+  it('a period from Sunday 23:59 ends the next Sunday 23:59', () => {
+    expect(defaultCutoff(RUNNING.startsAt, D)).toEqual(RUNNING.cutoffAt)
+  })
+
+  it('a first period from Sat 21 Nov 20:00 or Mon 23 Nov 09:00 ends Sun 29 Nov 23:59', () => {
+    expect(firstPeriod(prague(2026, 11, 21, 20), D).cutoffAt).toEqual(RUNNING.cutoffAt)
+    expect(firstPeriod(prague(2026, 11, 23, 9), D).cutoffAt).toEqual(RUNNING.cutoffAt)
+  })
+
+  it('autumn DST: Sun 18 Oct 23:59 → Sun 25 Oct 23:59 is 169 hours', () => {
+    const start = prague(2026, 10, 18, 23, 59)
+    const cutoff = defaultCutoff(start, D)
+    expect(toPragueWallTime(cutoff)).toMatchObject({ month: 10, day: 25, hour: 23, minute: 59 })
+    expect(hours(start, cutoff)).toBe(169)
+  })
+
+  it('spring DST: Sun 22 Mar 23:59 → Sun 29 Mar 23:59 is 167 hours', () => {
+    const start = prague(2026, 3, 22, 23, 59)
+    const cutoff = defaultCutoff(start, D)
+    expect(toPragueWallTime(cutoff)).toMatchObject({ month: 3, day: 29, hour: 23, minute: 59 })
+    expect(hours(start, cutoff)).toBe(167)
+  })
+
+  describe('settling ends the period', () => {
+    it('on Sunday 20:00: the next period runs to the next Sunday 23:59', () => {
+      const at = prague(2026, 11, 29, 20)
+      const { ended, next } = value(endPeriodEarly(RUNNING, at, D, null))
+      expect(ended).toEqual({ ...RUNNING, endedAt: at })
+      expect(next).toEqual({
+        startsAt: at,
+        cutoffAt: prague(2026, 12, 6, 23, 59),
+        levels: D.levels,
+      })
+    })
+
+    it('at Sunday 23:58: still the next Sunday 23:59, not the same night', () => {
+      const at = prague(2026, 11, 29, 23, 58)
+      expect(value(endPeriodEarly(RUNNING, at, D, null)).next.cutoffAt).toEqual(
+        prague(2026, 12, 6, 23, 59),
+      )
+    })
+
+    it('on Saturday 20:00: the Sunday 23:59 eight days later', () => {
+      const at = prague(2026, 11, 28, 20)
+      expect(value(endPeriodEarly(RUNNING, at, D, null)).next.cutoffAt).toEqual(
+        prague(2026, 12, 6, 23, 59),
+      )
+    })
+
+    it('refused at or after the cutoff, at or before the start, and once ended', () => {
+      expect(error(endPeriodEarly(RUNNING, RUNNING.cutoffAt, D, null))).toBe('not_running')
+      expect(error(endPeriodEarly(RUNNING, plus(RUNNING.cutoffAt, 1), D, null))).toBe('not_running')
+      expect(error(endPeriodEarly(RUNNING, RUNNING.startsAt, D, null))).toBe('not_running')
+      expect(error(endPeriodEarly(RUNNING, plus(RUNNING.startsAt, -1), D, null))).toBe(
+        'not_running',
+      )
+      expect(endPeriodEarly(RUNNING, plus(RUNNING.startsAt, 1), D, null).ok).toBe(true)
+      expect(endPeriodEarly(RUNNING, plus(RUNNING.cutoffAt, -1), D, null).ok).toBe(true)
+      const ended = { ...RUNNING, endedAt: prague(2026, 11, 29, 20) }
+      expect(error(endPeriodEarly(ended, prague(2026, 11, 29, 21), D, null))).toBe('not_running')
+    })
+
+    it('an agreed change for the period after RUNNING applies after an early end', () => {
+      const settings = { cutoffAt: prague(2026, 12, 5, 23, 59), levels: { lower: 40, upper: 90 } }
+      const at = prague(2026, 11, 29, 20)
+      expect(value(endPeriodEarly(RUNNING, at, D, agreedProposal(7, settings))).next).toEqual({
+        startsAt: at,
+        ...settings,
+      })
+      expect(
+        value(endPeriodEarly(RUNNING, at, D, agreedProposal(6, settings))).next.levels,
+      ).toEqual(D.levels)
+    })
+
+    it('a pending proposal can not be made or approved, and lapses, once its period ended early', () => {
+      const at = prague(2026, 11, 29, 20)
+      const settings = { cutoffAt: prague(2026, 12, 5, 23, 59), levels: { lower: 40, upper: 90 } }
+      const p = value(proposePeriodSettings(family, DAD, RUNNING, settings, [], plus(at, -HOUR)))
+      const { ended, next } = value(endPeriodEarly(RUNNING, at, D, null))
+      const endedP: Period = { ...ended, id: RUNNING.id }
+      const nextP: Period = { ...next, id: 8 }
+      expect(error(approvePeriodSettings(p, family, OLDER, endedP, plus(at, 1)))).toBe(
+        'already_started',
+      )
+      expect(error(approvePeriodSettings(p, family, OLDER, nextP, plus(at, 1)))).toBe(
+        'already_started',
+      )
+      expect(lapsePeriodSettings(p, RUNNING, plus(at, -1)).status).toBe('pending')
+      expect(lapsePeriodSettings(p, endedP, at).status).toBe('lapsed')
+      expect(error(proposePeriodSettings(family, DAD, endedP, settings, [], plus(at, 1)))).toBe(
+        'already_started',
+      )
+    })
+
+    it('attribution: the early end instant belongs to the next period', () => {
+      const at = prague(2026, 11, 29, 20)
+      const { ended, next } = value(endPeriodEarly(RUNNING, at, D, null))
+      expect(periodEnd(ended)).toEqual(at)
+      expect(periodAt([ended, next], plus(at, -1))).toBe(ended)
+      expect(periodAt([ended, next], at)).toBe(next)
+      expect(isRunning(ended, at)).toBe(false)
+      expect(isRunning(next, at)).toBe(true)
+      expect(isRunning(next, plus(at, -1))).toBe(false)
+      expect(isRunning(ended, ended.startsAt)).toBe(true)
+    })
+
+    it('the chain continues from the early end', () => {
+      const at = prague(2026, 11, 29, 20)
+      const { ended } = value(endPeriodEarly(RUNNING, at, D, null))
+      expect(periodsToStart(ended, plus(at, -1), D, null)).toEqual([])
+      expect(periodsToStart(ended, at, D, null)).toEqual([
+        { startsAt: at, cutoffAt: prague(2026, 12, 6, 23, 59), levels: D.levels },
+      ])
+    })
   })
 })
