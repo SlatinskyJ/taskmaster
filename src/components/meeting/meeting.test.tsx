@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type * as ButtonModule from '~/components/ui/button'
 import type { Meeting } from '~/server/settlement/functions'
 import type { TaskView } from '~/server/tasks/functions'
-import { pendingWeek, settledOk, task, week } from './fixtures'
+import { pendingWeek, period, settledOk, task, week } from './fixtures'
 import { MeetingBody } from './MeetingScreen'
 import { reduce, START } from './meetingFlow'
 import type { MeetingEvent, MeetingUi } from './meetingFlow'
@@ -82,6 +82,18 @@ describe('step 1: Schválit', () => {
   })
 })
 
+describe('the week header', () => {
+  it('a running week shows its cutoff, not now', () => {
+    const now = week({ period: { ...period, endsAt: '2026-11-21T21:00:00.000Z' } })
+    expect(render(now).html).toContain('22. 11. – 29. 11. · Hranice 50 / 100')
+  })
+
+  it('a late meeting shows last week up to its end', () => {
+    const late = week({ period: { ...period, running: false, endsAt: '2026-11-26T19:00:00.000Z' } })
+    expect(render(late).html).toContain('22. 11. – 26. 11.')
+  })
+})
+
 describe('step 2: Vyúčtovat', () => {
   it("shows each taker's total, level, deduction and carry-over", () => {
     const { html } = render(week(), step2)
@@ -127,7 +139,7 @@ describe('step 3: Plánovat', () => {
     const { html } = render(week(), done)
     expect(html).toMatch(/data-step="current".*Plánovat/s)
     expect(html).toContain('Vyúčtováno · ne 29. 11. 20:00')
-    expect(html).toContain('Nový týden 29. 11. – 6. 12. · Hranice 50 / 100')
+    expect(html).toMatch(/Nový týden 29\. 11\. – 6\. 12\.<\/p>.*Hranice 50 \/ 100/s)
     expect(html).toMatch(/data-start="3".*Starší.*>30<.*data-start="4".*Mladší.*>47</s)
     expect(html).not.toContain('Potvrdit vyúčtování')
   })

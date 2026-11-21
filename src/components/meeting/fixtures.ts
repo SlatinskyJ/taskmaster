@@ -28,6 +28,7 @@ export const period = {
   id: 1,
   startsAt: '2026-11-21T23:00:00.000Z',
   endsAt: '2026-11-29T19:00:00.000Z',
+  cutoffAt: '2026-11-29T22:59:00.000Z',
   running: true,
   levels: { lower: 50, upper: 100 },
 }

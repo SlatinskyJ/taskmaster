@@ -64,6 +64,7 @@ describe('getMeeting', () => {
         id: f.p1.id,
         startsAt: SAT.toISOString(),
         endsAt: MEETING.toISOString(),
+        cutoffAt: CUTOFF.toISOString(),
         running: true,
         levels: { lower: 50, upper: 100 },
       },

@@ -55,6 +55,8 @@ export type Meeting =
         startsAt: string
         /** The week's end for its totals: now for the running week, else its end. */
         endsAt: string
+        /** Where the week ends at the latest (the header shows it while the week runs). */
+        cutoffAt: string
         running: boolean
         levels: Levels
       }
@@ -146,6 +148,7 @@ export function getMeeting(db: Db | Tx, now: Date): Meeting {
       id: target.id,
       startsAt: toIsoUtc(target.startsAt),
       endsAt: toIsoUtc(p.value.end),
+      cutoffAt: toIsoUtc(target.cutoffAt),
       running: isRunning(target, now),
       levels: target.levels,
     },

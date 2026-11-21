@@ -81,8 +81,11 @@ export function MeetingBody({
       <Steps step={step} />
       {meeting.period && !ui.result && (
         <p className="text-meta font-bold text-muted">
-          {weekLabel(meeting.period.startsAt, meeting.period.endsAt)} · {cs.meeting.levelsLabel}{' '}
-          {meeting.period.levels.lower} / {meeting.period.levels.upper}
+          {weekLabel(
+            meeting.period.startsAt,
+            meeting.period.running ? meeting.period.cutoffAt : meeting.period.endsAt,
+          )}{' '}
+          · {cs.meeting.levelsLabel} {meeting.period.levels.lower} / {meeting.period.levels.upper}
         </p>
       )}
       {step === 1 && meeting.period && (
@@ -293,10 +296,14 @@ function StepPlan({
             {cs.meeting.settledAt} · {dayTime(result.settledAt)}
           </p>
           {result.next ? (
-            <p className="text-row font-bold">
-              {cs.meeting.newWeek} {weekLabel(result.next.startsAt, result.next.cutoffAt)} ·{' '}
-              {cs.meeting.levelsLabel} {result.next.levels.lower} / {result.next.levels.upper}
-            </p>
+            <div>
+              <p className="text-row font-bold">
+                {cs.meeting.newWeek} {weekLabel(result.next.startsAt, result.next.cutoffAt)}
+              </p>
+              <p className="text-meta font-bold text-muted">
+                {cs.meeting.levelsLabel} {result.next.levels.lower} / {result.next.levels.upper}
+              </p>
+            </div>
           ) : (
             <p className="text-row font-bold">{cs.meeting.stillRunning}</p>
           )}
