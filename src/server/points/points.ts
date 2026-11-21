@@ -12,7 +12,8 @@ import { tasks, users } from '~/server/db/schema'
 // `confirmed` is the running total (spec §5.9): confirmed points − deducted by settlements ±
 // adjustments, computed by the domain's `runningTotal` over ledger entries. Today the only
 // entries are completions (confirmed one-time tasks with an earner). Owners of the rest:
-//   - #44 (weekly meeting) adds `settlement` entries, the points each settlement deducted;
+//   - #172 (points subtract settlements) switches this to #44's `ledgerEntries`, which adds
+//     `settlement` entries, the points each settlement deducted;
 //   - #48 (corrections, adjustments) adds `adjustment` entries;
 //   - #42 (periods) takes `levels` from the current period instead of DEFAULT_LEVELS;
 //   - #38 (recurring instances, their own table) adds a completion entry per confirmed instance
