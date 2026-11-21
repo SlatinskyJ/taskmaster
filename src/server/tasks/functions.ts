@@ -34,6 +34,7 @@ import {
   listBoard,
   listPendingCompletions,
   listScoreChangesWaiting,
+  listPlanTasks,
   listTasks,
   pendingApprovals,
 } from './tasks'
@@ -141,6 +142,11 @@ export const listPendingApprovalsFn = createServerFn({ method: 'GET' })
 export const listTasksFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver')])
   .handler((): TaskView[] => listTasks(getDb()))
+
+/** The meeting's plan step (#44). */
+export const listPlanTasksFn = createServerFn({ method: 'GET' })
+  .middleware([requireRole('giver')])
+  .handler((): TaskView[] => listPlanTasks(getDb()))
 
 // ── Bidding (#34, spec §5.2 path 2) ─────────────────────────────────────────────────────
 

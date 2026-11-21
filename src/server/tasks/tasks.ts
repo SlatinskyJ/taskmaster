@@ -485,6 +485,19 @@ export function listPendingCompletions(db: Db | Tx): TaskView[] {
   )
 }
 
+/** The meeting's plan step (spec §5.9 step 3): tasks that still need something, newest first. */
+export function listPlanTasks(db: Db | Tx): TaskView[] {
+  return views(
+    db,
+    db
+      .select()
+      .from(tasks)
+      .where(inArray(tasks.status, ['proposed', 'open', 'reserved']))
+      .orderBy(desc(tasks.id))
+      .all(),
+  )
+}
+
 /** Every one-time task, newest first (the giver's Úkoly list). */
 export function listTasks(db: Db | Tx): TaskView[] {
   return views(db, db.select().from(tasks).orderBy(desc(tasks.id)).all())
