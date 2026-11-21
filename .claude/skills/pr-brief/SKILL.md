@@ -59,9 +59,9 @@ Same order and look in every brief, so Jakub knows where to look:
 
 Diagrams: load the `artifact-diagramming` skill. Code snippets: real code trimmed with `// …`, short, file path under each, scrolled inside the block at phone width.
 
-Screenshots: Playwright against the dev server, viewport 390×844, light theme, `deviceScaleFactor: 2`. Dark theme too only when the PR changes the theme or tokens. Seed realistic Czech task names.
+Screenshots: Playwright against the dev server, the iPhone 15 Pro screen: viewport 393×852, `deviceScaleFactor: 3`, `isMobile: true`, `hasTouch: true`, light theme. Set these yourself: Playwright's `devices['iPhone 15 Pro']` has a shorter viewport (Safari bars), and the app runs as an installed PWA with the whole screen. Dark theme too only when the PR changes the theme or tokens. Seed realistic Czech task names.
 
-A screenshot shows exactly what a phone shows: one 390×844 screen, never the whole page. Use `page.screenshot()` with no `fullPage` (or `fullPage: false`), so every file is 780×1688 px; never `fullPage: true`, never an element screenshot taller than the screen. When the part that matters sits below the fold, scroll to it (`locator.scrollIntoViewIfNeeded()` or `window.scrollTo`) and take another 390×844 screenshot of that spot. Check each file's size before you publish it; one that is not 780×1688 is retaken.
+A screenshot shows exactly what a phone shows: one 393×852 screen, never the whole page. Use `page.screenshot()` with no `fullPage` (or `fullPage: false`), so every file is 1179×2556 px; never `fullPage: true`, never an element screenshot taller than the screen. When the part that matters sits below the fold, scroll to it (`locator.scrollIntoViewIfNeeded()` or `window.scrollTo`) and take another 393×852 screenshot of that spot. Check each file's size before you publish it; one that is not 1179×2556 is retaken.
 
 Screenshots on the page keep their natural aspect ratio, big enough to read. Put every screenshot `<figure>` inside one grid; give each `<img>` its real `width`/`height` attributes and this CSS:
 
