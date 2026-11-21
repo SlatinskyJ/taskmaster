@@ -14,7 +14,7 @@ updates:
     ignore:
       - dependency-name: node
         update-types: ['version-update:semver-major']
-    labels: [chore]
+    labels: []
     commit-message:
       prefix: 'chore(docker)'
 
@@ -28,6 +28,6 @@ updates:
     groups:
       actions:
         patterns: ['*']
-    labels: [chore]
+    labels: []
     commit-message:
       prefix: 'chore(ci)'
