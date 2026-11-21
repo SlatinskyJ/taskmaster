@@ -10,6 +10,7 @@ import { RecurringFields } from '~/components/templates/RecurringFields'
 import { Button } from '~/components/ui/button'
 import { Card } from '~/components/ui/card'
 import { Input } from '~/components/ui/input'
+import { FEATURES } from '~/lib/features'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { taskErrorMessage } from '~/lib/taskErrors'
@@ -69,25 +70,27 @@ function NewTask() {
           void submit()
         }}
       >
-        <div className="grid grid-cols-2 gap-1 rounded-card bg-track p-1">
-          {KINDS.map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              aria-pressed={kind === k}
-              onClick={() => {
-                setKind(k)
-                setError(null)
-              }}
-              className={cn(
-                'min-h-tap cursor-pointer rounded-button font-extrabold',
-                kind === k ? 'bg-surface text-ink shadow-sticker' : 'text-muted',
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {FEATURES.recurring && (
+          <div className="grid grid-cols-2 gap-1 rounded-card bg-track p-1">
+            {KINDS.map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                aria-pressed={kind === k}
+                onClick={() => {
+                  setKind(k)
+                  setError(null)
+                }}
+                className={cn(
+                  'min-h-tap cursor-pointer rounded-button font-extrabold',
+                  kind === k ? 'bg-surface text-ink shadow-sticker' : 'text-muted',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         <Card className="grid gap-3">
           <label className="grid gap-2">
             <span className={sectionLabelClass}>{cs.tasks.title}</span>

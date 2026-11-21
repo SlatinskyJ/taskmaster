@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '~/components/ui/dialog'
+import { FEATURES } from '~/lib/features'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { completeTaskFn, listTasksFn, releaseTaskFn, type TaskView } from '~/server/tasks/functions'
@@ -120,20 +121,22 @@ function Tasks() {
           </ul>
         )}
       </section>
-      <section className="grid gap-2" aria-labelledby="templates-label">
-        <SectionLabel id="templates-label">{cs.templates.section}</SectionLabel>
-        {templates.length === 0 ? (
-          <EmptyState>{cs.templates.empty}</EmptyState>
-        ) : (
-          <ul className="grid gap-2">
-            {templates.map((t) => (
-              <li key={t.id}>
-                <TemplateRow template={t} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {FEATURES.recurring && (
+        <section className="grid gap-2" aria-labelledby="templates-label">
+          <SectionLabel id="templates-label">{cs.templates.section}</SectionLabel>
+          {templates.length === 0 ? (
+            <EmptyState>{cs.templates.empty}</EmptyState>
+          ) : (
+            <ul className="grid gap-2">
+              {templates.map((t) => (
+                <li key={t.id}>
+                  <TemplateRow template={t} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
       <Dialog
         open={closing !== null}
         onOpenChange={(open) => {

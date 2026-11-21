@@ -1,11 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Placeholder } from '~/components/shell/Placeholder'
 import { Screen } from '~/components/shell/Screen'
 import { BidsToAnswer } from '~/components/tasks/BidsToAnswer'
 import { TakerBoard } from '~/components/tasks/TakerBoard'
 import { RecurringList } from '~/components/templates/RecurringList'
 import { ToApprove } from '~/components/tasks/ToApprove'
 import { WaitingForYou } from '~/components/tasks/WaitingForYou'
+import { FEATURES } from '~/lib/features'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import {
@@ -62,14 +62,14 @@ function Home() {
     <Screen title={`${cs.home.greeting}, ${user.displayName}!`} user={user}>
       <WaitingForYou
         items={waiting}
-        templates={waitingTemplates}
-        priceChanges={priceChanges}
+        templates={FEATURES.recurring ? waitingTemplates : []}
+        priceChanges={FEATURES.recurring ? priceChanges : []}
         me={{ id: user.id, role: user.role }}
       />
       {user.role === 'taker' ? (
         <>
           <TakerBoard items={board} me={user.id} />
-          <RecurringList items={recurring} waiting={priceChanges} />
+          {FEATURES.recurring && <RecurringList items={recurring} waiting={priceChanges} />}
         </>
       ) : (
         <>
@@ -77,7 +77,6 @@ function Home() {
           <BidsToAnswer items={bids} />
         </>
       )}
-      <Placeholder />
     </Screen>
   )
 }

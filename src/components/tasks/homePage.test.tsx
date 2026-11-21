@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TemplateView } from '~/server/templates/functions'
 
 // Domů itself (#138), rendered statically through its route, so the wiring of the price change
@@ -26,6 +26,9 @@ vi.mock('@tanstack/react-router', () => ({
   useRouterState: () => ({ location: { pathname: '/' } }),
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
 }))
+// Launch switches (src/lib/features.ts): all on unless a test turns one off.
+const features = vi.hoisted(() => ({ recurring: true, log: true, week: true, meeting: true }))
+vi.mock('~/lib/features', () => ({ FEATURES: features }))
 vi.mock('./useTaskAction', () => ({ useTaskAction: () => ({ busy: null, run: vi.fn() }) }))
 vi.mock('./bidCalls', () => ({ callBid: vi.fn(), BID_CALLS: {} }))
 // The loader's server calls, each returning a marker so the test can see where it went.
@@ -78,6 +81,29 @@ function render(user: PageUser, recurring: TemplateView[]) {
 }
 
 describe('Domů', () => {
+  beforeEach(() => {
+    features.recurring = true
+  })
+
+  it('launch: with recurring off a brother sees no chores, no price changes', () => {
+    features.recurring = false
+    const html = render({ id: 4, role: 'taker', displayName: 'Starší' }, [dishes, flowers])
+    expect(html).not.toContain('Opakované úkoly')
+    expect(html).not.toContain('Zalít kytky')
+    expect(html).not.toContain('Táta nabízí 4')
+  })
+
+  it('launch: with recurring off a parent sees no price changes either', () => {
+    features.recurring = false
+    const html = render({ id: 2, role: 'giver', displayName: 'Táta' }, [])
+    expect(html).not.toContain('Mladší chce 5')
+  })
+
+  it('has no "Tady brzy něco bude" line', () => {
+    const html = render({ id: 4, role: 'taker', displayName: 'Starší' }, [])
+    expect(html).not.toContain('Tady brzy něco bude')
+  })
+
   it('a brother sees the parents’ offer waiting and his recurring chores with Jiná cena', () => {
     const html = render({ id: 4, role: 'taker', displayName: 'Starší' }, [dishes, flowers])
     expect(html).toContain('Táta nabízí 4')
