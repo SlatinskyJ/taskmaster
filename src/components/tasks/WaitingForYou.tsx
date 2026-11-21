@@ -23,25 +23,29 @@ import { useTaskAction } from './useTaskAction'
  * A task row stays short and the task page explains (#34): without my bid, "Souhlasím" and a
  * link "Jiná cena" to the page; with my bid only "Otevřít", because picking between "Beru" and
  * "Souhlasím" needs both hints, which a row has no room for.
- * A price change of an agreed template (#138) waiting for this person's side links to its page.
+ * A price change of an agreed template (#138) waiting for this person's side links to its page;
+ * so does a new price of an agreed one-time task waiting for this person (#36).
  */
 export function WaitingForYou({
   items,
   templates = [],
   priceChanges,
+  taskPriceChanges,
   me,
 }: {
   items: readonly TaskView[]
   templates?: readonly TemplateView[]
   /** Required, so a screen can't forget it: price changes waiting for this person's side. */
   priceChanges: readonly TemplateView[]
+  /** Required too: one-time tasks whose new price waits for this person (#36). */
+  taskPriceChanges: readonly TaskView[]
   me: Me
 }) {
   const router = useRouter()
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const action = useTaskAction()
   const anyBusy = busyKey !== null || action.busy !== null
-  const count = items.length + templates.length + priceChanges.length
+  const count = items.length + templates.length + priceChanges.length + taskPriceChanges.length
   if (count === 0) return null
 
   async function approve(
@@ -159,6 +163,17 @@ export function WaitingForYou({
                   {cs.bids.answer}
                 </Link>
               }
+            />
+          </li>
+        ))}
+        {taskPriceChanges.map((t) => (
+          <li key={`task-price-${String(t.id)}`}>
+            <TaskRow
+              name={t.title}
+              state="negotiating"
+              points={t.score}
+              meta={cs.taskPrice.rowMeta(t.score, t.scoreChange?.score ?? t.score)}
+              action={pageLink(t, cs.bids.answer)}
             />
           </li>
         ))}

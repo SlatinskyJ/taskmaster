@@ -193,3 +193,36 @@ export function toastFor(action: BidAction, status: TaskView['status'], me: Me):
   if (action === 'approveOffer') return cs.tasks.approved
   return cs.bids.toast.sent
 }
+
+// ── Price change (#36, spec §5.2) ────────────────────────────────────────────────────────
+
+/** "Změnit cenu": no change in flight; open → any giver or taker; reserved → a giver or its taker. */
+export function canProposeChange(
+  task: Pick<TaskView, 'status' | 'reservedBy' | 'scoreChange'>,
+  me: Me,
+): boolean {
+  if (task.scoreChange) return false
+  if (me.role !== 'giver' && me.role !== 'taker') return false
+  if (task.status === 'open') return true
+  if (task.status === 'reserved') return me.role === 'giver' || task.reservedBy?.id === me.id
+  return false
+}
+
+/** What this person may answer to the change in flight (Jakub 2026-11-21: only who it waits for). */
+export function changeAnswer(
+  task: Pick<TaskView, 'scoreChange'>,
+  me: Me,
+): 'answer' | 'withdraw' | 'none' {
+  const change = task.scoreChange
+  if (!change) return 'none'
+  if (change.proposedBy.id === me.id) return 'withdraw'
+  return change.waitingFor.some((p) => p.id === me.id) ? 'answer' : 'none'
+}
+
+/** The hint under "Změnit cenu": reserved → who has to agree; open → both sides. */
+export function changeHint(task: Pick<TaskView, 'status' | 'reservedBy'>, me: Me): string {
+  if (task.status === 'reserved' && task.reservedBy) {
+    return cs.taskPrice.needs(me.role === 'giver' ? task.reservedBy.name : cs.taskPrice.parent)
+  }
+  return cs.taskPrice.needsOpen
+}

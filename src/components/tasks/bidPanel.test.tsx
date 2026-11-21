@@ -76,6 +76,7 @@ const view = (over: Partial<TaskView>): TaskView => ({
   completedAt: null,
   earnerId: null,
   waitingFor: [],
+  scoreChange: null,
   ...over,
 })
 const bids = view({
@@ -122,7 +123,12 @@ describe('WaitingForYou with bids', () => {
   it('no bid of mine: "Souhlasím" and "Jiná cena" to the page; with my bid: only "Otevřít"', () => {
     const mine = { ...bids, id: 2 }
     const html = renderToStaticMarkup(
-      <WaitingForYou priceChanges={[]} items={[view({}), mine]} me={STARSI} />,
+      <WaitingForYou
+        priceChanges={[]}
+        taskPriceChanges={[]}
+        items={[view({}), mine]}
+        me={STARSI}
+      />,
     )
     const [first = '', second = ''] = html.split('<li').slice(1)
     expect(first).toContain('Souhlasím')
@@ -183,7 +189,9 @@ describe('what a tap sends (#34)', () => {
     expect(action.pressed.get('Nabídnout')?.disabled).toBe(true)
   })
   it("a Domů row's Souhlasím approves the offer (open for both)", () => {
-    renderToStaticMarkup(<WaitingForYou priceChanges={[]} items={[view({})]} me={STARSI} />)
+    renderToStaticMarkup(
+      <WaitingForYou priceChanges={[]} taskPriceChanges={[]} items={[view({})]} me={STARSI} />,
+    )
     expect(tap('Souhlasím')).toMatchObject({
       action: 'approveOffer',
       data: { taskId: 1, score: 18 },

@@ -13,6 +13,7 @@ import {
   listBoardFn,
   listPendingApprovalsFn,
   listPendingCompletionsFn,
+  listScoreChangesWaitingFn,
   listTasksFn,
 } from '~/server/tasks/functions'
 import { getPointsFn } from '~/server/points/functions'
@@ -31,11 +32,13 @@ export const Route = createFileRoute('/_app/')({
     const waiting = await listPendingApprovalsFn()
     const waitingTemplates = await listPendingTemplateApprovalsFn()
     const priceChanges = await listPendingTemplatePriceChangesFn()
+    const taskPriceChanges = await listScoreChangesWaitingFn()
     if (context.user.role === 'taker') {
       return {
         waiting,
         waitingTemplates,
         priceChanges,
+        taskPriceChanges,
         board: await listBoardFn(),
         recurring: await listTemplatesFn(),
         toApprove: [],
@@ -48,6 +51,7 @@ export const Route = createFileRoute('/_app/')({
       waiting,
       waitingTemplates,
       priceChanges,
+      taskPriceChanges,
       board: [],
       recurring: [],
       toApprove: await listPendingCompletionsFn(),
@@ -67,6 +71,7 @@ function Home() {
     waiting,
     waitingTemplates,
     priceChanges,
+    taskPriceChanges,
     board,
     recurring,
     toApprove,
@@ -81,6 +86,7 @@ function Home() {
         items={waiting}
         templates={waitingTemplates}
         priceChanges={priceChanges}
+        taskPriceChanges={taskPriceChanges}
         me={{ id: user.id, role: user.role }}
       />
       {user.role === 'taker' ? (

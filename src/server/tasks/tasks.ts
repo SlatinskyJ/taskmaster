@@ -10,6 +10,7 @@ import {
   lowestBid,
   markAgreed,
   missingRoles,
+  oneTimeChangeWaitingFor,
   reopenOneTimeOffer,
   resolveOneTime,
 } from '~/domain'
@@ -25,6 +26,9 @@ import { taskScoreApprovals, tasks, users } from '~/server/db/schema'
 import type { TaskRow } from '~/server/db/schema'
 import type { ThreadEntry } from '~/server/threadEntry'
 import { listPeople } from '~/server/users/people'
+import { openChangeOf } from './changeRows'
+import { taskHistory } from './history'
+import type { HistoryEntry } from './history'
 import { saveItem, toItem } from './item'
 import { addEntry, openBids, openOffer, threadOf } from './thread'
 
@@ -316,6 +320,17 @@ export interface TaskView {
    * yet (any one of them agreeing is enough). Else [].
    */
   waitingFor: { id: number; name: string }[]
+  /** Open or reserved with a new score in flight (spec §5.2): who proposed, agreed, is awaited. */
+  scoreChange: ScoreChangeView | null
+}
+
+export interface ScoreChangeView {
+  id: number
+  score: number
+  proposedBy: { id: number; name: string }
+  approvedBy: { id: number; name: string }[]
+  /** The people whose yes would still count (and who may say no). */
+  waitingFor: { id: number; name: string }[]
 }
 
 /** Display names by user id ('' for an unknown id). */
@@ -365,13 +380,51 @@ function views(db: Db | Tx, rows: TaskRow[]): TaskView[] {
       waitingFor: people
         .filter((p) => p.active && missing.some((role) => role === p.role))
         .map((p) => ({ id: p.id, name: name(p.id) })),
+      scoreChange: scoreChangeView(db, t, people, name),
     }
   })
+}
+
+function scoreChangeView(
+  db: Db | Tx,
+  task: TaskRow,
+  people: Person[],
+  name: (id: number) => string,
+): ScoreChangeView | null {
+  if (task.status !== 'open' && task.status !== 'reserved') return null
+  const change = openChangeOf(db, task.id)
+  if (!change) return null
+  const named = (id: number) => ({ id, name: name(id) })
+  return {
+    id: change.id,
+    score: change.score,
+    proposedBy: named(change.proposedBy),
+    approvedBy: change.approvedBy.map(named),
+    waitingFor: oneTimeChangeWaitingFor(toItem(task), change, people).map(named),
+  }
+}
+
+/**
+ * "Čeká na tebe" (UI doc §7.1 TApprove, a price change): open or reserved tasks whose new score
+ * waits for this person, oldest change first.
+ */
+export function listScoreChangesWaiting(db: Db | Tx, userId: number): TaskView[] {
+  const rows = db
+    .select()
+    .from(tasks)
+    .where(inArray(tasks.status, ['open', 'reserved']))
+    .all()
+  const waiting = views(db, rows).filter((t) =>
+    t.scoreChange?.waitingFor.some((p) => p.id === userId),
+  )
+  return waiting.sort((a, b) => (a.scoreChange?.id ?? 0) - (b.scoreChange?.id ?? 0))
 }
 
 export interface TaskDetail {
   task: TaskView
   thread: ThreadEntry[]
+  /** Everything that happened to the task, oldest first (#36). */
+  history: HistoryEntry[]
 }
 
 /** A task with its full negotiation history (spec §5.2: every bid visible), or null. */
@@ -389,7 +442,7 @@ export function getTaskDetail(db: Db | Tx, taskId: number): TaskDetail | null {
     at: e.createdAt,
     state: e.closedAs ?? 'open',
   }))
-  return { task, thread }
+  return { task, thread, history: taskHistory(db, taskId, name) }
 }
 
 /** Proposed tasks with at least one current open bid, oldest task first (a giver answers them). */

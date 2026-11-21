@@ -716,6 +716,7 @@ describe('what screens get (PR B)', () => {
           { id: f.starsi, name: 'Starší' },
           { id: f.mladsi, name: 'Mladší' },
         ],
+        scoreChange: null,
       },
       thread: [
         {
@@ -743,6 +744,7 @@ describe('what screens get (PR B)', () => {
           state: 'open',
         },
       ],
+      history: expect.any(Array) as unknown,
     })
     expect(getTaskDetail(f.db, 999)).toBeNull()
   })

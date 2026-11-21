@@ -65,8 +65,10 @@ test('a parent sees both boys’ points, approves completions and sees Úkoly by
   const labels = await page.locator('[id^="group-"]').allTextContents()
   expect(labels.map((l) => l.replace(/ \(\d+\)$/, ''))).toEqual([
     cs.tasks.groupProposed,
+    cs.state.open,
     cs.state.reserved,
     cs.state.pending,
     cs.state.confirmed,
+    cs.state.cancelled,
   ])
 })
