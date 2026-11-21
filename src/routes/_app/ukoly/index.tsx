@@ -3,8 +3,8 @@ import { useState } from 'react'
 import { EmptyState } from '~/components/EmptyState'
 import { Screen } from '~/components/shell/Screen'
 import { SectionLabel } from '~/components/shell/SectionLabel'
-import { lowestText, taskChipState } from '~/components/tasks/taskView'
-import { TaskRow } from '~/components/tasks/TaskRow'
+import { TaskGroups } from '~/components/tasks/TaskGroups'
+import { waitingText } from '~/components/tasks/taskView'
 import { TemplateRow } from '~/components/templates/TemplateRow'
 import { useTaskAction } from '~/components/tasks/useTaskAction'
 import { Button, buttonVariants } from '~/components/ui/button'
@@ -22,7 +22,7 @@ import { cs } from '~/lib/strings'
 import { completeTaskFn, listTasksFn, releaseTaskFn, type TaskView } from '~/server/tasks/functions'
 import { listTemplatesFn } from '~/server/templates/functions'
 
-// Úkoly: all one-time tasks by state, givers only (UI doc §7.2 GTasks). A giver can release a
+// Úkoly: all one-time tasks grouped by state, active first (UI doc §7.2 GTasks, #41), givers only. A giver can release a
 // reservation or mark an open task done themselves (spec §5.4–§5.5). Recurring templates are
 // listed below the one-time tasks, so rows that need action stay on top (#37).
 export const Route = createFileRoute('/_app/ukoly/')({
@@ -41,7 +41,10 @@ function Tasks() {
   const [closing, setClosing] = useState<TaskView | null>(null)
 
   function meta(t: TaskView) {
-    if (t.status === 'proposed') return t.lowest ? undefined : cs.tasks.waitingForTaker
+    if (t.status === 'proposed') {
+      if (t.lowest) return undefined
+      return waitingText(t, user) ?? cs.tasks.waitingForTaker
+    }
     if (t.status === 'reserved' && t.reservedBy) return `${cs.work.reservedBy} ${t.reservedBy.name}`
     if (t.completedBy) return `${cs.work.doneBy} ${t.completedBy.name}`
     return undefined
@@ -104,20 +107,7 @@ function Tasks() {
         {list.length === 0 ? (
           <EmptyState>{cs.tasks.empty}</EmptyState>
         ) : (
-          <ul className="grid gap-2">
-            {list.map((t) => (
-              <li key={t.id}>
-                <TaskRow
-                  name={t.title}
-                  state={taskChipState(t)}
-                  points={t.score}
-                  meta={meta(t)}
-                  detail={t.lowest ? lowestText(t.lowest) : undefined}
-                  action={action(t)}
-                />
-              </li>
-            ))}
-          </ul>
+          <TaskGroups list={list} meta={meta} action={action} />
         )}
       </section>
       <section className="grid gap-2" aria-labelledby="templates-label">

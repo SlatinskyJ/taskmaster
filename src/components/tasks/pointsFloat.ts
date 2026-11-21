@@ -1,10 +1,4 @@
-/** A "+N" to float over where the tapped button was (UI doc §4), in screen coordinates. */
-export interface PointsFloat {
-  key: number
-  points: number
-  tone: 'pending' | 'confirmed'
-  rect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>
-}
+import type { PointsFloat } from '~/components/effects/floatStore'
 
 /**
  * The float for a successful action: `opts.float` points over the `opts.confetti` element,
