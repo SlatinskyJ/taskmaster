@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { fail, ok } from '~/domain/result'
 import type { SettlementRow } from '~/server/db/schema'
 import type { Period } from '~/domain'
-import { parseSettle, settled } from './functions'
+import { parseSettle, settled, viewerOf } from './functions'
 
 // Input checks and the response shape of the meeting server functions.
 
@@ -91,5 +91,14 @@ describe('settled (what a confirm returns to the screen)', () => {
 
   it('a refusal passes through unchanged', () => {
     expect(settled(fail('totals_changed'))).toEqual({ ok: false, error: 'totals_changed' })
+  })
+})
+
+describe('viewerOf', () => {
+  it('keeps only id and role of the signed-in user', () => {
+    expect(viewerOf({ id: 3, username: 'starsi', displayName: 'Starší', role: 'taker' })).toEqual({
+      id: 3,
+      role: 'taker',
+    })
   })
 })

@@ -92,7 +92,8 @@ function settledIds(db: Db | Tx): Set<PeriodId> {
   )
 }
 
-function takersOf(db: Db | Tx, people: readonly Person[]) {
+/** Active takers, by id, with their display names. Schůzka and Týden list the same people. */
+export function takersOf(db: Db | Tx, people: readonly Person[]) {
   return db
     .select({ id: users.id, name: users.displayName })
     .from(users)

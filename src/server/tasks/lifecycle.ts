@@ -80,6 +80,9 @@ function runStep(
   })
 }
 
+/** What a task's lifecycle audit entries store as `before` and `after` (read by ./rejections). */
+export type TaskAuditView = ReturnType<typeof auditView>
+
 function auditView(row: TaskRow) {
   return {
     status: row.status,
@@ -147,7 +150,7 @@ export function approveTask(db: Db | Tx, userId: number, taskId: number, now: Da
  * taker's reservation if it was reserved, otherwise open. The reason goes to the audit entry.
  */
 export function rejectTask(
-  db: Db,
+  db: Db | Tx,
   userId: number,
   taskId: number,
   reason: string | undefined,
