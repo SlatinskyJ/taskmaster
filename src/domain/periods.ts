@@ -4,19 +4,27 @@ import type { Person, PersonId } from './parties'
 import { findPerson, isActiveAdmin, isActiveGiver, isActiveTaker, isParty } from './parties'
 import type { Result } from './result'
 import { fail, ok } from './result'
-import type { Levels } from './settlement'
+import type { Levels, PeriodId } from './settlement'
 import { isValidLevels } from './settlement'
 
 // Periods, attribution and period-setting proposals (spec §5.5, §5.8).
 //
-// A period runs from the previous period's cutoff to its own cutoff. It is half-open,
-// [startsAt, cutoffAt): an instant exactly at the cutoff already belongs to the next period,
-// which matches the meeting listing items "completed before the cutoff" (spec §5.9).
+// A period runs from the end of the previous period to its own end. It is half-open,
+// [startsAt, end): an instant exactly at the end already belongs to the next period, which
+// matches the meeting listing items "completed before the period ends" (spec §5.9).
 //
-// Periods are not tied to calendar weeks. The next period starts at the cutoff, with or without
+// The end is the cutoff, unless settling ended the period earlier (Jakub 2026-11-21, spec
+// §5.8): the meeting normally runs before the cutoff, and confirming the settlement ends the
+// running period at that moment (`endedAt`). The cutoff is the latest end.
+//
+// Periods are not tied to calendar weeks. The next period starts at the end, with or without
 // a settlement ([call]). It takes the default settings in force at that moment, unless a
 // different cutoff/levels for it reached period agreement before it started. Once started, its
 // cutoff and levels never change.
+//
+// A per-period proposal is keyed on the period it follows (`afterPeriodId`), not on a start
+// instant: after an early end the next period starts sooner than planned. It is open while the
+// period it follows is running.
 //
 // Period agreement (spec §3, Jakub 2026-11-17) = every active taker and at least one active
 // giver approved. Proposing counts as approving. The admin never counts. Approvals are checked
@@ -24,8 +32,8 @@ import { isValidLevels } from './settlement'
 // handling for people becoming inactive), approvals are not pruned on deactivation.
 //
 // Caller duty: when people change, run `resolvePeriodProposal` on every pending proposal (it
-// promotes a proposal that is now agreed). When a period starts, run `lapsePeriodSettings` on
-// pending proposals for it. Pending default proposals never lapse ([call]).
+// promotes a proposal that is now agreed). When a period starts (at its predecessor's cutoff or
+// at an early end), run `lapsePeriodSettings` on pending proposals for it. Pending default proposals never lapse ([call]).
 
 export type PeriodError =
   | 'not_a_party'
@@ -38,6 +46,7 @@ export type PeriodError =
   | 'not_pending'
   | 'already_approved'
   | 'not_proposer'
+  | 'not_running'
 
 /** Weekday and Prague wall time of the default cutoff. */
 export interface CutoffTime {
@@ -54,16 +63,38 @@ export interface PeriodDefaults {
 }
 
 export const DEFAULT_LENGTH_DAYS = 7
-/** Default levels (Jakub 2026-11-21: week 1 runs on lower 50, upper 100). */
+/** The end of Sunday, 23:59 Europe/Prague (Jakub 2026-11-21, spec §5.8). */
+export const DEFAULT_CUTOFF: CutoffTime = { weekday: 0, hour: 23, minute: 59 }
+/** Default lower/upper levels (Jakub 2026-11-21, the spec's example numbers). */
 export const DEFAULT_LEVELS: Levels = { lower: 50, upper: 100 }
-/** [call] Sunday 18:00 Europe/Prague (spec §5.8). */
-export const DEFAULT_CUTOFF: CutoffTime = { weekday: 0, hour: 18, minute: 0 }
+/** The defaults in force until stored settings exist (#43, #47). */
+export const DEFAULT_PERIOD_DEFAULTS: PeriodDefaults = {
+  lengthDays: DEFAULT_LENGTH_DAYS,
+  cutoff: DEFAULT_CUTOFF,
+  levels: DEFAULT_LEVELS,
+}
 
-/** One period's span and levels. The DB adds an id. */
+/** One period's span and levels. */
 export interface PeriodSpan {
   startsAt: Date
   cutoffAt: Date
   levels: Levels
+  /** Set when settling ended the period before its cutoff; null or absent otherwise. */
+  endedAt?: Date | null
+}
+
+/** A stored period. */
+export type Period = PeriodSpan & { id: PeriodId }
+
+/** Where the period ends: the early end if settling ended it, else the cutoff. */
+export function periodEnd(period: PeriodSpan): Date {
+  return period.endedAt ?? period.cutoffAt
+}
+
+/** True while `now` is inside the period: startsAt ≤ now < end. */
+export function isRunning(period: PeriodSpan, now: Date): boolean {
+  const t = now.getTime()
+  return period.startsAt.getTime() <= t && t < periodEnd(period).getTime()
 }
 
 /** A different cutoff and/or levels for one period, agreed before it starts (spec §5.8). */
@@ -104,8 +135,8 @@ export function isValidPeriodSettings(settings: PeriodSettings, startsAt: Date):
 
 /**
  * [call] The default cutoff of a period starting at `startsAt`: the default cutoff time (e.g.
- * Sunday 18:00) nearest to `startsAt + lengthDays` (a tie goes to the later one), and always
- * after the start. A 7-day period from Sunday 18:00 ends the next Sunday 18:00. A period that
+ * Sunday 23:59) nearest to `startsAt + lengthDays` (a tie goes to the later one), and always
+ * after the start. A 7-day period from Sunday 23:59 ends the next Sunday 23:59. A period that
  * starts on another day (after a one-off change) ends on the Sunday nearest a week later, which
  * brings the chain back to the default weekday.
  */
@@ -127,16 +158,16 @@ export function firstPeriod(now: Date, defaults: PeriodDefaults): PeriodSpan {
 }
 
 /**
- * The period after `previous`: starts at its cutoff. Uses `proposal`'s settings if it is agreed
- * and made for exactly this start, else the defaults in force now.
+ * The period after `previous`: starts at its end. Uses `proposal`'s settings if it is agreed and
+ * made for the period after `previous` (by id), else the defaults in force now.
  */
 export function nextPeriod(
-  previous: PeriodSpan,
+  previous: PeriodSpan & { id?: PeriodId },
   defaults: PeriodDefaults,
   proposal: PeriodSettingsProposal | null,
 ): PeriodSpan {
-  const startsAt = previous.cutoffAt
-  if (proposal?.status === 'agreed' && proposal.periodStartsAt.getTime() === startsAt.getTime()) {
+  const startsAt = periodEnd(previous)
+  if (proposal?.status === 'agreed' && proposal.afterPeriodId === previous.id) {
     return { startsAt, cutoffAt: proposal.settings.cutoffAt, levels: proposal.settings.levels }
   }
   return { startsAt, cutoffAt: defaultCutoff(startsAt, defaults), levels: defaults.levels }
@@ -149,14 +180,14 @@ export function nextPeriod(
  * apply to the first of them.
  */
 export function periodsToStart(
-  latest: PeriodSpan,
+  latest: PeriodSpan & { id?: PeriodId },
   now: Date,
   defaults: PeriodDefaults,
   proposal: PeriodSettingsProposal | null,
 ): PeriodSpan[] {
   const started: PeriodSpan[] = []
-  let previous = latest
-  while (previous.cutoffAt.getTime() <= now.getTime()) {
+  let previous: PeriodSpan & { id?: PeriodId } = latest
+  while (periodEnd(previous).getTime() <= now.getTime()) {
     previous = nextPeriod(previous, defaults, proposal)
     started.push(previous)
   }
@@ -168,13 +199,56 @@ export function hasStarted(period: PeriodSpan, now: Date): boolean {
   return now.getTime() >= period.startsAt.getTime()
 }
 
-/** Settlement is allowed any time from the cutoff on (spec §5.8). */
+/**
+ * Settlement is allowed once the period has started (strictly after its first instant): before the cutoff it ends the running
+ * period, after the cutoff it settles a period that ended there (spec §5.8). A period that
+ * settling already ended early is settled. Double settlement of a period ended at its cutoff is
+ * guarded by its settlement records (#44), not here.
+ */
 export function canSettle(period: PeriodSpan, now: Date): boolean {
-  return now.getTime() >= period.cutoffAt.getTime()
+  // Strictly after the start, like `endPeriodEarly`: a settlement can't end a zero-length period.
+  return now.getTime() > period.startsAt.getTime() && period.endedAt == null
 }
 
 /**
- * The period an instant belongs to: the one with startsAt ≤ instant < cutoffAt. Used with a
+ * The period the meeting settles (spec §5.8, §5.9 step 1). `periods` oldest first, `settled`
+ * the ids that have settlement records. The oldest ended period without a settlement comes
+ * first (a missed or late meeting; weeks are never skipped); only when every ended period is
+ * settled, the running one, if it can be settled now. `undefined` = nothing to settle.
+ */
+export function periodToSettle<P extends Period>(
+  periods: readonly P[],
+  settled: ReadonlySet<PeriodId>,
+  now: Date,
+): P | undefined {
+  const t = now.getTime()
+  const ended = periods.find((p) => periodEnd(p).getTime() <= t && !settled.has(p.id))
+  if (ended) return ended
+  const running = periods.find((p) => isRunning(p, now))
+  return running && !settled.has(running.id) && canSettle(running, now) ? running : undefined
+}
+
+/**
+ * Settling ends the running period at `at` (spec §5.8). The next period starts at `at`, with its
+ * cutoff from that start and the default length (Sunday 20:00 → the next Sunday 23:59), or the
+ * agreed change for it. Refused unless startsAt < at < cutoffAt and the period has not ended.
+ */
+export function endPeriodEarly(
+  period: PeriodSpan & { id?: PeriodId },
+  at: Date,
+  defaults: PeriodDefaults,
+  proposal: PeriodSettingsProposal | null,
+): Result<{ ended: PeriodSpan; next: PeriodSpan }, PeriodError> {
+  const t = at.getTime()
+  if (period.endedAt != null || t <= period.startsAt.getTime() || t >= period.cutoffAt.getTime()) {
+    return fail('not_running')
+  }
+  const ended = { ...period, endedAt: at }
+  return ok({ ended, next: nextPeriod(ended, defaults, proposal) })
+}
+
+/**
+ * The period an instant belongs to: the one with startsAt ≤ instant < its end. Used with a
  * completion's `completedAt` (not approval time, spec §5.5). `undefined` if no period covers it.
  */
 export function periodAt<P extends PeriodSpan>(
@@ -182,7 +256,7 @@ export function periodAt<P extends PeriodSpan>(
   instant: Date,
 ): P | undefined {
   const t = instant.getTime()
-  return periods.find((p) => p.startsAt.getTime() <= t && t < p.cutoffAt.getTime())
+  return periods.find((p) => p.startsAt.getTime() <= t && t < periodEnd(p).getTime())
 }
 
 // ── Proposals (period agreement) ─────────────────────────────────────────────────────────
@@ -199,8 +273,8 @@ export interface PeriodProposal<S> {
   closedBy: PersonId | null
 }
 
-/** A change of one period's cutoff/levels; the period is the one starting at `periodStartsAt`. */
-export type PeriodSettingsProposal = PeriodProposal<PeriodSettings> & { periodStartsAt: Date }
+/** A change of one period's cutoff/levels; the period is the one after `afterPeriodId`. */
+export type PeriodSettingsProposal = PeriodProposal<PeriodSettings> & { afterPeriodId: PeriodId }
 export type DefaultsProposal = PeriodProposal<PeriodDefaults>
 
 /** Every active taker and at least one active giver approved (spec §3), checked now. */
@@ -234,25 +308,26 @@ function isPartyId(people: readonly Person[], id: PersonId): boolean {
 
 /**
  * [call] Any party proposes a different cutoff/levels for the period after `current` (the
- * running period), so it starts at `current.cutoffAt`. `existing` = earlier proposals for that
- * period; [call] refused while one is pending, or once one is agreed (that one stands).
+ * running period). `existing` = earlier proposals for that period; [call] refused while one is
+ * pending, or once one is agreed (that one stands). Refused once `current` is no longer running:
+ * the period after it has started.
  */
 export function proposePeriodSettings(
   people: readonly Person[],
   proposerId: PersonId,
-  current: PeriodSpan,
+  current: Period,
   settings: PeriodSettings,
   existing: readonly PeriodSettingsProposal[],
   now: Date,
 ): Result<PeriodSettingsProposal, PeriodError> {
-  const periodStartsAt = current.cutoffAt
   if (!isPartyId(people, proposerId)) return fail('not_a_party')
-  if (now.getTime() >= periodStartsAt.getTime()) return fail('already_started')
-  if (!isValidPeriodSettings(settings, periodStartsAt)) return fail('invalid_settings')
+  if (!isRunning(current, now)) return fail('already_started')
+  // At most the planned start: an early end only moves the start earlier.
+  if (!isValidPeriodSettings(settings, current.cutoffAt)) return fail('invalid_settings')
   if (hasPending(existing)) return fail('proposal_pending')
   if (hasAgreed(existing)) return fail('already_agreed')
   const proposal: PeriodSettingsProposal = {
-    periodStartsAt,
+    afterPeriodId: current.id,
     settings,
     proposedBy: proposerId,
     approvedBy: [proposerId],
@@ -310,14 +385,22 @@ function approve<P extends PeriodProposal<unknown>>(
   return ok(resolvePeriodProposal(approved, people))
 }
 
-/** A party approves a per-period change; refused once the period has started. */
+/** The period a proposal follows is `current` and still running: its period has not started. */
+const isOpenFor = (proposal: PeriodSettingsProposal, current: Period, now: Date) =>
+  proposal.afterPeriodId === current.id && isRunning(current, now)
+
+/**
+ * A party approves a per-period change; refused once the period has started. `current` = the
+ * running period (or the latest one).
+ */
 export function approvePeriodSettings(
   proposal: PeriodSettingsProposal,
   people: readonly Person[],
   approverId: PersonId,
+  current: Period,
   now: Date,
 ): Result<PeriodSettingsProposal, PeriodError> {
-  if (proposal.status === 'pending' && now.getTime() >= proposal.periodStartsAt.getTime()) {
+  if (proposal.status === 'pending' && !isOpenFor(proposal, current, now)) {
     return fail('already_started')
   }
   return approve(proposal, people, approverId)
@@ -358,14 +441,14 @@ export function withdrawPeriodProposal<P extends PeriodProposal<unknown>>(
 
 /**
  * A per-period change still pending when its period starts lapses: it needed agreement before
- * the start (spec §5.8). Returns the proposal unchanged otherwise.
+ * the start (spec §5.8). `current` = the running period (or the latest one). Returns the
+ * proposal unchanged otherwise.
  */
 export function lapsePeriodSettings(
   proposal: PeriodSettingsProposal,
+  current: Period,
   now: Date,
 ): PeriodSettingsProposal {
-  if (proposal.status !== 'pending' || now.getTime() < proposal.periodStartsAt.getTime()) {
-    return proposal
-  }
+  if (proposal.status !== 'pending' || isOpenFor(proposal, current, now)) return proposal
   return { ...proposal, status: 'lapsed' }
 }

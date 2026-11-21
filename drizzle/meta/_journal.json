@@ -96,8 +96,29 @@
     {
       "idx": 13,
       "version": "6",
-      "when": 1795301637798,
-      "tag": "0013_feature_flags",
+      "when": 1795290304167,
+      "tag": "0013_periods",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1795292160270,
+      "tag": "0014_settlements",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1795292161030,
+      "tag": "0015_settlements_final",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1795302589405,
+      "tag": "0016_feature_flags",
       "breakpoints": true
     }
   ]

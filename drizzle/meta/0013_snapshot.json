@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "2d1d5f6b-d653-4726-a643-7d4abdbddfa3",
+  "id": "44f66ec8-bf9f-4128-ab40-fd72c55960fe",
   "prevId": "50adb5e1-5854-4726-a84b-c8620e73bfca",
   "tables": {
     "audit_log": {
@@ -240,35 +240,6 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
-    },
-    "feature_flags": {
-      "name": "feature_flags",
-      "columns": {
-        "key": {
-          "name": "key",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "enabled": {
-          "name": "enabled",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "feature_flags_enabled_check": {
-          "name": "feature_flags_enabled_check",
-          "value": "\"feature_flags\".\"enabled\" IN (0, 1)"
-        }
-      }
     },
     "app_meta": {
       "name": "app_meta",
@@ -1392,6 +1363,86 @@
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
+    },
+    "periods": {
+      "name": "periods",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "starts_at": {
+          "name": "starts_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoff_at": {
+          "name": "cutoff_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ended_at": {
+          "name": "ended_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lower_level": {
+          "name": "lower_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "upper_level": {
+          "name": "upper_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "periods_starts_at_idx": {
+          "name": "periods_starts_at_idx",
+          "columns": [
+            "starts_at"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "periods_span_check": {
+          "name": "periods_span_check",
+          "value": "\"periods\".\"cutoff_at\" > \"periods\".\"starts_at\""
+        },
+        "periods_levels_check": {
+          "name": "periods_levels_check",
+          "value": "\"periods\".\"lower_level\" >= 1 AND \"periods\".\"lower_level\" <= \"periods\".\"upper_level\""
+        },
+        "periods_ended_check": {
+          "name": "periods_ended_check",
+          "value": "\"periods\".\"ended_at\" IS NULL OR (\"periods\".\"ended_at\" > \"periods\".\"starts_at\" AND \"periods\".\"ended_at\" < \"periods\".\"cutoff_at\")"
+        }
+      }
     }
   },
   "views": {},
