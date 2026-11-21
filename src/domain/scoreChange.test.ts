@@ -25,6 +25,7 @@ import {
   acceptLowestTemplateBid,
   acceptTemplateOffer,
   approveOneTimeScoreChange,
+  oneTimeChangeGiver,
   bidTemplateScore,
   counterTemplateScore,
   declineOneTimeScoreChange,
@@ -470,5 +471,19 @@ describe('who a one-time change waits for', () => {
       approveCompletion(value(completeItem(open(), person(OLDER), T0)), person(DAD)),
     )
     expect(waiting(confirmed, change)).toEqual([])
+  })
+})
+
+describe('oneTimeChangeGiver: whose offer a bid-won task holds at the new score', () => {
+  const change = (approvedBy: number[]): ScoreProposal => ({
+    proposedBy: approvedBy[0] ?? OLDER,
+    score: 20,
+    approvedBy,
+  })
+  it('the first active giver who said yes, else null', () => {
+    expect(oneTimeChangeGiver(change([OLDER, MUM, DAD]), withMum)).toBe(MUM)
+    expect(oneTimeChangeGiver(change([DAD, OLDER]), withMum)).toBe(DAD)
+    expect(oneTimeChangeGiver(change([OLDER, DAD, MUM]), deactivate(withMum, DAD))).toBe(MUM)
+    expect(oneTimeChangeGiver(change([OLDER, YOUNGER]), withMum)).toBeNull()
   })
 })

@@ -69,8 +69,6 @@ function runStep(
     const { row: stepped, accepted, closed } = saveItem(tx, row, next.value, {}, now)
     const saved = opts.extra ? opts.extra(tx, row, stepped, people) : stepped
     const actor = { kind: 'user', userId } as const
-    // A score change in flight ends once the task can't change score any more (spec §5.2).
-    discardStaleChange(tx, saved, actor, people, now)
     writeAudit(tx, {
       actor,
       action,
@@ -81,6 +79,9 @@ function runStep(
       reason: opts.reason,
       at: now,
     })
+    // A score change in flight ends once the task can't change score any more (spec §5.2);
+    // logged after the step that ends it, so the history reads cause, then effect.
+    discardStaleChange(tx, saved, actor, people, now)
     return ok(saved)
   })
 }

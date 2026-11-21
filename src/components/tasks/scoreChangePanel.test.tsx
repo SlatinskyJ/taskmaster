@@ -9,7 +9,7 @@ import {
   proposeTaskScoreChangeFn,
   type TaskView,
 } from '~/server/tasks/functions'
-import { CancelForm, cancelData } from './CancelTask'
+import { CancelForm, canCancel, cancelData } from './CancelTask'
 import { ProposeForm, ScoreChangePanel } from './ScoreChangePanel'
 
 // The price panel and the cancel form (#36), rendered statically. As in workButtons.test.tsx,
@@ -103,9 +103,12 @@ describe('a proposal in flight', () => {
   it('Souhlasím approves this change, never declines it', () => {
     renderToStaticMarkup(<ScoreChangePanel task={pending} me={MLADSI} />)
     action.pressed.get(cs.taskPrice.agree)?.onClick?.({})
-    void lastRun()[1]()
+    const [key, fn, success] = lastRun()
+    void fn()
+    expect(key).toBe('price-yes-7')
     expect(approveTaskScoreChangeFn).toHaveBeenCalledWith({ data: { taskId: 1, changeId: 7 } })
     expect(declineTaskScoreChangeFn).not.toHaveBeenCalled()
+    expect(success({ ok: true })).toBe(cs.taskPrice.toast.approved)
   })
 
   it('Nesouhlasím declines this change, never approves it', () => {
@@ -120,6 +123,7 @@ describe('a proposal in flight', () => {
 
   it('the proposer only gets Stáhnout návrh, which declines', () => {
     const html = renderToStaticMarkup(<ScoreChangePanel task={pending} me={TATA} />)
+    expect(html).toContain('Souhlasí: ty ✓')
     expect(html).not.toContain(`>${cs.taskPrice.agree}<`)
     expect(html).not.toContain(`>${cs.taskPrice.disagree}<`)
     action.pressed.get(cs.taskPrice.withdraw)?.onClick?.({})
@@ -230,5 +234,23 @@ describe('cancel form', () => {
     })
     expect(cancelData(1, '   ')).toEqual({ taskId: 1 })
     expect(cancelTaskFn).not.toHaveBeenCalled()
+  })
+})
+
+describe('who sees Zrušit úkol', () => {
+  it('a giver, on a task not yet done: proposed, open, reserved', () => {
+    const table = [
+      ['proposed', true],
+      ['open', true],
+      ['reserved', true],
+      ['done_unconfirmed', false],
+      ['confirmed', false],
+      ['cancelled', false],
+    ] as const
+    for (const [status, giver] of table) {
+      expect([status, canCancel({ status }, TATA)]).toEqual([status, giver])
+      expect([status, canCancel({ status }, STARSI)]).toEqual([status, false])
+      expect([status, canCancel({ status }, { id: 1, role: 'admin' })]).toEqual([status, false])
+    }
   })
 })

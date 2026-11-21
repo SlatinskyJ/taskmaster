@@ -24,7 +24,10 @@ describe('task history', () => {
       ['task.agreed', 'Starší', 20],
       ['task.completed', 'Starší', 20],
     ])
-    expect(history.find((h) => h.action === 'task.agreed')?.reservedBy).toBe('Starší')
+    expect(history.find((h) => h.action === 'task.agreed')?.reservedBy).toEqual({
+      id: f.starsi,
+      name: 'Starší',
+    })
     expect(history.find((h) => h.action === 'task.completed')?.reservedBy).toBeNull()
   })
 

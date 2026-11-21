@@ -220,6 +220,17 @@ export function approveOneTimeScoreChange(
 }
 
 /**
+ * The giver a bid-won reservation names once this change is agreed: the first active giver who
+ * said yes to the new score, or null. A later release reopens that giver's offer (spec §5.4).
+ */
+export function oneTimeChangeGiver(
+  change: ScoreProposal,
+  people: readonly Person[],
+): PersonId | null {
+  return change.approvedBy.find((id) => isGiver(people, id)) ?? null
+}
+
+/**
  * The active people whose yes would still count toward agreeing this change, in `people` order.
  * Open: everyone of each side that has not said yes. Reserved: the reserving taker until he
  * has, plus every giver until one has. Empty once agreed, or when the task can't change.

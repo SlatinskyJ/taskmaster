@@ -18,6 +18,8 @@ describe('historyTime', () => {
   it('Prague time in winter and in summer', () => {
     expect(historyTime(AT)).toBe('so 21. 11. 10:12')
     expect(historyTime('2026-07-04T09:12:00.000Z')).toBe('so 4. 7. 11:12')
+    // Single-digit hour and minute keep their leading zero.
+    expect(historyTime('2026-11-21T07:05:00.000Z')).toBe('so 21. 11. 08:05')
   })
 })
 
@@ -50,9 +52,11 @@ describe('historyLine', () => {
     expect(historyLine(entry({ action: 'task.score_approved', by: null }), 2)).toBe(
       'so 21. 11. 10:12 · souhlas s 8 b',
     )
-    expect(historyLine(entry({ action: 'task.agreed', reservedBy: 'Starší' }), 9)).toBe(
+    const agreed = entry({ action: 'task.agreed', reservedBy: { id: 3, name: 'Starší' } })
+    expect(historyLine(agreed, 9)).toBe(
       'so 21. 11. 10:12 · Táta: domluveno za 8 b · rezervace: Starší',
     )
+    expect(historyLine(agreed, 3)).toBe('so 21. 11. 10:12 · Táta: domluveno za 8 b · rezervace: ty')
   })
 
   it('the old offer action reads as an offer', () => {

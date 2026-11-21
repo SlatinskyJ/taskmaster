@@ -18,7 +18,7 @@ export interface HistoryEntry {
   /** The score the step was about, when it names one. */
   score: number | null
   /** `task.agreed` only: who the task was reserved to by the agreement. */
-  reservedBy: string | null
+  reservedBy: { id: number; name: string } | null
   reason: string | null
 }
 
@@ -47,7 +47,7 @@ export function taskHistory(
       action: e.action as TaskHistoryAction,
       by: e.actorUserId === null ? null : { id: e.actorUserId, name: name(e.actorUserId) },
       score: safeInt(field(e.after, 'score')),
-      reservedBy: reserved === null ? null : name(reserved),
+      reservedBy: reserved === null ? null : { id: reserved, name: name(reserved) },
       reason: e.reason,
     }
   })

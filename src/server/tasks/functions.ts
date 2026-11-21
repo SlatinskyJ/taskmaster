@@ -99,7 +99,6 @@ export function parseAcceptBid(data: unknown): {
   return { ...parseApproval(data), bidders: bidders(record(data).bidders, 1) }
 }
 
-/** A giver's counter: the takers he saw bidding exactly that number (0 to 50). */
 /** A price-change answer: the task and the change the person saw. */
 export function parseChangeAnswer(data: unknown): { taskId: number; changeId: number } {
   const { taskId, changeId } = record(data)
@@ -109,6 +108,7 @@ export function parseChangeAnswer(data: unknown): { taskId: number; changeId: nu
 /** A price-change proposal: the task and the new score. */
 export const parseChangeProposal = (data: unknown) => parseApproval(data)
 
+/** A giver's counter: the takers he saw bidding exactly that number (0 to 50). */
 export function parseCounter(data: unknown): { taskId: number; score: number; bidders: number[] } {
   return { ...parseApproval(data), bidders: bidders(record(data).bidders, 0) }
 }

@@ -161,14 +161,15 @@ function PendingChange({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-bold">{cs.taskPrice.pending}</span>
         <span>
-          <span className="num text-meta text-muted line-through">{task.score} b</span>{' '}
+          <span className="num text-meta text-ink line-through">{task.score} b</span>{' '}
           <span className="num text-title font-bold text-state-proposed-text">
             {change.score} b
           </span>
         </span>
       </div>
-      <p className="text-meta text-muted">
-        {cs.bids.agreed}: {change.approvedBy.map((p) => `${p.name} ✓`).join(', ')}
+      <p className="text-meta text-ink">
+        {cs.bids.agreed}:{' '}
+        {change.approvedBy.map((p) => `${p.id === me.id ? cs.bids.you : p.name} ✓`).join(', ')}
         {change.waitingFor.length > 0 && (
           <>
             <br />
@@ -199,13 +200,13 @@ function PendingChange({
               {cs.taskPrice.agree}
             </Button>
           </div>
-          <p className="text-meta text-muted">{cs.taskPrice.disagreeHint(task.score)}</p>
+          <p className="text-meta text-ink">{cs.taskPrice.disagreeHint(task.score)}</p>
         </>
       )}
       {answer === 'withdraw' && (
         <>
           {no}
-          <p className="text-meta text-muted">{cs.taskPrice.withdrawHint(task.score)}</p>
+          <p className="text-meta text-ink">{cs.taskPrice.withdrawHint(task.score)}</p>
         </>
       )}
     </Card>

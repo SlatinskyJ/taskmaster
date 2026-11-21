@@ -14,7 +14,7 @@ export function historyTime(iso: string): string {
   return `${day} ${String(t.day)}. ${String(t.month)}. ${pad(t.hour)}:${pad(t.minute)}`
 }
 
-function phrase(e: HistoryEntry): string {
+function phrase(e: HistoryEntry, meId: number): string {
   const h = cs.history
   const n = e.score ?? 0
   switch (e.action) {
@@ -30,7 +30,9 @@ function phrase(e: HistoryEntry): string {
     case 'task.score_approved':
       return h.approved(n)
     case 'task.agreed':
-      return e.reservedBy ? h.agreedReserved(n, e.reservedBy) : h.agreed(n)
+      return e.reservedBy
+        ? h.agreedReserved(n, e.reservedBy.id === meId ? h.you : e.reservedBy.name)
+        : h.agreed(n)
     case 'task.reserved':
       return h.reserved
     case 'task.released':
@@ -63,7 +65,7 @@ function phrase(e: HistoryEntry): string {
 /** The line without the reason; the reason, when set, goes on its own line (`historyReason`). */
 export function historyLine(e: HistoryEntry, meId: number): string {
   const who = e.by ? (e.by.id === meId ? cs.history.you : e.by.name) : null
-  const what = phrase(e)
+  const what = phrase(e, meId)
   return `${historyTime(e.at)} · ${who ? `${who}: ${what}` : what}`
 }
 

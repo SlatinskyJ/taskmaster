@@ -213,13 +213,13 @@ describe('saying no (Jakub 2026-11-21: only who it waits for)', () => {
 })
 
 describe('a change in flight is discarded once the task cannot change score', () => {
-  it('Starší marks it done: discarded before the completion is logged, score stays', () => {
+  it('Starší marks it done: discarded, logged after the completion, score stays', () => {
     const f = family()
     const id = reservedTask(f)
     must(proposeTaskScoreChange(f.db, f.tata, id, 20, T2))
     must(completeTask(f.db, f.starsi, id, T3))
     expect(changes(f, id)).toEqual([[20, 'discarded']])
-    expect(audits(f.db, id).slice(-2)).toEqual(['task.score_change_discarded', 'task.completed'])
+    expect(audits(f.db, id).slice(-2)).toEqual(['task.completed', 'task.score_change_discarded'])
     expect(row(f.db, id)?.score).toBe(18)
   })
 
@@ -232,6 +232,21 @@ describe('a change in flight is discarded once the task cannot change score', ()
     must(releaseTask(f.db, f.starsi, id, T3))
     expect(row(f.db, id)?.status).toBe('proposed')
     expect(changes(f, id)).toEqual([[20, 'discarded']])
+  })
+
+  it('a bid-won task at a new price: the giver who agreed to it owns the offer on release', () => {
+    const f = family()
+    const mama = addGiver(f)
+    const id = car(f)
+    must(placeBid(f.db, f.starsi, id, 25, T1))
+    must(acceptOffer(f.db, f.starsi, id, 18, T1))
+    expect(row(f.db, id)?.reservedGiverId).toBe(f.tata)
+    must(proposeTaskScoreChange(f.db, f.starsi, id, 20, T2))
+    must(approveTaskScoreChange(f.db, mama, id, changeId(f, id), T2))
+    expect(row(f.db, id)).toMatchObject({ score: 20, reservedGiverId: mama })
+    must(releaseTask(f.db, f.starsi, id, T3))
+    const detail = getTaskDetail(f.db, id)
+    expect(detail?.task).toMatchObject({ status: 'proposed', score: 20, approverIds: [mama] })
   })
 
   it('a tap reservation released back to open keeps the change', () => {
@@ -320,6 +335,6 @@ describe('cancel discards a change in flight', () => {
     must(proposeTaskScoreChange(f.db, f.tata, id, 20, T2))
     must(cancelTask(f.db, f.tata, id, undefined, T3))
     expect(changes(f, id)).toEqual([[20, 'discarded']])
-    expect(audits(f.db, id).slice(-2)).toEqual(['task.score_change_discarded', 'task.cancelled'])
+    expect(audits(f.db, id).slice(-2)).toEqual(['task.cancelled', 'task.score_change_discarded'])
   })
 })

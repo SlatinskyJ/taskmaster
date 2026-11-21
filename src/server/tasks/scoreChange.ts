@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import {
   approveOneTimeScoreChange,
   declineOneTimeScoreChange,
+  oneTimeChangeGiver,
   proposeOneTimeScoreChange,
   resolveOneTimeChange,
 } from '~/domain'
@@ -111,7 +112,12 @@ export function approveTaskScoreChange(
       at: now,
     })
     if (!result.value.agreed) return ok(task)
-    const { row } = saveItem(tx, task, toItem(task), { set: { score } }, now)
+    // A bid-won reservation names the giver whose offer it was; at the new score that is the
+    // first giver who said yes to it, so a later release reopens their offer, not the old one's.
+    const giverId =
+      task.reservedVia === 'bid' ? oneTimeChangeGiver(result.value.change, people) : null
+    const set = giverId === null ? { score } : { score, reservedGiverId: giverId }
+    const { row } = saveItem(tx, task, toItem(task), { set }, now)
     closeChange(tx, changeId, 'agreed', userId, now)
     writeAudit(tx, {
       actor,
