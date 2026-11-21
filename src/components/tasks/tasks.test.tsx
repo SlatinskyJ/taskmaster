@@ -249,6 +249,10 @@ describe('TakerBoard Moje row (#148)', () => {
     completedBy: null,
     completedAt: null,
     earnerId: null,
+    offeredByName: null,
+    approverIds: [],
+    bids: [],
+    lowest: null,
   }
   const doneButton = (html: string) =>
     buttons(html).find((b) => b.includes(`>${cs.work.done}<`)) ?? ''
