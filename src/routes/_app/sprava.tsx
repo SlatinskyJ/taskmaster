@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import type { PersonFormValues } from '~/components/admin/PersonForm'
 import { PersonDrawer } from '~/components/admin/PersonDrawer'
 import { ResetPasswordDialog } from '~/components/admin/ResetPasswordDialog'
+import { AdminPasskeysControl } from '~/components/auth/AdminPasskeys'
 import { Avatar } from '~/components/shell/Avatar'
 import { Screen } from '~/components/shell/Screen'
 import { SectionLabel } from '~/components/shell/SectionLabel'
@@ -13,6 +14,7 @@ import { Card } from '~/components/ui/card'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { userErrorMessage } from '~/lib/userErrors'
+import { listPasskeyCountsFn } from '~/server/passkeys/functions'
 import type { PersonSummary } from '~/server/users/functions'
 import { createUserFn, listUsersFn, resetPasswordFn, updateUserFn } from '~/server/users/functions'
 
@@ -23,7 +25,10 @@ export const Route = createFileRoute('/_app/sprava')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/sprava')
   },
-  loader: () => listUsersFn(),
+  loader: async () => {
+    const [people, passkeys] = await Promise.all([listUsersFn(), listPasskeyCountsFn()])
+    return { people, passkeys }
+  },
   component: Sprava,
 })
 
@@ -31,7 +36,7 @@ type Sheet = { mode: 'add' } | { mode: 'edit'; person: PersonSummary } | null
 
 function Sprava() {
   const { user } = Route.useRouteContext()
-  const people = Route.useLoaderData()
+  const { people, passkeys } = Route.useLoaderData()
   const router = useRouter()
   const [sheet, setSheet] = useState<Sheet>(null)
   // Kept apart from `sheet` so the drawer can close while its last content fades out.
@@ -86,7 +91,7 @@ function Sprava() {
           {people.map((p) => {
             const self = p.id === user.id
             return (
-              <li key={p.id}>
+              <li key={p.id} className="grid gap-1">
                 <button
                   type="button"
                   aria-label={cs.admin.editPerson(p.displayName)}
@@ -108,6 +113,11 @@ function Sprava() {
                   </span>
                   <ChevronRight aria-hidden="true" className="size-5 shrink-0 text-muted" />
                 </button>
+                <AdminPasskeysControl
+                  userId={p.id}
+                  name={p.displayName}
+                  count={passkeys[p.id] ?? 0}
+                />
               </li>
             )
           })}

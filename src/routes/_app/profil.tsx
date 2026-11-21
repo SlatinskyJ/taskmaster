@@ -2,6 +2,7 @@ import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { ChevronLeft } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { ProfilePasskeys } from '~/components/auth/ProfilePasskeys'
 import { Avatar } from '~/components/shell/Avatar'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { Button, buttonVariants } from '~/components/ui/button'
@@ -13,13 +14,19 @@ import { cs } from '~/lib/strings'
 import { THEME_PREFS, useThemePref, type ThemePref } from '~/lib/theme'
 import { cn } from '~/lib/utils'
 import { logoutFn } from '~/server/auth/functions'
+import { getPasskeysEnabledFn, listMyPasskeysFn } from '~/server/passkeys/functions'
 
-// Profile (UI doc §7.4): light / dark / auto, effects on/off, log out. Both choices are
+// Profile (UI doc §7.4): light / dark / auto, effects on/off, passkeys (#29), log out. Both choices are
 // stored on this device (src/lib/theme.ts, src/lib/effects.ts): a phone and a shared screen
 // may want different ones.
 export const Route = createFileRoute('/_app/profil')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/profil')
+  },
+  // Passkeys are listed with them off too, so old ones can still be removed.
+  loader: async () => {
+    const [enabled, passkeys] = await Promise.all([getPasskeysEnabledFn(), listMyPasskeysFn()])
+    return { enabled, passkeys }
   },
   component: Profile,
 })
@@ -36,6 +43,7 @@ function Profile() {
   const [theme, setTheme] = useThemePref()
   const [effects, setEffects] = useEffectsSwitch()
   const [leaving, setLeaving] = useState(false)
+  const { enabled, passkeys } = Route.useLoaderData()
 
   async function logout() {
     setLeaving(true)
@@ -134,6 +142,8 @@ function Profile() {
             </span>
           </button>
         </Card>
+
+        <ProfilePasskeys enabled={enabled} items={passkeys} />
 
         <Button
           variant="no"

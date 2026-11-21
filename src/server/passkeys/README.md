@@ -33,3 +33,26 @@ instead of a password. Built on `@simplewebauthn/server`. Password login stays a
 
 A passkey made under one RP ID never works under another, so passkeys made on a test host don't
 carry over to production.
+
+## Screens
+
+- `src/lib/passkeys.ts`: the browser side. Runs the ceremony and hands screens a plain outcome
+  (`cancelled` stays quiet). `createLoginFlow` keeps one ceremony at a time on the login screen.
+- `/login`: the passkey button and the username field's autofill, only when passkeys are on and
+  the browser can do them.
+- `/klic`: after a password login without a passkey, the offer ("Nastavit" / "Teď ne"). No
+  bottom bar. Asks again at the next password login.
+- `/profil`: your passkeys (device, added, last used), add this device, remove behind a confirm.
+- `/sprava`: the admin sees each person's count and removes all of a person's passkeys.
+
+The server bundle leaves `@simplewebauthn/server` unbundled (`traceDeps` in `vite.config.ts`):
+bundled, its `reflect-metadata` import ran too late and the login screen failed to load.
+
+## Trying it locally
+
+`pnpm build`, then
+`WEBAUTHN_RP_ID=localhost WEBAUTHN_ORIGIN=http://localhost:3000 TASKMASTER_ENV=preview node .output/server/index.mjs`
+and open `http://localhost:3000` (demo users, password `demo1234`).
+
+`pnpm e2e` runs the browser tests (`e2e/`) against the built server: passkeys on, with Chromium's
+virtual authenticator, and off. Without Playwright's own Chromium, set `PW_CHROMIUM_PATH`.
