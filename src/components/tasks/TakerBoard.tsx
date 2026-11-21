@@ -12,6 +12,8 @@ import { WorkButtons } from './WorkButtons'
  * A taker's work on Domů (UI doc §7.1, until #40 builds the full home): "Moje" (reserved by me,
  * or done and waiting for approval) and "Volné" (open, Rezervovat). Marking an open task done
  * without reserving it is allowed by the server (spec §5.5) and gets its button with #40.
+ * On a reserved "Moje" row, ↶ Uvolnit is an icon button so the name and chip read in full at
+ * 360 px; Hotovo, the main action, keeps its label (mockup Main, #148). See WorkButtons.
  */
 export function TakerBoard({ items, me }: { items: readonly TaskView[]; me: number }) {
   const { busy, run } = useTaskAction()

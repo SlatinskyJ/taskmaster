@@ -3,25 +3,42 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { PointsBar } from '~/components/points/PointsBar'
 import { cs, type ItemStateKey } from '~/lib/strings'
-import type { TaskView } from '~/server/tasks/functions'
+import { completeTaskFn, releaseTaskFn, type TaskView } from '~/server/tasks/functions'
 import { StateChip } from './StateChip'
 import { STATE_CHIP_BG, STATE_DOT, STATE_STRIPE, STATE_TEXT } from './stateStyles'
 import { TaskRow } from './TaskRow'
+import { TakerBoard } from './TakerBoard'
 import { WaitingForYou } from './WaitingForYou'
 import { ToApprove } from './ToApprove'
 
-// ToApprove needs the router (useTaskAction) and server functions; neither runs in a static render.
-const action = vi.hoisted(() => ({ busy: null as string | null }))
+// The task lists need the router (useTaskAction) and server functions; neither runs in a static render.
+const action = vi.hoisted(() => ({ busy: null as string | null, run: vi.fn() }))
 vi.mock('./useTaskAction', () => ({
-  useTaskAction: () => ({ busy: action.busy, run: vi.fn() }),
+  useTaskAction: () => ({ busy: action.busy, run: action.run }),
 }))
-vi.mock('~/server/tasks/functions', () => ({ approveTaskFn: vi.fn(), rejectTaskFn: vi.fn() }))
+vi.mock('~/server/tasks/functions', () => ({
+  approveTaskFn: vi.fn(),
+  rejectTaskFn: vi.fn(),
+  completeTaskFn: vi.fn(),
+  releaseTaskFn: vi.fn(),
+  reserveTaskFn: vi.fn(),
+}))
 vi.mock('./bidCalls', () => ({ callBid: vi.fn(), BID_CALLS: {} }))
 // WaitingForYou's task rows link to the task page (#34); a plain <a> stands in for the router.
 vi.mock('@tanstack/react-router', () => ({
   useRouter: () => ({ invalidate: vi.fn() }),
   Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
 }))
+
+const buttons = (html: string) => html.match(/<button[\s\S]*?<\/button>/g) ?? []
+function byLabel(html: string, label: string): string {
+  const found = buttons(html).filter((b) =>
+    /^<button[^>]*>/.exec(b)?.[0].includes(`aria-label="${label}"`),
+  )
+  if (found.length !== 1)
+    throw new Error(`expected one button "${label}", got ${String(found.length)}`)
+  return found[0] ?? ''
+}
 
 const STATES = Object.keys(cs.state) as ItemStateKey[]
 
@@ -205,15 +222,6 @@ describe('ToApprove', () => {
     earnerId: 4,
     waitingFor: [],
   }
-  const buttons = (html: string) => html.match(/<button[\s\S]*?<\/button>/g) ?? []
-  function byLabel(html: string, label: string): string {
-    const found = buttons(html).filter((b) =>
-      /^<button[^>]*>/.exec(b)?.[0].includes(`aria-label="${label}"`),
-    )
-    if (found.length !== 1)
-      throw new Error(`expected one button "${label}", got ${String(found.length)}`)
-    return found[0] ?? ''
-  }
 
   it('shows ✕ Zamítnout and ✓ Schválit as 44 px icon buttons, each with its own label, colour and icon', () => {
     action.busy = null
@@ -243,3 +251,109 @@ describe('ToApprove', () => {
     expect(byLabel(html, cs.work.reject)).not.toContain('aria-busy="true"')
   })
 })
+
+describe('TakerBoard Moje row (#148)', () => {
+  const reserved: TaskView = {
+    id: 1,
+    title: 'Vyluxovat celý obývák a chodbu',
+    status: 'reserved',
+    score: 18,
+    approvalRequired: true,
+    createdByName: 'Táta',
+    approvedBy: [],
+    reservedBy: { id: 4, name: 'Mladší' },
+    completedBy: null,
+    completedAt: null,
+    earnerId: null,
+    offeredByName: null,
+    approverIds: [],
+    bids: [],
+    lowest: null,
+    waitingFor: [],
+  }
+  const doneButton = (html: string) =>
+    buttons(html).find((b) => b.includes(`>${cs.work.done}<`)) ?? ''
+
+  it('shows ↶ Uvolnit as a 44 px icon button and keeps Hotovo as text', () => {
+    action.busy = null
+    const html = renderToStaticMarkup(<TakerBoard items={[reserved]} me={4} />)
+    const release = byLabel(html, cs.work.release)
+    expect(release).toContain('size-tap')
+    expect(release).toContain('lucide-undo-2')
+    expect(release).not.toContain('lucide-x')
+    expect(release).not.toMatch(/>Uvolnit</)
+    const done = doneButton(html)
+    expect(done).toContain('bg-ok')
+    expect(done).toContain('min-h-tap')
+    expect(html).toContain(cs.state.reserved)
+  })
+
+  it('disables both buttons and marks Uvolnit busy while a release runs', () => {
+    action.busy = 'release-1'
+    const html = renderToStaticMarkup(<TakerBoard items={[reserved]} me={4} />)
+    const release = byLabel(html, cs.work.release)
+    expect(release).toMatch(/<button[^>]*disabled/)
+    expect(release).toMatch(/<button[^>]*aria-busy="true"/)
+    expect(doneButton(html)).toMatch(/<button[^>]*disabled/)
+    expect(doneButton(html)).not.toContain('aria-busy="true"')
+  })
+
+  it('disables Uvolnit, not busy, while Hotovo runs', () => {
+    action.busy = 'done-1'
+    const html = renderToStaticMarkup(<TakerBoard items={[reserved]} me={4} />)
+    const release = byLabel(html, cs.work.release)
+    expect(release).toMatch(/<button[^>]*disabled/)
+    expect(release).not.toContain('aria-busy="true"')
+    expect(doneButton(html)).toMatch(/<button[^>]*aria-busy="true"/)
+  })
+
+  it('Uvolnit releases its own task, not marks it done', async () => {
+    action.busy = null
+    action.run.mockClear()
+    vi.mocked(releaseTaskFn).mockClear()
+    vi.mocked(completeTaskFn).mockClear()
+    const other: TaskView = { ...reserved, id: 7, title: 'Vynést tříděný odpad' }
+    const tree = TakerBoard({ items: [reserved, other], me: 4 })
+    findByLabel(tree, cs.work.release, 1).onClick()
+    expect(action.run).toHaveBeenCalledTimes(1)
+    const [key, call] = action.run.mock.calls[0] as [string, () => Promise<unknown>]
+    expect(key).toBe('release-7')
+    await call()
+    expect(releaseTaskFn).toHaveBeenCalledWith({ data: { taskId: 7 } })
+    expect(completeTaskFn).not.toHaveBeenCalled()
+  })
+
+  it('hides the ↶ icon from screen readers, which read the label', () => {
+    action.busy = null
+    const html = renderToStaticMarkup(<TakerBoard items={[reserved]} me={4} />)
+    expect(byLabel(html, cs.work.release)).toMatch(/<svg[^>]*aria-hidden="true"/)
+  })
+})
+
+/** Walks a React element tree (props, children and hook-free components, not rendered) for the element(s) with this aria-label; `index` picks one of several. */
+function findByLabel(node: unknown, label: string, index?: number): { onClick: () => void } {
+  const found: { onClick: () => void }[] = []
+  const walk = (n: unknown): void => {
+    if (Array.isArray(n)) {
+      n.forEach(walk)
+      return
+    }
+    if (n === null || typeof n !== 'object' || !('props' in n)) return
+    const props = (n as { props: Record<string, unknown> }).props
+    // Hook-free components (TaskRow, WorkButtons, Button) are expanded so their DOM elements are
+    // found; their output already holds whatever of their props they render.
+    const type = (n as { type?: unknown }).type
+    if (typeof type === 'function') {
+      walk((type as (p: unknown) => unknown)(props))
+      return
+    }
+    if (props['aria-label'] === label) found.push(props as unknown as { onClick: () => void })
+    Object.values(props).forEach(walk)
+  }
+  walk(node)
+  if (index === undefined && found.length !== 1)
+    throw new Error(`expected one "${label}", got ${String(found.length)}`)
+  const hit = found[index ?? 0]
+  if (!hit) throw new Error('unreachable')
+  return hit
+}
