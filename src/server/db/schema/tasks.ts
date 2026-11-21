@@ -1,10 +1,18 @@
 import { sql } from 'drizzle-orm'
-import { check, index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import {
+  check,
+  index,
+  integer,
+  primaryKey,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core'
 import { users } from './users'
 
 // One-time tasks (spec §4, §5.2, §5.6). The row holds the lifecycle state and the score: the
 // giver's current offer while `proposed`, the agreed score after that. Never deleted:
-// cancelled is a state (spec §5.10). Bids come with #34.
+// cancelled is a state (spec §5.10). The negotiation (offers and bids) is `task_thread` below.
 
 /** The states a one-time task can be in (spec §5.6). Expired is for instances only. */
 export const TASK_STATUSES = [
@@ -96,3 +104,53 @@ export const taskScoreApprovals = sqliteTable(
 )
 
 export type TaskScoreApprovalRow = typeof taskScoreApprovals.$inferSelect
+
+/** Which side put a number in the thread: the giver side offers, a taker bids (spec §5.2). */
+export const THREAD_SIDES = ['giver', 'taker'] as const
+/** How a thread row closed: the same side put a new number, the task was agreed at it, or at something else. */
+export const THREAD_CLOSINGS = ['replaced', 'accepted', 'closed'] as const
+
+/**
+ * The negotiation of a one-time task (spec §5.2 path 2): giver-side offers (the first offer, a
+ * counter, the re-offer after a release) and takers' bids. Rows are never deleted, so every
+ * offer and bid stays in the history. While the task is proposed it has exactly one open giver
+ * row, whose score equals `tasks.score` (the current offer is stored twice: only `createTask`,
+ * `counterOffer` and `reopenOffer` write giver rows, each together with `tasks.score`), and at
+ * most one open bid per taker.
+ */
+export const taskThread = sqliteTable(
+  'task_thread',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    taskId: integer('task_id')
+      .notNull()
+      .references(() => tasks.id),
+    /** Who put the number: the offering giver, or the bidding taker. */
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    side: text('side', { enum: THREAD_SIDES }).notNull(),
+    score: integer('score').notNull(),
+    createdAt: text('created_at').notNull(),
+    /** Null while open. */
+    closedAt: text('closed_at'),
+    closedAs: text('closed_as', { enum: THREAD_CLOSINGS }),
+  },
+  (t) => [
+    check('task_thread_side_check', sql`${t.side} IN ('giver', 'taker')`),
+    check('task_thread_score_check', sql`${t.score} >= 1`),
+    check(
+      'task_thread_closed_check',
+      sql`(${t.closedAt} IS NULL AND ${t.closedAs} IS NULL) OR (${t.closedAt} IS NOT NULL AND ${t.closedAs} IS NOT NULL AND ${t.closedAs} IN ('replaced', 'accepted', 'closed'))`,
+    ),
+    uniqueIndex('task_thread_open_offer_idx')
+      .on(t.taskId)
+      .where(sql`closed_at IS NULL AND side = 'giver'`),
+    uniqueIndex('task_thread_open_bid_idx')
+      .on(t.taskId, t.userId)
+      .where(sql`closed_at IS NULL AND side = 'taker'`),
+    index('task_thread_task_idx').on(t.taskId),
+  ],
+)
+
+export type ThreadRow = typeof taskThread.$inferSelect

@@ -133,8 +133,21 @@ describe('approveTaskOffer (spec §5.2 path 1, score agreement)', () => {
       .from(auditLog)
       .where(eq(auditLog.action, 'task.agreed'))
       .get()
-    expect(agreed && JSON.parse(agreed.before ?? 'null')).toEqual({ status: 'proposed' })
-    expect(agreed && JSON.parse(agreed.after ?? 'null')).toEqual({ status: 'open', score: 18 })
+    expect(agreed && JSON.parse(agreed.before ?? 'null')).toEqual({
+      status: 'proposed',
+      score: 18,
+      offerRound: 1,
+    })
+    expect(agreed && JSON.parse(agreed.after ?? 'null')).toEqual({
+      status: 'open',
+      score: 18,
+      offerRound: 1,
+      reservedBy: null,
+      reservedVia: null,
+      reservedGiverId: null,
+      accepted: [1],
+      closed: [],
+    })
   })
 
   it('rolls back the approval and the opening when the audit write fails', () => {
