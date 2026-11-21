@@ -11,6 +11,7 @@ import {
   threadTime,
   toastFor,
   waitingMeta,
+  waitingOnTakers,
   waitingText,
 } from './taskView'
 
@@ -231,5 +232,25 @@ describe('taskView', () => {
     for (const status of ['open', 'proposed', 'done_unconfirmed', 'confirmed'] as const)
       expect(canWorkOn({ ...mine, status }, STARSI)).toBe(false)
     expect(canWorkOn(view({ status: 'reserved', reservedBy: null }), STARSI)).toBe(false)
+  })
+})
+
+describe('waitingOnTakers (GHome "Čeká na kluky", #41)', () => {
+  const TATA = { id: 2, role: 'giver' } as const
+  const boys = [
+    { id: 3, name: 'Starší' },
+    { id: 4, name: 'Mladší' },
+  ]
+
+  it('keeps offers with no bids that wait only for the boys, in list order', () => {
+    const keep = view({ id: 1, waitingFor: boys })
+    const alsoKeep = view({ id: 6, waitingFor: [boys[0] ?? { id: 3, name: 'Starší' }] })
+    const withBids = view({ id: 2, waitingFor: boys, bids: [b(3, 'Starší', 20)] })
+    const waitsForMe = view({ id: 3, waitingFor: [...boys, { id: 2, name: 'Táta' }] })
+    const nobody = view({ id: 4, waitingFor: [] })
+    const open = view({ id: 5, status: 'open', waitingFor: boys })
+    expect(
+      waitingOnTakers([keep, withBids, waitsForMe, nobody, open, alsoKeep], TATA).map((t) => t.id),
+    ).toEqual([1, 6])
   })
 })
