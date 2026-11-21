@@ -79,6 +79,11 @@ describe('mutation run main', () => {
     expect(main(changed, deps)).toBe(1)
   })
 
+  it('passes any other Stryker failure status through (2 → 2)', () => {
+    const { deps } = fakeDeps({ status: 2, writesReport: true })
+    expect(main(changed, deps)).toBe(2)
+  })
+
   it('Stryker status null (killed) → returns 1', () => {
     const { deps } = fakeDeps({ status: null })
     expect(main(changed, deps)).toBe(1)

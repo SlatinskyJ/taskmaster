@@ -145,6 +145,16 @@ describe('survivorReport', () => {
     expect(r.markdown).toContain('… and 50 more in mutation.json')
   })
 
+  it('prints exactly maxLines rows with no "more" line', () => {
+    const source = Array.from({ length: 3 }, () => 'go()').join('\n')
+    const mutants = Array.from({ length: 3 }, (_, i) =>
+      mutant('Survived', 'BlockStatement', [i + 1, 1], [i + 1, 5], '{}'),
+    )
+    const r = survivorReport({ files: { 'src/a.ts': { source, mutants } } }, 3)
+    expect(listLines(r.markdown)).toHaveLength(3)
+    expect(r.markdown).not.toContain('more in mutation.json')
+  })
+
   it('caps at 200 lines by default', () => {
     const source = Array.from({ length: 201 }, () => 'go()').join('\n')
     const mutants = Array.from({ length: 201 }, (_, i) =>
