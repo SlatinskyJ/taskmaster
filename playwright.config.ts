@@ -53,7 +53,7 @@ export default defineConfig({
     },
     {
       name: 'off',
-      testMatch: 'passkeys-off.spec.ts',
+      testMatch: ['passkeys-off.spec.ts', 'home.spec.ts'],
       use: { ...chromium, baseURL: `http://localhost:${String(OFF)}` },
     },
   ],

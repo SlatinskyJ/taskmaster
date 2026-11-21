@@ -374,6 +374,10 @@ export const cs = {
     /** Tick labels under the points bar, UI doc §3: `spodní 50`, `horní 100`. */
     lowerTick: 'spodní',
     upperTick: 'horní',
+    /** Under the bar on Domů (mockup Main): how far the certain points are from the next level. */
+    missingLower: (n: number) => `Do spodní hranice chybí ${formatPoints(n)}.`,
+    missingUpper: (n: number) => `Do horní hranice chybí ${formatPoints(n)}.`,
+    upperDone: 'Horní hranice splněna!',
   },
   /** Effects, UI doc §4. */
   effects: {

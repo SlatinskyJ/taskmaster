@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { login } from '~/server/auth'
 import { auditLog, tasks, templates, templateThread, users } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
+import { takerPoints } from '~/server/points'
 import { listTasks } from '~/server/tasks'
 import { bootstrapAdmin } from '~/server/users'
 import { DEMO_PASSWORD, describeDemo, seedDemo } from './seed'
@@ -40,6 +41,17 @@ describe('demo seed (#62)', () => {
       ['task.bid_placed', 'user'],
       ['task.score_approved', 'user'],
       ['task.agreed', 'user'],
+      // #40: five tasks done (four of them approved), one left open, each agreed on one yes.
+      ...[true, true, false, true, true].flatMap((approved) => [
+        ['task.created', 'user'],
+        ['task.score_approved', 'user'],
+        ['task.agreed', 'user'],
+        ['task.completed', 'user'],
+        ...(approved ? [['task.approved', 'user']] : []),
+      ]),
+      ['task.created', 'user'],
+      ['task.score_approved', 'user'],
+      ['task.agreed', 'user'],
     ])
   })
 
@@ -50,6 +62,12 @@ describe('demo seed (#62)', () => {
     expect(
       all.map((t) => [t.title, t.status, t.score, t.bids.map((b) => [b.name, b.score])]),
     ).toEqual([
+      ['Umýt okna v obýváku i v ložnici', 'open', 5, []],
+      ['Pověsit prádlo', 'confirmed', 25, []],
+      ['Umýt nádobí', 'confirmed', 30, []],
+      ['Vytřít podlahu v kuchyni', 'done_unconfirmed', 12, []],
+      ['Uklidit pokoj', 'confirmed', 25, []],
+      ['Vynést tříděný odpad', 'confirmed', 15, []],
       ['Vyluxovat celý obývák a chodbu', 'reserved', 8, []],
       ['Uklidit sklep', 'proposed', 10, []],
       [
@@ -63,6 +81,17 @@ describe('demo seed (#62)', () => {
       ],
     ])
     expect(all.find((t) => t.status === 'reserved')?.reservedBy?.name).toBe('Starší')
+  })
+
+  it('gives both brothers points (#40): Starší below spodní 50, Mladší past it, plus an open task', () => {
+    const db = createTestDb()
+    seedDemo(db, PREVIEW, T0)
+    expect(takerPoints(db).takers.map((t) => [t.name, t.confirmed, t.pending])).toEqual([
+      ['Starší', 40, 12],
+      ['Mladší', 55, 0],
+    ])
+    const open = listTasks(db).filter((t) => t.status === 'open')
+    expect(open.map((t) => [t.title, t.score])).toEqual([['Umýt okna v obýváku i v ložnici', 5]])
   })
 
   it('demo login works for every role', async () => {
