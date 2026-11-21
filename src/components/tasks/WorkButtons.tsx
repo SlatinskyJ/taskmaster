@@ -6,7 +6,40 @@ import { completeTaskFn, releaseTaskFn, type TaskView } from '~/server/tasks/fun
 import { canWorkOn, type Me } from './taskView'
 import { useTaskAction } from './useTaskAction'
 
-type Run = ReturnType<typeof useTaskAction>['run']
+export type Run = ReturnType<typeof useTaskAction>['run']
+
+/** Hotovo for one task: the main action, with confetti; the toast says whether it waits. */
+export function DoneButton({
+  task,
+  busy,
+  run,
+  wide = false,
+}: {
+  task: Pick<TaskView, 'id'>
+  busy: string | null
+  run: Run
+  wide?: boolean
+}) {
+  const doneKey = `done-${String(task.id)}`
+  return (
+    <Button
+      variant="ok"
+      disabled={busy !== null}
+      aria-busy={busy === doneKey}
+      className={cn(wide && 'w-full')}
+      onClick={(e) => {
+        void run(
+          doneKey,
+          () => completeTaskFn({ data: { taskId: task.id } }),
+          (r) => (r.status === 'confirmed' ? cs.work.toast.done : cs.work.toast.pending),
+          { confetti: e.currentTarget },
+        )
+      }}
+    >
+      {cs.work.done}
+    </Button>
+  )
+}
 
 /**
  * Hotovo and Uvolnit for the brother who has the task (spec §5.4, §5.5), on his Domů row and on
@@ -25,27 +58,8 @@ export function WorkButtons({
   run: Run
   wide?: boolean
 }) {
-  const doneKey = `done-${String(task.id)}`
   const releaseKey = `release-${String(task.id)}`
-  const done = (
-    <Button
-      key="done"
-      variant="ok"
-      disabled={busy !== null}
-      aria-busy={busy === doneKey}
-      className={cn(wide && 'w-full')}
-      onClick={(e) => {
-        void run(
-          doneKey,
-          () => completeTaskFn({ data: { taskId: task.id } }),
-          (r) => (r.status === 'confirmed' ? cs.work.toast.done : cs.work.toast.pending),
-          { confetti: e.currentTarget },
-        )
-      }}
-    >
-      {cs.work.done}
-    </Button>
-  )
+  const done = <DoneButton key="done" task={task} busy={busy} run={run} wide={wide} />
   const release = (
     <Button
       key="release"

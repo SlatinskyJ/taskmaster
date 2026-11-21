@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import { cs } from '~/lib/strings'
 import type { TemplateView } from '~/server/templates/functions'
 
 // Domů itself (#138), rendered statically through its route, so the wiring of the price change
@@ -34,6 +35,15 @@ vi.mock('~/server/tasks/functions', () => ({
   listBoardFn: vi.fn(() => Promise.resolve(['board'])),
   listPendingCompletionsFn: vi.fn(() => Promise.resolve(['toApprove'])),
   listBidsToAnswerFn: vi.fn(() => Promise.resolve(['bids'])),
+}))
+const points = vi.hoisted(() => ({
+  value: {
+    levels: { lower: 40, upper: 90 },
+    takers: [{ id: 4, name: 'Starší', confirmed: 18, pending: 5 }],
+  },
+}))
+vi.mock('~/server/points/functions', () => ({
+  getPointsFn: vi.fn(() => Promise.resolve(['points'])),
 }))
 vi.mock('~/server/templates/functions', () => ({
   listPendingTemplateApprovalsFn: vi.fn(() => Promise.resolve(['waitingTemplates'])),
@@ -72,6 +82,7 @@ function render(user: PageUser, recurring: TemplateView[]) {
     recurring,
     toApprove: [],
     bids: [],
+    points: user.role === 'taker' ? points.value : undefined,
   }
   const Page = (Route as unknown as { component: () => ReactNode }).component
   return renderToStaticMarkup(<Page />)
@@ -99,6 +110,35 @@ describe('Domů', () => {
   })
 })
 
+describe('Domů points (#40)', () => {
+  const starsi = { id: 4, role: 'taker', displayName: 'Starší' } as const
+
+  it('a brother sees his points card above Čeká na tebe, against the given levels', () => {
+    const html = render(starsi, [])
+    expect(html).toContain('data-slot="points-bar"')
+    expect(html).toContain('18 ✔')
+    expect(html).toContain('5 ⏳')
+    expect(html).toContain('spodní 40')
+    expect(html).toContain('horní 90')
+    expect(html.indexOf('data-slot="points-bar"')).toBeLessThan(html.indexOf(cs.home.waiting))
+  })
+
+  it('a brother with no points sees zeros', () => {
+    const before = points.value
+    points.value = { ...before, takers: [{ id: 4, name: 'Starší', confirmed: 0, pending: 0 }] }
+    const html = render(starsi, [])
+    points.value = before
+    expect(html).toContain('0 ✔')
+    expect(html).toContain('0 ⏳')
+  })
+
+  it('a parent’s Domů has no points bar', () => {
+    expect(render({ id: 2, role: 'giver', displayName: 'Táta' }, [])).not.toContain(
+      'data-slot="points-bar"',
+    )
+  })
+})
+
 describe('Domů loader', () => {
   type Loader = (args: { context: { user: { role: string } } }) => Promise<Record<string, unknown>>
   const load = (role: string) =>
@@ -113,6 +153,7 @@ describe('Domů loader', () => {
       recurring: ['recurring'],
       toApprove: [],
       bids: [],
+      points: ['points'],
     })
   })
 

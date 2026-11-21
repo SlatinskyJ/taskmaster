@@ -2,7 +2,12 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ButtonModule from '~/components/ui/button'
 import { cs } from '~/lib/strings'
-import { completeTaskFn, releaseTaskFn, type TaskView } from '~/server/tasks/functions'
+import {
+  completeTaskFn,
+  releaseTaskFn,
+  reserveTaskFn,
+  type TaskView,
+} from '~/server/tasks/functions'
 import { TakerBoard } from './TakerBoard'
 import { TaskWorkPanel } from './WorkButtons'
 
@@ -74,6 +79,7 @@ beforeEach(() => {
   action.pressed.clear()
   vi.mocked(completeTaskFn).mockReset()
   vi.mocked(releaseTaskFn).mockReset()
+  vi.mocked(reserveTaskFn).mockReset()
 })
 
 describe('TaskWorkPanel (task page)', () => {
@@ -151,5 +157,60 @@ describe('TakerBoard Moje row (Domů)', () => {
     expect(html).toContain('Vynést koše')
     action.pressed.get(cs.work.release)?.onClick?.({ currentTarget: null })
     expect(lastRun()[0]).toBe('release-1')
+  })
+})
+
+describe('TakerBoard Volné row (Domů, #40)', () => {
+  const open = view({
+    id: 7,
+    title: 'Umýt okna v obýváku i v ložnici',
+    status: 'open',
+    reservedBy: null,
+  })
+
+  it('an open row has icon Rezervovat, then Hotovo, both 44 px', () => {
+    const html = renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
+    expect(html).toContain('Umýt okna v obýváku i v ložnici')
+    expect(count(html, `aria-label="${cs.work.reserve}"`)).toBe(1)
+    expect(count(html, `>${cs.work.reserve}<`)).toBe(0)
+    expect(html.indexOf(`aria-label="${cs.work.reserve}"`)).toBeLessThan(
+      html.indexOf(`>${cs.work.done}<`),
+    )
+    expect(html).toMatch(
+      new RegExp(
+        `aria-label="${cs.work.reserve}"[^>]*title="${cs.work.reserve}"|title="${cs.work.reserve}"[^>]*aria-label="${cs.work.reserve}"`,
+      ),
+    )
+    expect(html).toContain('size-tap')
+  })
+
+  it('Rezervovat reserves, it does not complete', () => {
+    renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
+    action.pressed.get(cs.work.reserve)?.onClick?.({ currentTarget: null })
+    const [key, fn, success] = lastRun()
+    expect(key).toBe('reserve-7')
+    void fn()
+    expect(reserveTaskFn).toHaveBeenCalledWith({ data: { taskId: 7 } })
+    expect(completeTaskFn).not.toHaveBeenCalled()
+    expect(success({ ok: true, status: 'reserved' })).toBe(cs.work.toast.reserved)
+  })
+
+  it('Hotovo completes the open task with confetti, without reserving it', () => {
+    renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
+    const el = { tag: 'button' }
+    action.pressed.get(cs.work.done)?.onClick?.({ currentTarget: el })
+    const [key, fn, , opts] = lastRun()
+    expect(key).toBe('done-7')
+    expect(opts).toEqual({ confetti: el })
+    void fn()
+    expect(completeTaskFn).toHaveBeenCalledWith({ data: { taskId: 7 } })
+    expect(reserveTaskFn).not.toHaveBeenCalled()
+  })
+
+  it('both are disabled while anything on the board runs', () => {
+    action.busy = 'done-1'
+    renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
+    expect(action.pressed.get(cs.work.reserve)?.disabled).toBe(true)
+    expect(action.pressed.get(cs.work.done)?.disabled).toBe(true)
   })
 })
