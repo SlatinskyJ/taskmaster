@@ -1,4 +1,3 @@
-// Throwaway: exercises the mutation CI job once (#155); reverted in the next commit.
 import type { Person, PersonId } from './parties'
 import { findPerson, isActiveAdmin, isActiveGiver } from './parties'
 import type { Result } from './result'
