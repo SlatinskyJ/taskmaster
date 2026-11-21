@@ -1,0 +1,246 @@
+import { asc } from 'drizzle-orm'
+import {
+  DEFAULT_PERIOD_DEFAULTS,
+  findPerson,
+  isActiveGiver,
+  isRunning,
+  periodEnd,
+  periodToSettle,
+  runningTotal,
+  settle,
+} from '~/domain'
+import type {
+  Level,
+  Levels,
+  Period,
+  PeriodError,
+  PeriodId,
+  Person,
+  SettlementError,
+  SettlementRecord,
+} from '~/domain'
+import { toIsoUtc } from '~/domain/dates'
+import { fail, ok } from '~/domain/result'
+import type { Result } from '~/domain/result'
+import { writeAudit } from '~/server/audit'
+import type { Actor, Tx } from '~/server/audit'
+import type { Db } from '~/server/db'
+import { settlements, users } from '~/server/db/schema'
+import type { SettlementRow } from '~/server/db/schema'
+import { endRunningPeriod, listPeriods } from '~/server/periods'
+import { listPendingCompletions } from '~/server/tasks/tasks'
+import type { TaskView } from '~/server/tasks/tasks'
+import { listPeople } from '~/server/users/people'
+import { ledgerEntries } from './ledger'
+
+// The weekly meeting (spec §5.9): step 1 clears pending items, step 2 settles. Which week the
+// meeting settles is the domain's `periodToSettle` (oldest unsettled ended week first, then the
+// running one). Settling writes one final record per active taker; for the running week it
+// also ends the week now and starts the next one (§5.8). One transaction for all of it.
+
+export interface MeetingTaker {
+  id: number
+  name: string
+  total: number
+  level: Level
+  deducted: number
+  carryOver: number
+}
+
+export type Meeting =
+  | { period: null }
+  | {
+      period: {
+        id: number
+        startsAt: string
+        /** The week's end for its totals: now for the running week, else its end. */
+        endsAt: string
+        running: boolean
+        levels: Levels
+      }
+      /** Completions done before `endsAt` that still wait for a giver (step 1). */
+      pending: TaskView[]
+      /** What confirming would write, per active taker. */
+      takers: MeetingTaker[]
+    }
+
+export type SettleError =
+  | SettlementError
+  | PeriodError
+  | 'not_found'
+  | 'nothing_to_settle'
+  | 'wrong_period'
+  | 'pending_items'
+  | 'already_settled'
+  | 'totals_changed'
+
+export interface ShownTotal {
+  takerId: number
+  total: number
+}
+
+function settledIds(db: Db | Tx): Set<PeriodId> {
+  return new Set(
+    db
+      .select({ periodId: settlements.periodId })
+      .from(settlements)
+      .all()
+      .map((s) => s.periodId),
+  )
+}
+
+function takersOf(db: Db | Tx, people: readonly Person[]) {
+  return db
+    .select({ id: users.id, name: users.displayName })
+    .from(users)
+    .orderBy(asc(users.id))
+    .all()
+    .filter((u) => {
+      const p = findPerson(people, u.id)
+      return p?.role === 'taker' && p.active
+    })
+}
+
+interface Preview {
+  end: Date
+  pending: TaskView[]
+  records: (SettlementRecord & { name: string })[]
+}
+
+/** The totals and records for `target`, as of `now`. `settleBy` = any giver id for the preview. */
+function preview(
+  db: Db | Tx,
+  people: readonly Person[],
+  giverId: number,
+  target: Period,
+  now: Date,
+): Result<Preview, SettlementError> {
+  const end = isRunning(target, now) ? now : periodEnd(target)
+  const pending = listPendingCompletions(db).filter(
+    (t) => t.completedAt !== null && t.completedAt < toIsoUtc(end),
+  )
+  const entries = ledgerEntries(db, end)
+  const records: Preview['records'] = []
+  for (const taker of takersOf(db, people)) {
+    const total = runningTotal(entries, taker.id)
+    const r = settle(people, giverId, target.id, taker.id, total, target.levels)
+    if (!r.ok) return r
+    records.push({ ...r.value, name: taker.name })
+  }
+  return ok({ end, pending, records })
+}
+
+/** What the meeting screen shows now (read-only). `{ period: null }` = nothing to settle. */
+export function getMeeting(db: Db | Tx, now: Date): Meeting {
+  const people = listPeople(db)
+  const target = periodToSettle(listPeriods(db), settledIds(db), now)
+  // The preview needs a giver for the domain's `settle`; with none there is nobody to settle.
+  const giver = people.find(isActiveGiver)
+  if (!target || !giver) return { period: null }
+  const p = preview(db, people, giver.id, target, now)
+  if (!p.ok) return { period: null }
+  return {
+    period: {
+      id: target.id,
+      startsAt: toIsoUtc(target.startsAt),
+      endsAt: toIsoUtc(p.value.end),
+      running: isRunning(target, now),
+      levels: target.levels,
+    },
+    pending: p.value.pending,
+    takers: p.value.records.map((r) => ({
+      id: r.takerId,
+      name: r.name,
+      total: r.totalBefore,
+      level: r.level,
+      deducted: r.deducted,
+      carryOver: r.carryOver,
+    })),
+  }
+}
+
+function sameTotals(records: readonly SettlementRecord[], shown: readonly ShownTotal[]): boolean {
+  if (records.length !== shown.length) return false
+  return records.every((r) =>
+    shown.some((s) => s.takerId === r.takerId && s.total === r.totalBefore),
+  )
+}
+
+class Refused extends Error {
+  constructor(readonly code: SettleError) {
+    super(code)
+  }
+}
+
+/**
+ * The giver confirms step 2 for `periodId` with the totals the screen showed. Refused unless
+ * that period is the one to settle now, nothing is pending before its end, and the totals are
+ * unchanged. Writes a final record and a `settlement.created` audit entry per active taker; if
+ * the week is still running, ends it now and starts the next one. One transaction.
+ */
+export function settlePeriod(
+  db: Db,
+  giverId: number,
+  periodId: number,
+  shown: readonly ShownTotal[],
+  now: Date,
+): Result<{ period: Period; records: SettlementRow[]; next: Period | null }, SettleError> {
+  try {
+    return db.transaction((tx) => {
+      const people = listPeople(tx)
+      const giver = findPerson(people, giverId)
+      if (!giver || !isActiveGiver(giver)) return fail('not_a_giver')
+      const periods = listPeriods(tx)
+      if (!periods.some((p) => p.id === periodId)) return fail('not_found')
+      const settled = settledIds(tx)
+      if (settled.has(periodId)) return fail('already_settled')
+      const target = periodToSettle(periods, settled, now)
+      if (!target) return fail('nothing_to_settle')
+      if (target.id !== periodId) return fail('wrong_period')
+      const p = preview(tx, people, giverId, target, now)
+      if (!p.ok) return p
+      if (p.value.pending.length > 0) return fail('pending_items')
+      if (!sameTotals(p.value.records, shown)) return fail('totals_changed')
+      const actor: Actor = { kind: 'user', userId: giverId }
+      const records: SettlementRow[] = []
+      for (const r of p.value.records) {
+        const row = tx
+          .insert(settlements)
+          .values({
+            periodId: target.id,
+            takerId: r.takerId,
+            totalBefore: r.totalBefore,
+            level: r.level,
+            deducted: r.deducted,
+            carryOver: r.carryOver,
+            settledBy: giverId,
+            settledAt: toIsoUtc(now),
+          })
+          .returning()
+          .get()
+        writeAudit(tx, {
+          actor,
+          action: 'settlement.created',
+          entityType: 'settlement',
+          entityId: row.id,
+          after: row,
+          at: now,
+        })
+        records.push(row)
+      }
+      let next: Period | null = null
+      let period = target
+      if (isRunning(target, now)) {
+        const ended = endRunningPeriod(tx, actor, target.id, now, DEFAULT_PERIOD_DEFAULTS)
+        // Throwing rolls back the records written above.
+        if (!ended.ok) throw new Refused(ended.error)
+        next = ended.value.next
+        period = ended.value.ended
+      }
+      return ok({ period, records, next })
+    })
+  } catch (err) {
+    if (err instanceof Refused) return fail(err.code)
+    throw err
+  }
+}
