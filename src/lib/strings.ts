@@ -63,6 +63,8 @@ export const cs = {
   },
   /** One-time tasks (#33): GTasks, GCreate, TApprove (UI doc §7). */
   tasks: {
+    /** Úkoly group of proposed tasks, negotiating ones included (#41). */
+    groupProposed: 'Návrhy a vyjednávání',
     new: '+ Nový',
     empty: 'Zatím žádné úkoly.',
     createTitle: 'Nový úkol',
@@ -251,6 +253,8 @@ export const cs = {
     greeting: 'Ahoj',
     /** "Čeká na tebe (2)" (UI doc §6 [call]: always at the top of Domů). */
     waiting: 'Čeká na tebe',
+    /** GHome: offers still waiting for a brother's yes (#41). */
+    waitingOnTakers: 'Čeká na kluky',
   },
   meeting: {
     /** The weekly meeting (spec §5.9, UI doc §7.3), giver only. Title is `cs.nav.meeting`. */
@@ -416,6 +420,12 @@ export const cs = {
     /** Tick labels under the points bar, UI doc §3: `spodní 50`, `horní 100`. */
     lowerTick: 'spodní',
     upperTick: 'horní',
+    /** Under the bar on Domů (mockup Main): how far the certain points are from the next level. */
+    missingLower: (n: number) => `Do spodní hranice chybí ${formatPoints(n)}.`,
+    missingUpper: (n: number) => `Do horní hranice chybí ${formatPoints(n)}.`,
+    upperDone: 'Horní hranice splněna!',
+    /** GHome: every taker's points this week (#41). */
+    takersTitle: 'Kluci tento týden',
   },
   /** Effects, UI doc §4. */
   effects: {

@@ -72,7 +72,7 @@ export function ToApprove({ items }: { items: readonly TaskView[] }) {
                           `approve-${String(t.id)}`,
                           () => approveTaskFn({ data: { taskId: t.id } }),
                           () => cs.work.toast.approved,
-                          { confetti: e.currentTarget },
+                          { confetti: e.currentTarget, float: t.score },
                         )
                       }}
                     >
