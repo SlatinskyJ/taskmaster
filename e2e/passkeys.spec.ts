@@ -129,6 +129,8 @@ test('passkey story', async ({ page, browser, baseURL }) => {
   // 6. The offer can fail and still be skipped: failed text, buttons back, Teď ne → target.
   await passwordLogin(page, 'starsi', '/login?redirect=/tyden')
   await expect(page).toHaveURL(/\/klic/)
+  // Wait for the offer to load before failing the server calls, or its loader fails instead.
+  await expect(page.getByRole('button', { name: cs.passkeys.offerSet })).toBeEnabled()
   await page.route(SERVER_FN, (route) => route.abort())
   await page.getByRole('button', { name: cs.passkeys.offerSet }).click()
   await expect(page.getByText(cs.login.failed)).toBeVisible()

@@ -3,13 +3,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { defineConfig, devices } from '@playwright/test'
 
-// Browser tests against the built server (`pnpm build` first). Two servers on fresh, empty
+// Browser tests against the built server (`pnpm build` first). Three servers on fresh, empty
 // data folders seeded with the demo family: one with passkeys on (localhost), one with them
-// off, as on every preview. Locally, point PW_CHROMIUM_PATH at a Chromium if Playwright's own
+// off, as on every preview, and one for the task page flows (#36). Locally, point PW_CHROMIUM_PATH at a Chromium if Playwright's own
 // is not installed.
 
 const ON = 3100
 const OFF = 3101
+/** Task page flows (#36): own server and data folder, so they never touch the others' data. */
+const TASKS = 3102
 
 // The off server's data folder, shared with its spec (which adds a passkey row directly).
 // Playwright loads this file again in each worker; the env var keeps the folder the same.
@@ -56,6 +58,11 @@ export default defineConfig({
       testMatch: 'passkeys-off.spec.ts',
       use: { ...chromium, baseURL: `http://localhost:${String(OFF)}` },
     },
+    {
+      name: 'tasks',
+      testMatch: 'task-page.spec.ts',
+      use: { ...chromium, baseURL: `http://localhost:${String(TASKS)}` },
+    },
   ],
   webServer: [
     server(ON, {
@@ -63,5 +70,6 @@ export default defineConfig({
       WEBAUTHN_ORIGIN: `http://localhost:${String(ON)}`,
     }),
     server(OFF, { DATA_DIR: process.env.TM_E2E_OFF_DATA_DIR }),
+    server(TASKS, {}),
   ],
 })
