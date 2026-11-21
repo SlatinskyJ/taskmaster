@@ -317,14 +317,18 @@ jobs:
           docker buildx imagetools inspect "${IMAGE}:${short}"
 
   # main only: roll the image `publish` just pushed out to production (runbook
-  # docs/runbooks/prod-host.md). Same path as previews: an ephemeral tag:tm-ci node whose only
-  # access is Tailscale SSH as `deploy`, whose shell is deploy/prod/tm-prod. Runs only when the
-  # PROD_HOST repository variable is set, so no host name lives in this repo. Not a required check.
+  # docs/runbooks/prod-host.md). Like previews, an ephemeral tailnet node whose only access is
+  # Tailscale SSH as `deploy`, whose shell is deploy/prod/tm-prod. But it has its own tag
+  # (tag:tm-cd-prod) and OAuth client, whose secrets live only in the `production` environment,
+  # which admits only `main`: a PR run, which runs its branch's own workflow, can never get them.
+  # Runs only when the PROD_HOST repository variable is set, so no host name lives in this repo.
+  # Not a required check.
   deploy-prod:
     name: deploy prod
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PROD_HOST != ''
     needs: [publish]
     runs-on: ubuntu-24.04
+    environment: production
     timeout-minutes: 10
     # One production deploy at a time; a newer main waits for the running one instead of cutting it off.
     concurrency:
@@ -337,9 +341,9 @@ jobs:
     steps:
       - uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4.4.0
         with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:tm-ci
+          oauth-client-id: ${{ secrets.TS_PROD_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_PROD_OAUTH_SECRET }}
+          tags: tag:tm-cd-prod
           ping: ${{ env.PROD_HOST }}
       - name: Deploy on the production host
         run: |
