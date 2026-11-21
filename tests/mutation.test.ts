@@ -12,13 +12,21 @@ describe('mutateTargets', () => {
     expect(
       mutateTargets([
         { filename: 'src/b.tsx', status: 'modified' },
+        { filename: 'src/lib/testingTools.ts', status: 'modified' },
         { filename: 'src/a.ts', status: 'added' },
         { filename: 'src/c.ts', status: 'renamed' },
         { filename: 'src/d.ts', status: 'copied' },
         { filename: 'src/e.ts', status: 'changed' },
         { filename: 'src/a.ts', status: 'modified' },
       ]),
-    ).toEqual(['src/a.ts', 'src/b.tsx', 'src/c.ts', 'src/d.ts', 'src/e.ts'])
+    ).toEqual([
+      'src/a.ts',
+      'src/b.tsx',
+      'src/c.ts',
+      'src/d.ts',
+      'src/e.ts',
+      'src/lib/testingTools.ts',
+    ])
   })
 
   it('drops removed files, tests, generated and test-support files, and anything outside src/', () => {
@@ -29,6 +37,7 @@ describe('mutateTargets', () => {
         { filename: 'src/x.test.tsx', status: 'modified' },
         { filename: 'src/routeTree.gen.ts', status: 'modified' },
         { filename: 'src/server/db/testing.ts', status: 'modified' },
+        { filename: 'src/server/tasks/testing.ts', status: 'added' },
         { filename: 'scripts/a.ts', status: 'modified' },
         { filename: 'tests/a.test.ts', status: 'modified' },
         { filename: 'src/styles/app.css', status: 'modified' },

@@ -35,7 +35,9 @@ export interface StrykerReport {
   files: Record<string, { source: string; mutants: StrykerMutant[] }>
 }
 
-const NOT_MUTATED = new Set(['src/routeTree.gen.ts', 'src/server/db/testing.ts'])
+const GENERATED = 'src/routeTree.gen.ts'
+/** Tests, and test-support modules (`createTestDb()` and friends live in `testing.ts`). */
+const TEST_CODE = /(\.test\.tsx?|\/testing\.ts)$/
 
 /** The added or changed source files of a PR, sorted and unique. Deleted files are left out. */
 export function mutateTargets(files: readonly PrFile[]): string[] {
@@ -43,7 +45,7 @@ export function mutateTargets(files: readonly PrFile[]): string[] {
   for (const { filename, status } of files) {
     if (status === 'removed') continue
     if (!/^src\/.*\.tsx?$/.test(filename)) continue
-    if (/\.test\.tsx?$/.test(filename) || NOT_MUTATED.has(filename)) continue
+    if (filename === GENERATED || TEST_CODE.test(filename)) continue
     targets.add(filename)
   }
   return [...targets].sort()
