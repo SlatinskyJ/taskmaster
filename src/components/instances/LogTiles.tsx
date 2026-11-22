@@ -54,7 +54,7 @@ export function LogTiles({
           >
             <span className="line-clamp-3 break-words">{t.title}</span>
             {t.onBoard ? (
-              <span className="text-meta text-muted">{cs.log.onBoard}</span>
+              <span className="text-meta">{cs.log.onBoard}</span>
             ) : (
               <span className="num font-bold whitespace-nowrap text-state-pending-text">
                 {cs.log.points(t.score)}
