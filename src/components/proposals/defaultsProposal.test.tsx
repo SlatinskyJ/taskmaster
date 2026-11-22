@@ -3,10 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ButtonModule from '~/components/ui/button'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import { cs } from '~/lib/strings'
-import { proposeDefaultsFn } from '~/server/periods/functions'
-import { DefaultsProposalView } from './DefaultsProposalScreen'
+import { approveProposalFn, proposeDefaultsFn, rejectProposalFn } from '~/server/periods/functions'
+import { DefaultsProposalScreen, DefaultsProposalView } from './DefaultsProposalScreen'
 import type { DefaultsProposalViewProps } from './DefaultsProposalScreen'
-import { defaultsProposal, proposalsView, STARSI, TATA } from './fixtures'
+import { defaultsProposal, MAMA, proposalsView, STARSI, TATA } from './fixtures'
 import { proposeDefaults } from './proposalCalls'
 
 // Výchozí týden for parents (#43, UI doc §7.2 GDefaults), rendered statically.
@@ -31,13 +31,14 @@ vi.mock('~/components/ui/button', async (original) => {
   }
 })
 vi.mock('~/server/periods/functions', () => ({
-  approveProposalFn: vi.fn(),
+  approveProposalFn: vi.fn(() => Promise.resolve({ ok: true, status: 'pending' })),
   rejectProposalFn: vi.fn(),
   withdrawProposalFn: vi.fn(),
   proposePeriodFn: vi.fn(),
   proposeDefaultsFn: vi.fn(() => Promise.resolve({ ok: true, status: 'pending' })),
 }))
 vi.mock('@tanstack/react-router', () => ({ useRouter: () => ({ invalidate: vi.fn() }) }))
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 const t = cs.proposals
 const D = DEFAULT_PERIOD_DEFAULTS
@@ -116,5 +117,18 @@ describe('Výchozí týden (parents)', () => {
     render({ form: { ...D, lengthDays: 14 }, busy: 'propose' })
     expect(button(t.sending)?.disabled).toBe(true)
     expect(button(t.proposeAll)).toBeUndefined()
+  })
+
+  it('the screen: a second parent’s Souhlasím approves at once; Nesouhlasím asks first', () => {
+    const view = proposalsView({
+      defaults: defaultsProposal({ waitingFor: [MAMA, STARSI] }),
+      parties: [...proposalsView().parties, { id: MAMA, name: 'Máma', role: 'giver' }],
+    })
+    pressed.list = []
+    renderToStaticMarkup(<DefaultsProposalScreen view={view} me={MAMA} />)
+    button(t.reject)?.onClick?.()
+    expect(rejectProposalFn).not.toHaveBeenCalled()
+    button(t.approve)?.onClick?.()
+    expect(approveProposalFn).toHaveBeenCalledExactlyOnceWith({ data: { kind: 'defaults', id: 1 } })
   })
 })

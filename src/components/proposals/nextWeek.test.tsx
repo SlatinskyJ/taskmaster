@@ -164,6 +164,16 @@ describe('Příští týden', () => {
     expect(html).not.toContain(t.confirm.withdraw.body)
   })
 
+  it('saying no to a default week keeps the reject text', () => {
+    const html = renderToStaticMarkup(
+      <Dialog open>
+        <ConfirmBody kind="defaults" action="reject" busy={false} onConfirm={noop} onBack={noop} />
+      </Dialog>,
+    )
+    expect(html).toContain(t.confirm.reject.body)
+    expect(html).not.toContain(t.confirm.withdraw.bodyDefaults)
+  })
+
   it('the withdraw dialog has its own text', () => {
     const html = renderToStaticMarkup(
       <Dialog open>
@@ -383,6 +393,8 @@ describe('Příští týden', () => {
     const onFormChange = vi.fn()
     inputs.change = []
     render({ form, onFormChange })
+    expect(pressed.list.find((b) => b.name === t.shorter)?.disabled).toBe(false)
+    expect(pressed.list.find((b) => b.name === t.proposeAll)?.disabled).toBe(false)
     press(t.longer)
     press(t.shorter)
     press(cs.admin.defaults.more(t.lower))
