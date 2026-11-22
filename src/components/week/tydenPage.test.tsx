@@ -21,7 +21,7 @@ vi.mock('~/server/settlement/functions', () => ({
   getWeekFn: vi.fn(() => Promise.resolve('week')),
 }))
 
-const { Route } = await import('~/routes/_app/tyden')
+const { Route } = await import('~/routes/_app/tyden/index')
 const Page = (Route as unknown as { component: () => ReactNode }).component
 
 describe('Týden page', () => {

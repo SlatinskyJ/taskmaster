@@ -59,6 +59,8 @@ describe('canSee', () => {
     '/': 'taker giver',
     '/zapsat': 'taker',
     '/tyden': 'taker giver',
+    '/tyden/pristi': 'taker giver',
+    '/tyden/vychozi': 'giver',
     '/ukoly': 'giver',
     '/ukoly/novy': 'giver',
     '/schuzka': 'giver',
