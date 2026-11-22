@@ -3,6 +3,7 @@ import type { FeatureKey } from '~/lib/features'
 import {
   bootTick,
   cancelled,
+  disputes,
   instances,
   negotiation,
   pastWeek,
@@ -44,6 +45,8 @@ export const SEEDS = {
   scheduler: { pieces: [pastWeekScheduled, bootTick], features: ['recurring'] },
   /** Příští týden and Výchozí týden (#43): an open proposal of each kind. */
   proposals: { pieces: [thisWeek, proposals], features: ['week', 'periodProposals'] },
+  /** Disputes (#46): a confirmed and a rejected item this week, a settled past week. */
+  disputes: { pieces: [pastWeek, thisWeek, disputes], features: ['week', 'disputes'] },
   /** Previews and dev: everything. */
   demo: {
     pieces: [
@@ -54,6 +57,7 @@ export const SEEDS = {
       points,
       templates,
       thisWeek,
+      disputes,
       instances,
       proposals,
       bootTick,

@@ -72,7 +72,7 @@ function openOn(tx: Tx, item: DisputeItem) {
 
 /** A taker or giver disputes a locked item with a reason (stored trimmed). */
 export function openDisputeIn(
-  db: Db,
+  db: Db | Tx,
   userId: number,
   item: DisputeItem,
   reason: string,

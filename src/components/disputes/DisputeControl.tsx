@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
-import type { DisputeItem, DisputeMark } from '~/server/disputes/functions'
+import type { DisputeMark } from '~/server/disputes/functions'
 import type { OpenableKind } from '~/server/disputes/functions'
 import { DisputeDrawer } from './DisputeDrawer'
 import { DisputeOutcome } from './DisputeOutcome'
@@ -18,7 +18,7 @@ export function DisputeControl({
   name,
   lead,
 }: {
-  item: DisputeItem & { kind: OpenableKind }
+  item: { kind: OpenableKind; id: number }
   mark: DisputeMark | null
   /** What is disputed, e.g. "Potvrzené splnění". */
   what: string

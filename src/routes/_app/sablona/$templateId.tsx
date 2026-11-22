@@ -1,4 +1,6 @@
 import { createFileRoute, notFound } from '@tanstack/react-router'
+import { DisputeControl } from '~/components/disputes/DisputeControl'
+import { templateDispute } from '~/components/disputes/disputeProps'
 import { EmptyState } from '~/components/EmptyState'
 import { Screen } from '~/components/shell/Screen'
 import { SectionLabel } from '~/components/shell/SectionLabel'
@@ -11,6 +13,7 @@ import { parseIdParam } from '~/lib/idParam'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { templateDetail } from '~/lib/templateText'
+import { getItemMarkFn } from '~/server/disputes/functions'
 import { getTemplateDetailFn } from '~/server/templates/functions'
 
 // A recurring template's price page (#138, TApprove "price change" / GTask "change price", UI doc
@@ -20,7 +23,7 @@ export const Route = createFileRoute('/_app/sablona/$templateId')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/sablona/$templateId')
   },
-  loader: async ({ params }) => {
+  loader: async ({ params, context }) => {
     const templateId = parseIdParam(params.templateId)
     // TanStack Router's notFound() is thrown by design; it is not an Error.
     // eslint-disable-next-line @typescript-eslint/only-throw-error
@@ -28,14 +31,20 @@ export const Route = createFileRoute('/_app/sablona/$templateId')({
     const detail = await getTemplateDetailFn({ data: { templateId } })
     // eslint-disable-next-line @typescript-eslint/only-throw-error
     if (!detail) throw notFound()
-    return detail
+    // Rozporovat (#46): the score's mark, only with the switch on and once active.
+    const mark =
+      context.features.disputes && detail.template.status === 'active'
+        ? await getItemMarkFn({ data: { kind: 'template_score', id: detail.template.id } })
+        : null
+    return { ...detail, disputeMark: mark && 'error' in mark ? null : mark }
   },
   component: TemplatePage,
 })
 
 function TemplatePage() {
-  const { user } = Route.useRouteContext()
-  const { template: t, thread } = Route.useLoaderData()
+  const { user, features } = Route.useRouteContext()
+  const { template: t, thread, disputeMark } = Route.useLoaderData()
+  const dispute = features.disputes ? templateDispute(t) : null
   const me = { id: user.id, role: user.role }
   const chip = templateChip(t)
   const meta = priceMeta(t, me)
@@ -52,6 +61,7 @@ function TemplatePage() {
         {t.status === 'active' && (
           <p className="text-meta text-muted">{cs.templatePrice.futureOnly}</p>
         )}
+        {dispute && <DisputeControl {...dispute} mark={disputeMark} />}
       </Card>
       <section className="grid gap-2" aria-labelledby="history-label">
         <SectionLabel id="history-label">{cs.templatePrice.history}</SectionLabel>

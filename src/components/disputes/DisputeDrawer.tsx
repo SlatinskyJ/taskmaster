@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '~/components/ui/drawer'
 import { cs } from '~/lib/strings'
-import type { DisputeItem } from '~/server/disputes/functions'
 import { openDisputeFn } from '~/server/disputes/functions'
 import type { OpenableKind } from '~/server/disputes/functions'
 import { sendDispute } from './disputeCalls'
@@ -19,7 +18,7 @@ export function DisputeDrawer({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  item: DisputeItem & { kind: OpenableKind }
+  item: { kind: OpenableKind; id: number }
   what: string
   value: string
   onSent: () => void

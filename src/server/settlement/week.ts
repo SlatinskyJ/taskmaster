@@ -34,7 +34,7 @@ export interface WeekItem {
    * Confirmed and rejected items (#46): what a dispute on it names and its mark (open, or the
    * latest outcome; null without one). Waiting items have none: not locked yet.
    */
-  dispute?: { item: DisputeItem; mark: DisputeMark | null }
+  dispute?: { item: { kind: 'completion' | 'rejection'; id: number }; mark: DisputeMark | null }
 }
 
 export interface WeekTaker {

@@ -13,18 +13,31 @@ interface PageUser {
   displayName: string
 }
 const page = vi.hoisted(() => {
-  const state: { user: PageUser | null; task: TaskView | null; history: HistoryEntry[] } = {
+  const state: {
+    user: PageUser | null
+    task: TaskView | null
+    history: HistoryEntry[]
+    disputes: boolean
+    marks: unknown[]
+  } = {
     user: null,
     task: null,
     history: [],
+    disputes: false,
+    marks: [],
   }
   return state
 })
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (opts: Record<string, unknown>) => ({
     ...opts,
-    useRouteContext: () => ({ user: page.user }),
-    useLoaderData: () => ({ task: page.task, thread: [], history: page.history }),
+    useRouteContext: () => ({ user: page.user, features: { disputes: page.disputes } }),
+    useLoaderData: () => ({
+      task: page.task,
+      thread: [],
+      history: page.history,
+      disputeMarks: page.marks,
+    }),
   }),
   notFound: () => new Error('not found'),
   redirect: vi.fn(),
@@ -33,9 +46,16 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 vi.mock('./useTaskAction', () => ({ useTaskAction: () => ({ busy: null, run: vi.fn() }) }))
 vi.mock('./bidCalls', () => ({ callBid: vi.fn(), BID_CALLS: {} }))
-vi.mock('~/server/tasks/functions', () => ({}))
+vi.mock('~/server/tasks/functions', () => ({
+  getTaskDetailFn: vi.fn(() => Promise.resolve({ task: page.task, thread: [], history: [] })),
+}))
+vi.mock('~/server/disputes/functions', () => ({
+  getItemMarkFn: vi.fn(() => Promise.resolve(null)),
+  openDisputeFn: vi.fn(),
+}))
 
 const { Route } = await import('~/routes/_app/ukol/$taskId')
+const { getItemMarkFn } = await import('~/server/disputes/functions')
 
 const reserved: TaskView = {
   id: 1,
@@ -165,5 +185,79 @@ describe('task page: price, cancel, history (#36)', () => {
     expect(html).toContain('so 21. 11. 10:12 · Táta: zrušeno')
     expect(html).toContain('„Udělá to firma.“')
     expect(html).not.toContain(cs.cancelTask.action)
+  })
+})
+
+describe('task page: Rozporovat (#46)', () => {
+  const TATA = { id: 2, role: 'giver', displayName: 'Táta' } as const
+  const confirmed: TaskView = {
+    ...reserved,
+    status: 'confirmed',
+    completedBy: { id: 3, name: 'Starší' },
+    completedAt: '2026-11-21T09:00:00.000Z',
+    earnerId: 3,
+  }
+  type Loader = (a: {
+    params: { taskId: string }
+    context: { features: { disputes: boolean } }
+  }) => Promise<{ disputeMarks: unknown[] }>
+  const load = (task: TaskView, disputes: boolean) => {
+    page.task = task
+    vi.mocked(getItemMarkFn).mockClear()
+    return (Route as unknown as { loader: Loader }).loader({
+      params: { taskId: String(task.id) },
+      context: { features: { disputes } },
+    })
+  }
+  const on = (task: TaskView) => {
+    page.disputes = true
+    const html = render(TATA, task)
+    page.disputes = false
+    return html
+  }
+
+  it('loader, switch on: an agreed task reads its score mark, a confirmed one also its completion', async () => {
+    expect((await load(reserved, true)).disputeMarks).toEqual([null])
+    expect(vi.mocked(getItemMarkFn).mock.calls).toEqual([[{ data: { kind: 'task_score', id: 1 } }]])
+    await load(confirmed, true)
+    expect(vi.mocked(getItemMarkFn).mock.calls).toEqual([
+      [{ data: { kind: 'task_score', id: 1 } }],
+      [{ data: { kind: 'completion', id: 1 } }],
+    ])
+  })
+
+  it('loader: switch off or a proposed task reads nothing', async () => {
+    expect((await load(confirmed, false)).disputeMarks).toEqual([])
+    await load({ ...reserved, status: 'proposed' }, true)
+    expect(getItemMarkFn).not.toHaveBeenCalled()
+  })
+
+  it('an agreed task: Rozporovat on the score, led by Body za úkol', () => {
+    const html = on(reserved)
+    expect(html).toContain('aria-label="Rozporovat: Body za úkol – Vyluxovat celý obývák a chodbu"')
+    expect(html).toContain(`>${cs.disputes.what.task_score}<`)
+    expect(html).not.toContain(cs.disputes.what.completion)
+  })
+
+  it('a confirmed task: also on the completion, each line with its own lead and name', () => {
+    const html = on(confirmed)
+    expect(html.split('data-slot="dispute"')).toHaveLength(3)
+    expect(html).toContain(`>${cs.disputes.what.completion}<`)
+    expect(html).toContain(
+      'aria-label="Rozporovat: Potvrzené splnění – Vyluxovat celý obývák a chodbu"',
+    )
+  })
+
+  it('an open dispute on the score: Sporné next to its lead, no button there', () => {
+    page.marks = [{ status: 'open' }]
+    const html = on(reserved)
+    page.marks = []
+    expect(html).toContain(cs.disputes.waiting)
+    expect(html).not.toContain(`>${cs.disputes.action}<`)
+  })
+
+  it('proposed, or the switch off: none', () => {
+    expect(on({ ...reserved, status: 'proposed' })).not.toContain('data-slot="dispute"')
+    expect(render(TATA, confirmed)).not.toContain('data-slot="dispute"')
   })
 })
