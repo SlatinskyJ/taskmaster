@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { cs } from '~/lib/strings'
 import { getWeekFn } from '~/server/settlement/functions'
 import { getProposalsFn } from '~/server/periods/functions'
-import { periodProposal, proposalsView } from '../proposals/fixtures'
+import { defaultsProposal, periodProposal, proposalsView } from '../proposals/fixtures'
 import { takerWeek, week } from './fixtures'
 
 // Týden through its route (#45): the loader's call, the title per role, no placeholder.
@@ -54,6 +54,8 @@ describe('Týden page', () => {
     expect(idle).toContain(cs.proposals.entry.card)
     expect(idle).not.toContain(cs.proposals.entry.pending)
     page.data = { week: takerWeek(), proposals: proposalsView({ period: periodProposal() }) }
+    expect(renderToStaticMarkup(<Page />)).toContain(cs.proposals.entry.pending)
+    page.data = { week: takerWeek(), proposals: proposalsView({ defaults: defaultsProposal() }) }
     expect(renderToStaticMarkup(<Page />)).toContain(cs.proposals.entry.pending)
   })
 

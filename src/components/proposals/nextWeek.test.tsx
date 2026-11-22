@@ -20,9 +20,17 @@ import {
   STARSI,
   TATA,
 } from './fixtures'
-import { ConfirmBody, NextWeekView } from './NextWeekScreen'
+import { NextWeekView } from './NextWeekScreen'
+import { ConfirmBody } from './ProposalCard'
 import type { NextWeekViewProps } from './NextWeekScreen'
-import { attempt, callProposalAction, proposalErrorMessage, proposeNextWeek } from './proposalCalls'
+import {
+  asksFirst,
+  attempt,
+  callProposalAction,
+  proposalErrorMessage,
+  proposeNextWeek,
+  runProposalCall,
+} from './proposalCalls'
 import { initialNextWeek } from './proposalView'
 
 // Příští týden (#43, UI doc §7.2 Period), rendered statically. Button records every button's
@@ -47,6 +55,13 @@ vi.mock('~/components/ui/button', async (original) => {
     },
   }
 })
+const inputs = vi.hoisted(() => ({ change: [] as ((e: { target: { value: string } }) => void)[] }))
+vi.mock('~/components/ui/input', () => ({
+  Input: (props: { onChange?: (e: { target: { value: string } }) => void; value?: string }) => {
+    if (props.onChange) inputs.change.push(props.onChange)
+    return <input value={props.value} readOnly />
+  },
+}))
 vi.mock('~/server/periods/functions', () => ({
   approveProposalFn: vi.fn(() => Promise.resolve({ ok: true, status: 'pending' })),
   rejectProposalFn: vi.fn(() => Promise.resolve({ ok: true, status: 'rejected' })),
@@ -118,7 +133,13 @@ describe('Příští týden', () => {
     pressed.list = []
     const html = renderToStaticMarkup(
       <Dialog open>
-        <ConfirmBody action="reject" busy={false} onConfirm={onConfirm} onBack={noop} />
+        <ConfirmBody
+          kind="period"
+          action="reject"
+          busy={false}
+          onConfirm={onConfirm}
+          onBack={noop}
+        />
       </Dialog>,
     )
     expect(html).toContain(t.confirm.reject.title)
@@ -127,10 +148,26 @@ describe('Příští týden', () => {
     expect(onConfirm).toHaveBeenCalledTimes(1)
   })
 
+  it('withdrawing a default week says the default week stays', () => {
+    const html = renderToStaticMarkup(
+      <Dialog open>
+        <ConfirmBody
+          kind="defaults"
+          action="withdraw"
+          busy={false}
+          onConfirm={noop}
+          onBack={noop}
+        />
+      </Dialog>,
+    )
+    expect(html).toContain(t.confirm.withdraw.bodyDefaults)
+    expect(html).not.toContain(t.confirm.withdraw.body)
+  })
+
   it('the withdraw dialog has its own text', () => {
     const html = renderToStaticMarkup(
       <Dialog open>
-        <ConfirmBody action="withdraw" busy={false} onConfirm={noop} onBack={noop} />
+        <ConfirmBody kind="period" action="withdraw" busy={false} onConfirm={noop} onBack={noop} />
       </Dialog>,
     )
     expect(html).toContain(t.confirm.withdraw.title)
@@ -339,5 +376,105 @@ describe('Příští týden', () => {
     render({ view: proposalsView({ period: periodProposal() }), busy: 'period:approve' })
     expect(names()).toEqual([t.sending, t.reject])
     expect(pressed.list.every((b) => b.disabled)).toBe(true)
+  })
+
+  it('the form controls: Kratší, Delší, both levels and the end time each change the form', () => {
+    const form = { lengthDays: 7, hour: 23, minute: 59, levels: { lower: 50, upper: 100 } }
+    const onFormChange = vi.fn()
+    inputs.change = []
+    render({ form, onFormChange })
+    press(t.longer)
+    press(t.shorter)
+    press(cs.admin.defaults.more(t.lower))
+    press(cs.admin.defaults.less(t.upper))
+    inputs.change[0]?.({ target: { value: '18:30' } })
+    inputs.change[0]?.({ target: { value: '' } })
+    expect(onFormChange.mock.calls.map((c) => c[0] as unknown)).toEqual([
+      { ...form, lengthDays: 8 },
+      { ...form, lengthDays: 6 },
+      { ...form, levels: { lower: 51, upper: 100 } },
+      { ...form, levels: { lower: 50, upper: 99 } },
+      { ...form, hour: 18, minute: 30 },
+    ])
+  })
+
+  it('Kratší stops at 1 day; Zrušit cancels; Navrhnout všem submits', () => {
+    const onCancelForm = vi.fn()
+    const onSubmit = vi.fn()
+    render({
+      form: { lengthDays: 1, hour: 23, minute: 59, levels: { lower: 50, upper: 100 } },
+      onCancelForm,
+      onSubmit,
+    })
+    expect(pressed.list.find((b) => b.name === t.shorter)?.disabled).toBe(true)
+    expect(pressed.list.find((b) => b.name === t.longer)?.disabled).toBe(false)
+    press(t.cancel)
+    press(t.proposeAll)
+    expect(onCancelForm).toHaveBeenCalledTimes(1)
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+  })
+
+  it('while sending, the form buttons are disabled and say Posílám…', () => {
+    render({
+      form: { lengthDays: 7, hour: 23, minute: 59, levels: { lower: 50, upper: 100 } },
+      busy: 'propose',
+    })
+    expect(pressed.list.find((b) => b.name === t.sending)?.disabled).toBe(true)
+    expect(pressed.list.find((b) => b.name === t.cancel)?.disabled).toBe(true)
+  })
+})
+
+describe('running a call', () => {
+  const ui = () => ({
+    busy: vi.fn(),
+    error: vi.fn(),
+    success: vi.fn(),
+    reload: vi.fn(() => Promise.resolve()),
+  })
+
+  it('only Souhlasím runs at once; the others ask first', () => {
+    expect([asksFirst('approve'), asksFirst('reject'), asksFirst('withdraw')]).toEqual([
+      false,
+      true,
+      true,
+    ])
+  })
+
+  it('success: busy on and off, the toast, the reload, no error', async () => {
+    const u = ui()
+    const ok = await runProposalCall(
+      'period:approve',
+      () => Promise.resolve({ ok: true, status: 'pending' }),
+      t.done.approve,
+      u,
+    )
+    expect(ok).toBe(true)
+    expect(u.busy.mock.calls).toEqual([['period:approve'], [null]])
+    expect(u.error.mock.calls).toEqual([[null]])
+    expect(u.success).toHaveBeenCalledExactlyOnceWith(t.done.approve)
+    expect(u.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('a refusal: its Czech text on the error line, no toast, no reload', async () => {
+    const u = ui()
+    const ok = await runProposalCall(
+      'propose',
+      () => Promise.resolve({ ok: false, error: 'already_started' }),
+      t.sent,
+      u,
+    )
+    expect(ok).toBe(false)
+    expect(u.error.mock.calls).toEqual([[null], [t.errors.alreadyStarted]])
+    expect(u.busy.mock.calls).toEqual([['propose'], [null]])
+    expect(u.success).not.toHaveBeenCalled()
+    expect(u.reload).not.toHaveBeenCalled()
+  })
+
+  it('a throw: the generic text', async () => {
+    const u = ui()
+    expect(await runProposalCall('x', () => Promise.reject(new Error('net')), t.sent, u)).toBe(
+      false,
+    )
+    expect(u.error).toHaveBeenLastCalledWith(t.errors.failed)
   })
 })

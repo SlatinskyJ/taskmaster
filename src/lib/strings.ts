@@ -541,6 +541,9 @@ export const cs = {
     tooLong: 'Takhle dlouhý týden nejde, zkrať ho.',
     noWeek: 'Týden ještě nezačal.',
     defaultsLink: 'Výchozí týden (rodiče)',
+    /** Výchozí týden form (GDefaults): the stored default week above the form. */
+    nowLine: (length: string, end: string, lower: number, upper: number) =>
+      `Nyní: ${length} · konec ${end} · spodní hranice ${String(lower)}, horní ${String(upper)}`,
     defaultsHint:
       'Pošle se jako návrh. Začne platit, až souhlasí všichni kluci a jeden rodič. Běžící týden se nemění.',
     sent: 'Návrh odeslán',
@@ -554,6 +557,7 @@ export const cs = {
       withdraw: {
         title: 'Stáhnout návrh?',
         body: 'Návrh zmizí. Příští týden bude podle výchozího týdne.',
+        bodyDefaults: 'Návrh zmizí. Výchozí týden zůstane, jak je.',
         yes: 'Stáhnout',
       },
       back: 'Zpět',

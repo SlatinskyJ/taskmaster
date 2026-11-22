@@ -82,3 +82,39 @@ export async function attempt(call: () => Promise<ProposalResult>): Promise<stri
     return e.failed
   }
 }
+
+/** Nesouhlasím and Stáhnout návrh end a proposal, so they ask first; Souhlasím runs at once. */
+export function asksFirst(action: ProposalAction): action is 'reject' | 'withdraw' {
+  return action !== 'approve'
+}
+
+/** What a screen does around one call: its busy key, its error line, the toast and the reload. */
+export interface CallUi {
+  busy: (key: string | null) => void
+  error: (text: string | null) => void
+  success: (text: string) => void
+  reload: () => Promise<void>
+}
+
+/**
+ * Runs one call for a screen: busy while it runs; on a refusal or a throw the Czech text goes
+ * to the error line and nothing else happens; on success the toast, then the reload.
+ */
+export async function runProposalCall(
+  key: string,
+  call: () => Promise<ProposalResult>,
+  done: string,
+  ui: CallUi,
+): Promise<boolean> {
+  ui.busy(key)
+  ui.error(null)
+  const failed = await attempt(call)
+  ui.busy(null)
+  if (failed) {
+    ui.error(failed)
+    return false
+  }
+  ui.success(done)
+  await ui.reload()
+  return true
+}

@@ -105,4 +105,16 @@ describe('Výchozí týden (parents)', () => {
     render({ view: proposalsView({ defaults: defaultsProposal() }), me: STARSI })
     expect(pressed.list.map((b) => b.name)).toEqual([t.approve, t.reject])
   })
+
+  it('the form shows what is stored now (Nyní …)', () => {
+    expect(render({ form: { ...D, lengthDays: 21 } })).toContain(
+      'Nyní: 7 dní · konec neděle 23:59 · spodní hranice 50, horní 100',
+    )
+  })
+
+  it('while proposing, the button says Posílám… and is disabled', () => {
+    render({ form: { ...D, lengthDays: 14 }, busy: 'propose' })
+    expect(button(t.sending)?.disabled).toBe(true)
+    expect(button(t.proposeAll)).toBeUndefined()
+  })
 })

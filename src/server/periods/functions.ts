@@ -21,7 +21,7 @@ export {
   withdrawProposalFn,
 } from './proposalFunctions'
 export type { ProposalResult } from './proposalFunctions'
-export type { Party, ProposalView, ProposalsView, SpanView } from './proposals'
+export type { Party, ProposalKind, ProposalView, ProposalsView, SpanView } from './proposals'
 
 // Server functions for the default week on Správa (#47). Admin only: the guard here, and the
 // domain's `setDefaults` again inside (`not_admin`). The admin is always the signed-in user.

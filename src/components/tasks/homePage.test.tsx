@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cs } from '~/lib/strings'
 import { getProposalsFn } from '~/server/periods/functions'
 import type { TaskView } from '~/server/tasks/functions'
-import { periodProposal, proposalsView } from '../proposals/fixtures'
+import { defaultsProposal, periodProposal, proposalsView } from '../proposals/fixtures'
 import type { TemplateView } from '~/server/templates/functions'
 
 // Domů itself (#138), rendered statically through its route, so the wiring of the price change
@@ -412,6 +412,16 @@ describe('Domů proposal rows (#43)', () => {
     expect(html).toContain(cs.proposals.entry.periodRow)
     expect(html).toContain(`${cs.home.waiting} (1)`)
     expect(html).toContain(cs.proposals.entry.open)
+  })
+
+  it('a default-week proposal waiting for me has its own row', () => {
+    features.periodProposals = true
+    const html = render(mladsi, [], {
+      priceChanges: [],
+      proposals: proposalsView({ defaults: defaultsProposal() }),
+    })
+    expect(html).toContain(cs.proposals.entry.defaultsRow)
+    expect(html).not.toContain(cs.proposals.entry.periodRow)
   })
 
   it('switch off: no row even with data', () => {

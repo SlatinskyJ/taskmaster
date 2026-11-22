@@ -2,20 +2,15 @@ import { Check } from 'lucide-react'
 import { StateChip } from '~/components/tasks/StateChip'
 import { Button } from '~/components/ui/button'
 import { Card } from '~/components/ui/card'
+import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '~/components/ui/dialog'
 import { cs } from '~/lib/strings'
 import type { Party, ProposalView } from '~/server/periods/functions'
 import type { ProposalAction } from './proposalCalls'
+import type { ChangeRow } from './proposalRows'
 import { agreementRows, myActions } from './proposalView'
 import type { ProposalKind } from './proposalView'
 
 const t = cs.proposals
-
-/** One value of a proposal: the old one struck through next to the new one, or once. */
-export interface ChangeRow {
-  label: string
-  old: string
-  now: string
-}
 
 /** The key of a pressed button while its call runs: `period:approve`, … */
 export const busyKey = (kind: ProposalKind, action: ProposalAction) => `${kind}:${action}`
@@ -95,9 +90,9 @@ export function ProposalCard({
       </dl>
       <div className="grid gap-1">
         <p className="text-meta font-bold text-muted">{t.whoAgreed}</p>
-        <ul className="grid gap-1">
+        <ul className="grid gap-0.5">
           {agreementRows(proposal, parties).map((row) => (
-            <li key={row.id} className="flex min-h-tap items-center justify-between gap-3">
+            <li key={row.id} className="flex items-center justify-between gap-3 py-0.5">
               <span className="min-w-0 font-bold break-words">{row.name}</span>
               {row.agreed ? (
                 <span className="flex shrink-0 items-center gap-1 font-bold text-state-confirmed-text">
@@ -124,5 +119,49 @@ export function ProposalCard({
         </p>
       )}
     </Card>
+  )
+}
+
+/**
+ * The question before Nesouhlasím or Stáhnout návrh, both of which end the proposal. The
+ * withdraw text names what stays: next week's default, or the default week as it is.
+ */
+export function ConfirmBody({
+  kind,
+  action,
+  busy,
+  onConfirm,
+  onBack,
+}: {
+  kind: ProposalKind
+  action: 'reject' | 'withdraw'
+  busy: boolean
+  onConfirm: () => void
+  onBack: () => void
+}) {
+  const c = t.confirm[action]
+  const body =
+    action === 'withdraw' && kind === 'defaults' ? t.confirm.withdraw.bodyDefaults : c.body
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>{c.title}</DialogTitle>
+        <DialogDescription>{body}</DialogDescription>
+      </DialogHeader>
+      <DialogFooter>
+        <Button type="button" variant="ghost" onClick={onBack}>
+          {t.confirm.back}
+        </Button>
+        <Button
+          type="button"
+          variant={action === 'reject' ? 'no' : 'primary'}
+          disabled={busy}
+          aria-busy={busy}
+          onClick={onConfirm}
+        >
+          {busy ? t.sending : c.yes}
+        </Button>
+      </DialogFooter>
+    </>
   )
 }

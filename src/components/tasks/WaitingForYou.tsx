@@ -7,6 +7,7 @@ import { priceMeta } from '~/components/templates/priceView'
 import { Button, buttonVariants } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
 import { templateDetail } from '~/lib/templateText'
+import type { ProposalKind } from '~/server/periods/functions'
 import type { TaskView } from '~/server/tasks/functions'
 import type { TemplateView } from '~/server/templates/functions'
 import { callBid } from './bidCalls'
@@ -41,7 +42,7 @@ export function WaitingForYou({
   /** Required too: one-time tasks whose new price waits for this person (#36). */
   taskPriceChanges: readonly TaskView[]
   /** Proposals for next week or the default week waiting for this person (#43). */
-  proposals?: readonly ('period' | 'defaults')[]
+  proposals?: readonly ProposalKind[]
   me: Me
 }) {
   const router = useRouter()

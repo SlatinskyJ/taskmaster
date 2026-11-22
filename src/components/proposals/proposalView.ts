@@ -1,7 +1,14 @@
 import { isValidPeriodSettings, MAX_LENGTH_DAYS } from '~/domain/periods'
 import type { Levels } from '~/domain'
-import { addPragueDays, fromPragueWallTime, toPragueWallTime } from '~/domain/dates'
-import type { ProposalView, ProposalsView } from '~/server/periods/functions'
+import {
+  addPragueDays,
+  fromPragueWallTime,
+  pragueDaysBetween,
+  toPragueWallTime,
+} from '~/domain/dates'
+import type { ProposalKind, ProposalView, ProposalsView } from '~/server/periods/functions'
+
+export type { ProposalKind }
 
 // The Příští týden screen's rules, framework-free so they are tested without a DOM. Every date
 // counts from the server's `next.startsAt`; the browser never works out the default week.
@@ -27,10 +34,7 @@ export function nextWeekCutoff(nextStartsAt: Date, f: NextWeekForm): Date {
 
 /** Whole Prague calendar days between two instants (for "7 dní" on the proposal card). */
 export function lengthInDays(startsAt: Date, cutoffAt: Date): number {
-  const a = toPragueWallTime(startsAt)
-  const b = toPragueWallTime(cutoffAt)
-  const days = (w: typeof a) => Date.UTC(w.year, w.month - 1, w.day) / 86_400_000
-  return Math.round(days(b) - days(a))
+  return pragueDaysBetween(startsAt, cutoffAt)
 }
 
 /** The form's start values, from the server's `next` span. */
@@ -89,8 +93,6 @@ export function agreementRows(
     .filter((x) => p.approvedBy.includes(x.id) || p.waitingFor.includes(x.id))
     .map((x) => ({ id: x.id, name: x.name, agreed: p.approvedBy.includes(x.id) }))
 }
-
-export type ProposalKind = 'period' | 'defaults'
 
 /** Domů rows: the proposals waiting for `me`. */
 export function waitingProposals(

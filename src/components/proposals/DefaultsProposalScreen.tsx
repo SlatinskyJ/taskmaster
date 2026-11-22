@@ -7,10 +7,10 @@ import { Dialog, DialogContent } from '~/components/ui/dialog'
 import type { PeriodDefaults } from '~/domain'
 import { cs } from '~/lib/strings'
 import type { ProposalsView } from '~/server/periods/functions'
-import { attempt, callProposalAction, proposeDefaults } from './proposalCalls'
-import type { ProposalAction } from './proposalCalls'
-import { busyKey, ProposalCard } from './ProposalCard'
-import { ConfirmBody, defaultsRows } from './NextWeekScreen'
+import { asksFirst, callProposalAction, proposeDefaults, runProposalCall } from './proposalCalls'
+import type { CallUi, ProposalAction } from './proposalCalls'
+import { busyKey, ConfirmBody, ProposalCard } from './ProposalCard'
+import { defaultsNowLine, defaultsRows } from './proposalRows'
 
 const t = cs.proposals
 
@@ -57,17 +57,20 @@ export function DefaultsProposalView({
     )
   }
   return (
-    <DefaultWeekView
-      saved={view.currentDefaults}
-      form={form}
-      busy={busy === 'propose'}
-      error={error}
-      onChange={onChange}
-      onSave={onPropose}
-      saveLabel={t.proposeAll}
-      busyLabel={t.sending}
-      hint={t.defaultsHint}
-    />
+    <div className="grid gap-2">
+      <p className="text-meta font-bold text-muted">{defaultsNowLine(view.currentDefaults)}</p>
+      <DefaultWeekView
+        saved={view.currentDefaults}
+        form={form}
+        busy={busy === 'propose'}
+        error={error}
+        onChange={onChange}
+        onSave={onPropose}
+        saveLabel={t.proposeAll}
+        busyLabel={t.sending}
+        hint={t.defaultsHint}
+      />
+    </div>
   )
 }
 
@@ -78,28 +81,23 @@ export function DefaultsProposalScreen({ view, me }: { view: ProposalsView; me: 
   const [error, setError] = useState<string | null>(null)
   const [ask, setAsk] = useState<'reject' | 'withdraw' | null>(null)
 
-  async function run(key: string, call: () => ReturnType<typeof proposeDefaults>, done: string) {
-    setBusy(key)
-    setError(null)
-    const failed = await attempt(call)
-    setBusy(null)
-    setAsk(null)
-    if (failed) {
-      setError(failed)
-      return
-    }
-    toast.success(done)
-    await router.invalidate()
+  const ui: CallUi = {
+    busy: setBusy,
+    error: setError,
+    success: (text) => toast.success(text),
+    reload: () => router.invalidate(),
   }
 
-  const act = (action: ProposalAction) => {
+  async function act(action: ProposalAction) {
     const p = view.defaults
     if (!p) return
-    void run(
+    await runProposalCall(
       busyKey('defaults', action),
       () => callProposalAction(action, 'defaults', p.id),
       t.done[action],
+      ui,
     )
+    setAsk(null)
   }
 
   return (
@@ -115,11 +113,11 @@ export function DefaultsProposalScreen({ view, me }: { view: ProposalsView; me: 
           setForm(d)
         }}
         onPropose={() => {
-          void run('propose', () => proposeDefaults(form), t.sent)
+          void runProposalCall('propose', () => proposeDefaults(form), t.sent, ui)
         }}
         onAct={(action) => {
-          if (action === 'approve') act(action)
-          else setAsk(action)
+          if (asksFirst(action)) setAsk(action)
+          else void act(action)
         }}
       />
       <Dialog
@@ -131,10 +129,11 @@ export function DefaultsProposalScreen({ view, me }: { view: ProposalsView; me: 
         <DialogContent>
           {ask && (
             <ConfirmBody
+              kind="defaults"
               action={ask}
               busy={busy !== null}
               onConfirm={() => {
-                act(ask)
+                void act(ask)
               }}
               onBack={() => {
                 setAsk(null)
