@@ -15,8 +15,8 @@ import { rollPeriods } from './periods'
 
 // The stored default week (spec §5.8): one row, `period_defaults` id 1. Every new period takes
 // the values stored at the moment it starts (the roller each tick, the settlement confirm inside
-// its transaction); the running period never changes. Only the admin saves them directly here;
-// #43 adds givers' proposals that apply through `writePeriodDefaults` once agreed.
+// its transaction); the running period never changes. The admin saves them directly here; an
+// agreed default-week proposal (./proposals.ts) applies through `writePeriodDefaults`.
 
 type Reader = Db | Tx
 
@@ -58,7 +58,7 @@ export function getPeriodDefaults(db: Reader): PeriodDefaults {
 
 /**
  * The one write path for the defaults. No role check: callers check (the admin here, an agreed
- * proposal in #43). First starts every period already due by `now` with the defaults stored
+ * proposal in ./proposals.ts). First starts every period already due by `now` with the defaults stored
  * before this change, so a save between a cutoff and the roller's next tick never reaches a
  * period that has already started (spec §5.8). Then writes the row and its `settings.changed`
  * entry (`before` null when the row had to be recreated). Inside the caller's transaction.
