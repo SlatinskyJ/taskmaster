@@ -2,9 +2,11 @@ import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import type { Db } from '~/server/db'
-import { tasks } from '~/server/db/schema'
+import { settlements, tasks } from '~/server/db/schema'
 import { listPeriods, rollPeriods } from '~/server/periods'
-import { completeTask, rejectTask } from '~/server/tasks/lifecycle'
+import { openDisputeIn } from '~/server/disputes'
+import { approveTask, completeTask, rejectTask } from '~/server/tasks/lifecycle'
+import { rejectionsSince } from '~/server/tasks/rejections'
 import { family, must } from '~/server/tasks/testing'
 import { getMeeting, settlePeriod } from './meeting'
 import { CUTOFF, doneTask, MEETING, plus, prague, reservedTask, SAT, week } from './testing'
@@ -115,6 +117,15 @@ describe('getWeek', () => {
             status: i === 0 ? 'done_unconfirmed' : 'confirmed',
             at: plus(SAT, h * H).toISOString(),
             reason: null,
+            // A confirmed item can be disputed (#46); a waiting one is not locked yet.
+            ...(i === 0
+              ? {}
+              : {
+                  dispute: {
+                    item: { kind: 'completion', id: expect.any(Number) as number },
+                    mark: null,
+                  },
+                }),
           })),
         },
       ],
@@ -153,20 +164,24 @@ describe('getWeek', () => {
         levels: { lower: 50, upper: 100 },
         records: [
           {
+            id: expect.any(Number) as number,
             takerId: f.starsi,
             name: 'Starší',
             totalBefore: 114,
             level: 'upper',
             deducted: 100,
             carryOver: 14,
+            dispute: null,
           },
           {
+            id: expect.any(Number) as number,
             takerId: f.mladsi,
             name: 'Mladší',
             totalBefore: 47,
             level: 'none',
             deducted: 0,
             carryOver: 47,
+            dispute: null,
           },
         ],
       },
@@ -250,6 +265,13 @@ describe('getWeek', () => {
     const edge = rejected(f, 4, plus(SAT, -60_000)) // rejected exactly at the start
     const r = rejected(f, 7, plus(SAT, H), 'nádobí zůstalo v dřezu')
     const items = getWeek(f.db, giver(f), MEETING).takers
+    const entry = (task: number) => ({
+      item: {
+        kind: 'rejection',
+        id: rejectionsSince(f.db, new Date(0)).find((x) => x.taskId === task)?.entryId,
+      },
+      mark: null,
+    })
     expect(items[0]?.items).toEqual([
       {
         taskId: r,
@@ -259,6 +281,7 @@ describe('getWeek', () => {
         at: plus(SAT, H + 60_000).toISOString(),
         reason: 'nádobí zůstalo v dřezu',
         closed: false,
+        dispute: entry(r),
       },
       {
         taskId: edge,
@@ -268,6 +291,7 @@ describe('getWeek', () => {
         at: SAT.toISOString(),
         reason: null,
         closed: false,
+        dispute: entry(edge),
       },
     ])
     expect(items[1]?.items).toEqual([])
@@ -289,5 +313,61 @@ describe('getWeek', () => {
         items: [],
       },
     ])
+  })
+})
+
+describe('getWeek dispute marks (#46)', () => {
+  const at = plus(MEETING, H)
+
+  it('a confirmed item is keyed by its task; after a dispute its mark is open', () => {
+    const f = demoWeek()
+    const item = getWeek(f.db, starsi(f), MEETING).takers[0]?.items.find(
+      (i) => i.status === 'confirmed',
+    )
+    expect(item?.dispute).toEqual({ item: { kind: 'completion', id: item?.taskId }, mark: null })
+    must(openDisputeIn(f.db, f.starsi, { kind: 'completion', id: item?.taskId ?? 0 }, 'x', at))
+    const again = getWeek(f.db, starsi(f), at).takers[0]?.items.find(
+      (i) => i.taskId === item?.taskId,
+    )
+    expect(again?.dispute?.mark).toEqual({ status: 'open' })
+  })
+
+  it('a rejected row is keyed by its entry: its mark and the confirmed row of the same task stay apart', () => {
+    const f = week()
+    const id = rejected(f, 4, plus(SAT, H), 'Znovu.')
+    must(completeTask(f.db, f.starsi, id, plus(SAT, 2 * H)))
+    must(approveTask(f.db, f.tata, id, plus(SAT, 2 * H)))
+    const items = () => getWeek(f.db, starsi(f), at).takers[0]?.items ?? []
+    const rejectedRow = () => items().find((i) => i.status === 'rejected')
+    const confirmedRow = () => items().find((i) => i.status === 'confirmed')
+    const entryId = rejectionsSince(f.db, SAT)[0]?.entryId
+    expect(rejectedRow()?.dispute?.item).toEqual({ kind: 'rejection', id: entryId })
+    must(openDisputeIn(f.db, f.starsi, { kind: 'rejection', id: entryId ?? 0 }, 'x', at))
+    expect(rejectedRow()?.dispute?.mark).toEqual({ status: 'open' })
+    expect(confirmedRow()?.dispute).toEqual({ item: { kind: 'completion', id }, mark: null })
+  })
+
+  it('a confirmed row disputed leaves the rejected row of the same task unmarked', () => {
+    const f = week()
+    const id = rejected(f, 4, plus(SAT, H))
+    must(completeTask(f.db, f.starsi, id, plus(SAT, 2 * H)))
+    must(approveTask(f.db, f.tata, id, plus(SAT, 2 * H)))
+    must(openDisputeIn(f.db, f.starsi, { kind: 'completion', id }, 'x', at))
+    const items = getWeek(f.db, starsi(f), at).takers[0]?.items ?? []
+    expect(items.find((i) => i.status === 'rejected')?.dispute?.mark).toBeNull()
+    expect(items.find((i) => i.status === 'confirmed')?.dispute?.mark).toEqual({ status: 'open' })
+  })
+
+  it('a history record carries its settlement id; a dispute on it marks only that record', () => {
+    const f = demoWeek()
+    approveAll(f)
+    settle(f.db, f.tata, MEETING)
+    const records = () => getWeek(f.db, giver(f), MONDAY).history[0]?.records ?? []
+    const [first, second] = records()
+    const ids = f.db.select().from(settlements).all()
+    expect(first?.id).toBe(ids.find((r) => r.takerId === f.starsi)?.id)
+    must(openDisputeIn(f.db, f.starsi, { kind: 'settlement', id: first?.id ?? 0 }, 'x', MONDAY))
+    expect(records().map((r) => r.dispute)).toEqual([{ status: 'open' }, null])
+    expect(second?.takerId).toBe(f.mladsi)
   })
 })

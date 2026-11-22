@@ -446,6 +446,40 @@ export const cs = {
     /** Under a rejected self-logged chore with no reason: it ends there (#38). */
     rejectedClosed: 'Bez bodů.',
   },
+  /** Disputes on locked items (#46, spec §5.11, UI doc §7.1 TDispute). Chip text: `state.disputed`. */
+  disputes: {
+    action: 'Rozporovat',
+    actionFor: (what: string, name: string) => `Rozporovat: ${what} – ${name}`,
+    /** An open dispute's chip on its item. */
+    waiting: 'Sporné · čeká na správce',
+    /** Týden → Historie: the disputes the viewer is involved in. */
+    list: 'Rozporováno',
+    reasonLabel: 'Proč?',
+    note: 'Spor rozhodne správce. Do té doby se body ani stav nemění. Rodiče spor uvidí. Vzít zpět ho nejde.',
+    send: 'Poslat správci',
+    sending: 'Posílám…',
+    sent: 'Odesláno správci.',
+    kept: (note: string) => `Správce nechal beze změny: ${note}`,
+    fixed: (note: string) => `Správce opravil: ${note}`,
+    openedBy: (name: string, reason: string) => `${name}: ${reason}`,
+    what: {
+      task_score: 'Body za úkol',
+      template_score: 'Body za opakovaný úkol',
+      completion: 'Potvrzené splnění',
+      rejection: 'Zamítnuté splnění',
+      settlement: 'Vyúčtování týdne',
+      adjustment: 'Úprava bodů',
+    },
+    errors: {
+      not_locked: 'Tohle se teď rozporovat nedá.',
+      dispute_open: 'Už je rozporováno.',
+      reason_required: 'Napiš, proč.',
+      not_found: 'Tohle už neexistuje.',
+      not_a_party: 'Rozporovat můžou jen děti a rodiče.',
+      feature_off: 'Rozporování je vypnuté.',
+      generic: 'Nepovedlo se. Zkus to znovu.',
+    },
+  },
   admin: {
     title: 'Správa',
     people: 'Lidé',

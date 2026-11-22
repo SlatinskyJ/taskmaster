@@ -35,7 +35,7 @@ describe('itemChip', () => {
 
 describe('historyLine', () => {
   it('total, deducted, carry-over', () => {
-    const r = { takerId: 3, name: 'Starší', level: 'upper' as const }
+    const r = { id: 21, takerId: 3, name: 'Starší', level: 'upper' as const, dispute: null }
     expect(historyLine({ ...r, totalBefore: 108, deducted: 100, carryOver: 8 })).toBe(
       'Celkem 108 · odečteno 100 · převod 8',
     )
