@@ -63,7 +63,8 @@ describe('Úkoly', () => {
     const html = show(TasksRoute)
     expect(html).toContain('Opakované')
     expect(html).toContain('Zalít kytky')
-    expect(html).toContain('Jednorázové')
+    // The top section holds one-time tasks and instances of recurring chores (#38).
+    expect(html).toContain('K udělání')
   })
 
   it('launch: no Opakované section and no lone Jednorázové heading', () => {
@@ -72,6 +73,7 @@ describe('Úkoly', () => {
     expect(html).not.toContain('Opakované')
     expect(html).not.toContain('Zalít kytky')
     expect(html).not.toContain('Jednorázové')
+    expect(html).not.toContain('K udělání')
     expect(html).toContain('Zatím žádné úkoly.')
   })
 })

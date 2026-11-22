@@ -79,6 +79,7 @@ const view = (over: Partial<TaskView>): TaskView => ({
   templateId: null,
   dueAt: null,
   graceEndsAt: null,
+  createdAt: '2026-11-17T10:00:00.000Z',
   waitingFor: [],
   scoreChange: null,
   ...over,

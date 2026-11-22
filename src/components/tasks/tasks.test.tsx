@@ -183,6 +183,7 @@ describe('WaitingForYou with templates (#37)', () => {
     templateId: null,
     dueAt: null,
     graceEndsAt: null,
+    createdAt: '2026-11-17T10:00:00.000Z',
     waitingFor: [],
     scoreChange: null,
   }
@@ -252,6 +253,7 @@ describe('ToApprove', () => {
     templateId: null,
     dueAt: null,
     graceEndsAt: null,
+    createdAt: '2026-11-17T10:00:00.000Z',
     waitingFor: [],
     scoreChange: null,
   }
@@ -342,6 +344,7 @@ describe('template price change: ways in', () => {
       templateId: null,
       dueAt: null,
       graceEndsAt: null,
+      createdAt: '2026-11-17T10:00:00.000Z',
       waitingFor: [],
       scoreChange: {
         id: 3,
@@ -422,6 +425,7 @@ describe('TakerBoard Moje row (#148)', () => {
     templateId: null,
     dueAt: null,
     graceEndsAt: null,
+    createdAt: '2026-11-17T10:00:00.000Z',
     offeredByName: null,
     approverIds: [],
     bids: [],

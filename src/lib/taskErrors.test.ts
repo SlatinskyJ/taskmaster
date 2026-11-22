@@ -18,6 +18,8 @@ describe('taskErrorMessage', () => {
     ['same_score', 'Tohle číslo už platí. Zvol jiné.'],
     ['no_bids', 'Zatím nikdo nic nenabídl.'],
     ['no_bid', 'Nejdřív nabídni svou cenu.'],
+    ['past_grace', 'Termín už prošel, tohle už nejde.'],
+    ['score_changed', 'Cena se mezitím změnila, podívej se znovu.'],
     ['invalid_schedule', 'Vyber aspoň jeden den.'],
     ['invalid_deadline', 'Termín nedává smysl. Zkontroluj ho.'],
     ['already_approved', 'Souhlas už máš zapsaný.'],

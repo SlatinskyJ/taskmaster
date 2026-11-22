@@ -99,6 +99,23 @@ export const cs = {
     },
   },
   /** Recurring templates (#37): GCreate recurring part, GTasks, TApprove (UI doc §7). */
+  /** Instances of a recurring chore made by a person (#38, UI doc §7.2 GTasks). */
+  instances: {
+    /** A parent's button on an agreed template: one more instance right now. */
+    now: '+ Teď',
+    toast: { created: 'Přidáno do úkolů' },
+    /** An instance row: its due time ("do zítra 7:00"). */
+    dueToday: (time: string) => `do ${time}`,
+    dueTomorrow: (time: string) => `do zítra ${time}`,
+    dueOn: (weekday: string, time: string) => `do ${weekday} ${time}`,
+    overdue: 'po termínu',
+    /** An on-demand instance without a deadline: when a parent made it. */
+    onDemandAt: (time: string) => `na vyžádání · ${time}`,
+    errors: {
+      pastGrace: 'Termín už prošel, tohle už nejde.',
+      scoreChanged: 'Cena se mezitím změnila, podívej se znovu.',
+    },
+  },
   templates: {
     kindOneTime: 'Jednorázový',
     kindRecurring: 'Opakovaný',
@@ -106,6 +123,8 @@ export const cs = {
     section: 'Opakované',
     /** Section above the one-time tasks on Úkoly, so its empty line can't read as "no tasks". */
     oneTimeSection: 'Jednorázové',
+    /** Úkoly's top section once it holds instances of recurring chores too (#38). */
+    itemsSection: 'K udělání',
     empty: 'Zatím žádné opakované úkoly.',
     when: 'Kdy vzniká',
     /** Index = weekday, 0 = Sunday (src/domain/dates.ts). */

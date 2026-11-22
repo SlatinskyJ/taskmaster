@@ -11,6 +11,7 @@ import type {
   TaskActionResult,
 } from '~/server/tasks/functions'
 import type { TemplateActionResult } from '~/server/templates/functions'
+import type { InstanceActionResult } from '~/server/instances/functions'
 import { pointsFloat } from './pointsFloat'
 
 /**
@@ -25,7 +26,11 @@ export function useTaskAction() {
 
   async function run<
     R extends
-      LifecycleActionResult | TaskActionResult | TemplateActionResult | ScoreChangeActionResult,
+      | LifecycleActionResult
+      | TaskActionResult
+      | TemplateActionResult
+      | ScoreChangeActionResult
+      | InstanceActionResult,
   >(
     key: string,
     action: () => Promise<R>,

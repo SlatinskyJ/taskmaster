@@ -716,6 +716,7 @@ describe('what screens get (PR B)', () => {
         templateId: null,
         dueAt: null,
         graceEndsAt: null,
+        createdAt: T0.toISOString(),
         waitingFor: [
           { id: f.starsi, name: 'Starší' },
           { id: f.mladsi, name: 'Mladší' },

@@ -57,6 +57,7 @@ const reserved: TaskView = {
   templateId: null,
   dueAt: null,
   graceEndsAt: null,
+  createdAt: '2026-11-17T10:00:00.000Z',
   waitingFor: [],
   scoreChange: null,
 }
@@ -101,6 +102,23 @@ describe('task page: price, cancel, history (#36)', () => {
     const mine = render(STARSI)
     expect(mine).toContain(cs.taskPrice.needs(cs.taskPrice.parent))
     expect(mine).not.toContain(cs.cancelTask.action)
+  })
+
+  it('an instance has no price change (its score is fixed), but shows its due time (#38)', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-24T17:00:00.000Z'))
+    const instance: TaskView = {
+      ...reserved,
+      origin: 'on_demand',
+      templateId: 5,
+      dueAt: '2026-11-25T06:00:00.000Z',
+      graceEndsAt: '2026-11-25T07:00:00.000Z',
+    }
+    const html = render(TATA, instance)
+    vi.useRealTimers()
+    expect(html).not.toContain(cs.taskPrice.change)
+    expect(html).toContain(cs.cancelTask.action)
+    expect(html).toContain('do zítra 7:00')
   })
 
   it('a proposal in flight: the brother it waits for gets Souhlasím and Nesouhlasím', () => {

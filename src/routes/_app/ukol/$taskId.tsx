@@ -8,7 +8,7 @@ import { ScoreChangePanel } from '~/components/tasks/ScoreChangePanel'
 import { StateChip } from '~/components/tasks/StateChip'
 import { TaskHistory } from '~/components/tasks/TaskHistory'
 import { TaskWorkPanel } from '~/components/tasks/WorkButtons'
-import { detailMeta, taskChipState, waitingText } from '~/components/tasks/taskView'
+import { detailMeta, instanceMeta, taskChipState, waitingText } from '~/components/tasks/taskView'
 import { Card } from '~/components/ui/card'
 import { parseIdParam } from '~/lib/idParam'
 import { guardScreen } from '~/lib/screenGuard'
@@ -41,6 +41,7 @@ function TaskPage() {
   const { task, thread, history } = Route.useLoaderData()
   const me = { id: user.id, role: user.role }
   const meta = detailMeta(task, me)
+  const due = instanceMeta(task, new Date())
   const waiting = waitingText(task, me)
   return (
     <Screen title={task.title} user={user} back="/">
@@ -49,6 +50,7 @@ function TaskPage() {
           <StateChip state={taskChipState(task)} />
           <span className="num text-title font-bold">{task.score}</span>
           {meta && <span className="text-meta text-muted">{meta}</span>}
+          {due && <span className="text-meta text-muted">{due}</span>}
         </div>
         {task.status === 'proposed' && (
           <p className="text-meta text-muted">
@@ -63,7 +65,10 @@ function TaskPage() {
         )}
       </Card>
       <TaskWorkPanel task={task} me={me} />
-      <ScoreChangePanel key={`price-${String(task.score)}`} task={task} me={me} />
+      {/* An instance's score is fixed when it is made (spec §4, #38): no price change. */}
+      {task.origin === 'one_time' && (
+        <ScoreChangePanel key={`price-${String(task.score)}`} task={task} me={me} />
+      )}
       <CancelTask task={task} me={me} />
       <section className="grid gap-2" aria-labelledby="thread-label">
         <SectionLabel id="thread-label">{cs.bids.thread}</SectionLabel>

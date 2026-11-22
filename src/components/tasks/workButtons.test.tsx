@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ButtonModule from '~/components/ui/button'
 import { cs } from '~/lib/strings'
 import {
@@ -73,6 +73,7 @@ const view = (over: Partial<TaskView>): TaskView => ({
   templateId: null,
   dueAt: null,
   graceEndsAt: null,
+  createdAt: '2026-11-17T10:00:00.000Z',
   waitingFor: [],
   scoreChange: null,
   ...over,
@@ -282,5 +283,42 @@ describe('✓ Schválit floats the points (UI doc §4 "Confirmed", #41)', () => 
     renderToStaticMarkup(<ToApprove items={[view({ status: 'done_unconfirmed', score: 12 })]} />)
     action.pressed.get(cs.work.approve)?.onClick?.({ currentTarget: el })
     expect(action.run.mock.calls[0]?.[3]).toEqual({ confetti: el, float: 12 })
+  })
+})
+
+describe('TakerBoard instance rows show their due time (#38)', () => {
+  const due = {
+    origin: 'on_demand' as const,
+    templateId: 1,
+    dueAt: '2026-11-25T06:00:00.000Z',
+    graceEndsAt: '2026-11-25T07:00:00.000Z',
+  }
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-24T17:00:00.000Z'))
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+  it('on Volné and, once reserved, on Moje', () => {
+    const free = view({ id: 7, status: 'open', reservedBy: null, ...due })
+    expect(renderToStaticMarkup(<TakerBoard items={[free]} me={3} />)).toContain('do zítra 7:00')
+    const mine = view({ id: 7, ...due })
+    expect(renderToStaticMarkup(<TakerBoard items={[mine]} me={STARSI.id} />)).toContain(
+      'do zítra 7:00',
+    )
+  })
+  it('an on-demand one without a deadline says when it was made', () => {
+    const free = view({
+      id: 7,
+      status: 'open',
+      reservedBy: null,
+      origin: 'on_demand',
+      templateId: 1,
+      createdAt: '2026-11-24T14:02:00.000Z',
+    })
+    expect(renderToStaticMarkup(<TakerBoard items={[free]} me={3} />)).toContain(
+      'na vyžádání · 15:02',
+    )
   })
 })

@@ -321,6 +321,8 @@ export interface TaskView {
   /** An instance's deadline (UTC ISO): due, and the end of the grace window; else null. */
   dueAt: string | null
   graceEndsAt: string | null
+  /** When it was made (UTC ISO): an on-demand instance shows it (#38). */
+  createdAt: string
   /**
    * Proposed only: the active people of each side that has not said yes to the current offer
    * yet (any one of them agreeing is enough). Else [].
@@ -387,6 +389,7 @@ function views(db: Db | Tx, rows: TaskRow[]): TaskView[] {
       templateId: t.templateId,
       dueAt: t.dueAt,
       graceEndsAt: t.graceEndsAt,
+      createdAt: t.createdAt,
       waitingFor: people
         .filter((p) => p.active && missing.some((role) => role === p.role))
         .map((p) => ({ id: p.id, name: name(p.id) })),
