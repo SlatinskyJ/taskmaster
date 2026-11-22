@@ -324,6 +324,8 @@ export const cs = {
     greeting: 'Ahoj',
     /** "Čeká na tebe (2)" (UI doc §6 [call]: always at the top of Domů). */
     waiting: 'Čeká na tebe',
+    /** A parent's Domů with nothing to answer (UI doc §8). */
+    giverEmpty: 'Teď na tebe nic nečeká.',
     /** GHome: offers still waiting for a brother's yes (#41). */
     waitingOnTakers: 'Čeká na kluky',
   },

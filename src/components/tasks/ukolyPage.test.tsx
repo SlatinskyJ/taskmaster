@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import { ALL_FEATURES } from '~/lib/features'
 import { cs } from '~/lib/strings'
 import type { TaskView } from '~/server/tasks/functions'
 
@@ -10,7 +11,10 @@ const page = vi.hoisted(() => ({ data: {} }))
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (opts: Record<string, unknown>) => ({
     ...opts,
-    useRouteContext: () => ({ user: { id: 2, role: 'giver', displayName: 'Táta' } }),
+    useRouteContext: () => ({
+      user: { id: 2, role: 'giver', displayName: 'Táta' },
+      features: ALL_FEATURES,
+    }),
     useLoaderData: () => page.data,
   }),
   redirect: vi.fn(),

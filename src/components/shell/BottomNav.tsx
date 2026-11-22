@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { CalendarDays, CirclePlus, House, ListTodo, Users, type LucideIcon } from 'lucide-react'
 import type { Role } from '~/domain/parties'
+import type { Features } from '~/lib/features'
 import { navItems, type NavKey } from '~/lib/nav'
 import { cs } from '~/lib/strings'
 
@@ -13,8 +14,8 @@ const ICONS: Record<NavKey, LucideIcon> = {
 }
 
 /** The role's bottom bar (UI doc §6). Renders nothing for the admin. */
-export function BottomNav({ role }: { role: Role }) {
-  const items = navItems(role)
+export function BottomNav({ role, features }: { role: Role; features: Readonly<Features> }) {
+  const items = navItems(role, features)
   if (items.length === 0) return null
   return (
     <nav

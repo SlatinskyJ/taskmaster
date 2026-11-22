@@ -34,7 +34,7 @@ export const Route = createFileRoute('/_app/ukoly/')({
 })
 
 function Tasks() {
-  const { user } = Route.useRouteContext()
+  const { user, features } = Route.useRouteContext()
   const { list, templates } = Route.useLoaderData()
   const { busy, run } = useTaskAction()
   // "Hotovo bez bodů" can't be undone, so it asks first (UI doc §5).
@@ -102,28 +102,35 @@ function Tasks() {
   )
   return (
     <Screen title={cs.nav.tasks} user={user} action={newButton}>
-      <section className="grid gap-2" aria-labelledby="one-time-label">
-        <SectionLabel id="one-time-label">{cs.templates.oneTimeSection}</SectionLabel>
+      <section
+        className="grid gap-2"
+        aria-labelledby={features.recurring ? 'one-time-label' : undefined}
+      >
+        {features.recurring && (
+          <SectionLabel id="one-time-label">{cs.templates.oneTimeSection}</SectionLabel>
+        )}
         {list.length === 0 ? (
           <EmptyState>{cs.tasks.empty}</EmptyState>
         ) : (
           <TaskGroups list={list} meta={meta} action={action} />
         )}
       </section>
-      <section className="grid gap-2" aria-labelledby="templates-label">
-        <SectionLabel id="templates-label">{cs.templates.section}</SectionLabel>
-        {templates.length === 0 ? (
-          <EmptyState>{cs.templates.empty}</EmptyState>
-        ) : (
-          <ul className="grid gap-2">
-            {templates.map((t) => (
-              <li key={t.id}>
-                <TemplateRow template={t} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {features.recurring && (
+        <section className="grid gap-2" aria-labelledby="templates-label">
+          <SectionLabel id="templates-label">{cs.templates.section}</SectionLabel>
+          {templates.length === 0 ? (
+            <EmptyState>{cs.templates.empty}</EmptyState>
+          ) : (
+            <ul className="grid gap-2">
+              {templates.map((t) => (
+                <li key={t.id}>
+                  <TemplateRow template={t} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
       <Dialog
         open={closing !== null}
         onOpenChange={(open) => {

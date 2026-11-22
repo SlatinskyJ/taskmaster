@@ -1,4 +1,5 @@
 import type { Role } from '~/domain/parties'
+import type { Features } from './features'
 
 // Who sees which screen, and the bottom bar per role (UI doc §6). Framework-free so the whole
 // matrix is unit-tested. Server functions still check roles themselves (src/server/auth/guards);
@@ -53,8 +54,23 @@ export interface NavItem {
 const HOME: NavItem = { to: '/', key: 'home' }
 const WEEK: NavItem = { to: '/tyden', key: 'week' }
 
-/** Taker: Domů / Zapsat / Týden. Giver: Domů / Úkoly / Schůzka / Týden. Admin: no bar. */
-export function navItems(role: Role): readonly NavItem[] {
+/** Taker: Domů / Zapsat / Týden. Giver: Domů / Úkoly / Schůzka / Týden. Admin: no bar.
+ * Tabs whose feature is switched off (src/lib/features.ts) are left out. */
+export function navItems(role: Role, features: Readonly<Features>): readonly NavItem[] {
+  return allNavItems(role).filter((i) => {
+    const feature = TAB_FEATURE[i.key]
+    return feature === undefined || features[feature]
+  })
+}
+
+/** The switch each placeholder tab waits on; tabs not listed always show. */
+const TAB_FEATURE: Partial<Record<NavKey, keyof Features>> = {
+  log: 'log',
+  week: 'week',
+  meeting: 'meeting',
+}
+
+function allNavItems(role: Role): readonly NavItem[] {
   switch (role) {
     case 'taker':
       return [HOME, { to: '/zapsat', key: 'log' }, WEEK]
@@ -69,7 +85,7 @@ export function canSee(role: Role, path: AppPath): boolean {
   return SCREEN_ROLES[path].includes(role)
 }
 
-/** Whether the app shell shows the bottom bar on this screen. */
-export function showsBar(role: Role, pathname: string): boolean {
-  return navItems(role).length > 0 && !BARLESS_PATHS.some((p) => p === pathname)
+/** Whether the app shell shows the bottom bar on this screen: not for a single tab. */
+export function showsBar(role: Role, pathname: string, features: Readonly<Features>): boolean {
+  return navItems(role, features).length > 1 && !BARLESS_PATHS.some((p) => p === pathname)
 }

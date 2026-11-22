@@ -32,7 +32,7 @@ const KINDS: readonly [ItemKind, string][] = [
 ]
 
 function NewTask() {
-  const { user } = Route.useRouteContext()
+  const { user, features } = Route.useRouteContext()
   const router = useRouter()
   const [kind, setKind] = useState<ItemKind>('one_time')
   const [title, setTitle] = useState('')
@@ -69,25 +69,27 @@ function NewTask() {
           void submit()
         }}
       >
-        <div className="grid grid-cols-2 gap-1 rounded-card bg-track p-1">
-          {KINDS.map(([k, label]) => (
-            <button
-              key={k}
-              type="button"
-              aria-pressed={kind === k}
-              onClick={() => {
-                setKind(k)
-                setError(null)
-              }}
-              className={cn(
-                'min-h-tap cursor-pointer rounded-button font-extrabold',
-                kind === k ? 'bg-surface text-ink shadow-sticker' : 'text-muted',
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {features.recurring && (
+          <div className="grid grid-cols-2 gap-1 rounded-card bg-track p-1">
+            {KINDS.map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                aria-pressed={kind === k}
+                onClick={() => {
+                  setKind(k)
+                  setError(null)
+                }}
+                className={cn(
+                  'min-h-tap cursor-pointer rounded-button font-extrabold',
+                  kind === k ? 'bg-surface text-ink shadow-sticker' : 'text-muted',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         <Card className="grid gap-3">
           <label className="grid gap-2">
             <span className={sectionLabelClass}>{cs.tasks.title}</span>

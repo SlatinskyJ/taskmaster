@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { cs } from '~/lib/strings'
+import type { TaskView } from '~/server/tasks/functions'
 import type { TemplateView } from '~/server/templates/functions'
 
 // Domů itself (#138), rendered statically through its route, so the wiring of the price change
@@ -19,7 +20,7 @@ const page = vi.hoisted(() => {
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (opts: Record<string, unknown>) => ({
     ...opts,
-    useRouteContext: () => ({ user: page.user }),
+    useRouteContext: () => ({ user: page.user, features }),
     useLoaderData: () => page.data,
   }),
   redirect: vi.fn(),
@@ -27,6 +28,8 @@ vi.mock('@tanstack/react-router', () => ({
   useRouterState: () => ({ location: { pathname: '/' } }),
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
 }))
+// Launch switches (the app shell's `context.features`): all on unless a test turns one off.
+const features = vi.hoisted(() => ({ recurring: true, log: true, week: true, meeting: true }))
 vi.mock('./useTaskAction', () => ({ useTaskAction: () => ({ busy: null, run: vi.fn() }) }))
 vi.mock('./bidCalls', () => ({ callBid: vi.fn(), BID_CALLS: {} }))
 // The loader's server calls, each returning a marker so the test can see where it went.
@@ -99,6 +102,96 @@ function render(user: PageUser, recurring: TemplateView[], over: Record<string, 
 }
 
 describe('Domů', () => {
+  beforeEach(() => {
+    features.recurring = true
+  })
+
+  it('launch: with recurring off a brother sees no chores, no price changes', () => {
+    features.recurring = false
+    const html = render({ id: 4, role: 'taker', displayName: 'Starší' }, [dishes, flowers])
+    expect(html).not.toContain('Opakované úkoly')
+    expect(html).not.toContain('Zalít kytky')
+    expect(html).not.toContain('Táta nabízí 4')
+  })
+
+  it('launch: with recurring off a parent sees no price changes either', () => {
+    features.recurring = false
+    const html = render({ id: 2, role: 'giver', displayName: 'Táta' }, [])
+    expect(html).not.toContain('Mladší chce 5')
+  })
+
+  it('a parent with nothing to answer gets one line and the way to Nový úkol', () => {
+    const html = render({ id: 2, role: 'giver', displayName: 'Táta' }, [], { priceChanges: [] })
+    expect(html).toContain('Teď na tebe nic nečeká.')
+    expect(html).toContain('Nový úkol')
+  })
+
+  it('a parent with only a hidden price change still gets the empty line at launch', () => {
+    features.recurring = false
+    expect(render({ id: 2, role: 'giver', displayName: 'Táta' }, [])).toContain(
+      'Teď na tebe nic nečeká.',
+    )
+  })
+
+  it('a parent with a price change waiting gets no empty line', () => {
+    expect(render({ id: 2, role: 'giver', displayName: 'Táta' }, [])).not.toContain(
+      'Teď na tebe nic nečeká.',
+    )
+  })
+
+  it('a parent with only a task price change waiting gets no empty line', () => {
+    // Mamka's new price on a one-time task waits for Táta; it is not behind any launch switch.
+    features.recurring = false
+    const change: TaskView = {
+      id: 7,
+      title: 'Vyluxovat celý obývák a chodbu',
+      status: 'open',
+      score: 10,
+      approvalRequired: true,
+      createdByName: 'Táta',
+      offeredByName: null,
+      approvedBy: [],
+      approverIds: [],
+      bids: [],
+      lowest: null,
+      reservedBy: null,
+      completedBy: null,
+      completedAt: null,
+      earnerId: null,
+      waitingFor: [],
+      scoreChange: {
+        id: 3,
+        score: 12,
+        proposedBy: { id: 5, name: 'Mamka' },
+        approvedBy: [{ id: 5, name: 'Mamka' }],
+        waitingFor: [{ id: 2, name: 'Táta' }],
+      },
+    }
+    const html = render({ id: 2, role: 'giver', displayName: 'Táta' }, [], {
+      taskPriceChanges: [change],
+    })
+    expect(html).toContain('Vyluxovat celý obývák a chodbu')
+    expect(html).not.toContain('Teď na tebe nic nečeká.')
+  })
+
+  it('a parent with two kinds of item waiting gets no empty line', () => {
+    // One template approval and one price change: the counts add up, they don't cancel out.
+    const html = render({ id: 2, role: 'giver', displayName: 'Táta' }, [], {
+      waitingTemplates: [flowers],
+    })
+    expect(html).not.toContain('Teď na tebe nic nečeká.')
+  })
+
+  it('a brother never gets the parent empty line', () => {
+    const html = render({ id: 4, role: 'taker', displayName: 'Starší' }, [], { priceChanges: [] })
+    expect(html).not.toContain('Teď na tebe nic nečeká.')
+  })
+
+  it('has no "Tady brzy něco bude" line', () => {
+    const html = render({ id: 4, role: 'taker', displayName: 'Starší' }, [])
+    expect(html).not.toContain('Tady brzy něco bude')
+  })
+
   it('a brother sees the parents’ offer waiting and his recurring chores with Jiná cena', () => {
     const html = render({ id: 4, role: 'taker', displayName: 'Starší' }, [dishes, flowers])
     expect(html).toContain('Táta nabízí 4')
