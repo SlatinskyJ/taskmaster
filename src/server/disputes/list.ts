@@ -46,12 +46,11 @@ function visibleTo(viewer: Viewer, openedBy: number, takerId: number | null): bo
   return openedBy === viewer.id || takerId === null || takerId === viewer.id
 }
 
-/** Whether `viewer` may see the disputes on `item` at all (a page's mark, #46). */
+/** Whether `viewer` may see the disputes on `item` at all (a page's mark, #46): same rule. */
 export function seesItemDisputes(db: Db | Tx, viewer: Viewer, item: DisputeItem): boolean {
-  if (viewer.role === 'giver') return true
-  if (viewer.role !== 'taker') return false
   const takerId = loadTarget(db, item)?.about.takerId ?? null
-  if (takerId === null || takerId === viewer.id) return true
+  // Anyone else's opening counts as not his; then whether he opened one himself.
+  if (visibleTo(viewer, 0, takerId)) return true
   const mine = db
     .select({ id: disputes.id })
     .from(disputes)
@@ -63,7 +62,7 @@ export function seesItemDisputes(db: Db | Tx, viewer: Viewer, item: DisputeItem)
       ),
     )
     .get()
-  return mine !== undefined
+  return mine !== undefined && visibleTo(viewer, viewer.id, takerId)
 }
 
 export function listDisputes(db: Db | Tx, viewer: Viewer): DisputeListEntry[] {

@@ -139,6 +139,21 @@ describe('itemMarkHandler', () => {
     expect(itemMarkHandler(f.db, viewer(f.mladsi), byMladsi)).toEqual({ status: 'open' })
   })
 
+  it('the earner sees the mark of a dispute Táta opened on his completion', () => {
+    const f = withSwitch(true)
+    const item = { kind: 'completion', id: f.confirmed } as const
+    must(openDisputeIn(f.db, f.tata, item, 'x', MEETING))
+    expect(itemMarkHandler(f.db, { id: f.starsi, role: 'taker' }, item)).toEqual({ status: 'open' })
+    expect(itemMarkHandler(f.db, { id: f.mladsi, role: 'taker' }, item)).toBeNull()
+  })
+
+  it('the admin gets no mark (not a party), not even on a score', () => {
+    const f = withSwitch(true)
+    const item = { kind: 'task_score', id: f.confirmed } as const
+    must(openDisputeIn(f.db, f.starsi, item, 'x', MEETING))
+    expect(itemMarkHandler(f.db, { id: f.admin, role: 'admin' }, item)).toBeNull()
+  })
+
   it('a score’s mark is for every party (scores are shared)', () => {
     const f = withSwitch(true)
     const item = { kind: 'task_score', id: f.confirmed } as const
