@@ -87,6 +87,8 @@
   - `invalid defaults write nothing` → `{ lower: 60, upper: 50 }`, `lengthDays: 10` → `invalid_settings`, no audit row
   - `a save does not change the running period; the next roll uses it` → `rollPeriods` at T0 with stored defaults, save 60/120, the running period still 50/100; roll after its cutoff → new period 60/120 with the saved weekday's cutoff
   - `settling after a save starts the next period with the saved defaults` → via `settlePeriod(..., getPeriodDefaults(db))`
+  - `a failed audit write rolls the save back` → stub `writeAudit` to throw (as other audit-rollback tests do): row unchanged, error propagates
+  - `boundaries`: `upper = lower` ok; `lower = 1` ok; `lengthDays 7` and `364` ok (domain), `0`/`371` refused
 - [ ] **Step 2: Roller test** `a tick uses the defaults stored at that tick`: start the roller, save new levels, advance fake time past the cutoff → the created period has the new levels. Existing roller tests drop the `D` argument (no assertion changes).
 - [ ] **Step 3:** run → FAIL. **Step 4:** implement. **Step 5:** `pnpm test src/server/periods src/server/settlement` PASS, `pnpm typecheck` clean. **Step 6:** commit `Stored period defaults: read at each start, admin save with audit`.
 - [ ] **Step 7:** before pushing roller.ts, tell the Track A thread ("Build recurring chores and scheduler") the new `startPeriodRoller(db, opts)` signature.
@@ -103,7 +105,7 @@
   - `parseDefaults(data: unknown): PeriodDefaults` — exact keys `{ lengthDays, cutoff: { weekday, hour, minute }, levels: { lower, upper } }`, safe integers only, `upper ≤ LEVEL_MAX`, `lengthDays ≤ LENGTH_WEEKS_MAX * 7`; throws `Error('Invalid input')` otherwise (as `parseSettle` does). Domain rules stay in the domain.
   - `getPeriodDefaultsFn` — GET, `requireRole('admin')`, returns `PeriodDefaults`
   - `savePeriodDefaultsFn` — POST, `requireRole('admin')`, validator `parseDefaults`, handler `savePeriodDefaults(getDb(), context.user.id, data, new Date())`, returns `{ ok: true } | { ok: false; error: SetDefaultsError }`
-- [ ] **Step 1: Failing parser tests**: valid input passes through; each of: missing key, string number, 1.5, `upper: 1000`, `lengthDays: 371`, nested `cutoff` not an object, `null` → throws.
+- [ ] **Step 1: Failing parser tests**: valid input passes through; `upper: 999` and `lengthDays: 364` pass (boundaries); each of: missing key, string number, 1.5, `upper: 1000`, `lengthDays: 371`, nested `cutoff` not an object, `null` → throws. Handler shape: `getPeriodDefaultsFn` returns exactly the `PeriodDefaults` keys (no `updated_by`, no row id); `savePeriodDefaultsFn` returns exactly `{ ok: true }` or `{ ok: false, error }`, pinned with `toStrictEqual` on the handler's inner functions.
 - [ ] **Step 2–4:** FAIL → implement → PASS; `pnpm test tests/server-fn-guards.test.ts` PASS (both fns are guarded). **Step 5:** commit `Admin server functions for the default week`.
 
 ### Task 4: "Výchozí týden" card on Správa
@@ -122,12 +124,17 @@ Layout (UI doc §5 steppers, ASettings mockup, 360 px):
 - Section label `Výchozí týden`.
 - Card rows: **Délka** stepper in weeks, shown `7 dní` / `14 dní` (min 1, max `LENGTH_WEEKS_MAX`; value `lengthDays / 7`); **Konec**: weekday `Select` (`po út st čt pá so ne`, Monday first, mapped to domain 1…6,0) and `<Input type="time">` side by side; **Spodní hranice** and **Horní hranice** `ScoreStepper`s (lower min 1 max `LEVEL_MAX`; upper min = current lower, max `LEVEL_MAX`; raising lower above upper pushes upper up with it).
 - Meta line: `Platí od dalšího týdne, který ještě nezačal. Běžící týden se nemění.`
+- Tap targets: stepper buttons are `size-tap` (ScoreStepper already), the Select trigger and time input `min-h-tap`, Uložit `size="lg"` full width. No animation added.
+- Busy and errors: Uložit shows `cs.admin.saving` and is disabled while the request runs; a refusal or a network error shows its Czech text under the button (network: `cs.admin.defaults.failed`) and the form keeps the values, so Uložit is the retry. The Správa loader already has the route error state (`RouteError`); the card has no empty state (the row always reads, ruling 2). Nothing here is irreversible (a save can be changed back), so no Dialog.
+- 360 px: labels left, controls right on one row each; Konec puts the weekday select and the time input side by side (`grid-cols-2`), all fits at 360 px without wrapping.
 - `Uložit` button: disabled while `sameDefaults(form, defaults)` or saving; on success toast `Uloženo`, `router.invalidate()`; on error the Czech message under the button.
 
-Strings (`cs.admin.defaults`): `title: 'Výchozí týden'`, `length: 'Délka'`, `days: (n) => \`${n} dní\``, `cutoff: 'Konec'`, `weekday: 'Den'`, `time: 'Čas'`, `lower: 'Spodní hranice'`, `upper: 'Horní hranice'`, `hint` (above), `weekdays: ['po','út','st','čt','pá','so','ne']`, errors `invalidSettings: 'Takhle to nejde: horní hranice musí být aspoň spodní.'`, `notAdmin` reuses `cs.admin.errors.notAdmin`.
+Strings (`cs.admin.defaults`): `title: 'Výchozí týden'`, `length: 'Délka'`, `days: (n) => \`${n} dní\``, `cutoff: 'Konec'`, `weekday: 'Den'`, `time: 'Čas'`, `lower: 'Spodní hranice'`, `upper: 'Horní hranice'`, `hint` (above), `weekdays: ['po','út','st','čt','pá','so','ne']`, `failed: 'Uložení se nepovedlo. Zkus to znovu.'`, errors `invalidSettings: 'Takhle to nejde: horní hranice musí být aspoň spodní.'`, `notAdmin` reuses `cs.admin.errors.notAdmin`.
 
 - [ ] **Step 1: Failing tests**:
   - form helpers: `toTime(23, 59) === '23:59'`, `toTime(8, 5) === '08:05'`, `fromTime('20:00')` → `{20, 0}`, `fromTime('')` → null, `sameDefaults` true/false.
+  - route: `src/routes/_app/sprava.tsx` page test renders the card from the loader (real entry point, as `schuzkaPage.test.tsx` does)
+  - card: shows `Ukládám…` and a disabled button while `onSave` is pending; a network failure (rejected promise) shows the generic error and keeps the values
   - card: renders `7 dní`, `ne`, `23:59`, `50`, `100` from the seeded defaults; Uložit disabled until a change; `+` on Délka shows `14 dní` and enables Uložit; picking `so` + `20:00` and lower 60 / upper 120 calls `onSave` with `{ lengthDays: 14, cutoff: { weekday: 6, hour: 20, minute: 0 }, levels: { lower: 60, upper: 120 } }`; raising lower above upper raises upper; an error string from `onSave` is shown.
 - [ ] **Step 2–4:** FAIL → implement → PASS. **Step 5:** `pnpm lint && pnpm typecheck` clean. **Step 6:** commit `Správa: edit the default week`.
 
