@@ -119,6 +119,9 @@ describe('task page: price, cancel, history (#36)', () => {
     expect(html).not.toContain(cs.taskPrice.change)
     expect(html).toContain(cs.cancelTask.action)
     expect(html).toContain('<span class="text-meta text-muted">do zítra 7:00</span>')
+    // Nothing is ever negotiated on an instance, so no empty "Vyjednávání" heading either.
+    expect(html).not.toContain(cs.bids.thread)
+    expect(render(TATA)).toContain(cs.bids.thread)
   })
 
   it('a one-time task has no due line, not even an empty one', () => {

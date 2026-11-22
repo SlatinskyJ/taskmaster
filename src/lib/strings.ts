@@ -110,7 +110,7 @@ export const cs = {
       `${title} za ${String(n)} b. Rodič to ještě schválí.`,
     confirm: 'Zapsat',
     toast: 'Zapsáno, čeká na schválení',
-    empty: 'Zatím tu nejsou žádné opakované úkoly.',
+    empty: 'Zatím tu nejsou žádné domluvené opakované úkoly. Až je rodiče přidají, objeví se tady.',
   },
   /** Instances of a recurring chore made by a person (#38, UI doc §7.2 GTasks). */
   instances: {
