@@ -5,7 +5,7 @@ import { defineConfig, devices } from '@playwright/test'
 
 // Browser tests against the built server (`pnpm build` first). Five servers on fresh, empty
 // data folders seeded with the demo family: one with passkeys on (localhost), one with them
-// off, as on every preview, one for the task page flows (#36), one for the weekly meeting and one for Týden. Locally, point PW_CHROMIUM_PATH at a Chromium if Playwright's own
+// off, as on every preview, one for the task page flows (#36), one for the weekly meeting, one for Týden and one for the default week on Správa. Locally, point PW_CHROMIUM_PATH at a Chromium if Playwright's own
 // is not installed.
 
 const ON = 3100
@@ -16,6 +16,8 @@ const TASKS = 3102
 const MEETING = 3103
 /** Týden (#45): its own server, so other specs' approvals never change its numbers. */
 const WEEK = 3104
+/** Výchozí týden on Správa (#47): its own server, as the save changes the defaults for good. */
+const DEFAULT_WEEK = 3105
 
 // The off server's data folder, shared with its spec (which adds a passkey row directly).
 // Playwright loads this file again in each worker; the env var keeps the folder the same.
@@ -77,6 +79,11 @@ export default defineConfig({
       testMatch: 'meeting.spec.ts',
       use: { ...chromium, baseURL: `http://localhost:${String(MEETING)}` },
     },
+    {
+      name: 'default-week',
+      testMatch: 'default-week.spec.ts',
+      use: { ...chromium, baseURL: `http://localhost:${String(DEFAULT_WEEK)}` },
+    },
   ],
   webServer: [
     server(ON, {
@@ -87,5 +94,6 @@ export default defineConfig({
     server(TASKS, {}),
     server(MEETING, {}),
     server(WEEK, {}),
+    server(DEFAULT_WEEK, {}),
   ],
 })
