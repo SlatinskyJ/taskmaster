@@ -3,7 +3,12 @@ import { eq } from 'drizzle-orm'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import type { Db } from '~/server/db'
 import { featureFlags, templates, users } from '~/server/db/schema'
-import { createOnDemandInstance, selfLogInstance } from '~/server/instances'
+import {
+  createOnDemandInstance,
+  createScheduledInstances,
+  expireOverdueInstances,
+  selfLogInstance,
+} from '~/server/instances'
 import {
   acceptOffer,
   approveTask,
@@ -149,6 +154,10 @@ export function seedDemo(
     seedPoints(tx, id, step, now)
     seedTemplates(tx, ids, now)
     seedWeek(tx, id, now)
+    // The scheduler's boot tick, as a preview's first boot runs it (#39): the fish's last
+    // missed slot is made open, its earlier one has expired, the cat's water stays open.
+    expireOverdueInstances(tx, now, SEED_LOG)
+    createScheduledInstances(tx, now, SEED_LOG)
     seedInstances(tx, id, step, now)
     return { kind: 'seeded', usernames: DEMO_USERS.map((u) => u.username) } as const
   })
@@ -255,6 +264,48 @@ function seedInstances(tx: Tx, id: (username: string) => number, step: Step, now
   step('reject "Vyndat myčku"', rejectTask(tx, id('tata'), logged.id, undefined, now))
 }
 
+/** A job failure inside the seed must fail the seed, not be logged and skipped. */
+const SEED_LOG = {
+  error: (message: string, err?: unknown) => {
+    throw new Error(`Demo seed: ${message}`, { cause: err })
+  },
+}
+
+/** Two templates on an everyday schedule (#39), so previews show scheduled rows at any hour. */
+const DEMO_SCHEDULED: readonly NewTemplate[] = [
+  {
+    title: 'Vyměnit kočce vodu',
+    score: 1,
+    approvalRequired: true,
+    schedule: { days: [0, 1, 2, 3, 4, 5, 6], time: { hour: 7, minute: 0 } },
+    deadline: null,
+  },
+  {
+    title: 'Nakrmit rybičky',
+    score: 1,
+    approvalRequired: true,
+    schedule: { days: [0, 1, 2, 3, 4, 5, 6], time: { hour: 18, minute: 0 } },
+    // A slot's grace ends 25 h after it: the one made below has always expired by `now`.
+    deadline: { dayOffset: 1, due: { hour: 18, minute: 0 }, graceMinutes: 60 },
+  },
+]
+
+/**
+ * Early in the past week (#39), before its settlement, so the audit log stays in time order:
+ * Táta makes both everyday templates and Starší agrees, then a scheduler tick a day later makes
+ * one instance of each. The rest happens at the seed's boot tick (`seedDemo`).
+ */
+function seedSchedule(tx: Tx, id: (username: string) => number, start: Date): void {
+  const agreeAt = new Date(start.getTime() + 4 * HOUR)
+  for (const input of DEMO_SCHEDULED) {
+    const created = createTemplateIn(tx, id('tata'), input, agreeAt)
+    if (!created.ok) throw new Error(`Demo seed: template "${input.title}": ${created.error}`)
+    const agreed = approveTemplateScoreIn(tx, id('starsi'), created.value.id, input.score, agreeAt)
+    if (!agreed.ok) throw new Error(`Demo seed: approve "${input.title}": ${agreed.error}`)
+  }
+  createScheduledInstances(tx, new Date(agreeAt.getTime() + 26 * HOUR), SEED_LOG)
+}
+
 const HOUR = 3_600_000
 const PAST_WEEK_MS = 7 * 24 * HOUR
 
@@ -295,6 +346,7 @@ function seedPastWeek(tx: Tx, id: (username: string) => number, start: Date, now
     const approved = approveTask(tx, tata, task, at)
     if (!approved.ok) throw new Error(`Demo seed: approve "${chore.title}": ${approved.error}`)
   })
+  seedSchedule(tx, id, start)
   const week = listPeriods(tx)[0]
   if (!week) throw new Error('Demo seed: no past week')
   const settleAt = new Date(Math.min(week.cutoffAt.getTime() - HOUR, now.getTime() - HOUR))

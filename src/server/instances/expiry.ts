@@ -1,5 +1,6 @@
 import { and, inArray, lte } from 'drizzle-orm'
 import { toIsoUtc } from '~/domain/dates'
+import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { tasks } from '~/server/db/schema'
 import { expireTask } from '~/server/tasks/lifecycle'
@@ -9,7 +10,7 @@ import { expireTask } from '~/server/tasks/lifecycle'
 
 /** Expires what is overdue at `at`; returns the ids it expired. Never throws. */
 export function expireOverdueInstances(
-  db: Db,
+  db: Db | Tx,
   at: Date,
   log: Pick<Console, 'error'> = console,
 ): number[] {

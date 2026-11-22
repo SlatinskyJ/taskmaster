@@ -1,5 +1,5 @@
 import { verify } from '@node-rs/argon2'
-import { asc, eq, ne, sql } from 'drizzle-orm'
+import { and, asc, eq, ne, sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { login } from '~/server/auth'
 import { auditLog, settlements, tasks, templates, templateThread, users } from '~/server/db/schema'
@@ -8,6 +8,7 @@ import { takerPoints } from '~/server/points'
 import { listTasks } from '~/server/tasks'
 import { bootstrapAdmin } from '~/server/users'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
+import { fromPragueWallTime } from '~/domain/dates'
 import { listPeriods, rollPeriods } from '~/server/periods'
 import { rejectionsSince } from '~/server/tasks/rejections'
 import { getMeeting } from '~/server/settlement/meeting'
@@ -56,8 +57,11 @@ describe('demo seed (#62)', () => {
         ...[...done, 'task.approved'],
         ...[...done, 'task.approved'],
         ...[...done, 'task.approved'],
-        ...[...done, 'task.rejected'],
       ].map((action) => [action, 'user']),
+      // #39: a scheduler tick early in the past week makes the water and the fish.
+      ['instance.created', 'system'],
+      ['instance.created', 'system'],
+      ...[...done, 'task.rejected'].map((action) => [action, 'user']),
       ['task.created', 'user'],
       ['task.bid_placed', 'user'],
       ['task.bid_placed', 'user'],
@@ -96,6 +100,9 @@ describe('demo seed (#62)', () => {
           ...(approved ? ['task.approved'] : []),
         ].map((action) => [action, 'user']),
       ),
+      // #39: the boot tick expires that fish and makes today's; the water is still open.
+      ['instance.expired', 'system'],
+      ['instance.created', 'system'],
       // #38: two instances from Táta's "+ Teď", logs by Mladší and Starší, Starší's rejected.
       ['instance.created', 'user'],
       ['instance.created', 'user'],
@@ -239,6 +246,7 @@ describe('demo seed (#62)', () => {
   it('adds three templates (#37, #38): one waiting for agreement, two agreed', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
+    const scheduled = ['Vyměnit kočce vodu', 'Nakrmit rybičky']
     expect(
       db
         .select({
@@ -250,7 +258,8 @@ describe('demo seed (#62)', () => {
           due: templates.dueTime,
         })
         .from(templates)
-        .all(),
+        .all()
+        .filter((t) => !scheduled.includes(t.title)),
     ).toEqual([
       {
         title: 'Vynést koše',
@@ -275,6 +284,7 @@ describe('demo seed (#62)', () => {
       .from(auditLog)
       .where(eq(auditLog.entityType, 'template'))
       .all()
+      .slice(2 * 3) // #39's two everyday templates come first, tested below
       .map((r) => r.action)
     expect(actions).toEqual([
       'template.created',
@@ -295,7 +305,7 @@ describe('demo seed (#62)', () => {
     const rows = db
       .select()
       .from(tasks)
-      .where(ne(tasks.origin, 'one_time'))
+      .where(and(ne(tasks.origin, 'one_time'), ne(tasks.origin, 'scheduled')))
       .orderBy(asc(tasks.id))
       .all()
     expect(
@@ -314,9 +324,11 @@ describe('demo seed (#62)', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     const name = (id: number) => db.select().from(users).where(eq(users.id, id)).get()?.username
+    const dishes = db.select().from(templates).where(eq(templates.title, 'Vyndat myčku')).get()
     const rows = db
       .select()
       .from(templateThread)
+      .where(eq(templateThread.templateId, dishes?.id ?? 0))
       .all()
       .map((r) => [name(r.userId), r.side, r.score, r.closedAs])
     expect(rows).toEqual([
@@ -329,7 +341,7 @@ describe('demo seed (#62)', () => {
         .from(templates)
         .all()
         .map((t) => t.score),
-    ).toEqual([4, 3, 2])
+    ).toEqual([1, 1, 4, 3, 2])
   })
 
   it('all or nothing: a failing template leaves no people either', () => {
@@ -398,6 +410,46 @@ describe('demo seed (#62)', () => {
       ],
     ])
   })
+
+  // Previews seed with the real clock: every weekday, morning and evening, gives the same rows.
+  const NOWS = [16, 17, 18, 19, 20, 21, 22].flatMap((day) =>
+    [8, 20].map((hour) => fromPragueWallTime({ year: 2026, month: 11, day, hour, minute: 0 })),
+  )
+  it.each(NOWS)(
+    "scheduled rows (#39) at %s: water open, today's fish open, an expired fish",
+    (now) => {
+      const db = createTestDb()
+      seedDemo(db, PREVIEW, now)
+      const rows = db
+        .select()
+        .from(tasks)
+        .where(eq(tasks.origin, 'scheduled'))
+        .orderBy(asc(tasks.id))
+        .all()
+      expect(rows.map((r) => [r.title, r.status, r.dueAt !== null])).toEqual([
+        ['Vyměnit kočce vodu', 'open', false],
+        ['Nakrmit rybičky', 'expired', true],
+        ['Nakrmit rybičky', 'open', true],
+      ])
+      const [, , fish] = rows
+      expect(new Date(fish?.graceEndsAt ?? 0).getTime()).toBeGreaterThan(now.getTime())
+      const expired = db
+        .select()
+        .from(auditLog)
+        .where(
+          and(eq(auditLog.action, 'instance.expired'), eq(auditLog.entityId, String(rows[1]?.id))),
+        )
+        .all()
+      expect(expired.map((e) => e.actorKind)).toEqual(['system'])
+      const at = db
+        .select({ at: auditLog.at })
+        .from(auditLog)
+        .orderBy(asc(auditLog.id))
+        .all()
+        .map((r) => r.at)
+      expect(at).toEqual([...at].sort())
+    },
+  )
 
   it('the audit log is in time order (#45)', () => {
     const db = createTestDb()

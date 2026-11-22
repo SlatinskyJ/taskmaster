@@ -172,6 +172,12 @@ describe('createScheduledInstances', () => {
       TUE_24.toISOString(),
       '2026-11-25T06:00:00.000Z',
     ])
+    // Born at the slot, written at the tick: the audit log stays in the order things happened.
+    const [entry] = auditsOf(g, late?.id ?? 0)
+    expect([entry?.at, json(entry?.after)]).toMatchObject([
+      prague(11, 25, 6, 30).toISOString(),
+      { slotAt: TUE_24.toISOString() },
+    ])
   })
 
   it('after downtime only the latest missed slot makes an instance', () => {

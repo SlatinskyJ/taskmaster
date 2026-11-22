@@ -1,4 +1,4 @@
-import { toPragueWallTime } from '~/domain/dates'
+import { parseIsoUtc, toPragueWallTime } from '~/domain/dates'
 import type { Role } from '~/domain/parties'
 import { formatDue, formatPragueTime } from '~/lib/formatDate'
 import { cs } from '~/lib/strings'
@@ -240,5 +240,9 @@ export function instanceMeta(
     return formatDue(task.dueAt, task.graceEndsAt, now)
   }
   if (task.origin === 'on_demand') return cs.instances.onDemandAt(formatPragueTime(task.createdAt))
+  if (task.origin === 'scheduled') {
+    const { weekday } = toPragueWallTime(parseIsoUtc(task.createdAt))
+    return cs.instances.scheduledAt(cs.weekdays[weekday], formatPragueTime(task.createdAt))
+  }
   return undefined
 }

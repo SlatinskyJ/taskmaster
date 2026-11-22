@@ -19,7 +19,7 @@ import { insertInstance } from './instances'
 
 /** Makes the instances due at `at`; returns the rows made. One template failing leaves the rest. */
 export function createScheduledInstances(
-  db: Db,
+  db: Db | Tx,
   at: Date,
   log: Pick<Console, 'error'> = console,
 ): TaskRow[] {
@@ -79,7 +79,7 @@ function slotFor(tx: Tx, template: TemplateRow, at: Date): TaskRow | null {
   if (!item.ok) throw new Error(`scheduled instance refused: ${item.error}`)
   const row = insertInstance(
     tx,
-    { actor: { kind: 'system' }, createdBy: template.createdBy, createdAt: slot },
+    { actor: { kind: 'system' }, createdBy: template.createdBy, createdAt: slot, loggedAt: at },
     template,
     'scheduled',
     item.value,

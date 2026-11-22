@@ -124,6 +124,8 @@ export const cs = {
     overdue: 'po termínu',
     /** An on-demand instance without a deadline: when a parent made it. */
     onDemandAt: (time: string) => `na vyžádání · ${time}`,
+    /** A scheduled instance without a deadline (#39): the slot it was made for. */
+    scheduledAt: (weekday: string, time: string) => `podle rozvrhu · ${weekday} ${time}`,
     errors: {
       pastGrace: 'Termín už prošel, tohle už nejde.',
       scoreChanged: 'Cena se mezitím změnila, podívej se znovu.',
@@ -352,6 +354,10 @@ export const cs = {
     /** A recurring chore's instance (#38): "+ Teď" by a parent, or logged by a boy. */
     instanceCreated: (n: number) => `přidáno za ${String(n)} b`,
     selfLogged: (n: number) => `zapsáno za ${String(n)} b`,
+    /** Made by the schedule (#39), no person. */
+    scheduledCreated: (n: number) => `přidáno podle rozvrhu za ${String(n)} b`,
+    /** Its grace window ended with nobody done (#39). */
+    expired: 'prošlo',
     other: 'změna',
   },
   home: {

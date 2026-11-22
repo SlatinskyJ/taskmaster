@@ -34,11 +34,16 @@ function load(tx: Tx, userId: number, templateId: number) {
   return ok({ template, actor: byPerson(person) })
 }
 
-/** Who makes an instance: the audit actor, the row's `created_by`, and when it is born. */
+/**
+ * Who makes an instance: the audit actor, the row's `created_by`, when it is born (`created_at`)
+ * and when that is written (`loggedAt`, the audit entry's time; default `createdAt`). A
+ * scheduled instance is born at its slot but written at the tick, later after downtime.
+ */
 export interface InstanceBirth {
   actor: AuditActor
   createdBy: number
   createdAt: Date
+  loggedAt?: Date
 }
 
 /**
@@ -53,7 +58,7 @@ export function insertInstance(
   item: Item,
   extra: Record<string, unknown> = {},
 ): TaskRow {
-  const now = birth.createdAt
+  const now = birth.loggedAt ?? birth.createdAt
   const at = toIsoUtc(now)
   const row = tx
     .insert(tasks)
@@ -67,7 +72,7 @@ export function insertInstance(
       dueAt: item.deadline ? toIsoUtc(item.deadline.dueAt) : null,
       graceEndsAt: item.deadline ? toIsoUtc(item.deadline.graceEndsAt) : null,
       createdBy: birth.createdBy,
-      createdAt: at,
+      createdAt: toIsoUtc(birth.createdAt),
       updatedAt: at,
       agreedAt: template.agreedAt,
     })
