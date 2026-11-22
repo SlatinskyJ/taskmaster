@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { cs } from '../src/lib/strings'
 import { logout, passwordLogin } from './helpers'
 
-// The task page flows of #36 through the real routes and server functions, on the demo data:
+// The task page flows of #36 through the real routes and server functions, on the `tasks` seed (#183):
 // Táta's new price 12 for "Shrabat listí na zahradě" (now 10) waits for the brothers.
 const TASK = 'Shrabat listí na zahradě'
 
