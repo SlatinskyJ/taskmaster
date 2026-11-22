@@ -186,6 +186,22 @@ export function defaultsErrorMessage(error: string): string {
 }
 
 /**
+ * Runs one save and gives the Czech error to show, or null when saved: a refusal code maps
+ * through `defaultsErrorMessage`, a thrown error (network) to the generic text.
+ */
+export async function trySave(
+  onSave: (d: PeriodDefaults) => Promise<string | null>,
+  form: PeriodDefaults,
+): Promise<string | null> {
+  try {
+    const refused = await onSave(form)
+    return refused ? defaultsErrorMessage(refused) : null
+  } catch {
+    return t.failed
+  }
+}
+
+/**
  * The card with its state. `onSave` sends the form and resolves to an error code, or null when
  * saved; a thrown error (network) shows the generic text. The form keeps its values on failure,
  * so Uložit is the retry.
@@ -204,14 +220,8 @@ export function DefaultWeekCard({
   async function save() {
     setBusy(true)
     setError(null)
-    try {
-      const refused = await onSave(form)
-      if (refused) setError(defaultsErrorMessage(refused))
-    } catch {
-      setError(t.failed)
-    } finally {
-      setBusy(false)
-    }
+    setError(await trySave(onSave, form))
+    setBusy(false)
   }
 
   return (

@@ -7,7 +7,8 @@ import { users } from './users'
 // changes it on Správa (src/server/periods/defaults.ts). Every new period takes the values in
 // this row at the moment it starts. Its history is the audit log (`settings.changed`).
 // The checks mirror the domain's `isValidDefaults`; the UI's LEVEL_MAX lives in code only, so
-// changing it needs no table rebuild.
+// changing it needs no table rebuild. The length check's 364 is `MAX_LENGTH_DAYS`: the two move
+// together, and changing it means a migration that rebuilds this table.
 export const periodDefaults = sqliteTable(
   'period_defaults',
   {

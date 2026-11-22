@@ -151,7 +151,7 @@ describe('startPeriodRoller', () => {
           cutoff: { weekday: 0, hour: 23, minute: 59 },
           levels: { lower: 60, upper: 120 },
         },
-        new Date(),
+        SAT,
       ),
     )
     vi.advanceTimersByTime(CUTOFF.getTime() - SAT.getTime())

@@ -34,8 +34,8 @@ function toDefaults(row: PeriodDefaultsRow): PeriodDefaults {
   }
 }
 
-/** Plain JSON for the audit log: exactly the defaults' fields. */
-function toAudit(d: PeriodDefaults) {
+/** Plain JSON, exactly the defaults' fields: the audit log's shape and what the screen gets. */
+export function plainDefaults(d: PeriodDefaults): PeriodDefaults {
   return {
     lengthDays: d.lengthDays,
     cutoff: { weekday: d.cutoff.weekday, hour: d.cutoff.hour, minute: d.cutoff.minute },
@@ -90,8 +90,8 @@ export function writePeriodDefaults(
     action: 'settings.changed',
     entityType: 'settings',
     entityId: ROW_ID,
-    before: previous ? toAudit(toDefaults(previous)) : null,
-    after: toAudit(defaults),
+    before: previous ? plainDefaults(toDefaults(previous)) : null,
+    after: plainDefaults(defaults),
     at: now,
   })
 }

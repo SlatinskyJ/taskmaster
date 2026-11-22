@@ -7,7 +7,7 @@ import type { Weekday } from '~/domain/dates'
 import type { Db } from '~/server/db'
 import { auditLog, periodDefaults } from '~/server/db/schema'
 import { failAuditOn, family, json, must } from '~/server/tasks/testing'
-import { getPeriodDefaults, savePeriodDefaults } from './defaults'
+import { getPeriodDefaults, savePeriodDefaults, writePeriodDefaults } from './defaults'
 import { currentPeriod, listPeriods, rollPeriods } from './periods'
 
 const prague = (year: number, month: number, day: number, hour = 0, minute = 0) =>
@@ -180,5 +180,15 @@ describe('savePeriodDefaults', () => {
     // The period after it takes the saved defaults.
     const [third] = rollPeriods(f.db, prague(2026, 12, 7), getPeriodDefaults(f.db))
     expect(third).toMatchObject({ levels: { lower: 60, upper: 120 } })
+  })
+
+  it('a write by the system (an agreed proposal) stores no user and audits a system actor', () => {
+    const f = family()
+    f.db.transaction((tx) => {
+      writePeriodDefaults(tx, { kind: 'system' }, NEW, SAVE_AT)
+    })
+    expect(getPeriodDefaults(f.db)).toEqual(NEW)
+    expect(f.db.select().from(periodDefaults).get()?.updatedBy).toBeNull()
+    expect(settingsAudit(f.db)[0]).toMatchObject({ actorKind: 'system', actorUserId: null })
   })
 })

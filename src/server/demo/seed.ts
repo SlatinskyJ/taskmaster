@@ -1,5 +1,4 @@
 import { hashSync } from '@node-rs/argon2'
-import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import type { Db } from '~/server/db'
 import { users } from '~/server/db/schema'
 import {
@@ -14,7 +13,7 @@ import {
   rejectTask,
   reserveTask,
 } from '~/server/tasks'
-import { listPeriods, rollPeriods } from '~/server/periods'
+import { getPeriodDefaults, listPeriods, rollPeriods } from '~/server/periods'
 import { getMeeting, settlePeriod } from '~/server/settlement/meeting'
 import type { Tx } from '~/server/audit'
 import { approveTemplateScoreIn, createTemplateIn } from '~/server/templates/templates'
@@ -249,7 +248,7 @@ function doChore(tx: Tx, tata: number, boy: number, title: string, score: number
  */
 function seedPastWeek(tx: Tx, id: (username: string) => number, start: Date, now: Date): void {
   const tata = id('tata')
-  rollPeriods(tx, start, DEFAULT_PERIOD_DEFAULTS)
+  rollPeriods(tx, start, getPeriodDefaults(tx))
   DEMO_PAST_WEEK.forEach((chore, i) => {
     const at = new Date(start.getTime() + (i + 1) * HOUR)
     const task = doChore(tx, tata, id(chore.by), chore.title, chore.score, at)

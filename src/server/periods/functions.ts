@@ -5,7 +5,7 @@ import type { Result } from '~/domain/result'
 import { LENGTH_WEEKS_MAX, LEVEL_MAX } from '~/lib/periodLimits'
 import { requireRole } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
-import { getPeriodDefaults, savePeriodDefaults } from './defaults'
+import { getPeriodDefaults, plainDefaults, savePeriodDefaults } from './defaults'
 import type { SetDefaultsError } from './defaults'
 
 export type { SetDefaultsError }
@@ -53,13 +53,7 @@ export function parseDefaults(data: unknown): PeriodDefaults {
 }
 
 /** What the screen gets: the defaults' fields, nothing else from the row. */
-export function defaultsView(d: PeriodDefaults): PeriodDefaults {
-  return {
-    lengthDays: d.lengthDays,
-    cutoff: { weekday: d.cutoff.weekday, hour: d.cutoff.hour, minute: d.cutoff.minute },
-    levels: { lower: d.levels.lower, upper: d.levels.upper },
-  }
-}
+export const defaultsView = plainDefaults
 
 export type SaveDefaultsResult = { ok: true } | { ok: false; error: SetDefaultsError }
 

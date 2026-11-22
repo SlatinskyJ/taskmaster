@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import type { PeriodDefaults } from '~/domain'
 import { cs } from '~/lib/strings'
-import { DefaultWeekView, defaultsErrorMessage } from './DefaultWeekCard'
+import { DefaultWeekView, defaultsErrorMessage, trySave } from './DefaultWeekCard'
 import type { DefaultWeekViewProps } from './DefaultWeekCard'
 
 const D = DEFAULT_PERIOD_DEFAULTS
@@ -92,5 +92,23 @@ describe('Výchozí týden card (Správa, #47)', () => {
     expect(defaultsErrorMessage('invalid_settings')).toBe(cs.admin.defaults.invalidSettings)
     expect(defaultsErrorMessage('not_admin')).toBe(cs.admin.errors.notAdmin)
     expect(defaultsErrorMessage('boom')).toBe(cs.admin.defaults.failed)
+  })
+})
+
+describe('trySave', () => {
+  it('a saved form shows no error', async () => {
+    expect(await trySave(() => Promise.resolve(null), D)).toBeNull()
+  })
+
+  it('a refusal shows its Czech message', async () => {
+    expect(await trySave(() => Promise.resolve('invalid_settings'), D)).toBe(
+      cs.admin.defaults.invalidSettings,
+    )
+  })
+
+  it('a network failure shows the generic message', async () => {
+    expect(await trySave(() => Promise.reject(new Error('offline')), D)).toBe(
+      cs.admin.defaults.failed,
+    )
   })
 })
