@@ -111,8 +111,8 @@ export const cs = {
     confirm: 'Zapsat',
     toast: 'Zapsáno, čeká na schválení',
     /** A chore with a copy on the board can't be logged (Jakub 2026-11-22): take that one. */
-    onBoard: 'Už je na nástěnce',
-    tileOnBoardLabel: (title: string) => `${title}, už je na nástěnce`,
+    onBoard: 'Už je zadaný na Domů',
+    tileOnBoardLabel: (title: string) => `${title}, už je zadaný na Domů`,
     /** "Kdy?" (Jakub 2026-11-22): Dnes ráno = today 7:00, Včera = yesterday 18:00. */
     when: { label: 'Kdy?', now: 'Teď', this_morning: 'Dnes ráno', yesterday: 'Včera' },
     empty: 'Zatím tu nejsou žádné domluvené opakované úkoly. Až je rodiče přidají, objeví se tady.',
@@ -139,7 +139,7 @@ export const cs = {
     errors: {
       pastGrace: 'Termín už prošel, tohle už nejde.',
       scoreChanged: 'Cena se mezitím změnila, podívej se znovu.',
-      alreadyOpen: 'Tenhle úkol už je na nástěnce. Vezmi si ho tam.',
+      alreadyOpen: 'Tenhle úkol už je zadaný. Najdeš ho na Domů.',
       tooEarly: 'Tohle už patří do minulého týdne.',
     },
   },
@@ -475,6 +475,24 @@ export const cs = {
     resetDone: 'Heslo změněno',
     you: 'ty',
     selfHint: 'Svou roli ani heslo tady neměníš.',
+    /** Výchozí týden on Správa (#47, spec §5.8). Level labels: `cs.meeting.level`. */
+    defaults: {
+      title: 'Výchozí týden',
+      length: 'Délka',
+      days: (n: number) => `${String(n)} dní`,
+      shorter: 'Kratší',
+      longer: 'Delší',
+      less: (field: string) => `Méně: ${field}`,
+      more: (field: string) => `Více: ${field}`,
+      cutoff: 'Konec',
+      weekday: 'Den',
+      time: 'Čas',
+      /** Full day names, Sunday first like `Weekday`; the list shows them Monday first. */
+      weekdayNames: ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'],
+      hint: 'Platí od dalšího týdne, který ještě nezačal. Běžící týden se nemění.',
+      failed: 'Uložení se nepovedlo. Zkus to znovu.',
+      invalidSettings: 'Takhle to nejde: horní hranice musí být aspoň spodní.',
+    },
     errors: {
       invalidUsername:
         'Jen malá písmena bez diakritiky, číslice a . _ -, 2 až 32 znaků, začíná písmenem.',

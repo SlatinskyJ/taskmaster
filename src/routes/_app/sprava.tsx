@@ -2,6 +2,7 @@ import { createFileRoute, useRouter } from '@tanstack/react-router'
 import { ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { DefaultWeekCard } from '~/components/admin/DefaultWeekCard'
 import type { PersonFormValues } from '~/components/admin/PersonForm'
 import { PersonDrawer } from '~/components/admin/PersonDrawer'
 import { ResetPasswordDialog } from '~/components/admin/ResetPasswordDialog'
@@ -14,20 +15,27 @@ import { Card } from '~/components/ui/card'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { userErrorMessage } from '~/lib/userErrors'
+import type { PeriodDefaults } from '~/domain'
 import { listPasskeyCountsFn } from '~/server/passkeys/functions'
+import { getPeriodDefaultsFn, savePeriodDefaultsFn } from '~/server/periods/functions'
 import type { PersonSummary } from '~/server/users/functions'
 import { createUserFn, listUsersFn, resetPasswordFn, updateUserFn } from '~/server/users/functions'
 
 // Správa, the admin's only screen, no bottom bar (UI doc §6, §7.5). Others go to their landing.
 // People (#134): add, rename, change role, reset password. No deactivation (Jakub 2026-11-17).
-// The list is never empty: the admin is always in it. Settings and disputes come with #47.
+// The list is never empty: the admin is always in it. Výchozí týden (#47, spec §5.8): the
+// admin edits the default week directly. Disputes come with the rest of #47.
 export const Route = createFileRoute('/_app/sprava')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/sprava')
   },
   loader: async () => {
-    const [people, passkeys] = await Promise.all([listUsersFn(), listPasskeyCountsFn()])
-    return { people, passkeys }
+    const [people, passkeys, defaults] = await Promise.all([
+      listUsersFn(),
+      listPasskeyCountsFn(),
+      getPeriodDefaultsFn(),
+    ])
+    return { people, passkeys, defaults }
   },
   component: Sprava,
 })
@@ -36,7 +44,7 @@ type Sheet = { mode: 'add' } | { mode: 'edit'; person: PersonSummary } | null
 
 function Sprava() {
   const { user } = Route.useRouteContext()
-  const { people, passkeys } = Route.useLoaderData()
+  const { people, passkeys, defaults } = Route.useLoaderData()
   const router = useRouter()
   const [sheet, setSheet] = useState<Sheet>(null)
   // Kept apart from `sheet` so the drawer can close while its last content fades out.
@@ -83,9 +91,18 @@ function Sprava() {
     return null
   }
 
+  async function saveDefaults(next: PeriodDefaults): Promise<string | null> {
+    const r = await savePeriodDefaultsFn({ data: next })
+    if (!r.ok) return r.error
+    toast.success(cs.admin.saved)
+    await router.invalidate()
+    return null
+  }
+
   return (
     <Screen title={cs.admin.title} user={user}>
-      <SectionLabel>{cs.admin.people}</SectionLabel>
+      <DefaultWeekCard defaults={defaults} onSave={saveDefaults} />
+      <SectionLabel className="mt-3.5">{cs.admin.people}</SectionLabel>
       <Card>
         <ul className="grid gap-1">
           {people.map((p) => {

@@ -60,13 +60,27 @@ describe('schedulerJobs', () => {
     for (const job of schedulerJobs(f.db, D, log)) job.run(at)
 
     expect(log.info.mock.calls.map((c) => c[0] as string)).toEqual([
-      `[periods] started ${at.toISOString()} → 2026-11-29T22:59:00.000Z`,
+      `[periods] started ${at.toISOString()} → 2026-11-29T22:59:00.000Z levels 50/100`,
       '[scheduler] expiry: 1',
       '[scheduler] instances: 1',
     ])
     expect(listPeriods(f.db)).toHaveLength(1)
     expect(row(f.db, overdue)?.status).toBe('expired')
     expect(log.error).not.toHaveBeenCalled()
+  })
+
+  it('reads the period defaults on every tick, so a stored change applies (#186)', () => {
+    const db = createTestDb()
+    let defaults = DEFAULT_PERIOD_DEFAULTS
+    const jobs = schedulerJobs(db, () => defaults, quietLog())
+    const periods = jobs.find((j) => j.name === 'periods')
+    periods?.run(prague(11, 16, 10))
+    defaults = { ...DEFAULT_PERIOD_DEFAULTS, levels: { lower: 60, upper: 120 } }
+    periods?.run(prague(11, 23, 0, 30))
+    expect(listPeriods(db).map((p) => [p.levels.lower, p.levels.upper])).toEqual([
+      [50, 100],
+      [60, 120],
+    ])
   })
 
   it('rolls the period at the cutoff while running', async () => {

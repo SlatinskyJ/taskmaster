@@ -9,6 +9,8 @@ import {
   reserveTask,
 } from '~/server/tasks'
 import { T0, T1, T2, T3, family, must, type Family } from '~/server/tasks/testing'
+import { periodDefaults } from '~/server/db/schema'
+import { getPeriodDefaults, rollPeriods, savePeriodDefaults } from '~/server/periods'
 import { takerPoints } from './points'
 
 // The points query (spec §5.7): confirmed = running total, pending = done and unconfirmed.
@@ -36,12 +38,12 @@ const confirmedBy = (f: Family, taker: number, score: number) => {
   return id
 }
 
-const row = (f: Family, id: number) => takerPoints(f.db).takers.find((t) => t.id === id)
+const row = (f: Family, id: number) => takerPoints(f.db, T3).takers.find((t) => t.id === id)
 
 describe('takerPoints', () => {
   it('is zero for every taker with no tasks', () => {
     const f = family()
-    expect(takerPoints(f.db)).toEqual({
+    expect(takerPoints(f.db, T3)).toEqual({
       levels: { lower: 50, upper: 100 },
       takers: [
         { id: f.starsi, name: 'Starší', confirmed: 0, pending: 0 },
@@ -88,7 +90,7 @@ describe('takerPoints', () => {
     must(reserveTask(f.db, f.mladsi, released, T2))
     must(releaseTask(f.db, f.mladsi, released, T3))
     must(completeTask(f.db, f.tata, openTask(f, 13), T2))
-    expect(takerPoints(f.db).takers.map((t) => [t.confirmed, t.pending])).toEqual([
+    expect(takerPoints(f.db, T3).takers.map((t) => [t.confirmed, t.pending])).toEqual([
       [0, 0],
       [0, 0],
     ])
@@ -103,6 +105,27 @@ describe('takerPoints', () => {
 
   it('leaves out admins and givers', () => {
     const f = family()
-    expect(takerPoints(f.db).takers.map((t) => t.id)).toEqual([f.starsi, f.mladsi])
+    expect(takerPoints(f.db, T3).takers.map((t) => t.id)).toEqual([f.starsi, f.mladsi])
+  })
+})
+
+describe('takerPoints levels', () => {
+  const NEW = { lower: 60, upper: 120 }
+
+  it('with no running period, the stored defaults', () => {
+    const f = family()
+    f.db.update(periodDefaults).set({ lowerLevel: 60, upperLevel: 120 }).run()
+    expect(takerPoints(f.db, T3).levels).toEqual(NEW)
+  })
+
+  it("the running period's levels, not a save made during it; the next period's after", () => {
+    const f = family()
+    const [first] = rollPeriods(f.db, T3, getPeriodDefaults(f.db))
+    if (!first) throw new Error('no period')
+    must(savePeriodDefaults(f.db, f.admin, { ...getPeriodDefaults(f.db), levels: NEW }, T3))
+    expect(takerPoints(f.db, T3).levels).toEqual({ lower: 50, upper: 100 })
+    const after = new Date(first.cutoffAt.getTime() + 1)
+    rollPeriods(f.db, after, getPeriodDefaults(f.db))
+    expect(takerPoints(f.db, after).levels).toEqual(NEW)
   })
 })

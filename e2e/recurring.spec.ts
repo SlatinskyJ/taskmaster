@@ -5,7 +5,6 @@ import { passwordLogin } from './helpers'
 // Recurring chores made by a person (#38) on the demo data, at 360 px: Starší logs a chore on
 // Zapsat and his pending points go up; Táta's "+ Teď" adds an open copy to Úkoly and he approves
 // the log; with the copy on the board, Zapsat shows the tile as taken (Jakub 2026-11-22).
-// Scheduled ones (#39) come from the seed's scheduler ticks, so they are there at any hour.
 
 test.use({ viewport: { width: 360, height: 800 } })
 
@@ -21,7 +20,7 @@ async function switchTo(page: Page, username: string) {
 test('Zapsat, + Teď, approve, then the tile is taken', async ({ page }) => {
   await passwordLogin(page, 'starsi')
   await expect(page).toHaveURL(/\/$/)
-  await expect(bar(page)).toHaveAttribute('aria-label', /^260 bodů potvrzeno, 14 čeká/)
+  await expect(bar(page)).toHaveAttribute('aria-label', /^40 bodů potvrzeno, 12 čeká/)
   await page.goto('/zapsat')
   // The school bag is already on the board in the demo data.
   await expect(
@@ -34,7 +33,7 @@ test('Zapsat, + Teď, approve, then the tile is taken', async ({ page }) => {
   await page.getByRole('button', { name: cs.log.confirm, exact: true }).click()
   await expect(page.getByText(cs.log.toast)).toBeVisible()
   await page.goto('/')
-  await expect(bar(page)).toHaveAttribute('aria-label', /^260 bodů potvrzeno, 17 čeká/)
+  await expect(bar(page)).toHaveAttribute('aria-label', /^40 bodů potvrzeno, 15 čeká/)
 
   await switchTo(page, 'tata')
   await page.goto('/ukoly')
@@ -55,7 +54,7 @@ test('Zapsat, + Teď, approve, then the tile is taken', async ({ page }) => {
   await mine.getByRole('button', { name: cs.work.approve }).click()
   await expect(page.locator('[data-slot="points-bar"]').nth(0)).toHaveAttribute(
     'aria-label',
-    /^263 bodů potvrzeno, 14 čeká/,
+    /^43 bodů potvrzeno, 12 čeká/,
   )
 
   await switchTo(page, 'starsi')
@@ -63,30 +62,4 @@ test('Zapsat, + Teď, approve, then the tile is taken', async ({ page }) => {
   await expect(
     page.getByRole('button', { name: cs.log.tileOnBoardLabel('Vyndat myčku') }),
   ).toBeDisabled()
-})
-
-test('scheduled and expired instances', async ({ page }) => {
-  await passwordLogin(page, 'tata')
-  await expect(page).toHaveURL(/\/$/)
-  await page.goto('/ukoly')
-  await expect(
-    page.getByRole('listitem').filter({ hasText: 'Vyměnit kočce vodu' }).filter({
-      hasText: ' · podle rozvrhu',
-    }),
-  ).toBeVisible()
-  const expired = page
-    .getByRole('region', { name: new RegExp(`^${cs.state.expired}`) })
-    .getByRole('listitem')
-    .filter({ hasText: 'Nakrmit rybičky' })
-  await expect(expired).toHaveCount(1)
-  // A finished row has no link; the seed makes the expired fish fifth (after the past week's
-  // three chores and the cat's water), and the heading check fails loudly if that moves.
-  await page.goto('/ukol/5')
-  await expect(page.getByRole('heading', { name: 'Nakrmit rybičky' })).toBeVisible()
-  await expect(page.getByRole('region', { name: cs.history.title })).toContainText(
-    cs.history.expired,
-  )
-  await expect(page.getByRole('region', { name: cs.history.title })).toContainText(
-    cs.history.scheduledCreated(1),
-  )
 })

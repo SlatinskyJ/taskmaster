@@ -223,7 +223,14 @@ describe('LogConfirm', () => {
     )
     expect(html).toContain(cs.log.when.label)
     for (const w of ALL) expect(html).toContain(cs.log.when[w])
-    expect(html).toMatch(/aria-pressed="true"[^>]*>Včera</)
+    // Only the picked pill is pressed and ringed.
+    const pill = (label: string) => new RegExp(`<button[^>]*>${label}</button>`).exec(html)?.[0]
+    expect(pill(cs.log.when.yesterday)).toMatch(/aria-pressed="true"/)
+    expect(pill(cs.log.when.yesterday)).toContain('ring-accent-strong')
+    for (const other of [cs.log.when.now, cs.log.when.this_morning]) {
+      expect(pill(other)).toMatch(/aria-pressed="false"/)
+      expect(pill(other)).not.toContain('ring-accent-strong')
+    }
     ui.pressed.get(cs.log.when.this_morning)?.onClick?.({})
     expect(onWhen).toHaveBeenCalledWith('this_morning')
   })

@@ -63,6 +63,8 @@ export interface PeriodDefaults {
 }
 
 export const DEFAULT_LENGTH_DAYS = 7
+/** [call] The longest default period: 52 weeks. */
+export const MAX_LENGTH_DAYS = 364
 /** The end of Sunday, 23:59 Europe/Prague (Jakub 2026-11-21, spec §5.8). */
 export const DEFAULT_CUTOFF: CutoffTime = { weekday: 0, hour: 23, minute: 59 }
 /** Default lower/upper levels (Jakub 2026-11-21, the spec's example numbers). */
@@ -113,7 +115,7 @@ const isWholeIn = (n: number, min: number, max: number) =>
 export function isValidDefaults(defaults: PeriodDefaults): boolean {
   const { lengthDays, cutoff, levels } = defaults
   return (
-    isWholeIn(lengthDays, 7, 364) &&
+    isWholeIn(lengthDays, 7, MAX_LENGTH_DAYS) &&
     lengthDays % 7 === 0 &&
     isWholeIn(cutoff.weekday, 0, 6) &&
     isWholeIn(cutoff.hour, 0, 23) &&
@@ -122,11 +124,15 @@ export function isValidDefaults(defaults: PeriodDefaults): boolean {
   )
 }
 
-/** A per-period change: valid levels and a cutoff after the period's start. */
+/**
+ * A per-period change: valid levels and a cutoff after the period's start and [call] at most
+ * `MAX_LENGTH_DAYS` after it, the same longest period the defaults allow.
+ */
 export function isValidPeriodSettings(settings: PeriodSettings, startsAt: Date): boolean {
   return (
     !Number.isNaN(settings.cutoffAt.getTime()) &&
     settings.cutoffAt.getTime() > startsAt.getTime() &&
+    settings.cutoffAt.getTime() <= addPragueDays(startsAt, MAX_LENGTH_DAYS).getTime() &&
     isValidLevels(settings.levels)
   )
 }
@@ -285,6 +291,24 @@ export function isPeriodAgreed(
   const approved = (p: Person) => approvedBy.includes(p.id)
   const takers = people.filter(isActiveTaker)
   return takers.every(approved) && people.filter(isActiveGiver).some(approved)
+}
+
+/**
+ * Who still has to approve for period agreement, by id ascending: every active taker who has
+ * not, and every active giver while no giver has. Empty exactly when `isPeriodAgreed` holds.
+ */
+export function periodAgreementWaitingFor(
+  approvedBy: readonly PersonId[],
+  people: readonly Person[],
+): PersonId[] {
+  const giverApproved = people.some((p) => isActiveGiver(p) && approvedBy.includes(p.id))
+  return people
+    .filter(
+      (p) =>
+        (isActiveTaker(p) && !approvedBy.includes(p.id)) || (!giverApproved && isActiveGiver(p)),
+    )
+    .map((p) => p.id)
+    .sort((a, b) => a - b)
 }
 
 /** Promotes a pending proposal that has period agreement now. Call after people change. */

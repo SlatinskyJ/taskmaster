@@ -1,3 +1,4 @@
+import { resolvePendingProposals } from '~/server/periods/proposals'
 import { resolveProposedTasks } from '~/server/tasks/tasks'
 import { resolveProposedTemplates } from '~/server/templates/templates'
 import type { PeopleChangeHook } from './people'
@@ -8,7 +9,8 @@ import type { PeopleChangeHook } from './people'
  * registry could be empty. A feature that keeps agreements in flight adds its hook to this list (spec §3):
  * - proposals and bids: re-run `resolveTemplate` / `resolveOneTime` (#33, #37); a one-time
  *   task this opens closes its open bids (#34);
- * - reservations of a deactivated taker: release them (#35).
+ * - reservations of a deactivated taker: release them (#35);
+ * - period and default-week proposals that now have period agreement (#43).
  */
 export const PEOPLE_CHANGE_HOOKS: readonly PeopleChangeHook[] = [
   (tx, people, now) => {
@@ -16,5 +18,8 @@ export const PEOPLE_CHANGE_HOOKS: readonly PeopleChangeHook[] = [
   },
   (tx, people, now) => {
     resolveProposedTemplates(tx, people, now)
+  },
+  (tx, people, now) => {
+    resolvePendingProposals(tx, people, now)
   },
 ]

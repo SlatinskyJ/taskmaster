@@ -243,15 +243,15 @@ describe('data migrations', () => {
     sqlite.close()
   })
 
-  it('0018 keeps every task as a one-time task, with its thread rows', () => {
+  it('0020 keeps every task as a one-time task, with its thread rows', () => {
     const A = '2026-11-21T10:00:00.000Z'
     const dir = tempDir()
     const before = join(dir, 'm')
     cpSync('drizzle', before, { recursive: true })
-    // Keep migrations 0000–0017 only: the state of a database before instances.
+    // Keep migrations 0000–0019 only: the state of a database before instances.
     const path = join(before, 'meta', '_journal.json')
     const journal = JSON.parse(readFileSync(path, 'utf8')) as { entries: { idx: number }[] }
-    journal.entries = journal.entries.filter((e) => e.idx <= 17)
+    journal.entries = journal.entries.filter((e) => e.idx <= 19)
     writeFileSync(path, JSON.stringify(journal))
     const sqlite = new Database(join(dir, 'db.sqlite'))
     applyMigrations(sqlite, before)

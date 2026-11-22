@@ -212,7 +212,7 @@ describe('createScheduledInstances', () => {
       ['instance.created', 'system'],
       ['instance.expired', 'system'],
     ])
-    const points = takerPoints(f.db).takers.map((t) => [t.name, t.confirmed, t.pending])
+    const points = takerPoints(f.db, TUE_24).takers.map((t) => [t.name, t.confirmed, t.pending])
     expect(points).toEqual([
       ['Starší', 4, 0],
       ['Mladší', 0, 0],

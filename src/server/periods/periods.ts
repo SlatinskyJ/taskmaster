@@ -1,14 +1,16 @@
 import { and, asc, desc, eq, isNull, lte } from 'drizzle-orm'
 import { endPeriodEarly, firstPeriod, isRunning, periodAt, periodsToStart } from '~/domain'
 import type { Levels, Period, PeriodDefaults, PeriodError, PeriodId, PeriodSpan } from '~/domain'
-import { parseIsoUtc, toIsoUtc } from '~/domain/dates'
+import { toIsoUtc } from '~/domain/dates'
 import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
 import { writeAudit } from '~/server/audit'
 import type { Actor, Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { periods } from '~/server/db/schema'
-import type { PeriodRow } from '~/server/db/schema'
+import { agreedProposalFor, lapseProposals, toPeriod } from './proposalRows'
+
+export { toPeriod }
 
 // Stored periods (spec §5.8). The chain rules live in src/domain/periods.ts; this module stores
 // them. Two paths start a period, each with its audit entries in one transaction:
@@ -17,23 +19,11 @@ import type { PeriodRow } from '~/server/db/schema'
 //   - `endRunningPeriod` (the meeting's settlement, #44): settling ends the running period now
 //     and starts the next one.
 //
-// Per-period proposals (#43) are not stored yet: both paths pass `null`. #43 owns reading the
-// agreed proposal on both paths, lapsing pending ones when their period starts (at either path),
-// and refusing approvals after that. The defaults are a required parameter on purpose: when #43
-// or #47 store settings, the type checker lists every caller.
+// Both paths apply the agreed per-period change for the period they start (#43, only the first
+// period started) and then lapse every pending change whose period has started
+// (./proposalRows.ts). Approvals after the start are refused in ./proposals.ts.
 
 type Reader = Db | Tx
-
-/** A stored row as a domain period. */
-export function toPeriod(row: PeriodRow): Period {
-  return {
-    id: row.id,
-    startsAt: parseIsoUtc(row.startsAt),
-    cutoffAt: parseIsoUtc(row.cutoffAt),
-    endedAt: row.endedAt === null ? null : parseIsoUtc(row.endedAt),
-    levels: { lower: row.lowerLevel, upper: row.upperLevel },
-  }
-}
 
 /** Every period, oldest first. */
 export function listPeriods(db: Reader): Period[] {
@@ -64,11 +54,14 @@ export function currentPeriod(db: Reader, now: Date): Period | undefined {
 
 /**
  * The levels points are shown against now: the running period's. With no running period (before
- * the first roll, or between a cutoff and its roll tick) the defaults, which is what the next
- * period gets until #43 adds agreed changes.
+ * the first roll, or between a cutoff and its roll tick) what the next period gets: the agreed
+ * change for it, else the defaults.
  */
 export function currentLevels(db: Reader, now: Date, defaults: PeriodDefaults): Levels {
-  return currentPeriod(db, now)?.levels ?? defaults.levels
+  const running = currentPeriod(db, now)
+  if (running) return running.levels
+  const latest = latestPeriod(db)
+  return (latest && agreedProposalFor(db, latest.id)?.settings.levels) ?? defaults.levels
 }
 
 /** The period an instant (a completion's `completed_at`, spec §5.5) belongs to, if any. */
@@ -78,7 +71,14 @@ export function periodAtInstant(db: Reader, instant: Date): Period | undefined {
 
 type Cause = 'first' | 'cutoff' | 'settled'
 
-function insertPeriod(tx: Tx, span: PeriodSpan, cause: Cause, actor: Actor, now: Date): Period {
+function insertPeriod(
+  tx: Tx,
+  span: PeriodSpan,
+  cause: Cause,
+  actor: Actor,
+  now: Date,
+  proposalId: number | null = null,
+): Period {
   const row = tx
     .insert(periods)
     .values({
@@ -102,6 +102,8 @@ function insertPeriod(tx: Tx, span: PeriodSpan, cause: Cause, actor: Actor, now:
       cutoffAt: row.cutoffAt,
       levels: period.levels,
       cause,
+      /** The agreed change this period took its cutoff and levels from; null for the defaults. */
+      proposalId,
     },
     at: now,
   })
@@ -122,9 +124,13 @@ export function rollPeriods(db: Db | Tx, now: Date, defaults: PeriodDefaults): P
       latest = insertPeriod(tx, firstPeriod(now, defaults), 'first', system, now)
       created.push(latest)
     }
-    for (const span of periodsToStart(latest, now, defaults, null)) {
-      created.push(insertPeriod(tx, span, 'cutoff', system, now))
-    }
+    const agreed = agreedProposalFor(tx, latest.id)
+    periodsToStart(latest, now, defaults, agreed).forEach((span, i) => {
+      // Only the first period started can take the agreed change (domain `periodsToStart`).
+      const applied = i === 0 && agreed ? agreed.id : null
+      created.push(insertPeriod(tx, span, 'cutoff', system, now, applied))
+    })
+    lapseProposals(tx, now)
     return created
   })
 }
@@ -150,7 +156,8 @@ export function endRunningPeriod(
   // when `now` was read just before the cutoff but the scheduler has already started the next
   // period: ending this one would insert a period overlapping it.
   if (latestPeriod(tx)?.id !== periodId) return fail('not_running')
-  const step = endPeriodEarly(toPeriod(row), now, defaults, null)
+  const agreed = agreedProposalFor(tx, periodId)
+  const step = endPeriodEarly(toPeriod(row), now, defaults, agreed)
   if (!step.ok) return step
   const endedAt = toIsoUtc(now)
   tx.update(periods)
@@ -166,6 +173,7 @@ export function endRunningPeriod(
     after: { endedAt },
     at: now,
   })
-  const next = insertPeriod(tx, step.value.next, 'settled', actor, now)
+  const next = insertPeriod(tx, step.value.next, 'settled', actor, now, agreed?.id ?? null)
+  lapseProposals(tx, now)
   return ok({ ended: { ...toPeriod(row), endedAt: now }, next })
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fromPragueWallTime, toPragueWallTime } from './dates'
+import { addPragueDays, fromPragueWallTime, toPragueWallTime } from './dates'
 import type { Person } from './parties'
 import type {
   DefaultsProposal,
@@ -23,6 +23,7 @@ import {
   firstPeriod,
   hasStarted,
   isPeriodAgreed,
+  periodAgreementWaitingFor,
   isValidDefaults,
   lapsePeriodSettings,
   nextPeriod,
@@ -336,6 +337,19 @@ describe('period agreement (spec §3)', () => {
   it('with Mum, one giver is still enough', () => {
     expect(isPeriodAgreed([MUM, OLDER, YOUNGER], withMum)).toBe(true)
   })
+
+  it('waitingFor: takers who have not approved, and every giver while none has', () => {
+    expect(periodAgreementWaitingFor([OLDER], withMum)).toEqual(
+      [DAD, MUM, YOUNGER].sort((a, b) => a - b),
+    )
+    expect(periodAgreementWaitingFor([MUM, OLDER], withMum)).toEqual([YOUNGER])
+    expect(periodAgreementWaitingFor([JAKUB, OLDER, YOUNGER], family)).toEqual([DAD])
+    expect(periodAgreementWaitingFor([DAD, OLDER, YOUNGER], family)).toEqual([])
+    // Sorted by id whatever order the people come in.
+    expect(periodAgreementWaitingFor([], [...withMum].reverse())).toEqual(
+      [DAD, OLDER, YOUNGER, MUM].sort((a, b) => a - b),
+    )
+  })
 })
 
 describe('per-period proposals (spec §5.8)', () => {
@@ -392,6 +406,16 @@ describe('per-period proposals (spec §5.8)', () => {
     expect(error(proposePeriodSettings(family, DAD, CURRENT, at, [], NOW))).toBe('invalid_settings')
     const bad = { ...settings, levels: { lower: 0, upper: 80 } }
     expect(error(proposePeriodSettings(family, DAD, CURRENT, bad, [], NOW))).toBe(
+      'invalid_settings',
+    )
+  })
+
+  it('[call] the cutoff is at most 364 days (MAX_LENGTH_DAYS) after the planned start', () => {
+    const last = addPragueDays(CURRENT.cutoffAt, 364)
+    const ok364 = { ...settings, cutoffAt: last }
+    expect(proposePeriodSettings(family, DAD, CURRENT, ok364, [], NOW).ok).toBe(true)
+    const over = { ...settings, cutoffAt: new Date(last.getTime() + 1) }
+    expect(error(proposePeriodSettings(family, DAD, CURRENT, over, [], NOW))).toBe(
       'invalid_settings',
     )
   })

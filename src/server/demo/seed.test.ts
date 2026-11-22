@@ -1,165 +1,21 @@
-import { verify } from '@node-rs/argon2'
-import { and, asc, eq, ne, sql } from 'drizzle-orm'
+import { asc, sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { login } from '~/server/auth'
-import { auditLog, settlements, tasks, templates, templateThread, users } from '~/server/db/schema'
+import { auditLog, periods, settlements, tasks, templates, users } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
-import { takerPoints } from '~/server/points'
-import { listTasks } from '~/server/tasks'
 import { bootstrapAdmin } from '~/server/users'
-import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
-import { fromPragueWallTime } from '~/domain/dates'
-import { listPeriods, rollPeriods } from '~/server/periods'
-import { rejectionsSince } from '~/server/tasks/rejections'
-import { getMeeting } from '~/server/settlement/meeting'
 import { ALL_FEATURES, NO_FEATURES } from '~/lib/features'
+import type { Features } from '~/lib/features'
 import { getFlags } from '~/server/features'
 import { DEMO_PASSWORD, describeDemo, seedDemo } from './seed'
+import { SEEDS } from './seeds'
+import type { SeedName } from './seeds'
 
 const T0 = new Date('2026-11-17T10:00:00.000Z')
 const PREVIEW = { TASKMASTER_ENV: 'preview', NODE_ENV: 'production' }
 
+// The guards, picking a seed by name (#183) and what holds for every seed.
 describe('demo seed (#62)', () => {
-  it('fills an empty preview database with one person per role, audit-logged', async () => {
-    const db = createTestDb()
-    expect(seedDemo(db, PREVIEW, T0)).toEqual({
-      kind: 'seeded',
-      usernames: ['admin', 'tata', 'starsi', 'mladsi'],
-    })
-    const rows = db.select().from(users).all()
-    expect(rows.map((u) => [u.username, u.role, u.active])).toEqual([
-      ['admin', 'admin', true],
-      ['tata', 'giver', true],
-      ['starsi', 'taker', true],
-      ['mladsi', 'taker', true],
-    ])
-    expect(await verify(rows[0]?.passwordHash ?? '', DEMO_PASSWORD)).toBe(true)
-    const log = db.select().from(auditLog).where(eq(auditLog.entityType, 'user')).all()
-    expect(log.map((r) => [r.action, r.actorKind])).toEqual(
-      Array(4).fill(['user.created', 'system']),
-    )
-    const taskLog = db
-      .select()
-      .from(auditLog)
-      .where(eq(auditLog.entityType, 'task'))
-      .orderBy(asc(auditLog.id))
-      .all()
-    const done = [
-      'task.created',
-      'task.score_approved',
-      'task.agreed',
-      'task.reserved',
-      'task.completed',
-    ]
-    expect(taskLog.map((r) => [r.action, r.actorKind])).toEqual([
-      // #45's past week: three approved chores, then this week's rejected one.
-      ...[
-        ...[...done, 'task.approved'],
-        ...[...done, 'task.approved'],
-        ...[...done, 'task.approved'],
-      ].map((action) => [action, 'user']),
-      // #39: a scheduler tick early in the past week makes the water and the fish.
-      ['instance.created', 'system'],
-      ['instance.created', 'system'],
-      ...[...done, 'task.rejected'].map((action) => [action, 'user']),
-      ['task.created', 'user'],
-      ['task.bid_placed', 'user'],
-      ['task.bid_placed', 'user'],
-      ['task.created', 'user'],
-      ['task.created', 'user'],
-      ['task.bid_placed', 'user'],
-      ['task.score_approved', 'user'],
-      ['task.agreed', 'user'],
-      ['task.created', 'user'],
-      ['task.score_approved', 'user'],
-      ['task.agreed', 'user'],
-      ['task.score_change_proposed', 'user'],
-      ['task.created', 'user'],
-      ['task.score_approved', 'user'],
-      ['task.agreed', 'user'],
-      ['task.cancelled', 'user'],
-      // #40: five tasks done (four of them approved), one left open, each agreed on one yes.
-      ...[true, true, false, true, true].flatMap((approved) => [
-        ['task.created', 'user'],
-        ['task.score_approved', 'user'],
-        ['task.agreed', 'user'],
-        ['task.completed', 'user'],
-        ...(approved ? [['task.approved', 'user']] : []),
-      ]),
-      ['task.created', 'user'],
-      ['task.score_approved', 'user'],
-      ['task.agreed', 'user'],
-      // #44's week: six approved chores, then one pending completion per boy.
-      ...[...Array<boolean>(6).fill(true), false, false].flatMap((approved) =>
-        [
-          'task.created',
-          'task.score_approved',
-          'task.agreed',
-          'task.reserved',
-          'task.completed',
-          ...(approved ? ['task.approved'] : []),
-        ].map((action) => [action, 'user']),
-      ),
-      // #39: the boot tick expires that fish and makes today's; the water is still open.
-      ['instance.expired', 'system'],
-      ['instance.created', 'system'],
-      // #38: logs by Mladší and Starší, Starší's rejected, then the school bag from Táta's "+ Teď".
-      ['instance.self_logged', 'user'],
-      ['instance.self_logged', 'user'],
-      ['task.rejected', 'user'],
-      ['instance.created', 'user'],
-    ])
-  })
-
-  it('seeds a task in negotiation, a plain offer and one reserved to Starší, through the real actions', () => {
-    const db = createTestDb()
-    seedDemo(db, PREVIEW, T0)
-    // The offers; #44's done chores are checked in their own test below.
-    const all = listTasks(db).filter((t) => t.status === 'proposed' || t.status === 'reserved')
-    expect(
-      all.map((t) => [t.title, t.status, t.score, t.bids.map((b) => [b.name, b.score])]),
-    ).toEqual([
-      ['Vyluxovat celý obývák a chodbu', 'reserved', 8, []],
-      ['Uklidit sklep', 'proposed', 10, []],
-      [
-        'Umýt auto',
-        'proposed',
-        18,
-        [
-          ['Mladší', 22],
-          ['Starší', 25],
-        ],
-      ],
-      // Rejected (#45), so back to Mladší's reservation.
-      ['Vynést sklo a plasty do kontejneru', 'reserved', 4, []],
-    ])
-    expect(all.find((t) => t.title.startsWith('Vyluxovat'))?.reservedBy?.name).toBe('Starší')
-    // #36: Táta's new price 12 waits for the brothers; the cancelled task keeps its reason.
-    expect(
-      listTasks(db).find((t) => t.title === 'Shrabat listí na zahradě')?.scoreChange,
-    ).toMatchObject({
-      score: 12,
-      waitingFor: [{ name: 'Starší' }, { name: 'Mladší' }],
-    })
-    const cancelled = db.select().from(auditLog).where(eq(auditLog.action, 'task.cancelled')).get()
-    expect(cancelled?.reason).toBe('Udělá to firma.')
-  })
-
-  it('gives both brothers points (#40 + #44 week): confirmed and waiting, plus an open task', () => {
-    const db = createTestDb()
-    seedDemo(db, PREVIEW, T0)
-    expect(takerPoints(db).takers.map((t) => [t.name, t.confirmed, t.pending])).toEqual([
-      ['Starší', 260, 14],
-      // + 3 pending: the self-logged dishwasher (#38).
-      ['Mladší', 152, 6],
-    ])
-    const open = listTasks(db).filter((t) => t.status === 'open' && t.origin === 'one_time')
-    expect(open.map((t) => [t.title, t.score])).toEqual([
-      ['Umýt okna v obýváku i v ložnici', 5],
-      ['Shrabat listí na zahradě', 10],
-    ])
-  })
-
   it('demo login works for every role', async () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
@@ -221,234 +77,11 @@ describe('demo seed (#62)', () => {
     expect(db.select().from(users).all()).toHaveLength(4)
   })
 
-  it('turns every launch switch on, so a preview shows the whole app (prod stays off)', () => {
-    const db = createTestDb()
-    expect(getFlags(db)).toEqual(NO_FEATURES)
-    seedDemo(db, PREVIEW, T0)
-    expect(getFlags(db)).toEqual(ALL_FEATURES)
-  })
-
   it('leaves the switches alone when it does not seed', () => {
     const db = createTestDb()
     seedDemo(db, { NODE_ENV: 'production' }, T0)
     expect(getFlags(db)).toEqual(NO_FEATURES)
   })
-
-  it('a later boot of a seeded preview keeps a switch someone turned off', () => {
-    const db = createTestDb()
-    seedDemo(db, PREVIEW, T0)
-    db.run(sql`UPDATE feature_flags SET enabled = 0 WHERE key = 'week'`)
-    expect(seedDemo(db, PREVIEW, T0)).toEqual({ kind: 'skipped', reason: 'not_empty' })
-    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, week: false })
-  })
-
-  it('adds three templates (#37, #38): one waiting for agreement, two agreed', () => {
-    const db = createTestDb()
-    seedDemo(db, PREVIEW, T0)
-    const scheduled = ['Vyměnit kočce vodu', 'Nakrmit rybičky']
-    expect(
-      db
-        .select({
-          title: templates.title,
-          status: templates.status,
-          score: templates.score,
-          days: templates.scheduleDays,
-          time: templates.scheduleTime,
-          due: templates.dueTime,
-        })
-        .from(templates)
-        .all()
-        .filter((t) => !scheduled.includes(t.title)),
-    ).toEqual([
-      {
-        title: 'Vynést koše',
-        status: 'proposed',
-        score: 4,
-        days: 1 << 2,
-        time: '18:00',
-        due: '07:00',
-      },
-      { title: 'Vyndat myčku', status: 'active', score: 3, days: 0, time: null, due: null },
-      {
-        title: 'Nachystat tašku do školy',
-        status: 'active',
-        score: 2,
-        days: 0,
-        time: null,
-        due: '07:00',
-      },
-    ])
-    const actions = db
-      .select({ action: auditLog.action })
-      .from(auditLog)
-      .where(eq(auditLog.entityType, 'template'))
-      .all()
-      .slice(2 * 3) // #39's two everyday templates come first, tested below
-      .map((r) => r.action)
-    expect(actions).toEqual([
-      'template.created',
-      'template.created',
-      'template.score_approved',
-      'template.agreed',
-      'template.bid_placed',
-      'template.score_countered',
-      'template.created',
-      'template.score_approved',
-      'template.agreed',
-    ])
-  })
-
-  it('adds instances (#38): Mladší\'s log waiting, Starší\'s rejected, then the bag from "+ Teď"', () => {
-    const db = createTestDb()
-    seedDemo(db, PREVIEW, T0)
-    const rows = db
-      .select()
-      .from(tasks)
-      .where(and(ne(tasks.origin, 'one_time'), ne(tasks.origin, 'scheduled')))
-      .orderBy(asc(tasks.id))
-      .all()
-    expect(
-      rows.map((r) => [r.title, r.origin, r.status, r.score, r.dueAt, r.earnerId !== null]),
-    ).toEqual([
-      ['Vyndat myčku', 'self_logged', 'done_unconfirmed', 3, null, true],
-      // Starší's log, rejected by Táta: closed, no points (§5.5).
-      ['Vyndat myčku', 'self_logged', 'rejected', 3, null, true],
-      // After the logs: Zapsat refuses a chore already on the board.
-      // T0 is Tue 17 Nov 2026 10:00Z: "next day, 7:00" Prague is Wed 06:00Z.
-      ['Nachystat tašku do školy', 'on_demand', 'open', 2, '2026-11-18T06:00:00.000Z', false],
-    ])
-  })
-
-  it('leaves a score change in flight on the dishwasher (#138): Mladší bids 5, Táta offers 4', () => {
-    const db = createTestDb()
-    seedDemo(db, PREVIEW, T0)
-    const name = (id: number) => db.select().from(users).where(eq(users.id, id)).get()?.username
-    const dishes = db.select().from(templates).where(eq(templates.title, 'Vyndat myčku')).get()
-    const rows = db
-      .select()
-      .from(templateThread)
-      .where(eq(templateThread.templateId, dishes?.id ?? 0))
-      .all()
-      .map((r) => [name(r.userId), r.side, r.score, r.closedAs])
-    expect(rows).toEqual([
-      ['mladsi', 'taker', 5, null],
-      ['tata', 'giver', 4, null],
-    ])
-    expect(
-      db
-        .select()
-        .from(templates)
-        .all()
-        .map((t) => t.score),
-    ).toEqual([1, 1, 4, 3, 2])
-  })
-
-  it('all or nothing: a failing template leaves no people either', () => {
-    const db = createTestDb()
-    db.run(
-      sql`CREATE TRIGGER boom BEFORE INSERT ON templates WHEN NEW.title = 'Vyndat myčku' BEGIN SELECT RAISE(ABORT, 'boom'); END`,
-    )
-    expect(() => seedDemo(db, PREVIEW, T0)).toThrow('boom')
-    expect(db.select().from(users).all()).toHaveLength(0)
-    expect(db.select().from(templates).all()).toHaveLength(0)
-    expect(db.select().from(auditLog).all()).toHaveLength(0)
-  })
-
-  it('demo seed gives a meeting with 4 pending items and totals 160 / 102 (#40 + #44, #45 carry 8, #38)', () => {
-    const db = createTestDb()
-    seedDemo(db, PREVIEW, T0)
-    // The scheduler starts the week at boot, right after the seed.
-    rollPeriods(db, new Date(T0.getTime() + 60_000), DEFAULT_PERIOD_DEFAULTS)
-    const meeting = getMeeting(db, new Date(T0.getTime() + 120_000))
-    if (!meeting.period) throw new Error('no meeting')
-    expect(meeting.pending.map((t) => [t.title, t.score, t.completedBy?.name])).toEqual([
-      ['Vytřít podlahu v kuchyni', 12, 'Starší'],
-      ['Zalít kytky', 2, 'Starší'],
-      ['Vynést tříděný', 3, 'Mladší'],
-      ['Vyndat myčku', 3, 'Mladší'],
-    ])
-    expect(meeting.takers.map((t) => [t.name, t.total])).toEqual([
-      ['Starší', 160],
-      ['Mladší', 102],
-    ])
-  })
-
-  it('a settled past week (#45): records, the current week from the settle, one rejection', () => {
-    const db = createTestDb()
-    seedDemo(db, PREVIEW, T0)
-    const [past, current] = listPeriods(db)
-    if (!past || !current) throw new Error('no weeks')
-    expect(past.startsAt).toEqual(new Date(T0.getTime() - 7 * 86_400_000))
-    expect(current.startsAt).toEqual(past.endedAt)
-    expect(listPeriods(db)).toHaveLength(2)
-    const name = (id: number) => db.select().from(users).where(eq(users.id, id)).get()?.username
-    expect(
-      db
-        .select()
-        .from(settlements)
-        .all()
-        .map((r) => [r.periodId, name(r.takerId), r.totalBefore, r.level, r.deducted, r.carryOver]),
-    ).toEqual([
-      [past.id, 'starsi', 108, 'upper', 100, 8],
-      [past.id, 'mladsi', 50, 'lower', 50, 0],
-    ])
-    expect(
-      rejectionsSince(db, current.startsAt).map((r) => [
-        r.title,
-        r.score,
-        name(r.earnerId),
-        r.reason,
-      ]),
-    ).toEqual([
-      ['Vyndat myčku', 3, 'starsi', null],
-      [
-        'Vynést sklo a plasty do kontejneru',
-        4,
-        'mladsi',
-        'Sklo zůstalo v tašce u dveří, vynes ho prosím až dolů do kontejneru.',
-      ],
-    ])
-  })
-
-  // Previews seed with the real clock: every weekday, morning and evening, gives the same rows.
-  const NOWS = [16, 17, 18, 19, 20, 21, 22].flatMap((day) =>
-    [8, 20].map((hour) => fromPragueWallTime({ year: 2026, month: 11, day, hour, minute: 0 })),
-  )
-  it.each(NOWS)(
-    "scheduled rows (#39) at %s: water open, today's fish open, an expired fish",
-    (now) => {
-      const db = createTestDb()
-      seedDemo(db, PREVIEW, now)
-      const rows = db
-        .select()
-        .from(tasks)
-        .where(eq(tasks.origin, 'scheduled'))
-        .orderBy(asc(tasks.id))
-        .all()
-      expect(rows.map((r) => [r.title, r.status, r.dueAt !== null])).toEqual([
-        ['Vyměnit kočce vodu', 'open', false],
-        ['Nakrmit rybičky', 'expired', true],
-        ['Nakrmit rybičky', 'open', true],
-      ])
-      const [, , fish] = rows
-      expect(new Date(fish?.graceEndsAt ?? 0).getTime()).toBeGreaterThan(now.getTime())
-      const expired = db
-        .select()
-        .from(auditLog)
-        .where(
-          and(eq(auditLog.action, 'instance.expired'), eq(auditLog.entityId, String(rows[1]?.id))),
-        )
-        .all()
-      expect(expired.map((e) => e.actorKind)).toEqual(['system'])
-      const at = db
-        .select({ at: auditLog.at })
-        .from(auditLog)
-        .orderBy(asc(auditLog.id))
-        .all()
-        .map((r) => r.at)
-      expect(at).toEqual([...at].sort())
-    },
-  )
 
   it('the audit log is in time order (#45)', () => {
     const db = createTestDb()
@@ -472,6 +105,106 @@ describe('demo seed (#62)', () => {
   it('boot messages: silent outside previews, says the password inside', () => {
     expect(describeDemo({ kind: 'skipped', reason: 'not_preview' })).toBeNull()
     expect(describeDemo({ kind: 'skipped', reason: 'not_empty' })).toContain('not seeding')
-    expect(describeDemo({ kind: 'seeded', usernames: ['admin'] })).toContain(DEMO_PASSWORD)
+    expect(describeDemo({ kind: 'seeded', seed: 'home', usernames: ['admin'] })).toMatch(
+      /seeded home: admin .*demo1234/,
+    )
+  })
+  it('TASKMASTER_SEED picks the seed; unset or empty is demo', () => {
+    for (const name of [undefined, '']) {
+      const db = createTestDb()
+      expect(seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: name }, T0)).toEqual({
+        kind: 'seeded',
+        seed: 'demo',
+        usernames: ['admin', 'tata', 'starsi', 'mladsi'],
+      })
+    }
+    const db = createTestDb()
+    expect(seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: 'family' }, T0)).toMatchObject({
+      kind: 'seeded',
+      seed: 'family',
+    })
+    expect(db.select().from(users).all()).toHaveLength(4)
+    for (const table of [tasks, templates, periods, settlements]) {
+      expect(db.select().from(table).all()).toHaveLength(0)
+    }
+  })
+
+  it('an unknown TASKMASTER_SEED fails the boot and seeds nothing', () => {
+    for (const name of ['Home', 'nope', 'toString', 'constructor']) {
+      const db = createTestDb()
+      expect(() => seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: name }, T0)).toThrow(
+        `unknown TASKMASTER_SEED "${name}" (known: family, home, launch, tasks, week, recurring, scheduler, demo)`,
+      )
+      expect(db.select().from(users).all()).toHaveLength(0)
+      expect(db.select().from(auditLog).all()).toHaveLength(0)
+    }
+  })
+
+  it('a misspelt TASKMASTER_SEED fails a later boot too, and adds nothing', () => {
+    const db = createTestDb()
+    seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: 'home' }, T0)
+    const before = db.select().from(auditLog).all().length
+    expect(() => seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: 'Home' }, T0)).toThrow(
+      'unknown TASKMASTER_SEED "Home"',
+    )
+    expect(db.select().from(auditLog).all()).toHaveLength(before)
+  })
+
+  it('TASKMASTER_SEED never matters outside a preview', () => {
+    const db = createTestDb()
+    expect(seedDemo(db, { TASKMASTER_SEED: 'nope' }, T0)).toEqual({
+      kind: 'skipped',
+      reason: 'not_preview',
+    })
+    const env = { ...PREVIEW, ADMIN_PASSWORD: 'correct horse battery', TASKMASTER_SEED: 'nope' }
+    expect(seedDemo(db, env, T0)).toEqual({ kind: 'skipped', reason: 'admin_password_set' })
+    expect(db.select().from(users).all()).toHaveLength(0)
+  })
+
+  it('each seed turns on its switches and only those', () => {
+    const expected: Record<SeedName, Features> = {
+      family: NO_FEATURES,
+      home: NO_FEATURES,
+      launch: NO_FEATURES,
+      tasks: NO_FEATURES,
+      week: { ...NO_FEATURES, week: true, meeting: true },
+      recurring: { ...NO_FEATURES, recurring: true, log: true },
+      scheduler: { ...NO_FEATURES, recurring: true },
+      demo: ALL_FEATURES,
+    }
+    for (const name of Object.keys(SEEDS) as SeedName[]) {
+      const db = createTestDb()
+      seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: name }, T0)
+      expect(getFlags(db), name).toEqual(expected[name])
+    }
+  })
+
+  it('every seed: the family logs in and the audit log is in time order', async () => {
+    for (const name of Object.keys(SEEDS)) {
+      const db = createTestDb()
+      seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: name }, T0)
+      for (const username of ['admin', 'tata', 'starsi', 'mladsi']) {
+        const r = await login(db, { username, password: DEMO_PASSWORD, ip: '127.0.0.1' }, T0)
+        expect(r.ok, `${name}: ${username}`).toBe(true)
+      }
+      const at = db
+        .select({ at: auditLog.at })
+        .from(auditLog)
+        .orderBy(asc(auditLog.id))
+        .all()
+        .map((r) => r.at)
+      expect(at, name).toEqual([...at].sort())
+    }
+  })
+
+  it('all or nothing: a failing switch leaves nobody, no tasks, every switch off', () => {
+    const db = createTestDb()
+    db.run(
+      sql`CREATE TRIGGER boom BEFORE INSERT ON audit_log WHEN NEW.action = 'feature.switched' BEGIN SELECT RAISE(ABORT, 'boom'); END`,
+    )
+    expect(() => seedDemo(db, PREVIEW, T0)).toThrow('boom')
+    expect(db.select().from(users).all()).toHaveLength(0)
+    expect(db.select().from(tasks).all()).toHaveLength(0)
+    expect(getFlags(db)).toEqual(NO_FEATURES)
   })
 })

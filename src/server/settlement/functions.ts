@@ -3,7 +3,6 @@ import type { Result } from '~/domain/result'
 import { requireRole } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
 import type { SettlementRow } from '~/server/db/schema'
-import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import type { Levels, Period } from '~/domain'
 import { toIsoUtc } from '~/domain/dates'
 import { getMeeting, settlePeriod } from './meeting'
@@ -93,17 +92,7 @@ export const settlePeriodFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver')])
   .validator(parseSettle)
   .handler(({ data, context }) =>
-    settled(
-      settlePeriod(
-        getDb(),
-        context.user.id,
-        data.periodId,
-        data.shown,
-        new Date(),
-        // The same defaults the scheduler gets (src/server/plugins/database.ts) until #43/#47 store them.
-        DEFAULT_PERIOD_DEFAULTS,
-      ),
-    ),
+    settled(settlePeriod(getDb(), context.user.id, data.periodId, data.shown, new Date())),
   )
 
 /** The week's viewer is always the signed-in user: id and role, nothing else. */

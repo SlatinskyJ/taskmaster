@@ -19,7 +19,10 @@ export function schedulerJobs(
       name: 'periods',
       run(at) {
         for (const p of rollPeriods(db, at, defaults())) {
-          log.info(`[periods] started ${p.startsAt.toISOString()} → ${p.cutoffAt.toISOString()}`)
+          const levels = `${String(p.levels.lower)}/${String(p.levels.upper)}`
+          log.info(
+            `[periods] started ${p.startsAt.toISOString()} → ${p.cutoffAt.toISOString()} levels ${levels}`,
+          )
         }
       },
     },

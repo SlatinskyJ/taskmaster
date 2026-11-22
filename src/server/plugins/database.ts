@@ -1,8 +1,8 @@
 import { definePlugin } from 'nitro'
 import { databasePath, getDb } from '~/server/db'
 import { describeDemo, seedDemo } from '~/server/demo'
-import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import { describePasskeys, passkeyConfig } from '~/server/passkeys/config'
+import { getPeriodDefaults } from '~/server/periods'
 import { startScheduler, schedulerJobs } from '~/server/scheduler'
 import { bootstrapAdmin, describeBootstrap } from '~/server/users'
 
@@ -34,7 +34,8 @@ export default definePlugin((nitroApp) => {
       '[auth] TRUST_PROXY is not 1: the per-IP login limit sees the proxy, not the client',
     )
   }
-  const scheduler = startScheduler(schedulerJobs(db, () => DEFAULT_PERIOD_DEFAULTS))
+  // The stored default week (#186), read on every tick, so an admin's change applies.
+  const scheduler = startScheduler(schedulerJobs(db, () => getPeriodDefaults(db)))
   nitroApp.hooks.hook('close', () => {
     scheduler.stop()
   })
