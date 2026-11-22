@@ -33,7 +33,8 @@ export function TemplateRow({
       detail={templateDetail(t)}
       action={
         active ? (
-          <div className="flex flex-wrap justify-end gap-2">
+          // Stacked: two buttons side by side would squeeze the name to one word at 360 px.
+          <div className="grid shrink-0 gap-2">
             {onNow && (
               <Button variant="ghost" disabled={busy} onClick={onNow}>
                 {cs.instances.now}
