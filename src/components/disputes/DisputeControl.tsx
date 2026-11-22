@@ -37,7 +37,7 @@ export function DisputeControl({
       className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1"
     >
       {lead && <span className="text-meta font-bold text-muted">{what}</span>}
-      {mark && <DisputeOutcome mark={mark} />}
+      {mark && <DisputeOutcome mark={mark} ownLine={lead} />}
       {mark?.status !== 'open' && (
         <>
           <Button

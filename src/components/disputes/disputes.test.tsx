@@ -163,3 +163,11 @@ describe('TaskRow footer', () => {
     expect(html).toMatch(/data-slot="task-row"[^]*<i>patička<\/i>[^]*<\/div>$/)
   })
 })
+
+describe('DisputeControl with a lead (task page)', () => {
+  it('a closed outcome goes on its own line under the lead and the button', () => {
+    const html = control({ status: 'dismissed', note: 'Body sedí.' }, true)
+    expect(html).toMatch(/<span class="[^"]*order-last basis-full[^"]*">Správce nechal beze změny/)
+    expect(control({ status: 'dismissed', note: 'Body sedí.' })).not.toContain('basis-full')
+  })
+})
