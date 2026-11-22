@@ -14,7 +14,7 @@
 
 **Base:** branch `47-default-week-settings` (PR #186). Stacked.
 
-**Size:** about 380 changed lines without tests and migrations (schema ~70, store ~170, wiring ~40, server functions ~90, flag ~10).
+**Size:** about 420 changed lines (the people-change hook adds ~30) without tests and migrations (schema ~70, store ~170, wiring ~40, server functions ~90, flag ~10).
 
 ## Global Constraints
 
@@ -32,8 +32,8 @@
 2. **Agreed per-period proposal applies when the period after `afterPeriodId` starts**, in `rollPeriods` (cutoff) and `endRunningPeriod` (settlement). It applies only to the first period started (domain `periodsToStart` already does this).
 3. **Lapse** runs in the same two places, right after a period starts: every `pending` per-period proposal whose `afterPeriodId` is no longer the running period becomes `lapsed`, audited `period.proposal_lapsed` (new action) with a system actor.
 4. **Server switch check:** every proposal server function refuses with `feature_off` when `periodProposals` is off, not only the hidden screens. Reading included.
-5. **Per-period cutoff upper bound:** the parser refuses a cutoff more than `MAX_LENGTH_DAYS` (364) days after the running period's cutoff. The domain only requires "after the start".
-6. **People changes:** no `resolvePeriodProposal` sweep on user changes. Jakub's 2026-11-17 rule: no design for users becoming inactive. Adding a taker can only make a pending proposal need one more approval, which counting live already does.
+5. **Per-period cutoff upper bound (extends the `MAX_LENGTH_DAYS` [call]; goes in the brief so Jakub can overturn it):** the domain's `isValidPeriodSettings(settings, startsAt)` also refuses a cutoff later than `addPragueDays(startsAt, MAX_LENGTH_DAYS)`; `startsAt` there is the running period's cutoff (the planned start). Levels are capped at `LEVEL_MAX` in the server parser, as for the defaults.
+6. **People changes:** a role change in the admin console can give a pending proposal period agreement with no new approval (a taker who had not approved becomes a giver). A people-change hook `resolvePendingProposals(tx, people, now)` in `PEOPLE_CHANGE_HOOKS` (`src/server/users/hooks.ts`) promotes every pending proposal of both kinds that now has agreement, audits `*.proposal_agreed` with a system actor, and stores an agreed defaults proposal through `writePeriodDefaults` (system actor). Deactivation itself stays out of scope (Jakub 2026-11-17).
 7. **Admin direct save** leaves pending defaults proposals as they are (domain `setDefaults` comment).
 
 ## Review Focus
@@ -56,6 +56,7 @@
 - Test: `src/server/db/proposals-schema.test.ts`, `src/server/features/flags.test.ts`
 
 **Interfaces:**
+- Also: `period.created` audit `after` gains `proposalId` (null when defaults applied) — Task 3.
 - Produces tables:
   - `period_proposals`: `id` PK, `after_period_id` FK periods not null, `cutoff_at` text, `lower_level`, `upper_level`, `proposed_by` FK users, `status` text CHECK in (pending, agreed, rejected, withdrawn, lapsed), `closed_by` FK users nullable, `created_at`, `closed_at` nullable. CHECK levels 1 ≤ lower ≤ upper. Partial unique index: one `pending` or `agreed` row per `after_period_id`.
   - `defaults_proposals`: same lifecycle columns plus `length_days`, `cutoff_weekday`, `cutoff_hour`, `cutoff_minute`, levels; same CHECKs as `period_defaults`; partial unique index: at most one `pending` row.
@@ -71,7 +72,10 @@
 ### Task 2: Proposal store (`src/server/periods/proposals.ts`)
 
 **Files:**
-- Create: `src/server/periods/proposals.ts`, export from `src/server/periods/index.ts`
+- Create: `src/server/periods/proposalRows.ts`: row ↔ domain mapping, `agreedProposalFor`, `lapseProposals`. Imports only schema, audit and domain (no `defaults.ts`), so `periods.ts` can import it without a cycle.
+- Create: `src/server/periods/proposals.ts` (the write paths and `proposalsView`), export both from `src/server/periods/index.ts`
+- Modify: `src/server/users/hooks.ts` (add `resolvePendingProposals`); header comments in `periods.ts` and `defaults.ts` that say "#43 adds…" now describe what is there
+- Modify: `src/domain/periods.ts` (`isValidPeriodSettings` upper bound, ruling 5) + `src/domain/periods.test.ts`
 - Test: `src/server/periods/proposals.test.ts`
 
 **Interfaces:**
@@ -82,8 +86,9 @@
   - `proposePeriod(db, userId, settings: PeriodSettings, now): Result<{ id: number; status: PeriodProposalStatus }, ProposalError>`
   - `proposeDefaultsChange(db, giverId, defaults: PeriodDefaults, now): Result<{ id; status }, ProposalError>`
   - `approveProposal(db, userId, kind, id, now)`, `rejectProposal(db, userId, kind, id, now)`, `withdrawProposal(db, userId, kind, id, now)`: same result type
-  - `agreedProposalFor(tx, periodId): PeriodSettingsProposal | null`
-  - `lapseProposals(tx, now): void`
+  - `agreedProposalFor(tx, periodId): (PeriodSettingsProposal & { id: number }) | null` (proposalRows.ts)
+  - `lapseProposals(tx, now): void` (proposalRows.ts): only `pending` rows whose period is no longer running
+  - `resolvePendingProposals(tx, people, now): void` (proposals.ts)
   - `proposalsView(db, now): ProposalsView` = `{ period: PeriodProposalView | null; defaults: DefaultsProposalView | null }`, where each view is `{ id, settings, proposedBy, approvedBy: number[], status, waitingFor: number[] }` (`waitingFor` = active takers who have not approved, plus every active giver when no giver has). `period` = the pending or agreed one for the running period; `defaults` = the pending one.
 - Audit: `period.proposal_created|approved|agreed|rejected|withdrawn|lapsed` on entity `period_proposal`; `defaults.proposal_*` on `defaults_proposal`. `before`/`after` = `{ status, approvedBy }`; created has `after` with the settings. Agreement writes `*.proposal_agreed` after the approval entry.
 
@@ -94,11 +99,14 @@
   - `'the admin cannot propose or approve (not_a_party)'`
   - `'only the proposer withdraws (not_proposer)'`; `'any party rejects; a rejected one cannot be approved (not_pending)'`
   - `'approve after the cutoff is refused (already_started)'` — exactly at `cutoffAt` refused, at `cutoffAt − 1 ms` accepted
-  - `'a cutoff more than 364 days after the running cutoff is invalid_settings'` (boundary 364 accepted)
+  - `'a cutoff more than 364 days after the running cutoff is invalid_settings'` (boundary 364 accepted); the same boundary pair in `src/domain/periods.test.ts` for `isValidPeriodSettings`
+  - `'approve after the cutoff: refused, the row stays pending, nothing audited'`
   - `'a taker cannot propose defaults (not_a_giver)'`
   - `'defaults agreed by the last taker are stored at once; the running period keeps its levels'`; its audit order is `defaults.proposal_approved`, `defaults.proposal_agreed`, `settings.changed`
   - `'a failed audit write rolls back the approval'` (`failAuditOn(db, 'period.proposal_approved')`) and `'…rolls back the stored defaults'` (`failAuditOn(db, 'settings.changed')` on the agreeing approval)
-  - `'proposalsView: waitingFor lists who has not approved'`; shape pinned with `toEqual` (ids only, no names or secrets)
+  - `'defaults agreed at creation (a family with no takers) are stored at once'` (`settings.changed` written by `proposeDefaultsChange`)
+  - `'a taker who had not approved becomes a giver: the hook marks the proposal agreed'` (through `editPerson`), for both kinds; for defaults the stored defaults change
+  - `'proposalsView: waitingFor lists who has not approved'` with two givers (`addGiver` Máma): Táta approved → no giver listed; shape pinned with `toEqual` (ids only, no names or secrets)
 - [ ] **Step 2:** `pnpm vitest run src/server/periods/proposals.test.ts` → FAIL (module missing).
 - [ ] **Step 3:** implement. Each function: one `db.transaction`, load rows → domain object (`toDomain`), call the domain function, write the changed status/approvals, audit. `already_started` for a proposal whose period has started.
 - [ ] **Step 4:** same command → PASS.
@@ -119,8 +127,11 @@
   - `'settling early starts the next period with the agreed change'` (through `settlePeriod`)
   - `'two cutoffs missed: only the first started period takes the change'`
   - `'a pending defaults proposal stays pending across a roll'`
+  - `'settling early lapses a pending per-period proposal'` (status `lapsed`, audited)
+  - `'the applied agreed proposal stays agreed after the roll'`
+  - `'period.created after has proposalId of the applied proposal, null otherwise'`
 - [ ] **Step 2:** `pnpm vitest run src/server/periods/proposals-apply.test.ts` → FAIL.
-- [ ] **Step 3:** in `rollPeriods` pass `agreedProposalFor(tx, latest.id)` instead of `null` and call `lapseProposals(tx, now)` after inserting; same in `endRunningPeriod` with `endPeriodEarly(…, agreedProposalFor(tx, periodId))`.
+- [ ] **Step 3:** in `rollPeriods` pass `agreedProposalFor(tx, latest.id)` instead of `null` and call `lapseProposals(tx, now)` after inserting; same in `endRunningPeriod` with `endPeriodEarly(…, agreedProposalFor(tx, periodId))`. `insertPeriod` takes the applied proposal's id for the audit `after.proposalId` (only the first started period gets it).
 - [ ] **Step 4:** same command, then `pnpm vitest run src/server/periods src/server/settlement` → PASS.
 - [ ] **Step 5:** commit "Agreed period changes apply at the start; pending ones lapse".
 
@@ -138,9 +149,9 @@
   - `proposeDefaultsFn` (POST) data = `parseDefaults` shape (reuse from `functions.ts`)
   - `approveProposalFn`, `rejectProposalFn`, `withdrawProposalFn` (POST) data `{ kind: 'period' | 'defaults', id: number }`
   - results `{ ok: true; status } | { ok: false; error: ProposalError | 'feature_off' }`
-- Parsers exported for tests: `parsePeriodProposal`, `parseProposalRef` (exact keys, safe integers, ISO date that round-trips, `kind` in the list).
+- Parsers exported for tests: `parsePeriodProposal` (levels safe integers ≤ `LEVEL_MAX`), `parseProposalRef` (exact keys, safe integers, ISO date that round-trips, `kind` in the list).
 
-- [ ] **Step 1: Failing tests:** parsers refuse extra keys, wrong kind, non-ISO date, fractions; `'switch off → feature_off and nothing written'` for each handler body (call the exported `…Handler(db, user, data, now)` functions the fns wrap); results pinned with `toEqual`.
+- [ ] **Step 1: Failing tests:** parsers refuse levels above `LEVEL_MAX` (999 accepted, 1000 refused), extra keys, wrong kind, non-ISO date, fractions; `'switch off → feature_off and nothing written'` for each handler body (call the exported `…Handler(db, user, data, now)` functions the fns wrap); results pinned with `toEqual`.
 - [ ] **Step 2:** run → FAIL.
 - [ ] **Step 3:** implement thin wrappers: `getFlags(db).periodProposals` check, then the Task 2 function. Add all six to `EXPECTED_ROLES`.
 - [ ] **Step 4:** `pnpm vitest run src/server/periods tests/server-fn-guards.test.ts` → PASS.
