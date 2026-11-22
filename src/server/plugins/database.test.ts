@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as DbModule from '~/server/db'
 import { createTestDb } from '~/server/db/testing'
-import { listPeriods } from './periods'
+import { listPeriods } from '~/server/periods'
 
 // The boot plugin (src/server/plugins/database.ts) runs once through its real entry point over
-// a test DB: it must start the period roller, and Nitro's close hook must stop it.
+// a test DB: it must start the scheduler (#39), whose boot tick makes the first period, and Nitro's
+// close hook must stop it.
 const db = createTestDb()
 vi.mock('nitro', () => ({ definePlugin: (setup: unknown) => setup }))
 vi.mock('~/server/db', async (importOriginal) => ({
@@ -18,7 +19,7 @@ afterEach(() => {
 })
 
 describe('boot plugin', () => {
-  it('starts the period roller, and the close hook stops it', async () => {
+  it('starts the scheduler, and the close hook stops it', async () => {
     vi.useFakeTimers()
     vi.stubEnv('TASKMASTER_ENV', '')
     vi.stubEnv('ADMIN_PASSWORD', '')

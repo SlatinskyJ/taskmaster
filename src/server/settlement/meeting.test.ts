@@ -248,7 +248,7 @@ describe('settlePeriod', () => {
     const f = example()
     const stale = plus(CUTOFF, -1)
     const seen = shown(f.db, stale)
-    // The roller already started P2; the confirm's clock was read just before the cutoff.
+    // The scheduler already started P2; the confirm's clock was read just before the cutoff.
     rollPeriods(f.db, CUTOFF, D)
     expect(settlePeriod(f.db, f.tata, f.p1.id, seen, stale, D)).toEqual({
       ok: false,

@@ -12,8 +12,8 @@ import type { PeriodRow } from '~/server/db/schema'
 
 // Stored periods (spec §5.8). The chain rules live in src/domain/periods.ts; this module stores
 // them. Two paths start a period, each with its audit entries in one transaction:
-//   - `rollPeriods` (the roller, ./roller.ts): the first period, then one at every cutoff that
-//     has passed, catching up after downtime;
+//   - `rollPeriods` (the scheduler's periods job, src/server/scheduler): the first period, then
+//     one at every cutoff that has passed, catching up after downtime;
 //   - `endRunningPeriod` (the meeting's settlement, #44): settling ends the running period now
 //     and starts the next one.
 //
@@ -147,7 +147,7 @@ export function endRunningPeriod(
   const row = tx.select().from(periods).where(eq(periods.id, periodId)).get()
   if (!row) return fail('not_found')
   // Refused unless this period is still running and is the latest one. The second check matters
-  // when `now` was read just before the cutoff but the roller has already started the next
+  // when `now` was read just before the cutoff but the scheduler has already started the next
   // period: ending this one would insert a period overlapping it.
   if (latestPeriod(tx)?.id !== periodId) return fail('not_running')
   const step = endPeriodEarly(toPeriod(row), now, defaults, null)

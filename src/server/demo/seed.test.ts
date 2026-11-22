@@ -346,7 +346,7 @@ describe('demo seed (#62)', () => {
   it('demo seed gives a meeting with 4 pending items and totals 160 / 102 (#40 + #44, #45 carry 8, #38)', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
-    // The roller starts the week at boot, right after the seed.
+    // The scheduler starts the week at boot, right after the seed.
     rollPeriods(db, new Date(T0.getTime() + 60_000), DEFAULT_PERIOD_DEFAULTS)
     const meeting = getMeeting(db, new Date(T0.getTime() + 120_000))
     if (!meeting.period) throw new Error('no meeting')

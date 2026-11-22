@@ -100,7 +100,7 @@ export const settlePeriodFn = createServerFn({ method: 'POST' })
         data.periodId,
         data.shown,
         new Date(),
-        // The same defaults the roller gets (src/server/plugins/database.ts) until #43/#47 store them.
+        // The same defaults the scheduler gets (src/server/plugins/database.ts) until #43/#47 store them.
         DEFAULT_PERIOD_DEFAULTS,
       ),
     ),
