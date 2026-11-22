@@ -30,7 +30,6 @@ function settle(db: Db, tata: number, now: Date) {
       m.period.id,
       m.takers.map((t) => ({ takerId: t.id, total: t.total })),
       now,
-      D,
     ),
   )
 }

@@ -262,7 +262,7 @@ function seedPastWeek(tx: Tx, id: (username: string) => number, start: Date, now
   const meeting = getMeeting(tx, settleAt)
   if (!meeting.period) throw new Error('Demo seed: nothing to settle')
   const shown = meeting.takers.map((t) => ({ takerId: t.id, total: t.total }))
-  const settled = settlePeriod(tx, tata, week.id, shown, settleAt, DEFAULT_PERIOD_DEFAULTS)
+  const settled = settlePeriod(tx, tata, week.id, shown, settleAt)
   if (!settled.ok) throw new Error(`Demo seed: settle: ${settled.error}`)
   const rejectAt = new Date(now.getTime() - HOUR / 2)
   const glass = doChore(tx, tata, id('mladsi'), 'Vynést sklo a plasty do kontejneru', 4, rejectAt)

@@ -1,6 +1,6 @@
 import { periodEnd } from '~/domain'
-import type { PeriodDefaults } from '~/domain'
 import type { Db } from '~/server/db'
+import { getPeriodDefaults } from './defaults'
 import { currentPeriod, rollPeriods } from './periods'
 
 // The period roller (spec §5.8): rolls periods over at the cutoff and catches up after
@@ -9,7 +9,7 @@ import { currentPeriod, rollPeriods } from './periods'
 //
 // The first tick runs at once (boot catch-up). Each tick rolls, then sleeps until the running
 // period's end, at most `maxDelayMs` (so a sleeping laptop or clock change can't push a roll far
-// back). A failed tick is logged and retried after `retryDelayMs`; it never throws.
+// back). Each tick reads the stored default week (./defaults.ts). A failed tick is logged and retried after `retryDelayMs`; it never throws.
 
 export interface RollerOptions {
   now?: () => Date
@@ -18,11 +18,7 @@ export interface RollerOptions {
   log?: Pick<Console, 'info' | 'error'>
 }
 
-export function startPeriodRoller(
-  db: Db,
-  defaults: PeriodDefaults,
-  opts: RollerOptions = {},
-): { stop(): void } {
+export function startPeriodRoller(db: Db, opts: RollerOptions = {}): { stop(): void } {
   const now = opts.now ?? (() => new Date())
   const maxDelayMs = opts.maxDelayMs ?? 3_600_000
   const retryDelayMs = opts.retryDelayMs ?? 60_000
@@ -40,8 +36,12 @@ export function startPeriodRoller(
   function tick() {
     try {
       const at = now()
-      for (const p of rollPeriods(db, at, defaults)) {
-        log.info(`[periods] started ${p.startsAt.toISOString()} → ${p.cutoffAt.toISOString()}`)
+      // The defaults stored now (an admin may have changed them since the last tick).
+      for (const p of rollPeriods(db, at, getPeriodDefaults(db))) {
+        const levels = `${String(p.levels.lower)}/${String(p.levels.upper)}`
+        log.info(
+          `[periods] started ${p.startsAt.toISOString()} → ${p.cutoffAt.toISOString()} levels ${levels}`,
+        )
       }
       const running = currentPeriod(db, at)
       if (!running) {
