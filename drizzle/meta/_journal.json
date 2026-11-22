@@ -127,6 +127,13 @@
       "when": 1795305510380,
       "tag": "0017_feature_flags",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1795307808133,
+      "tag": "0018_instances",
+      "breakpoints": true
     }
   ]
 }
