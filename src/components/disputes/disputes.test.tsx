@@ -135,6 +135,14 @@ describe('DisputeList (Rozporováno)', () => {
     expect(html).toContain('Správce nechal beze změny: Body sedí.')
   })
 
+  it('the boy who opened it is named once, on the reason line', () => {
+    const html = renderToStaticMarkup(
+      <DisputeList entries={[{ ...entry, openedByName: 'Starší' }]} />,
+    )
+    expect(html.split('Starší')).toHaveLength(2)
+    expect(html).toContain('Starší: Jen půlka.')
+  })
+
   it('a settlement entry shows its week', () => {
     const html = renderToStaticMarkup(
       <DisputeList

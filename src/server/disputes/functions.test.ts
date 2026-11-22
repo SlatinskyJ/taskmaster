@@ -101,14 +101,49 @@ describe('openDisputeHandler', () => {
 describe('itemMarkHandler', () => {
   it('off → feature_off; none → null; open → { status: open }', () => {
     const off = withSwitch(false)
-    expect(itemMarkHandler(off.db, { kind: 'completion', id: off.confirmed })).toEqual({
+    const viewer = (id: number, role: 'giver' | 'taker' = 'taker') => ({ id, role })
+    expect(
+      itemMarkHandler(off.db, viewer(off.starsi), { kind: 'completion', id: off.confirmed }),
+    ).toEqual({
       error: 'feature_off',
     })
     const f = withSwitch(true)
     const item = { kind: 'completion', id: f.confirmed } as const
-    expect(itemMarkHandler(f.db, item)).toBeNull()
+    expect(itemMarkHandler(f.db, viewer(f.starsi), item)).toBeNull()
     must(openDisputeIn(f.db, f.starsi, item, 'x', MEETING))
-    expect(itemMarkHandler(f.db, item)).toEqual({ status: 'open' })
+    expect(itemMarkHandler(f.db, viewer(f.starsi), item)).toEqual({ status: 'open' })
+  })
+
+  it('a completion’s mark (with the admin’s note) only for a giver, its earner and whoever opened it', () => {
+    const f = withSwitch(true)
+    const viewer = (id: number, role: 'giver' | 'taker' = 'taker') => ({ id, role })
+    const item = { kind: 'completion', id: f.confirmed } as const
+    const id = must(openDisputeIn(f.db, f.starsi, item, 'x', MEETING)).id
+    f.db
+      .update(disputes)
+      .set({
+        status: 'dismissed',
+        resolvedBy: f.admin,
+        resolvedAt: MEETING.toISOString(),
+        note: 'Ne.',
+      })
+      .where(eq(disputes.id, id))
+      .run()
+    const kept = { status: 'dismissed', note: 'Ne.' }
+    expect(itemMarkHandler(f.db, viewer(f.starsi), item)).toEqual(kept)
+    expect(itemMarkHandler(f.db, viewer(f.tata, 'giver'), item)).toEqual(kept)
+    expect(itemMarkHandler(f.db, viewer(f.mladsi), item)).toBeNull()
+    const other = doneTask(f, { score: 3, completedAt: SAT, earner: f.starsi })
+    const byMladsi = { kind: 'completion', id: other } as const
+    must(openDisputeIn(f.db, f.mladsi, byMladsi, 'x', MEETING))
+    expect(itemMarkHandler(f.db, viewer(f.mladsi), byMladsi)).toEqual({ status: 'open' })
+  })
+
+  it('a score’s mark is for every party (scores are shared)', () => {
+    const f = withSwitch(true)
+    const item = { kind: 'task_score', id: f.confirmed } as const
+    must(openDisputeIn(f.db, f.starsi, item, 'x', MEETING))
+    expect(itemMarkHandler(f.db, { id: f.mladsi, role: 'taker' }, item)).toEqual({ status: 'open' })
   })
 })
 

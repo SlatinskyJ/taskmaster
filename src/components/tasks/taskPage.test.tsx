@@ -18,13 +18,13 @@ const page = vi.hoisted(() => {
     task: TaskView | null
     history: HistoryEntry[]
     disputes: boolean
-    marks: unknown[]
+    marks: Record<string, unknown>
   } = {
     user: null,
     task: null,
     history: [],
     disputes: false,
-    marks: [],
+    marks: {},
   }
   return state
 })
@@ -200,7 +200,7 @@ describe('task page: Rozporovat (#46)', () => {
   type Loader = (a: {
     params: { taskId: string }
     context: { features: { disputes: boolean } }
-  }) => Promise<{ disputeMarks: unknown[] }>
+  }) => Promise<{ disputeMarks: Record<string, unknown> }>
   const load = (task: TaskView, disputes: boolean) => {
     page.task = task
     vi.mocked(getItemMarkFn).mockClear()
@@ -217,7 +217,7 @@ describe('task page: Rozporovat (#46)', () => {
   }
 
   it('loader, switch on: an agreed task reads its score mark, a confirmed one also its completion', async () => {
-    expect((await load(reserved, true)).disputeMarks).toEqual([null])
+    expect((await load(reserved, true)).disputeMarks).toEqual({ task_score: null })
     expect(vi.mocked(getItemMarkFn).mock.calls).toEqual([[{ data: { kind: 'task_score', id: 1 } }]])
     await load(confirmed, true)
     expect(vi.mocked(getItemMarkFn).mock.calls).toEqual([
@@ -227,7 +227,7 @@ describe('task page: Rozporovat (#46)', () => {
   })
 
   it('loader: switch off or a proposed task reads nothing', async () => {
-    expect((await load(confirmed, false)).disputeMarks).toEqual([])
+    expect((await load(confirmed, false)).disputeMarks).toEqual({})
     await load({ ...reserved, status: 'proposed' }, true)
     expect(getItemMarkFn).not.toHaveBeenCalled()
   })
@@ -249,9 +249,9 @@ describe('task page: Rozporovat (#46)', () => {
   })
 
   it('an open dispute on the score: Sporné next to its lead, no button there', () => {
-    page.marks = [{ status: 'open' }]
+    page.marks = { task_score: { status: 'open' } }
     const html = on(reserved)
-    page.marks = []
+    page.marks = {}
     expect(html).toContain(cs.disputes.waiting)
     expect(html).not.toContain(`>${cs.disputes.action}<`)
   })

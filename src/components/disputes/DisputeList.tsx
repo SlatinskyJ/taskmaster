@@ -4,7 +4,7 @@ import { cs } from '~/lib/strings'
 import type { DisputeListEntry } from '~/server/disputes/functions'
 import { DisputeOutcome } from './DisputeOutcome'
 
-// Rozporováno (#46, plan Decision 5b): the viewer's disputes on Týden → Historie, so an outcome
+// Rozporováno (#46): the viewer's disputes on Týden → Historie, so an outcome
 // stays visible after its week. Nothing when there are none.
 export function DisputeList({ entries }: { entries: readonly DisputeListEntry[] }) {
   if (entries.length === 0) return null
@@ -21,7 +21,10 @@ export function DisputeList({ entries }: { entries: readonly DisputeListEntry[] 
             <span className="text-meta font-bold text-muted">{cs.disputes.what[e.item.kind]}</span>
             <span className="text-row font-bold break-words">
               {e.week ? weekLabel(e.week.startsAt, e.week.endsAt) : e.title}
-              {e.takerName && <span className="font-bold text-muted"> · {e.takerName}</span>}
+              {/* The boy's name once: the opened-by line below names him when he opened it. */}
+              {e.takerName && e.takerName !== e.openedByName && (
+                <span className="font-bold text-muted"> · {e.takerName}</span>
+              )}
             </span>
             <span className="text-meta break-words text-muted">
               {cs.disputes.openedBy(e.openedByName, e.reason)}

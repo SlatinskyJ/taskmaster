@@ -53,12 +53,6 @@ describe('locked items (spec §5.11)', () => {
     ['agreed template score', { kind: 'template_score', id: 2, agreement: 'agreed' }, true],
     ['template not yet agreed', { kind: 'template_score', id: 2, agreement: 'proposed' }, false],
     ['confirmed completion', { kind: 'completion', id: 3, outcome: 'confirmed' }, true],
-    // A rejected completion is its own kind (one `task.rejected` entry), never a completion.
-    [
-      'rejected completion (as completion)',
-      { kind: 'completion', id: 3, outcome: 'rejected' },
-      false,
-    ],
     ['rejected completion', { kind: 'rejection', id: 3 }, true],
     ['pending completion', { kind: 'completion', id: 3, outcome: 'pending' }, false],
     ['settlement record', { kind: 'settlement', id: 4, periodId: 46, takerId: OLDER }, true],

@@ -1,12 +1,12 @@
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import type { DisputeKind, DisputeTarget, Level } from '~/domain'
 import { periodEnd } from '~/domain'
 import { toIsoUtc } from '~/domain/dates'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
-import { auditLog, periods, settlements, tasks, templates } from '~/server/db/schema'
+import { periods, settlements, tasks, templates } from '~/server/db/schema'
 import { toPeriod } from '~/server/periods'
-import type { TaskAuditView } from '~/server/tasks/lifecycle'
+import { rejectionById } from '~/server/tasks/rejections'
 
 // The record a dispute names (keys: ./README.md), read with the state that decides whether it
 // is locked (spec §5.11), the numbers the audit entry keeps, and whose item it is.
@@ -16,7 +16,7 @@ export interface DisputeItem {
   id: number
 }
 
-/** The item's numbers when disputed (`dispute.opened` keeps them, plan Decision 8). */
+/** The item's numbers when disputed (`dispute.opened` keeps them). */
 export type DisputeValue = { score: number } | { level: Level; deducted: number }
 
 /** What the Rozporováno list needs: a title, whose item it is, and a settlement's week. */
@@ -44,8 +44,11 @@ export function loadTarget(db: Db | Tx, item: DisputeItem): LoadedTarget | null 
       const value = { score: t.score }
       if (item.kind === 'task_score') {
         // Locked once agreed, whatever happened after (a cancelled agreed task stays locked).
+        // A recurring copy's score is its template's: disputed there, never here (Jakub
+        // 2026-11-22), so it never counts as agreed.
+        const agreed = t.agreedAt !== null && t.templateId === null
         return {
-          target: { kind: 'task_score', id: t.id, agreement: t.agreedAt ? 'open' : 'proposed' },
+          target: { kind: 'task_score', id: t.id, agreement: agreed ? 'open' : 'proposed' },
           value,
           about: { title: t.title, takerId: null, week: null },
         }
@@ -71,22 +74,12 @@ export function loadTarget(db: Db | Tx, item: DisputeItem): LoadedTarget | null 
       }
     }
     case 'rejection': {
-      const e = db
-        .select()
-        .from(auditLog)
-        .where(and(eq(auditLog.id, item.id), eq(auditLog.action, 'task.rejected')))
-        .get()
-      if (!e?.before) return null
-      const before = JSON.parse(e.before) as TaskAuditView
-      const t = db
-        .select({ title: tasks.title })
-        .from(tasks)
-        .where(eq(tasks.id, Number(e.entityId)))
-        .get()
+      const r = rejectionById(db, item.id)
+      if (!r) return null
       return {
-        target: { kind: 'rejection', id: e.id },
-        value: { score: before.score },
-        about: { title: t?.title ?? '', takerId: before.earnerId, week: null },
+        target: { kind: 'rejection', id: r.entryId },
+        value: { score: r.score },
+        about: { title: r.title, takerId: r.earnerId, week: null },
       }
     }
     case 'settlement': {

@@ -49,18 +49,20 @@ export function recordDispute(week: HistoryWeek, r: HistoryRecord, named: boolea
  */
 const NOT_AGREED: readonly TaskView['status'][] = ['proposed', 'cancelled', 'expired']
 
-/** The task page: its score once agreed, and its completion once confirmed. */
+/** The task page: a one-time task's score once agreed, and any completion once confirmed. */
 export function taskDisputes(task: TaskView, named: boolean): DisputeProps[] {
   if (NOT_AGREED.includes(task.status)) return []
   const value = line(task.title, formatPoints(task.score))
-  const out: DisputeProps[] = [
-    {
+  const out: DisputeProps[] = []
+  // A recurring copy's score is its template's: disputed on the template page (Jakub 2026-11-22).
+  if (task.origin === 'one_time') {
+    out.push({
       item: { kind: 'task_score', id: task.id },
       what: cs.disputes.what.task_score,
       value,
       name: task.title,
-    },
-  ]
+    })
+  }
   if (task.status === 'confirmed') {
     const earner = named && task.earnerId !== null ? (task.completedBy?.name ?? null) : null
     out.push({

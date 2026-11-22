@@ -160,6 +160,8 @@ describe('template page: Rozporovat (#46)', () => {
     expect(html).toContain(
       'aria-label="Rozporovat: Body za opakovaný úkol – Vyluxovat celý obývák a chodbu"',
     )
+    // Led by what it disputes, so it doesn't read as a reply to the bid above it.
+    expect(html).toContain(`>${cs.disputes.what.template_score}<`)
     expect(render(TATA)).not.toContain('data-slot="dispute"')
   })
 })

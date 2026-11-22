@@ -62,6 +62,7 @@ const task = (over: Partial<TaskView>): TaskView =>
     score: 6,
     completedBy: null,
     earnerId: null,
+    origin: 'one_time',
     ...over,
   }) as TaskView
 
@@ -82,6 +83,12 @@ describe('taskDisputes', () => {
     ])
     expect(ps[1]?.value).toBe('Starší · Vysát auto · 6 bodů')
     expect(taskDisputes(t, false)[1]?.value).toBe('Vysát auto · 6 bodů')
+  })
+
+  it('a recurring copy: no score line (disputed on its template), its completion still has one', () => {
+    const t = task({ status: 'confirmed', origin: 'on_demand', templateId: 4, earnerId: 3 })
+    expect(taskDisputes(t, true).map((p) => p.item)).toEqual([{ kind: 'completion', id: 7 }])
+    expect(taskDisputes(task({ status: 'reserved', origin: 'scheduled' }), true)).toEqual([])
   })
 
   it.each(['proposed', 'cancelled', 'expired'] as const)('%s: none', (status) => {

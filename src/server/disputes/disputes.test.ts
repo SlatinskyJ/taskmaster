@@ -1,7 +1,7 @@
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import type { DisputeKind } from '~/domain'
-import { auditLog, disputes, settlements } from '~/server/db/schema'
+import { auditLog, disputes, settlements, tasks } from '~/server/db/schema'
 import { doneTask, MEETING, SAT, week } from '~/server/settlement/testing'
 import { agreedTemplate } from '~/server/templates/testing'
 import { rejectTask } from '~/server/tasks'
@@ -368,5 +368,102 @@ describe('listDisputes (Rozporováno)', () => {
     expect(listDisputes(f.db, { id: f.starsi, role: 'taker' }).map((e) => e.id)).toEqual(
       mine.slice(3).reverse(),
     )
+  })
+})
+
+describe('review round 1 (#46)', () => {
+  it('a recurring copy’s score is not its own item: not_locked; its completion still opens (Jakub 2026-11-22)', () => {
+    const f = setup()
+    const copy = doneTask(f, { score: 3, completedAt: SAT, earner: f.starsi })
+    f.db
+      .update(tasks)
+      .set({ templateId: agreedTemplate(f), origin: 'on_demand' })
+      .where(eq(tasks.id, copy))
+      .run()
+    expect(openDisputeIn(f.db, f.starsi, { kind: 'task_score', id: copy }, 'x', AT)).toEqual({
+      ok: false,
+      error: 'not_locked',
+    })
+    expect(openDisputeIn(f.db, f.starsi, { kind: 'completion', id: copy }, 'x', AT).ok).toBe(true)
+  })
+
+  it('a rejection entry with no earner is not_found (the same reader as Týden)', () => {
+    const f = setup()
+    const id = rejection(f, f.starsi)
+    const e = f.db.select().from(auditLog).where(eq(auditLog.id, id)).get()
+    const before = { ...(JSON.parse(e?.before ?? '{}') as object), earnerId: null }
+    f.db.run(sql`DROP TRIGGER IF EXISTS audit_log_no_update`)
+    f.db
+      .update(auditLog)
+      .set({ before: JSON.stringify(before) })
+      .where(eq(auditLog.id, id))
+      .run()
+    expect(openDisputeIn(f.db, f.tata, { kind: 'rejection', id }, 'x', AT)).toEqual({
+      ok: false,
+      error: 'not_found',
+    })
+  })
+
+  it('the admin on an unknown item is not_a_party, not not_found', () => {
+    const f = setup()
+    expect(openDisputeIn(f.db, f.admin, { kind: 'completion', id: 999 }, 'x', AT)).toEqual({
+      ok: false,
+      error: 'not_a_party',
+    })
+  })
+
+  it('Rozporováno: a taker sees the dispute he opened on the other boy’s completion', () => {
+    const f = setup()
+    const his = doneTask(f, { score: 3, completedAt: SAT, earner: f.mladsi })
+    const id = must(openDisputeIn(f.db, f.starsi, { kind: 'completion', id: his }, 'x', AT)).id
+    expect(listDisputes(f.db, { id: f.starsi, role: 'taker' }).map((e) => e.id)).toEqual([id])
+    expect(listDisputes(f.db, { id: f.mladsi, role: 'taker' }).map((e) => e.id)).toEqual([id])
+  })
+
+  it('Rozporováno: an older open dispute stays when 5 newer ones are closed', () => {
+    const f = setup()
+    const at = (n: number) => new Date(AT.getTime() + n * 1000)
+    const t0 = doneTask(f, { score: 1, completedAt: SAT, earner: f.starsi })
+    const old = must(openDisputeIn(f.db, f.starsi, { kind: 'completion', id: t0 }, 'x', at(0))).id
+    for (let i = 1; i <= 6; i++) {
+      const t = doneTask(f, { score: 1, completedAt: SAT, earner: f.starsi })
+      const id = must(openDisputeIn(f.db, f.starsi, { kind: 'completion', id: t }, 'x', at(i))).id
+      close(f, id, 'dismissed', 'n')
+    }
+    const list = listDisputes(f.db, { id: f.starsi, role: 'taker' })
+    expect(list.map((e) => e.id)).toContain(old)
+    expect(list).toHaveLength(6)
+  })
+
+  it('Rozporováno: the closed ones kept are the most recently closed', () => {
+    const f = setup()
+    const at = (n: number) => new Date(AT.getTime() + n * 1000)
+    const ids: number[] = []
+    for (let i = 0; i < 6; i++) {
+      const t = doneTask(f, { score: 1, completedAt: SAT, earner: f.starsi })
+      ids.push(must(openDisputeIn(f.db, f.starsi, { kind: 'completion', id: t }, 'x', at(i))).id)
+    }
+    // The oldest one is closed last, so it is kept and the second-oldest drops off.
+    ids.slice(1).forEach((id, i) => {
+      close(f, id, 'dismissed', 'n', at(100 + i))
+    })
+    close(f, ids[0] ?? 0, 'dismissed', 'n', at(200))
+    expect(listDisputes(f.db, { id: f.starsi, role: 'taker' }).map((e) => e.id)).toEqual([
+      ids[0],
+      ...ids.slice(2).reverse(),
+    ])
+  })
+
+  it('Rozporováno: a rejection and a score entry carry their task’s title', () => {
+    const f = setup()
+    const r = must(
+      openDisputeIn(f.db, f.starsi, { kind: 'rejection', id: rejection(f, f.starsi) }, 'x', AT),
+    ).id
+    const s = must(
+      openDisputeIn(f.db, f.starsi, { kind: 'task_score', id: f.confirmed }, 'x', AT),
+    ).id
+    const list = listDisputes(f.db, { id: f.tata, role: 'giver' })
+    expect(list.find((e) => e.id === r)?.title).toBe('Vyndat myčku')
+    expect(list.find((e) => e.id === s)?.title).toBe('Vyndat myčku')
   })
 })

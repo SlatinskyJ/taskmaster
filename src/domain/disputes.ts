@@ -49,7 +49,7 @@ export type DisputeRef =
  * kind `rejection` (one `task.rejected` audit entry: a task can be rejected several times), so
  * it has exactly one name and the one-open-dispute check holds.
  */
-export type CompletionOutcome = 'pending' | 'confirmed' | 'rejected'
+export type CompletionOutcome = 'pending' | 'confirmed'
 
 /** The disputed record with the state that decides whether it is locked. */
 export type DisputeTarget =

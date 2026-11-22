@@ -16,6 +16,7 @@ import { parseIdParam } from '~/lib/idParam'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { getItemMarkFn } from '~/server/disputes/functions'
+import type { DisputeMark } from '~/server/disputes/functions'
 import { getTaskDetailFn } from '~/server/tasks/functions'
 
 // One task's page (#34): TTask for a brother, GBid / GTask for a parent (UI doc §7). The state,
@@ -36,8 +37,18 @@ export const Route = createFileRoute('/_app/ukol/$taskId')({
     if (!detail) throw notFound()
     // Rozporovat (#46): the marks of the score and the completion, only with the switch on.
     const items = context.features.disputes ? taskDisputes(detail.task, false) : []
-    const marks = await Promise.all(items.map((d) => getItemMarkFn({ data: d.item })))
-    return { ...detail, disputeMarks: marks.map((m) => (m && 'error' in m ? null : m)) }
+    // Keyed by kind (one score and one completion per task), so a mark can't land on the
+    // other line.
+    const marks = await Promise.all(
+      items.map(async (d) => {
+        const m = await getItemMarkFn({ data: d.item })
+        return [d.item.kind, m && 'error' in m ? null : m] as const
+      }),
+    )
+    return {
+      ...detail,
+      disputeMarks: Object.fromEntries(marks) as Partial<Record<string, DisputeMark | null>>,
+    }
   },
   component: TaskPage,
 })
@@ -71,8 +82,13 @@ function TaskPage() {
           </p>
         )}
         {features.disputes &&
-          taskDisputes(task, user.role === 'giver').map((d, i) => (
-            <DisputeControl key={d.item.kind} {...d} mark={disputeMarks[i] ?? null} lead />
+          taskDisputes(task, user.role === 'giver').map((d) => (
+            <DisputeControl
+              key={d.item.kind}
+              {...d}
+              mark={disputeMarks[d.item.kind] ?? null}
+              lead
+            />
           ))}
       </Card>
       <TaskWorkPanel task={task} me={me} />

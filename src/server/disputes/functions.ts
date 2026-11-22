@@ -8,7 +8,7 @@ import { getFlags } from '~/server/features'
 import { int, record } from '~/server/periods/validators'
 import { disputeMarks, markKey, openDisputeIn } from './disputes'
 import type { DisputeMark, OpenDisputeError } from './disputes'
-import { listDisputes } from './list'
+import { listDisputes, seesItemDisputes } from './list'
 
 export type { DisputeItem } from './targets'
 export type { DisputeMark } from './disputes'
@@ -84,11 +84,14 @@ export function openDisputeHandler(
   return r.ok ? { ok: true } : { ok: false, error: r.error }
 }
 
+/** The item's mark, for a viewer who may see its disputes (a completion: its boy or opener). */
 export function itemMarkHandler(
   db: Db,
+  viewer: { id: number; role: Role },
   item: { kind: PageMarkKind; id: number },
 ): DisputeMark | null | { error: 'feature_off' } {
   if (!isOn(db)) return { error: 'feature_off' }
+  if (!seesItemDisputes(db, viewer, item)) return null
   return disputeMarks(db, [item]).get(markKey(item)) ?? null
 }
 
@@ -107,7 +110,9 @@ export const openDisputeFn = createServerFn({ method: 'POST' })
 export const getItemMarkFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
   .validator(parseItemMarkRef)
-  .handler(({ data }) => itemMarkHandler(getDb(), data))
+  .handler(({ data, context }) =>
+    itemMarkHandler(getDb(), { id: context.user.id, role: context.user.role }, data),
+  )
 
 export const getDisputeListFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])

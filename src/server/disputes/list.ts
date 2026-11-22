@@ -1,17 +1,18 @@
-import { desc } from 'drizzle-orm'
+import { and, desc, eq, ne } from 'drizzle-orm'
 import type { Role } from '~/domain'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { disputes, users } from '~/server/db/schema'
+import type { DisputeRow } from '~/server/db/schema'
 import { toMark } from './disputes'
 import type { DisputeMark } from './disputes'
 import { loadTarget } from './targets'
 import type { DisputeItem } from './targets'
 
-// Rozporováno (#46, plan Decision 5b): the disputes a viewer is involved in, on Týden →
+// Rozporováno (#46): the disputes a viewer is involved in, on Týden →
 // Historie, so an outcome stays visible after its week. A giver sees every dispute; a taker the
 // ones he opened, the ones on his own completions, rejections and settlements, and every score
-// dispute (scores are shared by all parties). Every open one, plus the newest closed ones.
+// dispute (scores are shared by all parties). Every open one, plus the most recently closed.
 
 /** How many closed disputes the list keeps (open ones are never cut). */
 export const DISPUTE_LIST_CLOSED_MAX = 5
@@ -30,7 +31,42 @@ export interface DisputeListEntry {
   mark: DisputeMark
 }
 
-export function listDisputes(db: Db | Tx, viewer: { id: number; role: Role }): DisputeListEntry[] {
+interface Viewer {
+  id: number
+  role: Role
+}
+
+/**
+ * Who sees a dispute: a giver every one; a taker those he opened, those on his own items, and
+ * every score dispute (whose item has no taker).
+ */
+function visibleTo(viewer: Viewer, openedBy: number, takerId: number | null): boolean {
+  if (viewer.role === 'giver') return true
+  if (viewer.role !== 'taker') return false
+  return openedBy === viewer.id || takerId === null || takerId === viewer.id
+}
+
+/** Whether `viewer` may see the disputes on `item` at all (a page's mark, #46). */
+export function seesItemDisputes(db: Db | Tx, viewer: Viewer, item: DisputeItem): boolean {
+  if (viewer.role === 'giver') return true
+  if (viewer.role !== 'taker') return false
+  const takerId = loadTarget(db, item)?.about.takerId ?? null
+  if (takerId === null || takerId === viewer.id) return true
+  const mine = db
+    .select({ id: disputes.id })
+    .from(disputes)
+    .where(
+      and(
+        eq(disputes.itemKind, item.kind),
+        eq(disputes.itemId, item.id),
+        eq(disputes.openedBy, viewer.id),
+      ),
+    )
+    .get()
+  return mine !== undefined
+}
+
+export function listDisputes(db: Db | Tx, viewer: Viewer): DisputeListEntry[] {
   if (viewer.role !== 'giver' && viewer.role !== 'taker') return []
   const names = new Map(
     db
@@ -39,27 +75,12 @@ export function listDisputes(db: Db | Tx, viewer: { id: number; role: Role }): D
       .all()
       .map((u) => [u.id, u.name]),
   )
-  const out: DisputeListEntry[] = []
-  let closed = 0
-  // Newest first; the viewer filter runs here in code, before the cap, so other boys'
-  // disputes never take a taker's places.
-  for (const r of db
-    .select()
-    .from(disputes)
-    .orderBy(desc(disputes.openedAt), desc(disputes.id))
-    .all()) {
-    if (r.status !== 'open' && closed >= DISPUTE_LIST_CLOSED_MAX) continue
+  const entry = (r: DisputeRow): DisputeListEntry | null => {
     const item = { kind: r.itemKind, id: r.itemId }
     const about = loadTarget(db, item)?.about ?? null
     const takerId = about?.takerId ?? null
-    const visible =
-      viewer.role === 'giver' ||
-      r.openedBy === viewer.id ||
-      takerId === null ||
-      takerId === viewer.id
-    if (!visible) continue
-    if (r.status !== 'open') closed++
-    out.push({
+    if (!visibleTo(viewer, r.openedBy, takerId)) return null
+    return {
       id: r.id,
       item,
       title: about?.title ?? '',
@@ -69,7 +90,27 @@ export function listDisputes(db: Db | Tx, viewer: { id: number; role: Role }): D
       reason: r.reason,
       openedAt: r.openedAt,
       mark: toMark(r),
-    })
+    }
   }
-  return out
+  // The viewer filter runs before the cap, so other boys' disputes never take a taker's places.
+  // Open ones newest opened first; then the most recently closed ones.
+  const open = db
+    .select()
+    .from(disputes)
+    .where(eq(disputes.status, 'open'))
+    .orderBy(desc(disputes.openedAt), desc(disputes.id))
+    .all()
+    .flatMap((r) => entry(r) ?? [])
+  const closed: DisputeListEntry[] = []
+  for (const r of db
+    .select()
+    .from(disputes)
+    .where(ne(disputes.status, 'open'))
+    .orderBy(desc(disputes.resolvedAt), desc(disputes.id))
+    .all()) {
+    if (closed.length >= DISPUTE_LIST_CLOSED_MAX) break
+    const e = entry(r)
+    if (e) closed.push(e)
+  }
+  return [...open, ...closed]
 }

@@ -61,7 +61,7 @@ function TemplatePage() {
         {t.status === 'active' && (
           <p className="text-meta text-muted">{cs.templatePrice.futureOnly}</p>
         )}
-        {dispute && <DisputeControl {...dispute} mark={disputeMark} />}
+        {dispute && <DisputeControl {...dispute} mark={disputeMark} lead />}
       </Card>
       <section className="grid gap-2" aria-labelledby="history-label">
         <SectionLabel id="history-label">{cs.templatePrice.history}</SectionLabel>
