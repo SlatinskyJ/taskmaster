@@ -79,8 +79,9 @@ describe('demo seed (#62)', () => {
 
   it('leaves the switches alone when it does not seed', () => {
     const db = createTestDb()
+    db.run(sql`UPDATE feature_flags SET enabled = 0 WHERE key = 'week'`)
     seedDemo(db, { NODE_ENV: 'production' }, T0)
-    expect(getFlags(db)).toEqual(NO_FEATURES)
+    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, week: false })
   })
 
   it('the audit log is in time order (#45)', () => {
@@ -161,7 +162,7 @@ describe('demo seed (#62)', () => {
     expect(db.select().from(users).all()).toHaveLength(0)
   })
 
-  it('each seed turns on its switches and only those', () => {
+  it('each seed turns on its switches and turns the rest off', () => {
     const expected: Record<SeedName, Features> = {
       family: NO_FEATURES,
       home: NO_FEATURES,
@@ -198,14 +199,14 @@ describe('demo seed (#62)', () => {
     }
   })
 
-  it('all or nothing: a failing switch leaves nobody, no tasks, every switch off', () => {
+  it('all or nothing: a failing switch leaves nobody, no tasks, every switch as it was', () => {
     const db = createTestDb()
     db.run(
       sql`CREATE TRIGGER boom BEFORE INSERT ON audit_log WHEN NEW.action = 'feature.switched' BEGIN SELECT RAISE(ABORT, 'boom'); END`,
     )
-    expect(() => seedDemo(db, PREVIEW, T0)).toThrow('boom')
+    expect(() => seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: 'launch' }, T0)).toThrow('boom')
     expect(db.select().from(users).all()).toHaveLength(0)
     expect(db.select().from(tasks).all()).toHaveLength(0)
-    expect(getFlags(db)).toEqual(NO_FEATURES)
+    expect(getFlags(db)).toEqual(ALL_FEATURES)
   })
 })

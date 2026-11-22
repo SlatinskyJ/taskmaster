@@ -25,15 +25,13 @@ const DEFAULTS: PeriodDefaults = {
   levels: { lower: 60, upper: 120 },
 }
 
-function on() {
+function withSwitch(enabled: boolean) {
   const f = week()
-  f.db
-    .update(featureFlags)
-    .set({ enabled: true })
-    .where(eq(featureFlags.key, 'periodProposals'))
-    .run()
+  f.db.update(featureFlags).set({ enabled }).where(eq(featureFlags.key, 'periodProposals')).run()
   return f
 }
+const on = () => withSwitch(true)
+const switchedOff = () => withSwitch(false)
 
 describe('parsePeriodProposal', () => {
   const good = { cutoffAt: CUT, levels: { lower: 60, upper: 120 } }
@@ -83,7 +81,7 @@ describe('parseProposalRef', () => {
 
 describe('switch off', () => {
   it('every handler answers feature_off and writes nothing', () => {
-    const f = week()
+    const f = switchedOff()
     const off = { ok: false, error: 'feature_off' }
     const settings = parsePeriodProposal({ cutoffAt: CUT, levels: { lower: 60, upper: 120 } })
     expect(proposalsHandler(f.db, AT)).toEqual({ error: 'feature_off' })

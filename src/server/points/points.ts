@@ -1,25 +1,22 @@
-import { and, asc, eq, inArray, isNotNull } from 'drizzle-orm'
+import { and, asc, eq } from 'drizzle-orm'
 import type { Role } from '~/domain/parties'
-import type { LedgerEntry, Levels } from '~/domain/settlement'
-import { runningTotal } from '~/domain/settlement'
+import type { Levels } from '~/domain/settlement'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
-import { tasks, users } from '~/server/db/schema'
+import { users } from '~/server/db/schema'
 import { getPeriodDefaults } from '~/server/periods/defaults'
 import { currentLevels } from '~/server/periods/periods'
+import { takerPointsNow } from '~/server/settlement/ledger'
 
 // Points per taker (spec §5.7), read-only.
 //
-// `confirmed` is the running total (spec §5.9): confirmed points − deducted by settlements ±
-// adjustments, computed by the domain's `runningTotal` over ledger entries. Today the only
-// entries are completions (confirmed tasks with an earner, one-time or instance). Owners of the rest:
-//   - #172 (points subtract settlements) switches this to #44's `ledgerEntries`, which adds
-//     `settlement` entries, the points each settlement deducted;
-//   - #48 (corrections, adjustments) adds `adjustment` entries;
-// `levels` are the running period's; when none runs (`currentLevels`), the agreed change for the
-// next period, else the stored defaults.
-// `pending` is the sum of the taker's done, unconfirmed tasks. A task a giver did himself has
-// no earner and counts for nobody.
+// `confirmed` and `pending` come from `takerPointsNow`, the one points read (Týden uses it too):
+// confirmed is the running total (spec §5.9), confirmed completions minus what each settlement
+// deducted; #48 (corrections, adjustments) adds `adjustment` entries there. `pending` is the sum
+// of the taker's done, unconfirmed tasks. A task a giver did himself has no earner and counts for
+// nobody. This adds every active taker (a zero row when he has neither) and the levels: the
+// running period's; when none runs (`currentLevels`), the agreed change for the next period, else
+// the stored defaults.
 
 export interface TakerPoints {
   id: number
@@ -41,28 +38,14 @@ export function takerPoints(db: Db | Tx, now: Date): PointsOverview {
     .where(and(eq(users.role, 'taker'), eq(users.active, true)))
     .orderBy(asc(users.id))
     .all()
-  const rows = db
-    .select({ earnerId: tasks.earnerId, status: tasks.status, score: tasks.score })
-    .from(tasks)
-    .where(and(inArray(tasks.status, ['confirmed', 'done_unconfirmed']), isNotNull(tasks.earnerId)))
-    .all()
-  const entries: LedgerEntry[] = []
-  const pending = new Map<number, number>()
-  for (const r of rows) {
-    if (r.earnerId === null) continue
-    if (r.status === 'confirmed') {
-      entries.push({ kind: 'completion', takerId: r.earnerId, points: r.score })
-    } else {
-      pending.set(r.earnerId, (pending.get(r.earnerId) ?? 0) + r.score)
-    }
-  }
+  const points = takerPointsNow(db)
   return {
     levels: currentLevels(db, now, getPeriodDefaults(db)),
     takers: takers.map((t) => ({
       id: t.id,
       name: t.name,
-      confirmed: runningTotal(entries, t.id),
-      pending: pending.get(t.id) ?? 0,
+      confirmed: points.get(t.id)?.confirmed ?? 0,
+      pending: points.get(t.id)?.pending ?? 0,
     })),
   }
 }

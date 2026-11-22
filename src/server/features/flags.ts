@@ -22,27 +22,30 @@ export function getFlags(db: Db | Tx): Features {
 }
 
 /**
- * Turns the given switches on inside the caller's transaction, one `feature.switched` entry
- * each (#183). A switch already on writes nothing; a missing row is created. Only the demo
- * seed calls this (previews and e2e); production switches change by migration or by hand.
+ * Sets every switch inside the caller's transaction: the listed ones on, all others off, one
+ * `feature.switched` entry per switch that changes (#183). A switch already as wanted writes
+ * nothing; a missing row is created. Only the demo seed calls this (previews and e2e), so each
+ * seed gets exactly its switches whatever the migrations turned on; production switches change
+ * by migration or by hand.
  */
-export function switchOnIn(tx: Tx, keys: readonly FeatureKey[], at: Date): void {
+export function setSwitchesIn(tx: Tx, on: readonly FeatureKey[], at: Date): void {
   const now = getFlags(tx)
-  for (const key of keys) {
-    if (now[key]) continue
+  for (const key of FEATURE_KEYS) {
+    const enabled = on.includes(key)
+    if (now[key] === enabled) continue
     tx.insert(featureFlags)
-      .values({ key, enabled: true })
-      .onConflictDoUpdate({ target: featureFlags.key, set: { enabled: true } })
+      .values({ key, enabled })
+      .onConflictDoUpdate({ target: featureFlags.key, set: { enabled } })
       .run()
     writeAudit(tx, {
       actor: { kind: 'system' },
       action: 'feature.switched',
       entityType: 'feature',
       entityId: key,
-      before: { enabled: false },
-      after: { enabled: true },
+      before: { enabled: now[key] },
+      after: { enabled },
       at,
     })
-    now[key] = true
+    now[key] = enabled
   }
 }

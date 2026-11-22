@@ -1,7 +1,15 @@
 import { verify } from '@node-rs/argon2'
 import { and, asc, eq, sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
-import { auditLog, settlements, tasks, templates, templateThread, users } from '~/server/db/schema'
+import {
+  auditLog,
+  featureFlags,
+  settlements,
+  tasks,
+  templates,
+  templateThread,
+  users,
+} from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { takerPoints } from '~/server/points'
 import { listTasks } from '~/server/tasks'
@@ -10,7 +18,7 @@ import { fromPragueWallTime } from '~/domain/dates'
 import { listPeriods, proposalsView, rollPeriods } from '~/server/periods'
 import { rejectionsSince } from '~/server/tasks/rejections'
 import { getMeeting } from '~/server/settlement/meeting'
-import { ALL_FEATURES, NO_FEATURES } from '~/lib/features'
+import { ALL_FEATURES } from '~/lib/features'
 import { getFlags } from '~/server/features'
 import { DEMO_PASSWORD, seedDemo } from './seed'
 
@@ -185,12 +193,13 @@ describe('the demo seed (previews)', () => {
     expect(cancelled?.reason).toBe('Udělá to firma.')
   })
 
-  it('gives both brothers points (#40 + #44 week): confirmed and waiting, plus an open task', () => {
+  it('gives both brothers points (#40 + #44 week, minus #45 settlement): confirmed and waiting, plus an open task', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
+    // Last week's settlement took 100 from Starší and 50 from Mladší (#172): the meeting's totals.
     expect(takerPoints(db, T0).takers.map((t) => [t.name, t.confirmed, t.pending])).toEqual([
-      ['Starší', 260, 14],
-      ['Mladší', 152, 6],
+      ['Starší', 160, 14],
+      ['Mladší', 102, 6],
     ])
     const open = listTasks(db).filter((t) => t.status === 'open')
     expect(open.map((t) => [t.title, t.score])).toEqual([
@@ -202,9 +211,9 @@ describe('the demo seed (previews)', () => {
     ])
   })
 
-  it('turns every launch switch on, so a preview shows the whole app (prod stays off)', () => {
+  it('turns every launch switch on, so a preview shows the whole app', () => {
     const db = createTestDb()
-    expect(getFlags(db)).toEqual(NO_FEATURES)
+    db.update(featureFlags).set({ enabled: false }).run()
     seedDemo(db, PREVIEW, T0)
     expect(getFlags(db)).toEqual(ALL_FEATURES)
   })
