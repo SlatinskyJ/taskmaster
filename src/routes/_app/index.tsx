@@ -86,6 +86,7 @@ function Home() {
     waiting.length +
       shownTemplates.length +
       shownPriceChanges.length +
+      taskPriceChanges.length +
       toApprove.length +
       bids.length ===
     0

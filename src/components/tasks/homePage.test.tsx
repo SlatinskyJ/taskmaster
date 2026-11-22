@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { cs } from '~/lib/strings'
+import type { TaskView } from '~/server/tasks/functions'
 import type { TemplateView } from '~/server/templates/functions'
 
 // Domů itself (#138), rendered statically through its route, so the wiring of the price change
@@ -136,6 +137,41 @@ describe('Domů', () => {
     expect(render({ id: 2, role: 'giver', displayName: 'Táta' }, [])).not.toContain(
       'Teď na tebe nic nečeká.',
     )
+  })
+
+  it('a parent with only a task price change waiting gets no empty line', () => {
+    // Mamka's new price on a one-time task waits for Táta; it is not behind any launch switch.
+    features.recurring = false
+    const change: TaskView = {
+      id: 7,
+      title: 'Vyluxovat celý obývák a chodbu',
+      status: 'open',
+      score: 10,
+      approvalRequired: true,
+      createdByName: 'Táta',
+      offeredByName: null,
+      approvedBy: [],
+      approverIds: [],
+      bids: [],
+      lowest: null,
+      reservedBy: null,
+      completedBy: null,
+      completedAt: null,
+      earnerId: null,
+      waitingFor: [],
+      scoreChange: {
+        id: 3,
+        score: 12,
+        proposedBy: { id: 5, name: 'Mamka' },
+        approvedBy: [{ id: 5, name: 'Mamka' }],
+        waitingFor: [{ id: 2, name: 'Táta' }],
+      },
+    }
+    const html = render({ id: 2, role: 'giver', displayName: 'Táta' }, [], {
+      taskPriceChanges: [change],
+    })
+    expect(html).toContain('Vyluxovat celý obývák a chodbu')
+    expect(html).not.toContain('Teď na tebe nic nečeká.')
   })
 
   it('a parent with two kinds of item waiting gets no empty line', () => {
