@@ -2,10 +2,10 @@ import { expect, test } from '@playwright/test'
 import { cs } from '../src/lib/strings'
 import { bottomBar, passwordLogin } from './helpers'
 
-// The launch switches as the migration seeds them (all off), read from the real database by
+// Every launch switch off, as at the family launch, read from the real database by
 // the app shell: a brother has no bar, a parent's bar is Domů / Úkoly, and Nový úkol has no
 // Jednorázový / Opakovaný toggle yet still creates a one-time task. Its own server on the
-// `launch` seed (#183), which turns no switch on, while previews' `demo` seed turns all on.
+// `launch` seed (#183), which turns every switch off, while previews' `demo` seed turns all on.
 
 test.use({ viewport: { width: 360, height: 800 } })
 

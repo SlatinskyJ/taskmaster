@@ -1,7 +1,7 @@
 import { hashSync } from '@node-rs/argon2'
 import type { Db } from '~/server/db'
 import { users } from '~/server/db/schema'
-import { switchOnIn } from '~/server/features'
+import { setSwitchesIn } from '~/server/features'
 import { createUser } from '~/server/users'
 import type { NewUser } from '~/server/users'
 import { SEEDS, isSeedName } from './seeds'
@@ -18,7 +18,8 @@ import type { SeedName } from './seeds'
 // does). All tested.
 //
 // What else it holds is picked by `TASKMASTER_SEED` (#183): a named seed (./seeds.ts) is a list
-// of pieces (./pieces.ts, one per feature's sample data) and the launch switches it turns on.
+// of pieces (./pieces.ts, one per feature's sample data) and the launch switches it turns on;
+// every other switch goes off.
 // Unset, previews and dev get `demo`, which has every piece and every switch on, so a preview
 // shows features production still hides. Each e2e suite names its own seed in e2e/suites.ts.
 // Everything runs in one transaction, through the real actions.
@@ -78,7 +79,7 @@ export function seedDemo(
     }
     const id = (username: string) => ids.get(username) ?? 0
     for (const piece of SEEDS[seed].pieces) piece({ tx, id, now, start })
-    switchOnIn(tx, SEEDS[seed].features, now)
+    setSwitchesIn(tx, SEEDS[seed].features, now)
     return { kind: 'seeded', seed, usernames: DEMO_USERS.map((u) => u.username) } as const
   })
 }

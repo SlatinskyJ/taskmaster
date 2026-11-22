@@ -155,6 +155,13 @@
       "when": 1795345091165,
       "tag": "0021_scheduler",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1795351314697,
+      "tag": "0022_launch_switches_on",
+      "breakpoints": true
     }
   ]
 }
