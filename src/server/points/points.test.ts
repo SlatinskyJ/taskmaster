@@ -11,6 +11,8 @@ import {
 import { T0, T1, T2, T3, family, must, type Family } from '~/server/tasks/testing'
 import { periodDefaults } from '~/server/db/schema'
 import { getPeriodDefaults, rollPeriods, savePeriodDefaults } from '~/server/periods'
+import { getMeeting, settlePeriod } from '~/server/settlement/meeting'
+import { doneTask, MEETING, plus, SAT, week } from '~/server/settlement/testing'
 import { takerPoints } from './points'
 
 // The points query (spec §5.7): confirmed = running total, pending = done and unconfirmed.
@@ -127,5 +129,47 @@ describe('takerPoints levels', () => {
     const after = new Date(first.cutoffAt.getTime() + 1)
     rollPeriods(f.db, after, getPeriodDefaults(f.db))
     expect(takerPoints(f.db, after).levels).toEqual(NEW)
+  })
+})
+
+describe('takerPoints after a settlement', () => {
+  /** P1 with Starší 100 + 30 and Mladší 30 confirmed, settled at the meeting. */
+  function settledWeek() {
+    const f = week()
+    doneTask(f, { score: 100, completedAt: plus(SAT, 3_600_000), earner: f.starsi })
+    doneTask(f, { score: 30, completedAt: plus(SAT, 7_200_000), earner: f.starsi })
+    doneTask(f, { score: 30, completedAt: plus(SAT, 7_200_000), earner: f.mladsi })
+    expect(takerPoints(f.db, MEETING).takers.map((t) => t.confirmed)).toEqual([130, 30])
+    const m = getMeeting(f.db, MEETING)
+    const shown = m.period ? m.takers.map((t) => ({ takerId: t.id, total: t.total })) : []
+    must(settlePeriod(f.db, f.tata, f.p1.id, shown, MEETING))
+    return f
+  }
+
+  it('confirmed drops by the deduction: 130 → settle at upper → 30; below lower keeps all', () => {
+    const f = settledWeek()
+    expect(
+      takerPoints(f.db, plus(MEETING, 1000)).takers.map((t) => [t.confirmed, t.pending]),
+    ).toEqual([
+      [30, 0],
+      [30, 0],
+    ])
+  })
+
+  it('next week: carry-over plus new confirmed, pending apart', () => {
+    const f = settledWeek()
+    doneTask(f, { score: 20, completedAt: plus(MEETING, 60_000), earner: f.starsi })
+    doneTask(f, {
+      score: 9,
+      completedAt: plus(MEETING, 60_000),
+      earner: f.mladsi,
+      status: 'done_unconfirmed',
+    })
+    expect(
+      takerPoints(f.db, plus(MEETING, 120_000)).takers.map((t) => [t.confirmed, t.pending]),
+    ).toEqual([
+      [50, 0],
+      [30, 9],
+    ])
   })
 })

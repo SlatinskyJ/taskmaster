@@ -193,12 +193,13 @@ describe('the demo seed (previews)', () => {
     expect(cancelled?.reason).toBe('Udělá to firma.')
   })
 
-  it('gives both brothers points (#40 + #44 week): confirmed and waiting, plus an open task', () => {
+  it('gives both brothers points (#40 + #44 week, minus #45 settlement): confirmed and waiting, plus an open task', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
+    // Last week's settlement took 100 from Starší and 50 from Mladší (#172): the meeting's totals.
     expect(takerPoints(db, T0).takers.map((t) => [t.name, t.confirmed, t.pending])).toEqual([
-      ['Starší', 260, 14],
-      ['Mladší', 152, 6],
+      ['Starší', 160, 14],
+      ['Mladší', 102, 6],
     ])
     const open = listTasks(db).filter((t) => t.status === 'open')
     expect(open.map((t) => [t.title, t.score])).toEqual([
