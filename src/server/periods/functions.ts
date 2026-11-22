@@ -13,7 +13,7 @@ export type { SetDefaultsError }
 // Server functions for the default week on Správa (#47). Admin only: the guard here, and the
 // domain's `setDefaults` again inside (`not_admin`). The admin is always the signed-in user.
 
-function record(value: unknown, keys: readonly string[]): Record<string, unknown> {
+export function record(value: unknown, keys: readonly string[]): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('Invalid input')
   }
@@ -25,7 +25,7 @@ function record(value: unknown, keys: readonly string[]): Record<string, unknown
   return r
 }
 
-function int(value: unknown, max: number): number {
+export function int(value: unknown, max: number): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value > max) {
     throw new Error('Invalid input')
   }
