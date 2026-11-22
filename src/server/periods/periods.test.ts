@@ -72,6 +72,7 @@ describe('rollPeriods (spec §5.8)', () => {
           cutoffAt: CUTOFF.toISOString(),
           levels: { lower: 50, upper: 100 },
           cause: 'first',
+          proposalId: null,
         },
       },
     ])
@@ -193,6 +194,7 @@ describe('endRunningPeriod: settling ends the period (spec §5.8)', () => {
           cutoffAt: prague(2026, 12, 6, 23, 59).toISOString(),
           levels: { lower: 50, upper: 100 },
           cause: 'settled',
+          proposalId: null,
         },
       },
     ])

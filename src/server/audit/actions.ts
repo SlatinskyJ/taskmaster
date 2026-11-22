@@ -62,6 +62,7 @@ export const AUDIT_ACTIONS = [
   'period.proposal_rejected',
   'period.proposal_withdrawn',
   'period.proposal_agreed',
+  'period.proposal_lapsed',
   'defaults.proposal_created',
   'defaults.proposal_approved',
   'defaults.proposal_rejected',

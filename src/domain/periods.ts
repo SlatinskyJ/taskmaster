@@ -124,11 +124,15 @@ export function isValidDefaults(defaults: PeriodDefaults): boolean {
   )
 }
 
-/** A per-period change: valid levels and a cutoff after the period's start. */
+/**
+ * A per-period change: valid levels and a cutoff after the period's start and [call] at most
+ * `MAX_LENGTH_DAYS` after it, the same longest period the defaults allow.
+ */
 export function isValidPeriodSettings(settings: PeriodSettings, startsAt: Date): boolean {
   return (
     !Number.isNaN(settings.cutoffAt.getTime()) &&
     settings.cutoffAt.getTime() > startsAt.getTime() &&
+    settings.cutoffAt.getTime() <= addPragueDays(startsAt, MAX_LENGTH_DAYS).getTime() &&
     isValidLevels(settings.levels)
   )
 }
@@ -287,6 +291,24 @@ export function isPeriodAgreed(
   const approved = (p: Person) => approvedBy.includes(p.id)
   const takers = people.filter(isActiveTaker)
   return takers.every(approved) && people.filter(isActiveGiver).some(approved)
+}
+
+/**
+ * Who still has to approve for period agreement, by id ascending: every active taker who has
+ * not, and every active giver while no giver has. Empty exactly when `isPeriodAgreed` holds.
+ */
+export function periodAgreementWaitingFor(
+  approvedBy: readonly PersonId[],
+  people: readonly Person[],
+): PersonId[] {
+  const giverApproved = people.some((p) => isActiveGiver(p) && approvedBy.includes(p.id))
+  return people
+    .filter(
+      (p) =>
+        (isActiveTaker(p) && !approvedBy.includes(p.id)) || (!giverApproved && isActiveGiver(p)),
+    )
+    .map((p) => p.id)
+    .sort((a, b) => a - b)
 }
 
 /** Promotes a pending proposal that has period agreement now. Call after people change. */
