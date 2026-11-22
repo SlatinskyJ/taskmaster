@@ -259,6 +259,7 @@ describe('getWeek', () => {
         status: 'rejected',
         at: plus(SAT, H + 60_000).toISOString(),
         reason: 'nádobí zůstalo v dřezu',
+        closed: false,
       },
       {
         taskId: edge,
@@ -267,6 +268,7 @@ describe('getWeek', () => {
         status: 'rejected',
         at: SAT.toISOString(),
         reason: null,
+        closed: false,
       },
     ])
     expect(items[1]?.items).toEqual([])

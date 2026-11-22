@@ -57,6 +57,10 @@ function phrase(e: HistoryEntry, meId: number): string {
       return h.changed(n)
     case 'task.score_change_discarded':
       return h.changeDiscarded(n)
+    case 'instance.created':
+      return h.instanceCreated(n)
+    case 'instance.self_logged':
+      return h.selfLogged(n)
     default:
       return h.other
   }

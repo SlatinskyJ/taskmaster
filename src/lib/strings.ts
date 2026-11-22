@@ -318,6 +318,9 @@ export const cs = {
     changeWithdrawn: 'návrh ceny stažen',
     changed: (n: number) => `nová cena ${String(n)} b`,
     changeDiscarded: (n: number) => `návrh ceny ${String(n)} b propadl`,
+    /** A recurring chore's instance (#38): "+ Teď" by a parent, or logged by a boy. */
+    instanceCreated: (n: number) => `přidáno za ${String(n)} b`,
+    selfLogged: (n: number) => `zapsáno za ${String(n)} b`,
     other: 'změna',
   },
   home: {
@@ -391,6 +394,8 @@ export const cs = {
     /** Under a rejected item: the chore is back with the boy (spec §5.5). */
     returnedToMe: 'Vráceno tobě.',
     returnedTo: (name: string) => `Vráceno: ${name}.`,
+    /** Under a rejected self-logged chore with no reason: it ends there (#38). */
+    rejectedClosed: 'Zamítnuto, bez bodů.',
   },
   admin: {
     title: 'Správa',

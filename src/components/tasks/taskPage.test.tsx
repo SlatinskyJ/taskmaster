@@ -53,6 +53,10 @@ const reserved: TaskView = {
   completedBy: null,
   completedAt: null,
   earnerId: null,
+  origin: 'one_time',
+  templateId: null,
+  dueAt: null,
+  graceEndsAt: null,
   waitingFor: [],
   scoreChange: null,
 }

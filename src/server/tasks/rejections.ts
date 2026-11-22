@@ -5,8 +5,8 @@ import type { Db } from '~/server/db'
 import { auditLog, tasks } from '~/server/db/schema'
 import type { TaskAuditView } from './lifecycle'
 
-// Rejected completions (spec §5.5). Rejecting sends the task back to reserved or open, so the
-// rejection itself lives only in its `task.rejected` audit entry. This read sits next to the
+// Rejected completions (spec §5.5). Rejecting sends the task back to reserved or open (a
+// self-logged instance ends `rejected`), so the rejection itself lives only in its `task.rejected` audit entry. This read sits next to the
 // writer (lifecycle.ts `auditView`) so the stored shape has one owner. Týden (#45) lists them;
 // Rozporovat on a rejected completion (#46) builds on the same read.
 
@@ -21,6 +21,11 @@ export interface Rejection {
   at: string
   /** The giver's reason, or null without one. */
   reason: string | null
+  /**
+   * A rejected self-log (#38): it ends `rejected` instead of going back to the taker, so there
+   * is nothing to redo.
+   */
+  closed: boolean
 }
 
 /** Every rejection at or after `since`, newest first. Entries with no earner are skipped. */
@@ -30,6 +35,7 @@ export function rejectionsSince(db: Db | Tx, since: Date): Rejection[] {
       entityId: auditLog.entityId,
       at: auditLog.at,
       before: auditLog.before,
+      after: auditLog.after,
       reason: auditLog.reason,
     })
     .from(auditLog)
@@ -59,6 +65,7 @@ export function rejectionsSince(db: Db | Tx, since: Date): Rejection[] {
       earnerId: before.earnerId,
       at: e.at,
       reason: e.reason,
+      closed: e.after !== null && (JSON.parse(e.after) as TaskAuditView).status === 'rejected',
     })
   }
   return out

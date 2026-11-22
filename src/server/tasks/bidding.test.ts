@@ -712,6 +712,10 @@ describe('what screens get (PR B)', () => {
         completedBy: null,
         completedAt: null,
         earnerId: null,
+        origin: 'one_time',
+        templateId: null,
+        dueAt: null,
+        graceEndsAt: null,
         waitingFor: [
           { id: f.starsi, name: 'Starší' },
           { id: f.mladsi, name: 'Mladší' },

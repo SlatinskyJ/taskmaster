@@ -43,6 +43,10 @@ export const AUDIT_ACTIONS = [
   'template.agreed',
   'template.updated',
   'template.cancelled',
+  // Instances are rows of `tasks` (#38): their entries have entity type `task`. Only their
+  // birth has its own action (`instance.created` on demand or scheduled, `instance.self_logged`)
+  // and the scheduler's `instance.expired` (#39); every later step reuses the `task.*` action.
+  // The other `instance.*` names are unused and stay listed (names are never removed).
   'instance.created',
   'instance.self_logged',
   'instance.reserved',
@@ -92,6 +96,7 @@ export const ENTITY_TYPES = [
   'settings',
   'task',
   'template',
+  /** Not used: instance rows are entity `task` (#38). Kept, since names are never removed. */
   'instance',
   'period',
   'period_proposal',

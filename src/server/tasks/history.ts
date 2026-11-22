@@ -6,7 +6,10 @@ import type { Db } from '~/server/db'
 // A task's history (#36, UI doc §7.2 GTask "history"), built from the audit log (spec §5.10).
 // Only names, scores and reasons leave the server: never the log's `before` / `after` JSON.
 
-export type TaskHistoryAction = Extract<AuditAction, `task.${string}`>
+export type TaskHistoryAction = Extract<
+  AuditAction,
+  `task.${string}` | 'instance.created' | 'instance.self_logged'
+>
 
 export interface HistoryEntry {
   id: number

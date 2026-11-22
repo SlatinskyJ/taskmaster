@@ -23,7 +23,7 @@ import { writeAudit } from '~/server/audit'
 import type { Actor, Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { taskScoreApprovals, tasks, users } from '~/server/db/schema'
-import type { TaskRow } from '~/server/db/schema'
+import type { TaskOrigin, TaskRow } from '~/server/db/schema'
 import type { ThreadEntry } from '~/server/threadEntry'
 import { listPeople } from '~/server/users/people'
 import { openChangeOf } from './changeRows'
@@ -315,6 +315,12 @@ export interface TaskView {
   completedAt: string | null
   /** The taker who gets the points, or null (open, or done by a giver). */
   earnerId: number | null
+  /** One-time task, or an instance of template `templateId` (spec §5.3). */
+  origin: TaskOrigin
+  templateId: number | null
+  /** An instance's deadline (UTC ISO): due, and the end of the grace window; else null. */
+  dueAt: string | null
+  graceEndsAt: string | null
   /**
    * Proposed only: the active people of each side that has not said yes to the current offer
    * yet (any one of them agreeing is enough). Else [].
@@ -377,6 +383,10 @@ function views(db: Db | Tx, rows: TaskRow[]): TaskView[] {
       completedBy: t.completedBy === null ? null : { id: t.completedBy, name: name(t.completedBy) },
       completedAt: t.completedAt,
       earnerId: t.earnerId,
+      origin: t.origin,
+      templateId: t.templateId,
+      dueAt: t.dueAt,
+      graceEndsAt: t.graceEndsAt,
       waitingFor: people
         .filter((p) => p.active && missing.some((role) => role === p.role))
         .map((p) => ({ id: p.id, name: name(p.id) })),

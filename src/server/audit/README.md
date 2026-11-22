@@ -24,6 +24,7 @@ const task = withAudit(
 - Actors: `{ kind: 'user', userId }`, `{ kind: 'system' }` (scheduler), `{ kind: 'anonymous' }` (failed login).
 - `before` / `after` are stored as JSON. `before` is omitted (or null) for creations, stored as SQL NULL; `after` holds the new values or the action's payload. `reason` is optional (required by some rules, e.g. corrections; the caller enforces that).
 - `entityType` comes from the closed `ENTITY_TYPES` list in `actions.ts`; add new ones there.
+- Recurring instances are rows of `tasks` and log with entity type `task`. Their birth is `instance.created` (on demand, scheduled) or `instance.self_logged`, the scheduler's expiry `instance.expired`; every other step on them is the `task.*` action of a one-time task.
 - Credentials never reach the log: keys like `password`, `pin`, `token`, `secret`, `credential` are replaced with `[redacted]` at any depth. A failed login logs only the normalised username, never what was typed as a password.
 - `at` defaults to the server clock; never pass a time that came from a request.
 - New action type: add it to `actions.ts`. Never rename or remove one; old rows keep it.
