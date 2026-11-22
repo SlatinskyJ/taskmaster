@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fromPragueWallTime, toPragueWallTime } from './dates'
+import { addPragueDays, fromPragueWallTime, toPragueWallTime } from './dates'
 import type { Person } from './parties'
 import type {
   DefaultsProposal,
@@ -392,6 +392,16 @@ describe('per-period proposals (spec §5.8)', () => {
     expect(error(proposePeriodSettings(family, DAD, CURRENT, at, [], NOW))).toBe('invalid_settings')
     const bad = { ...settings, levels: { lower: 0, upper: 80 } }
     expect(error(proposePeriodSettings(family, DAD, CURRENT, bad, [], NOW))).toBe(
+      'invalid_settings',
+    )
+  })
+
+  it('[call] the cutoff is at most 364 days (MAX_LENGTH_DAYS) after the planned start', () => {
+    const last = addPragueDays(CURRENT.cutoffAt, 364)
+    const ok364 = { ...settings, cutoffAt: last }
+    expect(proposePeriodSettings(family, DAD, CURRENT, ok364, [], NOW).ok).toBe(true)
+    const over = { ...settings, cutoffAt: new Date(last.getTime() + 1) }
+    expect(error(proposePeriodSettings(family, DAD, CURRENT, over, [], NOW))).toBe(
       'invalid_settings',
     )
   })

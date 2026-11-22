@@ -124,11 +124,15 @@ export function isValidDefaults(defaults: PeriodDefaults): boolean {
   )
 }
 
-/** A per-period change: valid levels and a cutoff after the period's start. */
+/**
+ * A per-period change: valid levels and a cutoff after the period's start and [call] at most
+ * `MAX_LENGTH_DAYS` after it, the same longest period the defaults allow.
+ */
 export function isValidPeriodSettings(settings: PeriodSettings, startsAt: Date): boolean {
   return (
     !Number.isNaN(settings.cutoffAt.getTime()) &&
     settings.cutoffAt.getTime() > startsAt.getTime() &&
+    settings.cutoffAt.getTime() <= addPragueDays(startsAt, MAX_LENGTH_DAYS).getTime() &&
     isValidLevels(settings.levels)
   )
 }

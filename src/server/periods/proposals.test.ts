@@ -1,0 +1,291 @@
+import { asc, eq } from 'drizzle-orm'
+import { describe, expect, it } from 'vitest'
+import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
+import type { PeriodDefaults, PeriodSettings } from '~/domain'
+import { addPragueDays, fromPragueWallTime } from '~/domain/dates'
+import type { Db } from '~/server/db'
+import { auditLog, defaultsProposals, periodProposals, users } from '~/server/db/schema'
+import { addGiver, failAuditOn, family, must } from '~/server/tasks/testing'
+import type { Family } from '~/server/tasks/testing'
+import { editPerson } from '~/server/users/admin'
+import { getPeriodDefaults } from './defaults'
+import { listPeriods, rollPeriods } from './periods'
+import {
+  approveProposal,
+  proposalsView,
+  proposeDefaultsChange,
+  proposePeriod,
+  rejectProposal,
+  withdrawProposal,
+} from './proposals'
+
+// Proposals for next week and for the default week (spec §3 period agreement, §5.8).
+
+const prague = (year: number, month: number, day: number, hour = 0, minute = 0) =>
+  fromPragueWallTime({ year, month, day, hour, minute })
+const SAT = prague(2026, 11, 21, 20) // first roll
+const CUTOFF = prague(2026, 11, 29, 23, 59) // first period's cutoff
+const AT = prague(2026, 11, 25, 12)
+const ms = (d: Date, n: number) => new Date(d.getTime() + n)
+
+/** Next week ends Saturday 6 Dec 20:00 at 60/120. */
+const NEXT: PeriodSettings = {
+  cutoffAt: prague(2026, 12, 6, 20),
+  levels: { lower: 60, upper: 120 },
+}
+const NEW_DEFAULTS: PeriodDefaults = {
+  lengthDays: 14,
+  cutoff: { weekday: 6, hour: 20, minute: 0 },
+  levels: { lower: 60, upper: 120 },
+}
+
+function week() {
+  const f = family()
+  rollPeriods(f.db, SAT, DEFAULT_PERIOD_DEFAULTS)
+  return f
+}
+
+const actions = (db: Db) =>
+  db
+    .select({ action: auditLog.action, kind: auditLog.actorKind })
+    .from(auditLog)
+    .orderBy(asc(auditLog.id))
+    .all()
+const actionNames = (db: Db, prefix: string) =>
+  actions(db)
+    .map((a) => a.action)
+    .filter((a) => a.startsWith(prefix))
+const periodRow = (db: Db, id: number) =>
+  db.select().from(periodProposals).where(eq(periodProposals.id, id)).get()
+const defaultsRow = (db: Db, id: number) =>
+  db.select().from(defaultsProposals).where(eq(defaultsProposals.id, id)).get()
+
+function agreedNextWeek(f: Family): number {
+  const { id } = must(proposePeriod(f.db, f.starsi, NEXT, AT))
+  must(approveProposal(f.db, f.mladsi, 'period', id, AT))
+  must(approveProposal(f.db, f.tata, 'period', id, AT))
+  return id
+}
+
+describe('proposePeriod and approvals', () => {
+  it('Starší proposes 60/120 for next week; Mladší and Táta approve → agreed, audited', () => {
+    const f = week()
+    const id = agreedNextWeek(f)
+    expect(periodRow(f.db, id)?.status).toBe('agreed')
+    expect(actionNames(f.db, 'period.proposal')).toEqual([
+      'period.proposal_created',
+      'period.proposal_approved',
+      'period.proposal_approved',
+      'period.proposal_agreed',
+    ])
+  })
+
+  it('proposing alone is pending; the proposer counts as approving', () => {
+    const f = week()
+    expect(proposePeriod(f.db, f.starsi, NEXT, AT)).toEqual({
+      ok: true,
+      value: { id: 1, status: 'pending' },
+    })
+    expect(proposalsView(f.db, AT).period).toMatchObject({ approvedBy: [f.starsi] })
+  })
+
+  it('a second proposal while one is pending or agreed is refused', () => {
+    const f = week()
+    const { id } = must(proposePeriod(f.db, f.starsi, NEXT, AT))
+    expect(proposePeriod(f.db, f.tata, NEXT, AT)).toEqual({ ok: false, error: 'proposal_pending' })
+    must(approveProposal(f.db, f.mladsi, 'period', id, AT))
+    must(approveProposal(f.db, f.tata, 'period', id, AT))
+    expect(proposePeriod(f.db, f.tata, NEXT, AT)).toEqual({ ok: false, error: 'already_agreed' })
+  })
+
+  it('the admin cannot propose or approve (not_a_party)', () => {
+    const f = week()
+    expect(proposePeriod(f.db, f.admin, NEXT, AT)).toEqual({ ok: false, error: 'not_a_party' })
+    const { id } = must(proposePeriod(f.db, f.starsi, NEXT, AT))
+    expect(approveProposal(f.db, f.admin, 'period', id, AT)).toEqual({
+      ok: false,
+      error: 'not_a_party',
+    })
+  })
+
+  it('only the proposer withdraws; any party rejects; a closed one cannot be approved', () => {
+    const f = week()
+    const { id } = must(proposePeriod(f.db, f.starsi, NEXT, AT))
+    expect(withdrawProposal(f.db, f.tata, 'period', id, AT)).toEqual({
+      ok: false,
+      error: 'not_proposer',
+    })
+    expect(rejectProposal(f.db, f.mladsi, 'period', id, AT)).toEqual({
+      ok: true,
+      value: { id, status: 'rejected' },
+    })
+    expect(periodRow(f.db, id)).toMatchObject({ closedBy: f.mladsi, closedAt: AT.toISOString() })
+    expect(approveProposal(f.db, f.tata, 'period', id, AT)).toEqual({
+      ok: false,
+      error: 'not_pending',
+    })
+    const second = must(proposePeriod(f.db, f.tata, NEXT, AT))
+    expect(withdrawProposal(f.db, f.tata, 'period', second.id, AT).ok).toBe(true)
+    expect(actionNames(f.db, 'period.proposal')).toContain('period.proposal_withdrawn')
+    expect(actionNames(f.db, 'period.proposal')).toContain('period.proposal_rejected')
+  })
+
+  it('approving at the cutoff is refused, the row stays pending, nothing audited', () => {
+    const f = week()
+    const { id } = must(proposePeriod(f.db, f.starsi, NEXT, AT))
+    must(approveProposal(f.db, f.mladsi, 'period', id, ms(CUTOFF, -1)))
+    const before = actions(f.db).length
+    expect(approveProposal(f.db, f.tata, 'period', id, CUTOFF)).toEqual({
+      ok: false,
+      error: 'already_started',
+    })
+    expect(periodRow(f.db, id)?.status).toBe('pending')
+    expect(actions(f.db)).toHaveLength(before)
+  })
+
+  it('a cutoff more than 364 days after the running cutoff is invalid_settings', () => {
+    const f = week()
+    const last = addPragueDays(CUTOFF, 364)
+    expect(proposePeriod(f.db, f.starsi, { ...NEXT, cutoffAt: ms(last, 1) }, AT)).toEqual({
+      ok: false,
+      error: 'invalid_settings',
+    })
+    expect(proposePeriod(f.db, f.starsi, { ...NEXT, cutoffAt: last }, AT).ok).toBe(true)
+  })
+
+  it('no running period (before the first roll) → no_running_period', () => {
+    const f = family()
+    expect(proposePeriod(f.db, f.starsi, NEXT, AT)).toEqual({
+      ok: false,
+      error: 'no_running_period',
+    })
+  })
+
+  it('a failed audit write rolls back the approval', () => {
+    const f = week()
+    const { id } = must(proposePeriod(f.db, f.starsi, NEXT, AT))
+    failAuditOn(f.db, 'period.proposal_approved')
+    expect(() => approveProposal(f.db, f.mladsi, 'period', id, AT)).toThrow(/audit down/)
+    expect(proposalsView(f.db, AT).period).toMatchObject({ approvedBy: [f.starsi] })
+  })
+})
+
+describe('default-week proposals', () => {
+  it('a taker cannot propose defaults (not_a_giver)', () => {
+    const f = week()
+    expect(proposeDefaultsChange(f.db, f.starsi, NEW_DEFAULTS, AT)).toEqual({
+      ok: false,
+      error: 'not_a_giver',
+    })
+  })
+
+  it('agreed by the last taker: stored at once; the running period keeps its levels', () => {
+    const f = week()
+    const { id } = must(proposeDefaultsChange(f.db, f.tata, NEW_DEFAULTS, AT))
+    must(approveProposal(f.db, f.starsi, 'defaults', id, AT))
+    expect(getPeriodDefaults(f.db)).toEqual(DEFAULT_PERIOD_DEFAULTS)
+    must(approveProposal(f.db, f.mladsi, 'defaults', id, AT))
+    expect(defaultsRow(f.db, id)?.status).toBe('agreed')
+    expect(getPeriodDefaults(f.db)).toEqual(NEW_DEFAULTS)
+    expect(listPeriods(f.db)[0]?.levels).toEqual({ lower: 50, upper: 100 })
+    expect(
+      actions(f.db)
+        .map((a) => a.action)
+        .slice(-3),
+    ).toEqual(['defaults.proposal_approved', 'defaults.proposal_agreed', 'settings.changed'])
+  })
+
+  it('a failed settings write rolls back the agreeing approval', () => {
+    const f = week()
+    const { id } = must(proposeDefaultsChange(f.db, f.tata, NEW_DEFAULTS, AT))
+    must(approveProposal(f.db, f.starsi, 'defaults', id, AT))
+    failAuditOn(f.db, 'settings.changed')
+    expect(() => approveProposal(f.db, f.mladsi, 'defaults', id, AT)).toThrow(/audit down/)
+    expect(defaultsRow(f.db, id)?.status).toBe('pending')
+    expect(getPeriodDefaults(f.db)).toEqual(DEFAULT_PERIOD_DEFAULTS)
+  })
+
+  it('agreed at creation (a family with no takers) is stored at once', () => {
+    const f = week()
+    f.db.update(users).set({ role: 'giver' }).where(eq(users.role, 'taker')).run()
+    const { id } = must(proposeDefaultsChange(f.db, f.tata, NEW_DEFAULTS, AT))
+    expect(defaultsRow(f.db, id)?.status).toBe('agreed')
+    expect(getPeriodDefaults(f.db)).toEqual(NEW_DEFAULTS)
+    expect(
+      actions(f.db)
+        .map((a) => a.action)
+        .slice(-3),
+    ).toEqual(['defaults.proposal_created', 'defaults.proposal_agreed', 'settings.changed'])
+  })
+})
+
+describe('people changes (role change in the admin console)', () => {
+  it('a taker who had not approved becomes a giver: the per-period proposal is agreed', () => {
+    const f = week()
+    const { id } = must(proposePeriod(f.db, f.mladsi, NEXT, AT))
+    must(approveProposal(f.db, f.tata, 'period', id, AT))
+    must(editPerson(f.db, f.admin, f.starsi, { role: 'giver' }, AT))
+    expect(periodRow(f.db, id)?.status).toBe('agreed')
+    expect(actions(f.db).at(-1)).toEqual({ action: 'period.proposal_agreed', kind: 'system' })
+  })
+
+  it('…the defaults proposal is agreed and stored, audited by the system', () => {
+    const f = week()
+    const { id } = must(proposeDefaultsChange(f.db, f.tata, NEW_DEFAULTS, AT))
+    must(approveProposal(f.db, f.mladsi, 'defaults', id, AT))
+    must(editPerson(f.db, f.admin, f.starsi, { role: 'giver' }, AT))
+    expect(defaultsRow(f.db, id)?.status).toBe('agreed')
+    expect(getPeriodDefaults(f.db)).toEqual(NEW_DEFAULTS)
+    expect(actions(f.db).slice(-2)).toEqual([
+      { action: 'defaults.proposal_agreed', kind: 'system' },
+      { action: 'settings.changed', kind: 'system' },
+    ])
+  })
+
+  it('a role change after the cutoff, before the roll: stays pending, the roll lapses it', () => {
+    const f = week()
+    const { id } = must(proposePeriod(f.db, f.mladsi, NEXT, AT))
+    must(approveProposal(f.db, f.tata, 'period', id, AT))
+    const late = ms(CUTOFF, 60_000)
+    // editPerson rolls nothing; the roller has not ticked since the cutoff.
+    must(editPerson(f.db, f.admin, f.starsi, { role: 'giver' }, late))
+    expect(periodRow(f.db, id)?.status).toBe('pending')
+    const [next] = rollPeriods(f.db, late, getPeriodDefaults(f.db))
+    expect(periodRow(f.db, id)?.status).toBe('lapsed')
+    expect(next?.levels).toEqual({ lower: 50, upper: 100 })
+  })
+})
+
+describe('proposalsView', () => {
+  it('waitingFor lists who has not approved; with two givers, one giver is enough', () => {
+    const f = week()
+    const mama = addGiver(f)
+    const { id } = must(proposePeriod(f.db, f.starsi, NEXT, AT))
+    expect(proposalsView(f.db, AT).period?.waitingFor).toEqual([f.tata, f.mladsi, mama])
+    must(approveProposal(f.db, f.tata, 'period', id, AT))
+    expect(proposalsView(f.db, AT)).toEqual({
+      period: {
+        id,
+        settings: { cutoffAt: NEXT.cutoffAt.toISOString(), levels: NEXT.levels },
+        proposedBy: f.starsi,
+        approvedBy: [f.starsi, f.tata],
+        status: 'pending',
+        waitingFor: [f.mladsi],
+      },
+      defaults: null,
+    })
+  })
+
+  it('shows the pending defaults proposal', () => {
+    const f = week()
+    const { id } = must(proposeDefaultsChange(f.db, f.tata, NEW_DEFAULTS, AT))
+    expect(proposalsView(f.db, AT).defaults).toEqual({
+      id,
+      settings: NEW_DEFAULTS,
+      proposedBy: f.tata,
+      approvedBy: [f.tata],
+      status: 'pending',
+      waitingFor: [f.starsi, f.mladsi],
+    })
+  })
+})
