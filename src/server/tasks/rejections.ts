@@ -6,9 +6,10 @@ import { auditLog, tasks } from '~/server/db/schema'
 import type { TaskAuditView } from './lifecycle'
 
 // Rejected completions (spec §5.5). Rejecting sends the task back to reserved or open (a
-// self-logged instance ends `rejected`), so the rejection itself lives only in its `task.rejected` audit entry. This read sits next to the
-// writer (lifecycle.ts `auditView`) so the stored shape has one owner. Týden (#45) lists them;
-// A dispute on a rejected completion (#46) names it by the entry's id (`entryId`).
+// self-logged instance ends `rejected`), so the rejection itself lives only in its
+// `task.rejected` audit entry. This read sits next to the writer (lifecycle.ts `auditView`) so
+// the stored shape has one owner. Týden (#45) lists them; a dispute on a rejected completion
+// (#46) names it by the entry's id (`entryId`).
 
 export interface Rejection {
   /** The `task.rejected` audit entry's id: names this one rejection (a dispute's key, #46). */
