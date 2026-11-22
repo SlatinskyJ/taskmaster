@@ -1,10 +1,12 @@
 import type { Weekday } from './dates'
+import { fromPragueWallTime, toPragueWallTime } from './dates'
+import type { Deadline } from './lifecycle'
 import type { Result } from './result'
 import { fail, ok } from './result'
 
 // What a recurring template defines besides its score (spec §5.3): an optional schedule and an
 // optional deadline rule. This module only checks that a definition makes sense; when an
-// instance actually appears and when it is due are worked out by #38/#39 through `dates.ts`.
+// instance actually appears is #39; when it is due is `instanceDeadline` below.
 //
 // Deadline rule (Jakub 2026-11-18): the due time is `dayOffset` Prague days after the instance
 // appears, at the `due` clock time ("next day, 7:00"). If that moment has already passed when
@@ -76,4 +78,24 @@ export function validateTemplateDefinition(
     return fail('invalid_deadline')
   }
   return ok({ schedule, deadline })
+}
+
+/**
+ * When an instance that appears at `appearsAt` is due, and when its grace window ends. The due
+ * day is built from the appearing day's date and `rule.due`, so a time inside a DST gap moves
+ * forward on that day only. A due time at or before `appearsAt` moves one day later.
+ */
+export function instanceDeadline(rule: DeadlineRule, appearsAt: Date): Deadline {
+  const day = toPragueWallTime(appearsAt)
+  const dueOn = (offset: number) =>
+    fromPragueWallTime({
+      year: day.year,
+      month: day.month,
+      day: day.day + offset,
+      hour: rule.due.hour,
+      minute: rule.due.minute,
+    })
+  let dueAt = dueOn(rule.dayOffset)
+  if (dueAt.getTime() <= appearsAt.getTime()) dueAt = dueOn(rule.dayOffset + 1)
+  return { dueAt, graceEndsAt: new Date(dueAt.getTime() + rule.graceMinutes * 60_000) }
 }

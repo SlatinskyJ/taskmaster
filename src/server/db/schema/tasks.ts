@@ -8,13 +8,22 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core'
+import { templates } from './templates'
+import { THREAD_CLOSINGS, THREAD_SIDES } from './thread'
 import { users } from './users'
 
-// One-time tasks (spec §4, §5.2, §5.6). The row holds the lifecycle state and the score: the
-// giver's current offer while `proposed`, the agreed score after that. Never deleted:
-// cancelled is a state (spec §5.10). The negotiation (offers and bids) is `task_thread` below.
+export { THREAD_CLOSINGS, THREAD_SIDES }
 
-/** The states a one-time task can be in (spec §5.6). Expired is for instances only. */
+// One-time tasks and instances of templates (spec §4, §5.2, §5.3, §5.6). The row holds the
+// lifecycle state and the score: the giver's current offer while `proposed`, the agreed score
+// after that (an instance's score is the template's at creation and never changes). Never
+// deleted: cancelled is a state (spec §5.10). The negotiation (offers and bids) of a one-time
+// task is `task_thread` below.
+
+/**
+ * The states a task can be in (spec §5.6). Expired (#39) and rejected (a self-log a giver
+ * turned down) are for instances only.
+ */
 export const TASK_STATUSES = [
   'proposed',
   'open',
@@ -22,8 +31,17 @@ export const TASK_STATUSES = [
   'done_unconfirmed',
   'confirmed',
   'cancelled',
+  'expired',
+  'rejected',
 ] as const
 export type TaskStatus = (typeof TASK_STATUSES)[number]
+
+/**
+ * Where a row came from (spec §5.3), same names as the domain's `ItemOrigin`. `scheduled` is
+ * written by the scheduler (#39).
+ */
+export const TASK_ORIGINS = ['one_time', 'on_demand', 'self_logged', 'scheduled'] as const
+export type TaskOrigin = (typeof TASK_ORIGINS)[number]
 
 /** How a reservation was made (spec §5.2 path 2, §5.4). No CHECK: adding one needs a rebuild. */
 export const RESERVATION_VIAS = ['tap', 'bid'] as const
@@ -67,15 +85,30 @@ export const tasks = sqliteTable(
     completedAt: text('completed_at'),
     /** The taker who gets the points; null when a giver did it (givers earn none). */
     earnerId: integer('earner_id').references(() => users.id),
+    /** The template an instance was made from; null for a one-time task. */
+    templateId: integer('template_id').references(() => templates.id),
+    origin: text('origin', { enum: TASK_ORIGINS }).notNull().default('one_time'),
+    /** An instance's deadline (spec §5.3): due, and the end of the grace window. Both or neither. */
+    dueAt: text('due_at'),
+    graceEndsAt: text('grace_ends_at'),
   },
   (t) => [
     check(
       'tasks_status_check',
-      sql`${t.status} IN ('proposed', 'open', 'reserved', 'done_unconfirmed', 'confirmed', 'cancelled')`,
+      sql`${t.status} IN ('proposed', 'open', 'reserved', 'done_unconfirmed', 'confirmed', 'cancelled', 'expired', 'rejected')`,
+    ),
+    check(
+      'tasks_origin_check',
+      sql`${t.origin} IN ('one_time', 'on_demand', 'self_logged', 'scheduled') AND (${t.origin} = 'one_time') = (${t.templateId} IS NULL)`,
+    ),
+    check(
+      'tasks_deadline_check',
+      sql`(${t.dueAt} IS NULL AND ${t.graceEndsAt} IS NULL) OR (${t.dueAt} IS NOT NULL AND ${t.graceEndsAt} IS NOT NULL AND ${t.templateId} IS NOT NULL)`,
     ),
     check('tasks_score_check', sql`${t.score} >= 1`),
     check('tasks_title_check', sql`length(trim(${t.title})) > 0`),
     index('tasks_status_idx').on(t.status),
+    index('tasks_template_idx').on(t.templateId),
   ],
 )
 
@@ -104,11 +137,6 @@ export const taskScoreApprovals = sqliteTable(
 )
 
 export type TaskScoreApprovalRow = typeof taskScoreApprovals.$inferSelect
-
-/** Which side put a number in the thread: the giver side offers, a taker bids (spec §5.2). */
-export const THREAD_SIDES = ['giver', 'taker'] as const
-/** How a thread row closed: the same side put a new number, the task was agreed at it, or at something else. */
-export const THREAD_CLOSINGS = ['replaced', 'accepted', 'closed'] as const
 
 /**
  * The negotiation of a one-time task (spec §5.2 path 2): giver-side offers (the first offer, a

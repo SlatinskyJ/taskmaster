@@ -10,7 +10,7 @@ const pad = (n: number) => String(n).padStart(2, '0')
 /** Prague time, `so 21. 11. 10:12`. */
 export function historyTime(iso: string): string {
   const t = toPragueWallTime(parseIsoUtc(iso))
-  const day = cs.bids.weekdays[t.weekday]
+  const day = cs.weekdays[t.weekday]
   return `${day} ${String(t.day)}. ${String(t.month)}. ${pad(t.hour)}:${pad(t.minute)}`
 }
 
@@ -57,6 +57,10 @@ function phrase(e: HistoryEntry, meId: number): string {
       return h.changed(n)
     case 'task.score_change_discarded':
       return h.changeDiscarded(n)
+    case 'instance.created':
+      return h.instanceCreated(n)
+    case 'instance.self_logged':
+      return h.selfLogged(n)
     default:
       return h.other
   }

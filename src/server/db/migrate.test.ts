@@ -242,4 +242,48 @@ describe('data migrations', () => {
     ])
     sqlite.close()
   })
+
+  it('0020 keeps every task as a one-time task, with its thread rows', () => {
+    const A = '2026-11-21T10:00:00.000Z'
+    const dir = tempDir()
+    const before = join(dir, 'm')
+    cpSync('drizzle', before, { recursive: true })
+    // Keep migrations 0000–0019 only: the state of a database before instances.
+    const path = join(before, 'meta', '_journal.json')
+    const journal = JSON.parse(readFileSync(path, 'utf8')) as { entries: { idx: number }[] }
+    journal.entries = journal.entries.filter((e) => e.idx <= 19)
+    writeFileSync(path, JSON.stringify(journal))
+    const sqlite = new Database(join(dir, 'db.sqlite'))
+    applyMigrations(sqlite, before)
+    sqlite.exec(`
+      insert into users (id, username, display_name, role, created_at, updated_at)
+        values (1, 'tata', 'Táta', 'giver', '${A}', '${A}');
+      insert into tasks (id, title, status, score, offer_round, approval_required, created_by, created_at, updated_at, agreed_at)
+        values (7, 'Umýt auto', 'open', 18, 2, 1, 1, '${A}', '${A}', '${A}');
+      insert into task_thread (task_id, user_id, side, score, created_at, closed_at, closed_as)
+        values (7, 1, 'giver', 18, '${A}', '${A}', 'accepted');`)
+    applyMigrations(sqlite, 'drizzle')
+    expect(
+      sqlite
+        .prepare(
+          'select id, title, status, score, offer_round, origin, template_id, due_at, grace_ends_at from tasks',
+        )
+        .all(),
+    ).toEqual([
+      {
+        id: 7,
+        title: 'Umýt auto',
+        status: 'open',
+        score: 18,
+        offer_round: 2,
+        origin: 'one_time',
+        template_id: null,
+        due_at: null,
+        grace_ends_at: null,
+      },
+    ])
+    expect(sqlite.prepare('select task_id from task_thread').all()).toEqual([{ task_id: 7 }])
+    expect(sqlite.prepare('pragma foreign_key_check').all()).toEqual([])
+    sqlite.close()
+  })
 })

@@ -1,5 +1,6 @@
 import { toPragueWallTime } from '~/domain/dates'
 import type { Role } from '~/domain/parties'
+import { formatDue, formatPragueTime } from '~/lib/formatDate'
 import { cs } from '~/lib/strings'
 import type { ItemStateKey } from '~/lib/strings'
 import type { TaskView } from '~/server/tasks/functions'
@@ -181,7 +182,7 @@ export function detailMeta(task: TaskView, me: Me): string | null {
 /** "so 10:12": weekday and time on the Prague wall clock. */
 export function threadTime(iso: string): string {
   const t = toPragueWallTime(new Date(iso))
-  const day = cs.bids.weekdays[t.weekday]
+  const day = cs.weekdays[t.weekday]
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${day} ${pad(t.hour)}:${pad(t.minute)}`
 }
@@ -225,4 +226,19 @@ export function changeHint(task: Pick<TaskView, 'status' | 'reservedBy'>, me: Me
     return cs.taskPrice.needs(me.role === 'giver' ? task.reservedBy.name : cs.taskPrice.parent)
   }
   return cs.taskPrice.needsOpen
+}
+
+/**
+ * The meta line of an instance row (#38): its due time ("do zítra 7:00", "po termínu"), or for
+ * an on-demand one without a deadline when it was made ("na vyžádání · 15:02"). Else undefined.
+ */
+export function instanceMeta(
+  task: Pick<TaskView, 'origin' | 'dueAt' | 'graceEndsAt' | 'createdAt'>,
+  now: Date,
+): string | undefined {
+  if (task.dueAt !== null && task.graceEndsAt !== null) {
+    return formatDue(task.dueAt, task.graceEndsAt, now)
+  }
+  if (task.origin === 'on_demand') return cs.instances.onDemandAt(formatPragueTime(task.createdAt))
+  return undefined
 }

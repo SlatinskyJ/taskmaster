@@ -158,9 +158,13 @@ function TakerWeek({ taker, week, named }: { taker: WeekTaker; week: Week; named
   )
 }
 
-/** Under a rejected item: the giver's reason, then that it went back to the boy. */
+/**
+ * Under a rejected item: the giver's reason, then that it went back to the boy. A rejected
+ * self-log (`closed`) went nowhere: only the reason, or that it earned nothing.
+ */
 export function rejectionLine(item: WeekItem, takerName: string | null): string | undefined {
   if (item.status !== 'rejected') return undefined
+  if (item.closed) return item.reason ?? cs.week.rejectedClosed
   const back = takerName === null ? cs.week.returnedToMe : cs.week.returnedTo(takerName)
   return item.reason ? `${item.reason} ${back}` : back
 }

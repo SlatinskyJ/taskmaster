@@ -43,6 +43,8 @@ describe('historyLine', () => {
     ['task.score_change_withdrawn', 'návrh ceny stažen'],
     ['task.score_changed', 'nová cena 8 b'],
     ['task.score_change_discarded', 'návrh ceny 8 b propadl'],
+    ['instance.created', 'přidáno za 8 b'],
+    ['instance.self_logged', 'zapsáno za 8 b'],
   ])('%s', (action, text) => {
     expect(historyLine(entry({ action }), 9)).toBe(`so 21. 11. 10:12 · Táta: ${text}`)
   })

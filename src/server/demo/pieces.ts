@@ -1,5 +1,8 @@
+import { eq } from 'drizzle-orm'
 import type { Tx } from '~/server/audit'
 import { nextPeriod } from '~/domain'
+import { templates as templateTable } from '~/server/db/schema'
+import { createOnDemandInstance, selfLogInstance } from '~/server/instances'
 import {
   approveProposal,
   currentPeriod,
@@ -118,8 +121,9 @@ export const points: Piece = (ctx) => {
 }
 
 /**
- * Two templates (#37): the bins wait for a boy's yes, the dishwasher is agreed, with a score
- * change in flight (#138): Mladší bids 5, Táta offers 4.
+ * Three templates (#37): the bins wait for a boy's yes, the dishwasher is agreed, with a score
+ * change in flight (#138): Mladší bids 5, Táta offers 4; the school bag is agreed with a
+ * deadline (#38).
  */
 const DEMO_TEMPLATES: readonly NewTemplate[] = [
   {
@@ -130,16 +134,25 @@ const DEMO_TEMPLATES: readonly NewTemplate[] = [
     deadline: { dayOffset: 1, due: { hour: 7, minute: 0 }, graceMinutes: 120 },
   },
   { title: 'Vyndat myčku', score: 3, approvalRequired: true, schedule: null, deadline: null },
+  {
+    title: 'Nachystat tašku do školy',
+    score: 2,
+    approvalRequired: true,
+    schedule: null,
+    deadline: { dayOffset: 1, due: { hour: 7, minute: 0 }, graceMinutes: 30 },
+  },
 ]
 
 export const templates: Piece = ({ tx, id, now }) => {
   const made = DEMO_TEMPLATES.map((input) =>
     step(`template "${input.title}"`, createTemplateIn(tx, id('tata'), input, now)),
   )
-  const dishes = made[1]
-  if (!dishes) return
+  const [, dishes, bag] = made
+  if (!dishes || !bag) return
+  for (const t of [dishes, bag]) {
+    step(`approve "${t.title}"`, approveTemplateScoreIn(tx, id('starsi'), t.id, t.score, now))
+  }
   const what = (verb: string) => `${verb} "${dishes.title}"`
-  step(what('approve'), approveTemplateScoreIn(tx, id('starsi'), dishes.id, dishes.score, now))
   step(what('bid on'), bidOnTemplateIn(tx, id('mladsi'), dishes.id, 5, now))
   step(what('offer on'), counterOnTemplateIn(tx, id('tata'), dishes.id, 4, now))
 }
@@ -224,6 +237,30 @@ export const thisWeek: Piece = (ctx) => {
       step(`approve "${chore.title}"`, approveTask(ctx.tx, ctx.id('tata'), task, ctx.now))
     }
   }
+}
+
+/**
+ * Instances (#38), after `templates`: Mladší's Zapsat of the dishwasher, waiting for a parent;
+ * Starší's, rejected by Táta without a reason (§5.5), so Týden and Úkoly show "Zamítnuto"; then
+ * Táta's "+ Teď" on the school bag (due the next day 7:00). The logs come first: Zapsat refuses
+ * a chore already on the board (Jakub 2026-11-22), so the bag's tile says it is taken
+ * while the dishwasher stays loggable.
+ */
+export const instances: Piece = ({ tx, id, now }) => {
+  const byTitle = (title: string) => {
+    const t = tx.select().from(templateTable).where(eq(templateTable.title, title)).get()
+    if (!t) throw new Error(`Demo seed: no template "${title}"`)
+    return t
+  }
+  const dishes = byTitle('Vyndat myčku')
+  const bag = byTitle('Nachystat tašku do školy')
+  step('Zapsat "Vyndat myčku"', selfLogInstance(tx, id('mladsi'), dishes.id, dishes.score, now))
+  const logged = step(
+    'Zapsat "Vyndat myčku" (Starší)',
+    selfLogInstance(tx, id('starsi'), dishes.id, dishes.score, now),
+  )
+  step('reject "Vyndat myčku"', rejectTask(tx, id('tata'), logged.id, undefined, now))
+  step('+ Teď "Nachystat tašku do školy"', createOnDemandInstance(tx, id('tata'), bag.id, now))
 }
 
 /**

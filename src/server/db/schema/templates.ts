@@ -8,7 +8,7 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core'
-import { THREAD_CLOSINGS, THREAD_SIDES } from './tasks'
+import { THREAD_CLOSINGS, THREAD_SIDES } from './thread'
 import { users } from './users'
 
 // Recurring templates (spec §4, §5.1, §5.3). A template is a chore definition, never done

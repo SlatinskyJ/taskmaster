@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { Weekday } from './dates'
-import { MAX_DUE_DAY_OFFSET, MAX_GRACE_MINUTES, validateTemplateDefinition } from './templates'
+import { fromPragueWallTime } from './dates'
+import {
+  MAX_DUE_DAY_OFFSET,
+  MAX_GRACE_MINUTES,
+  instanceDeadline,
+  validateTemplateDefinition,
+} from './templates'
 
 const SIX_PM = { hour: 18, minute: 0 }
 const SEVEN_AM = { hour: 7, minute: 0 }
@@ -80,5 +86,59 @@ describe('validateTemplateDefinition (spec §5.3)', () => {
       ok: true,
       value: { schedule: null, deadline: { dayOffset: 1, due: SEVEN_AM, graceMinutes: 120 } },
     })
+  })
+})
+
+describe('instanceDeadline (spec §5.3 deadline rule)', () => {
+  const prague = (month: number, day: number, hour: number, minute = 0) =>
+    fromPragueWallTime({ year: 2026, month, day, hour, minute })
+  const rule = (dayOffset: number, hour: number, minute: number, graceMinutes = 60) => ({
+    dayOffset,
+    due: { hour, minute },
+    graceMinutes,
+  })
+
+  it('"next day, 7:00" from Tuesday 18:00 is due Wednesday 7:00, grace one hour later', () => {
+    const d = instanceDeadline(rule(1, 7, 0), prague(11, 24, 18))
+    expect(d.dueAt.toISOString()).toBe('2026-11-25T06:00:00.000Z')
+    expect(d.graceEndsAt.toISOString()).toBe('2026-11-25T07:00:00.000Z')
+  })
+
+  it('"same day, 7:00" made at 06:59 is due the same day', () => {
+    expect(instanceDeadline(rule(0, 7, 0), prague(11, 24, 6, 59)).dueAt).toEqual(prague(11, 24, 7))
+  })
+
+  it('"same day, 7:00" made at exactly 07:00 is due the next day', () => {
+    expect(instanceDeadline(rule(0, 7, 0), prague(11, 24, 7)).dueAt).toEqual(prague(11, 25, 7))
+  })
+
+  it('"same day, 7:00" made at 07:30 is due the next day', () => {
+    expect(instanceDeadline(rule(0, 7, 0), prague(11, 24, 7, 30)).dueAt).toEqual(prague(11, 25, 7))
+  })
+
+  it('keeps the Prague clock time across the March switch', () => {
+    const d = instanceDeadline(rule(1, 7, 0), prague(3, 28, 18))
+    expect(d.dueAt.toISOString()).toBe('2026-03-29T05:00:00.000Z')
+  })
+
+  it('keeps the Prague clock time across the October switch', () => {
+    const d = instanceDeadline(rule(1, 7, 0), prague(10, 24, 18))
+    expect(d.dueAt.toISOString()).toBe('2026-10-25T06:00:00.000Z')
+  })
+
+  it('grace 0 ends at the due time', () => {
+    const d = instanceDeadline(rule(1, 7, 0, 0), prague(11, 24, 18))
+    expect(d.graceEndsAt).toEqual(d.dueAt)
+  })
+
+  it('a due time in the March gap moves forward on that day only', () => {
+    // 2:30 does not exist on 2026-03-29; it becomes 3:30 CEST (01:30Z).
+    expect(instanceDeadline(rule(0, 2, 30), prague(3, 29, 3)).dueAt.toISOString()).toBe(
+      '2026-03-29T01:30:00.000Z',
+    )
+    // Made after that: the next day at 2:30 CEST (00:30Z), not 3:30.
+    expect(instanceDeadline(rule(0, 2, 30), prague(3, 29, 3, 45)).dueAt.toISOString()).toBe(
+      '2026-03-30T00:30:00.000Z',
+    )
   })
 })

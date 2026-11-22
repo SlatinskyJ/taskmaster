@@ -37,6 +37,14 @@ export function taskErrorMessage(error: string): string {
       return cs.tasks.errors.noBid
     case 'reason_too_long':
       return cs.tasks.errors.reasonTooLong(REASON_MAX)
+    case 'past_grace':
+      return cs.instances.errors.pastGrace
+    case 'score_changed':
+      return cs.instances.errors.scoreChanged
+    case 'already_open':
+      return cs.instances.errors.alreadyOpen
+    case 'too_early':
+      return cs.instances.errors.tooEarly
     default:
       return cs.login.failed
   }

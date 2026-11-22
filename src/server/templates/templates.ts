@@ -303,6 +303,13 @@ const nameMap = (db: Db | Tx) =>
       .map((u) => [u.id, u.name]),
   )
 
+/** A template row's deadline rule for the domain (`dueTime` is stored as "HH:MM"), or null. */
+export function deadlineRuleOf(row: TemplateRow): DeadlineRule | null {
+  if (row.dueDayOffset === null || row.dueTime === null || row.graceMinutes === null) return null
+  const [hour = 0, minute = 0] = row.dueTime.split(':').map(Number)
+  return { dayOffset: row.dueDayOffset, due: { hour, minute }, graceMinutes: row.graceMinutes }
+}
+
 function views(db: Db | Tx, rows: TemplateRow[]): TemplateView[] {
   if (rows.length === 0) return []
   const names = nameMap(db)

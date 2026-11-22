@@ -96,6 +96,11 @@ describe('the demo seed (previews)', () => {
           ...(approved ? ['task.approved'] : []),
         ].map((action) => [action, 'user']),
       ),
+      // #38: Mladší's and Starší's Zapsat, Starší's rejected, then Táta's "+ Teď" on the bag.
+      ['instance.self_logged', 'user'],
+      ['instance.self_logged', 'user'],
+      ['task.rejected', 'user'],
+      ['instance.created', 'user'],
     ])
   })
 
@@ -107,6 +112,7 @@ describe('the demo seed (previews)', () => {
         .map((t) => [t.title, t.status])
         .sort(),
     ).toEqual([
+      ['Nachystat tašku do školy', 'open'], // #38 + Teď
       ['Nakrmit kočku', 'confirmed'], // #45 past week
       ['Posekat trávu', 'confirmed'], // #44 week
       ['Pověsit prádlo', 'confirmed'], // #40
@@ -121,6 +127,8 @@ describe('the demo seed (previews)', () => {
       ['Umýt okna v kuchyni', 'cancelled'], // #36
       ['Umýt okna v obýváku i v ložnici', 'open'], // #40
       ['Vyluxovat celý obývák a chodbu', 'reserved'], // #150
+      ['Vyndat myčku', 'done_unconfirmed'], // #38 Zapsat, Mladší
+      ['Vyndat myčku', 'rejected'], // #38 Zapsat, Starší
       ['Vynést papír', 'confirmed'], // #44
       ['Vynést sklo a plasty do kontejneru', 'reserved'], // #45, rejected
       ['Vynést tříděný odpad', 'confirmed'], // #40
@@ -172,10 +180,11 @@ describe('the demo seed (previews)', () => {
     seedDemo(db, PREVIEW, T0)
     expect(takerPoints(db, T0).takers.map((t) => [t.name, t.confirmed, t.pending])).toEqual([
       ['Starší', 260, 14],
-      ['Mladší', 152, 3],
+      ['Mladší', 152, 6],
     ])
     const open = listTasks(db).filter((t) => t.status === 'open')
     expect(open.map((t) => [t.title, t.score])).toEqual([
+      ['Nachystat tašku do školy', 2], // #38 + Teď
       ['Umýt okna v obýváku i v ložnici', 5],
       ['Shrabat listí na zahradě', 10],
     ])
@@ -196,7 +205,7 @@ describe('the demo seed (previews)', () => {
     expect(getFlags(db)).toEqual({ ...ALL_FEATURES, week: false })
   })
 
-  it('adds two templates (#37): one waiting for agreement, one agreed', () => {
+  it('adds three templates (#37, #38): one waiting for agreement, two agreed', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     expect(
@@ -221,6 +230,14 @@ describe('the demo seed (previews)', () => {
         due: '07:00',
       },
       { title: 'Vyndat myčku', status: 'active', score: 3, days: 0, time: null, due: null },
+      {
+        title: 'Nachystat tašku do školy',
+        status: 'active',
+        score: 2,
+        days: 0,
+        time: null,
+        due: '07:00',
+      },
     ])
     const actions = db
       .select({ action: auditLog.action })
@@ -229,12 +246,16 @@ describe('the demo seed (previews)', () => {
       .all()
       .map((r) => r.action)
     expect(actions).toEqual([
+      // By template (the entity index): the bins, the dishwasher, then the school bag.
       'template.created',
       'template.created',
       'template.score_approved',
       'template.agreed',
       'template.bid_placed',
       'template.score_countered',
+      'template.created',
+      'template.score_approved',
+      'template.agreed',
     ])
   })
 
@@ -257,7 +278,7 @@ describe('the demo seed (previews)', () => {
         .from(templates)
         .all()
         .map((t) => t.score),
-    ).toEqual([4, 3])
+    ).toEqual([4, 3, 2])
   })
 
   it('all or nothing: a failing template leaves no people either', () => {
@@ -271,7 +292,7 @@ describe('the demo seed (previews)', () => {
     expect(db.select().from(auditLog).all()).toHaveLength(0)
   })
 
-  it('demo seed gives a meeting with 3 pending items and totals 160 / 102 (#40 + #44, #45 carry 8)', () => {
+  it('demo seed gives a meeting with 4 pending items and totals 160 / 102 (#40 + #44, #45 carry 8)', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     // The roller starts the week at boot, right after the seed.
@@ -282,6 +303,7 @@ describe('the demo seed (previews)', () => {
       ['Vytřít podlahu v kuchyni', 12, 'Starší'],
       ['Zalít kytky', 2, 'Starší'],
       ['Vynést tříděný', 3, 'Mladší'],
+      ['Vyndat myčku', 3, 'Mladší'], // #38 Zapsat
     ])
     expect(meeting.takers.map((t) => [t.name, t.total])).toEqual([
       ['Starší', 160],
@@ -316,6 +338,8 @@ describe('the demo seed (previews)', () => {
         r.reason,
       ]),
     ).toEqual([
+      // #38: Starší's Zapsat, rejected without a reason.
+      ['Vyndat myčku', 3, 'starsi', null],
       [
         'Vynést sklo a plasty do kontejneru',
         4,

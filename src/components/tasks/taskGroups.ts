@@ -11,6 +11,8 @@ export const GROUP_LABEL: Record<TaskStatus, string> = {
   done_unconfirmed: cs.state.pending,
   confirmed: cs.state.confirmed,
   cancelled: cs.state.cancelled,
+  rejected: cs.state.rejected,
+  expired: cs.state.expired,
 }
 
 /** Active states first, finished ones last. */
@@ -20,6 +22,8 @@ export const GROUP_ORDER: readonly TaskStatus[] = [
   'reserved',
   'done_unconfirmed',
   'confirmed',
+  'rejected',
+  'expired',
   'cancelled',
 ]
 
