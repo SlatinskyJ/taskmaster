@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 import { cs } from '../src/lib/strings'
 import { passwordLogin } from './helpers'
 
-// Týden (#45) on the demo data: last week is settled (Starší 108 → 8 carried), this week runs.
+// Týden (#45) on the `week` seed (#183): last week is settled (Starší 108 → 8 carried), this week runs.
 // A taker sees only himself, through the real loader and server function; a giver sees both.
 
 test('Starší sees his own week and history, nobody else', async ({ page }) => {
@@ -11,12 +11,12 @@ test('Starší sees his own week and history, nobody else', async ({ page }) => 
   await page.goto('/tyden')
   await expect(page.getByRole('heading', { name: cs.week.myTitle })).toBeVisible()
   const main = page.locator('main')
-  // 160 from the demo seeds (#40, the #44 week, 8 carried from #45's settled week).
-  await expect(main).toContainText('160 ✔')
+  // 120: 8 carried from #45's settled week + the #44 week's 40 + 50 + 22.
+  await expect(main).toContainText('120 ✔')
   await expect(main).toContainText('Z minula převedeno 8 bodů')
   await expect(main).toContainText('Zalít kytky')
   await expect(main).not.toContainText('Mladší')
-  await expect(main).not.toContainText('102 ✔')
+  await expect(main).not.toContainText('47 ✔')
   await expect(main).not.toContainText('Vynést sklo a plasty do kontejneru')
 
   await page.getByRole('tab', { name: cs.week.history }).click()
@@ -32,7 +32,7 @@ test("Táta sees every boy, and Mladší's rejected chore", async ({ page }) => 
   const main = page.locator('main')
   await expect(main).toContainText('Starší')
   await expect(main).toContainText('Mladší')
-  await expect(main).toContainText('102 ✔')
+  await expect(main).toContainText('47 ✔')
   await expect(main).toContainText('Vynést sklo a plasty do kontejneru')
   await expect(main).toContainText('vynes ho prosím')
   await page.getByRole('tab', { name: cs.week.history }).click()
