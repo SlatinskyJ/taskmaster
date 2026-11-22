@@ -83,7 +83,9 @@ describe('schedulerJobs', () => {
     ])
   })
 
-  it('rolls the period at the cutoff while running', async () => {
+  // Sunday 23:59 is between quarter-hour ticks: the 00:00 tick starts the next period, from the
+  // cutoff (so nothing done in that minute falls between periods).
+  it('rolls the period at the first tick after the cutoff while running', async () => {
     const db = createTestDb()
     rollPeriods(db, prague(11, 16, 10), DEFAULT_PERIOD_DEFAULTS)
     const [first] = listPeriods(db)

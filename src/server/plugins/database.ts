@@ -13,7 +13,7 @@ import { bootstrapAdmin, describeBootstrap } from '~/server/users'
 // first: it brings its own admin, so the bootstrap then has nothing to do or warn about.
 // Last, once every config check has passed, start the scheduler (#39, src/server/scheduler):
 // its first tick runs now and catches up what downtime missed (periods, expiry, scheduled
-// instances), then it ticks once a minute. A failing job is logged and retried next tick, never
+// instances), then it ticks every 15 minutes. A failing job is logged and retried next tick, never
 // thrown. Nitro's `close` hook stops it, so a dev reload leaves no second loop.
 export default definePlugin((nitroApp) => {
   const db = getDb()

@@ -1,9 +1,10 @@
 import { Cron } from 'croner'
 import { APP_TIME_ZONE } from '~/domain/dates'
 
-// The scheduler (#39, spec §5.3, §5.8): one tick a minute runs every job, in order. The first
-// tick runs at once when it starts, which is the catch-up after downtime: each job works from
-// "what should exist at this instant", so one tick covers any number of missed minutes.
+// The scheduler (#39, spec §5.3, §5.8): one tick every 15 minutes (Jakub 2026-11-22) runs every
+// job, in order. The first tick runs at once when it starts, which is the catch-up after
+// downtime: each job works from "what should exist at this instant", so one tick covers any
+// number of missed ticks.
 // A job that throws is logged; the other jobs still run, and the next tick tries it again.
 // See README.md.
 
@@ -13,10 +14,13 @@ export interface Job {
   run(at: Date): void
 }
 
+/** :00, :15, :30, :45 Prague time (Jakub 2026-11-22: every minute is more than needed). */
+export const TICK_PATTERN = '*/15 * * * *'
+
 export interface SchedulerOptions {
   now?: () => Date
   log?: Pick<Console, 'info' | 'error'>
-  /** Cron pattern of the tick, in Prague time. Default: every minute. */
+  /** Cron pattern of the tick, in Prague time. Default: every quarter hour (TICK_PATTERN). */
   pattern?: string
 }
 
@@ -41,7 +45,7 @@ export function startScheduler(
   // `protect`: a tick still running when the next one is due is not doubled.
   // `unref`: the timer never keeps the process alive on its own.
   const cron = new Cron(
-    opts.pattern ?? '* * * * *',
+    opts.pattern ?? TICK_PATTERN,
     { timezone: APP_TIME_ZONE, protect: true, unref: true },
     tick,
   )

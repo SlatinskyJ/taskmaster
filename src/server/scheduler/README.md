@@ -5,8 +5,12 @@ Server-side time-driven work (#39, spec §5.3, §5.8). Started by the boot plugi
 
 ## The tick
 
-- One croner tick a minute (`* * * * *`, Europe/Prague), `protect` (no overlapping ticks) and
-  `unref` (never keeps the process alive).
+- One croner tick every 15 minutes (`*/15 * * * *`, Europe/Prague; Jakub 2026-11-22),
+  `protect` (no overlapping ticks) and `unref` (never keeps the process alive).
+- What that means: a period rolls at the first tick after its cutoff (Sunday 23:59 → 00:00) but
+  starts at the cutoff, so nothing done in between falls outside a period; a slot that is not on a
+  quarter hour appears at the next tick (its row still shows the slot time); a copy turns Prošlo
+  up to 15 minutes after its grace ends (Hotovo is refused from the grace end on regardless).
 - The first tick runs at once when the scheduler starts: that is the **catch-up after downtime**.
 - Each tick reads `now()` once and runs every job, in order, with that instant.
 - A job that throws is logged as `[scheduler] <name> failed`; the other jobs still run and the

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Job } from './scheduler'
 import { startScheduler } from './scheduler'
 
-// The tick (#39): every job once at start (boot catch-up), then once a minute, each with the
+// The tick (#39): every job once at start (boot catch-up), then every 15 minutes (Jakub 2026-11-22), each with the
 // instant of its tick; a failing job never stops the others. croner schedules its next run
 // after a microtask, so the clock moves with `advanceTimersByTimeAsync`.
 
@@ -44,16 +44,18 @@ describe('startScheduler', () => {
     s.stop()
   })
 
-  it('runs again at the next minute, with that tick’s instant', async () => {
+  it('runs again at the next quarter hour, not before, with that tick’s instant', async () => {
     const order: string[] = []
     const a = recorder('periods', order)
     const s = startScheduler([a.job], { log: quietLog(), now: () => new Date() })
+    await vi.advanceTimersByTimeAsync(14 * 60_000)
+    expect(a.seen).toHaveLength(1)
     await vi.advanceTimersByTimeAsync(30_000)
     expect(a.seen.map((d) => d.toISOString())).toEqual([
       '2026-11-22T10:00:30.000Z',
-      '2026-11-22T10:01:00.000Z',
+      '2026-11-22T10:15:00.000Z',
     ])
-    await vi.advanceTimersByTimeAsync(60_000)
+    await vi.advanceTimersByTimeAsync(15 * 60_000)
     expect(a.seen).toHaveLength(3)
     s.stop()
   })
@@ -66,7 +68,7 @@ describe('startScheduler', () => {
     const s = startScheduler([bad.job, good.job], { log })
     expect(order).toEqual(['expiry', 'instances'])
     expect(log.error).toHaveBeenCalledWith('[scheduler] expiry failed', expect.any(Error))
-    await vi.advanceTimersByTimeAsync(30_000)
+    await vi.advanceTimersByTimeAsync(15 * 60_000)
     expect(order).toEqual(['expiry', 'instances', 'expiry', 'instances'])
     s.stop()
   })
@@ -77,7 +79,7 @@ describe('startScheduler', () => {
     const s = startScheduler([a.job], { log: quietLog() })
     s.stop()
     expect(vi.getTimerCount()).toBe(0)
-    await vi.advanceTimersByTimeAsync(5 * 60_000)
+    await vi.advanceTimersByTimeAsync(60 * 60_000)
     expect(order).toEqual(['periods'])
   })
 })
