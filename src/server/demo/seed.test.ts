@@ -96,12 +96,11 @@ describe('demo seed (#62)', () => {
           ...(approved ? ['task.approved'] : []),
         ].map((action) => [action, 'user']),
       ),
-      // #38: two instances from Táta's "+ Teď", logs by Mladší and Starší, Starší's rejected.
-      ['instance.created', 'user'],
-      ['instance.created', 'user'],
+      // #38: logs by Mladší and Starší, Starší's rejected, then the school bag from Táta's "+ Teď".
       ['instance.self_logged', 'user'],
       ['instance.self_logged', 'user'],
       ['task.rejected', 'user'],
+      ['instance.created', 'user'],
     ])
   })
 
@@ -289,7 +288,7 @@ describe('demo seed (#62)', () => {
     ])
   })
 
-  it('adds instances (#38): two from "+ Teď", Mladší\'s log waiting, Starší\'s rejected', () => {
+  it('adds instances (#38): Mladší\'s log waiting, Starší\'s rejected, then the bag from "+ Teď"', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     const rows = db
@@ -301,12 +300,12 @@ describe('demo seed (#62)', () => {
     expect(
       rows.map((r) => [r.title, r.origin, r.status, r.score, r.dueAt, r.earnerId !== null]),
     ).toEqual([
-      ['Vyndat myčku', 'on_demand', 'open', 3, null, false],
-      // T0 is Tue 17 Nov 2026 10:00Z: "next day, 7:00" Prague is Wed 06:00Z.
-      ['Nachystat tašku do školy', 'on_demand', 'open', 2, '2026-11-18T06:00:00.000Z', false],
       ['Vyndat myčku', 'self_logged', 'done_unconfirmed', 3, null, true],
       // Starší's log, rejected by Táta: closed, no points (§5.5).
       ['Vyndat myčku', 'self_logged', 'rejected', 3, null, true],
+      // After the logs: Zapsat refuses a chore already on the board.
+      // T0 is Tue 17 Nov 2026 10:00Z: "next day, 7:00" Prague is Wed 06:00Z.
+      ['Nachystat tašku do školy', 'on_demand', 'open', 2, '2026-11-18T06:00:00.000Z', false],
     ])
   })
 

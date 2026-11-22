@@ -1,5 +1,15 @@
-import { eq } from 'drizzle-orm'
-import { byPerson, createInstance, findPerson, instanceDeadline, selfLog } from '~/domain'
+import { and, eq, inArray } from 'drizzle-orm'
+import {
+  byPerson,
+  createInstance,
+  findPerson,
+  instanceDeadline,
+  logChoices,
+  logInstant,
+  selfLog,
+} from '~/domain'
+import type { LogWhen } from '~/domain'
+import { currentPeriod } from '~/server/periods'
 import type { Item, LifecycleError } from '~/domain'
 import { toIsoUtc } from '~/domain/dates'
 import { fail, ok } from '~/domain/result'
@@ -19,7 +29,8 @@ import { listPeople } from '~/server/users/people'
 // Title, score and approval flag are copied from the template when the row is made: a later
 // price change of the template never touches it (spec §4). Scheduled instances are #39.
 
-export type InstanceError = LifecycleError | 'not_found' | 'not_agreed' | 'score_changed'
+export type InstanceError =
+  LifecycleError | 'not_found' | 'not_agreed' | 'score_changed' | 'already_open' | 'too_early'
 
 type Origin = 'on_demand' | 'self_logged'
 
@@ -112,9 +123,28 @@ export function createOnDemandInstance(
   })
 }
 
+/** Whether a copy of the template is on the board, open or reserved (a pending one is not). */
+function onBoard(db: Db | Tx, templateId: number): boolean {
+  return (
+    db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(and(eq(tasks.templateId, templateId), inArray(tasks.status, ['open', 'reserved'])))
+      .get() !== undefined
+  )
+}
+
+/** Zapsat's "Kdy?" choices at `now`: never before the running week started. */
+export function logChoicesAt(db: Db | Tx, now: Date): LogWhen[] {
+  return logChoices(now, currentPeriod(db, now)?.startsAt ?? null)
+}
+
 /**
  * Zapsat: a taker logs a chore he did unprompted. `score` is the number he was shown; a price
  * agreed meanwhile is refused (`score_changed`). Always waits for a giver (spec §5.3).
+ * Refused while a copy of the chore is on the board (`already_open`, Jakub 2026-11-22): he takes
+ * that one instead. `when` (Jakub 2026-11-22) sets the completion time ("včera" = yesterday
+ * 18:00); one before the running week is refused (`too_early`). The entry is written at `now`.
  */
 export function selfLogInstance(
   db: Db | Tx,
@@ -122,24 +152,30 @@ export function selfLogInstance(
   templateId: number,
   score: number,
   now: Date = new Date(),
+  when: LogWhen = 'now',
 ): Result<TaskRow, InstanceError> {
   return db.transaction((tx) => {
     const loaded = load(tx, takerId, templateId)
     if (!loaded.ok) return loaded
     const { template, actor } = loaded.value
-    const item = selfLog(actor, now)
+    const item = selfLog(actor, logInstant(when, now))
     if (!item.ok) return item
     if (template.score !== score) return fail('score_changed')
+    if (onBoard(tx, template.id)) return fail('already_open')
+    if (!logChoicesAt(tx, now).includes(when)) return fail('too_early')
     return ok(insert(tx, takerId, template, 'self_logged', item.value, now))
   })
 }
 
-/** What Zapsat offers: every agreed template, by Czech title. */
-export function listLoggableTemplates(db: Db | Tx): { id: number; title: string; score: number }[] {
+/** What Zapsat offers: every agreed template, by Czech title; `onBoard` ones can't be logged. */
+export function listLoggableTemplates(
+  db: Db | Tx,
+): { id: number; title: string; score: number; onBoard: boolean }[] {
   return db
     .select({ id: templates.id, title: templates.title, score: templates.score })
     .from(templates)
     .where(eq(templates.status, 'active'))
     .all()
     .sort((a, b) => a.title.localeCompare(b.title, 'cs'))
+    .map((t) => ({ ...t, onBoard: onBoard(db, t.id) }))
 }

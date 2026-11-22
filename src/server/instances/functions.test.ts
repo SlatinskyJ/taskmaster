@@ -7,8 +7,17 @@ import { parseSelfLog } from './parse'
 // What the instance server functions take and give back (#38). Roles: tests/server-fn-guards.
 
 describe('parseSelfLog', () => {
-  it('takes a template id and a score', () => {
-    expect(parseSelfLog({ templateId: 3, score: 4 })).toEqual({ templateId: 3, score: 4 })
+  it('takes a template id, a score and when (default now)', () => {
+    expect(parseSelfLog({ templateId: 3, score: 4 })).toEqual({
+      templateId: 3,
+      score: 4,
+      when: 'now',
+    })
+    expect(parseSelfLog({ templateId: 3, score: 4, when: 'yesterday' })).toEqual({
+      templateId: 3,
+      score: 4,
+      when: 'yesterday',
+    })
   })
   it.each([
     null,
@@ -16,6 +25,8 @@ describe('parseSelfLog', () => {
     { templateId: 3 },
     { templateId: '3', score: 4 },
     { templateId: 3, score: 1.5 },
+    { templateId: 3, score: 4, when: 'last_week' },
+    { templateId: 3, score: 4, when: 1 },
   ])('refuses %j', (input) => {
     expect(() => parseSelfLog(input)).toThrow('Invalid input')
   })

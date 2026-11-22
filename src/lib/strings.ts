@@ -110,6 +110,11 @@ export const cs = {
       `${title} za ${String(n)} b. Rodič to ještě schválí.`,
     confirm: 'Zapsat',
     toast: 'Zapsáno, čeká na schválení',
+    /** A chore with a copy on the board can't be logged (Jakub 2026-11-22): take that one. */
+    onBoard: 'Už je na nástěnce',
+    tileOnBoardLabel: (title: string) => `${title}, už je na nástěnce`,
+    /** "Kdy?" (Jakub 2026-11-22): Dnes ráno = today 7:00, Včera = yesterday 18:00. */
+    when: { label: 'Kdy?', now: 'Teď', this_morning: 'Dnes ráno', yesterday: 'Včera' },
     empty: 'Zatím tu nejsou žádné domluvené opakované úkoly. Až je rodiče přidají, objeví se tady.',
   },
   /** Instances of a recurring chore made by a person (#38, UI doc §7.2 GTasks). */
@@ -127,6 +132,8 @@ export const cs = {
     errors: {
       pastGrace: 'Termín už prošel, tohle už nejde.',
       scoreChanged: 'Cena se mezitím změnila, podívej se znovu.',
+      alreadyOpen: 'Tenhle úkol už je na nástěnce. Vezmi si ho tam.',
+      tooEarly: 'Tohle už patří do minulého týdne.',
     },
   },
   /** Recurring templates (#37): GCreate recurring part, GTasks, TApprove (UI doc §7). */
