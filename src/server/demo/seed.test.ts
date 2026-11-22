@@ -221,6 +221,14 @@ describe('demo seed (#62)', () => {
     expect(getFlags(db)).toEqual(NO_FEATURES)
   })
 
+  it('a later boot of a seeded preview keeps a switch someone turned off', () => {
+    const db = createTestDb()
+    seedDemo(db, PREVIEW, T0)
+    db.run(sql`UPDATE feature_flags SET enabled = 0 WHERE key = 'week'`)
+    expect(seedDemo(db, PREVIEW, T0)).toEqual({ kind: 'skipped', reason: 'not_empty' })
+    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, week: false })
+  })
+
   it('adds two templates (#37): one waiting for agreement, one agreed', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
