@@ -54,7 +54,7 @@ Built on [#184 Previews start with every launch switch on](https://github.com/Sl
 **Interfaces:**
 - Produces: `switchOnIn(tx: Tx, keys: readonly FeatureKey[], at: Date): void`. For each key not already on: upsert the row to `enabled = true` and `writeAudit(tx, { actor: { kind: 'system' }, action: 'feature.switched', entityType: 'feature', entityId: key, before: { enabled: false }, after: { enabled: true }, at })`. A key already on writes nothing. No "off" counterpart (YAGNI: nothing seeds a switch off; the migration's rows are off).
 
-- [ ] **Step 1: Failing tests** in `flags.test.ts`: `'switchOnIn turns the listed switches on and logs each'` (`['week', 'meeting']` → `getFlags` has those two on, the others off; two `feature.switched` entries, actor system, entity ids `week`, `meeting`); `'a switch already on writes nothing'` (second call adds no audit row); `'a missing row is created'` (delete the `log` row first, `switchOnIn(['log'])` → on).
+- [ ] **Step 1: Failing tests** in `flags.test.ts`: `'switchOnIn turns the listed switches on and logs each'` (`['week', 'meeting']` → `getFlags` has those two on, the others off; two `feature.switched` entries, actor system, entity ids `week`, `meeting`); `'a switch already on writes nothing'` (second call adds no audit row); `'a missing row is created'` (delete the `log` row first, `switchOnIn(['log'])` → on). `'rolls back when the audit write fails'`: a `BEFORE INSERT ON audit_log WHEN NEW.action = 'feature.switched'` trigger raising ABORT → the call inside `db.transaction` throws and `getFlags` is still `NO_FEATURES`.
 - [ ] **Step 2: Run** `pnpm test src/server/features` → fail (no `switchOnIn`).
 - [ ] **Step 3: Implement**; add `'feature.switched'` and `'feature'` to the lists in `actions.ts`. README: a new paragraph "Previews and tests" replacing "Previews start from the same migrations, so every switch is off there too": the demo seed turns every switch on (`TASKMASTER_SEED` unset); each e2e seed lists its own; production only by a migration or by hand, as before.
 - [ ] **Step 4: Run** `pnpm test src/server/features src/server/audit && pnpm typecheck` → pass.
@@ -137,6 +137,14 @@ Built on [#184 Previews start with every launch switch on](https://github.com/Sl
 
 - `demo` turns every switch on, so previews show the whole app, not the launch look. The launch look stays pinned by the `launch` e2e suite (switches off). From Jakub's 2026-11-22 ask that agents behind switches are not blocked on previews.
 - `meeting` reuses the `week` seed on its own server: same data, separate database.
+
+## Pre-flight
+
+- Audit rollback: Task 0 (switches) and the existing all-or-nothing tests (pieces) in Task 1.
+- Boundaries: Mladší at exactly spodní 50 in the `week` seed (Task 2 pins `lower`, Task 3's meeting starts him at 0).
+- Wrong actor: no new user-facing action (seed and switches run as `system` at boot only).
+- Real entry point: the boot plugin runs `seedDemo` with the real env in every e2e server (Task 3).
+- Server function shapes: none added.
 
 ## Size
 
