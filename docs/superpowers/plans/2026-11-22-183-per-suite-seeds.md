@@ -4,7 +4,7 @@
 
 **Goal:** Each browser-test suite boots its own server on its own database, seeded with only the data that suite needs, so a new feature's demo data never changes another suite's numbers. Each seed also turns on the launch switches (`feature_flags`, #163) it needs, so a feature behind a switch is never blocked on its preview or in its tests. Previews and dev keep the full demo seed, with every switch on.
 
-**Architecture:** The demo seed is split into named **pieces** (one per feature's sample data). A **seed** is a named, ordered list of pieces; `TASKMASTER_SEED` picks one at boot (default `demo`, the full list previews get today). `playwright.config.ts` gets one table row per spec file: its own port, server, data folder and seed. A seed also lists the launch switches it turns on: `demo` turns on all of them (Jakub 2026-11-22: agents working behind switches must not get blocked on previews), the launch suite none. The guards (preview flag, `ADMIN_PASSWORD`, empty DB) and the all-or-nothing transaction stay exactly as today.
+**Architecture:** The demo seed is split into named **pieces** (one per feature's sample data). A **seed** is a named, ordered list of pieces; `TASKMASTER_SEED` picks one at boot (default `demo`, the full list previews get today). `e2e/suites.ts` (read by `playwright.config.ts`) has one row per spec file: its own port, server, data folder and seed. A seed also lists the launch switches it turns on: `demo` turns on all of them (Jakub 2026-11-22: agents working behind switches must not get blocked on previews), the launch suite none. The guards (preview flag, `ADMIN_PASSWORD`, empty DB) and the all-or-nothing transaction stay exactly as today.
 
 **Tech Stack:** TypeScript, Drizzle/SQLite, Vitest, Playwright.
 
@@ -39,7 +39,7 @@
 - `src/server/demo/seed.test.ts` (modify): guards, picking, all-or-nothing, per-seed invariants.
 - `src/server/demo/demo.test.ts` (create): what previews get (today's content tests, moved).
 - `src/server/demo/suites.test.ts` (create): the numbers each e2e suite's seed must give (pinned next to the seed, so a seed change fails a unit test before the browser test).
-- `playwright.config.ts` (modify): suite table.
+- `e2e/suites.ts` (create): suite table; `playwright.config.ts` (modify): builds projects and servers from it.
 - `e2e/*.spec.ts` (modify): expected numbers for their own seeds; header comments name the seed.
 - `CLAUDE.md` (modify, one line): "Demo data" bullet explains pieces, seeds and `TASKMASTER_SEED`.
 
@@ -87,7 +87,7 @@ Built on [#184 Previews start with every launch switch on](https://github.com/Sl
   - `'every seed: the family logs in and the audit log is in time order'`: loop over `Object.keys(SEEDS)`; login for all four roles ok; audit `at` sorted.
   - Keep: refuses without preview, refuses non-empty, refuses with `ADMIN_PASSWORD`, both all-or-nothing tests plus a third (`BEFORE INSERT ON audit_log WHEN NEW.action = 'feature.switched'` ABORT → no users, no tasks, every switch still off), second boot, boot messages (update the seeded message assertion to contain the seed name).
 - [ ] **Step 3: Run** `pnpm test src/server/demo` → the new seed tests fail (no `SEEDS`, no `seed` in outcome), the rename test fails.
-- [ ] **Step 4: Implement** `pieces.ts`, `seeds.ts`, new `seed.ts` as in Interfaces. Pieces are today's bodies moved as they are; `seedPoints`' doc comment says what this piece alone gives (Starší 40 confirmed + 12 pending, Mladší 55; #183). The `seed.ts` header comment explains pieces/seeds: previews get `demo`; each e2e suite names its seed in `playwright.config.ts`; a feature PR adds its piece to `demo` and, if its suite needs it, to that suite's seed.
+- [ ] **Step 4: Implement** `pieces.ts`, `seeds.ts`, new `seed.ts` as in Interfaces. Pieces are today's bodies moved as they are; `seedPoints`' doc comment says what this piece alone gives (Starší 40 confirmed + 12 pending, Mladší 55; #183). The `seed.ts` header comment explains pieces/seeds: previews get `demo`; each e2e suite names its seed in `e2e/suites.ts`; a feature PR adds its piece to `demo` and, if its suite needs it, to that suite's seed.
 - [ ] **Step 5: Run** `pnpm test src/server/demo && pnpm typecheck && pnpm lint` → pass.
 - [ ] **Step 6: Commit** `Split the demo seed into pieces and named seeds (#183)`.
 
@@ -132,7 +132,7 @@ Built on [#184 Previews start with every launch switch on](https://github.com/Sl
   - `launch.spec.ts`: drop `setSwitches()` and its `beforeAll`/`afterAll` (#184); its seed turns no switch on.
   - `task-page.spec.ts`, `passkeys*.spec.ts`: only the header comment names the seed.
 - [ ] **Step 3: Run** `pnpm build && PW_CHROMIUM_PATH=/opt/pw-browsers/chromium… pnpm e2e --trace off` → all 7 projects pass. On a red spec: `superpowers:systematic-debugging`, compare with Task 2's pinned numbers first.
-- [ ] **Step 4: CLAUDE.md** "Demo data" bullet: add "The seed is built from pieces (`src/server/demo/pieces.ts`); `TASKMASTER_SEED` picks a named list of them (`seeds.ts`, default `demo`). Each e2e spec file has its own row in `playwright.config.ts`: own server, own DB, own seed. A feature PR adds its piece to `demo`, and gives its e2e suite the seed it needs. A seed lists the launch switches it turns on (`demo`: all); a feature behind a switch adds it to its suite's seed, so it is never blocked in tests or on its preview."
+- [ ] **Step 4: CLAUDE.md** "Demo data" bullet: add "The seed is built from pieces (`src/server/demo/pieces.ts`); `TASKMASTER_SEED` picks a named list of them (`seeds.ts`, default `demo`). Each e2e spec file has its own row in `e2e/suites.ts`: own server, own DB, own seed. A feature PR adds its piece to `demo`, and gives its e2e suite the seed it needs. A seed lists the launch switches it turns on (`demo`: all); a feature behind a switch adds it to its suite's seed, so it is never blocked in tests or on its preview."
 - [ ] **Step 5: Commit** `Give each e2e suite its own server and seed (#183)`.
 
 ## Rulings for the brief
