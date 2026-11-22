@@ -59,6 +59,10 @@
     /** Next week as it starts now: the domain's `nextPeriod(running, currentDefaults, agreed)`
      *  (the agreed change if there is one, else the default week). Null when `running` is. */
     next: { startsAt: string; cutoffAt: string; levels: Levels } | null
+    /** Next week as the default week alone would make it: `nextPeriod(running, currentDefaults, null)`,
+     *  even when a change is agreed. The "old" value on the card and the note read this, never
+     *  `currentDefaults.lengthDays` (a running week ending mid-week makes the span differ). Null when `running` is. */
+    defaultNext: { startsAt: string; cutoffAt: string; levels: Levels } | null
     /** The stored default week (what next week gets without a change). */
     currentDefaults: PeriodDefaults
     /** Every active taker and giver, by id: who the screens name. No admin, no usernames. */
@@ -69,7 +73,8 @@
 - [ ] **Step 1: Failing tests.**
   - `proposalsView` pins `running` (ISO strings), `currentDefaults` equal to `getPeriodDefaults`, and `parties` = Táta, Starší, Mladší with no admin, using `toEqual` on the whole object so no extra field slips in.
   - `next`: with nothing agreed, it equals `nextPeriod(running, defaults, null)` (starts at the running cutoff, default cutoff and levels). With an agreed change, it is that change's cutoff and levels.
-  - Before the first roll, `running` and `next` are null.
+  - `defaultNext`: equals `nextPeriod(running, defaults, null)` with and without an agreed change. A running week ending on a Wednesday (agreed one-off change) gives a `defaultNext` span that is not `lengthDays` (pins the case the browser must not recompute).
+  - Before the first roll, `running`, `next` and `defaultNext` are null.
 - [ ] **Step 2:** Run `npx vitest run src/server/periods/proposals.test.ts`. Expected: FAIL (missing fields).
 - [ ] **Step 3:** Implement. `parties` gets its own query on `users` (`id`, `displayName`, `role`, filtered to active takers and givers, sorted by id), not `listPeople`, which has no names. `next` calls the domain's `nextPeriod` with `agreedProposalFor`.
 - [ ] **Step 4:** Run it again. Expected: PASS. Also run `npx vitest run src/server/periods` (function tests pin the handler shape).
@@ -92,8 +97,9 @@
    *  time and its levels. No default-cutoff rule in the browser. */
   export function initialNextWeek(next: { startsAt: Date; cutoffAt: Date; levels: Levels }): NextWeekForm
   export function stepDays(f: NextWeekForm, by: 1 | -1): NextWeekForm // 1 … MAX_LENGTH_DAYS
-  /** False when the cutoff would pass `addPragueDays(nextStartsAt, MAX_LENGTH_DAYS)` (364 days
-   *  with an end time later than the start's); the form disables "Navrhnout všem" and says why. */
+  /** The domain's `isValidPeriodSettings({ cutoffAt: nextWeekCutoff(nextStartsAt, f), levels: f.levels }, nextStartsAt)`,
+   *  so the button and the server share one cap; no copy of the 364-day rule here.
+   *  The form disables "Navrhnout všem" and says why. */
   export function withinCap(nextStartsAt: Date, f: NextWeekForm): boolean
   /** Whole Prague days between two instants (for "7 dní" on the proposal card). */
   export function lengthInDays(startsAt: Date, cutoffAt: Date): number
@@ -148,14 +154,14 @@
 Screen: title "Příští týden", back button to `/tyden` (`Screen back`). Content (UI doc Period artboard):
 1. The "Tento týden" card: dates (`weekLabel`), the chip "Zamčeno", and levels.
 2. Section "Návrh na příští týden": a `ProposalCard` showing:
-   - the chip "Návrh od <name>" (proposer from `parties`; violet `proposed` state);
-   - next week's dates (from `next.startsAt`), length in days, and levels. "Old" is the default week that next week would get without the change (`currentDefaults` levels and the default length), struck through, next to the proposed value. A value that doesn't change shows once.
+   - the chip "Navrhuje: <name>" (display names like "Starší" can't be declined after "od") (proposer from `parties`; violet `proposed` state);
+   - next week's dates (from `next.startsAt`), length in days, and levels. "Old" is `defaultNext` from the server (its length in days and its levels), struck through, next to the proposed value. A value that doesn't change shows once.
    - the "who agreed" rows;
    - buttons from `myActions`: Souhlasím (ok), Nesouhlasím and Stáhnout návrh. The last two ask first in a Dialog:
      - Nesouhlasím: title "Nesouhlasit s návrhem?", text "Návrh tím skončí pro všechny. Kdo chce změnu, musí navrhnout znovu.", buttons "Nesouhlasím" (danger) and "Zpět";
      - Stáhnout návrh: title "Stáhnout návrh?", text "Návrh zmizí. Příští týden bude podle výchozího týdne.", buttons "Stáhnout" and "Zpět".
    - an agreed proposal shows a "Dohodnuto" chip and "Platí od <next.startsAt>", with no buttons.
-3. The note "Změna platí, jen když souhlasí všichni kluci a jeden rodič do <next.startsAt as 'ne 29. 11. 23:59'>. Jinak bude příští týden <length> a <lower> / <upper>." (the default week's values).
+3. The note "Změna platí, jen když souhlasí všichni kluci a jeden rodič do <next.startsAt as 'ne 29. 11. 23:59'>. Jinak bude příští týden <length>, spodní hranice <lower>, horní <upper>." (from `defaultNext`; "spodní/horní hranice" are the words Správa already uses).
 4. With no open next-week proposal: the button "Navrhnout jinak" opens `NextWeekForm` in place, starting from `initialNextWeek(next)`. It holds:
    - a length stepper in days ("Kratší" / "Delší", Czech plural), stopping at 1 and `MAX_LENGTH_DAYS`;
    - an end time input;
@@ -188,7 +194,7 @@ Route: `beforeLoad` runs `guardScreen` and, with `!context.features.periodPropos
   - No proposal → "Navrhnout jinak" opens the form, which shows "Konec: ne 6. 12. 23:59". Submitting calls `proposePeriodFn` once with exactly `{ cutoffAt: '2026-12-06T22:59:00.000Z', levels: { lower: 50, upper: 100 } }` (a fixed literal, not recomputed with `nextWeekCutoff`).
   - Wiring: with a next-week proposal of id 1 and a default-week proposal of id 1 (the ids collide on purpose), Souhlasím, Nesouhlasím (after the dialog) and Stáhnout návrh on each card call `approveProposalFn`, `rejectProposalFn` and `withdrawProposalFn` with `{ data: { kind, id } }` of that card, checked with `toHaveBeenCalledWith`.
   - A second giver after one giver approved sees Nesouhlasím and no Souhlasím.
-  - The chip "Návrh od Starší" names the proposer.
+  - The chip "Navrhuje: Starší" names the proposer.
   - `already_started` shows "Příští týden už začal, návrh už neplatí."
   - Day plurals: 1 den, 3 dny, 7 dní.
   - A refusal `proposal_pending` shows its Czech text; a throw shows the generic text and keeps the values.
@@ -269,7 +275,7 @@ It uses the server functions' cores (`proposePeriod`, `approveProposal`, `propos
 
 The e2e tests run serially in one file, on one server:
 1. Táta opens Týden, then Příští týden: the default-week proposal shows "čeká" for both brothers. He opens Výchozí týden, withdraws his pending proposal (dialog), changes the length, and taps Navrhnout všem: the new pending card shows.
-2. Mladší logs in. Domů shows "Návrh na příští týden" under Čeká na tebe. "Otevřít" leads to Příští týden. Nesouhlasím and the dialog's confirm close Starší's proposal. "Navrhnout jinak" opens the form; one day shorter, then Navrhnout všem: his own pending card shows "Návrh od Mladší".
+2. Mladší logs in. Domů shows "Návrh na příští týden" under Čeká na tebe. "Otevřít" leads to Příští týden. Nesouhlasím and the dialog's confirm close Starší's proposal. "Navrhnout jinak" opens the form; one day shorter, then Navrhnout všem: his own pending card shows "Navrhuje: Mladší".
 3. Starší approves through the Domů row, then Táta approves: the card shows "Dohodnuto".
 
 - [ ] **Step 1:** Write the e2e spec and the seed test change. Run `pnpm test` for the seed tests. Expected: FAIL.
