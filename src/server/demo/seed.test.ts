@@ -134,7 +134,7 @@ describe('demo seed (#62)', () => {
   it('gives both brothers points (#40 + #44 week): confirmed and waiting, plus an open task', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
-    expect(takerPoints(db).takers.map((t) => [t.name, t.confirmed, t.pending])).toEqual([
+    expect(takerPoints(db, T0).takers.map((t) => [t.name, t.confirmed, t.pending])).toEqual([
       ['Starší', 260, 14],
       ['Mladší', 152, 3],
     ])

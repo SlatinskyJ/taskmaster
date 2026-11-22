@@ -10,4 +10,4 @@ export type { PointsOverview, TakerPoints }
 
 export const getPointsFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
-  .handler(({ context }): PointsOverview => pointsView(getDb(), context.user))
+  .handler(({ context }): PointsOverview => pointsView(getDb(), context.user, new Date()))

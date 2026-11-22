@@ -22,7 +22,7 @@ function withPoints() {
 describe('pointsView', () => {
   it('gives a taker only his own row', () => {
     const f = withPoints()
-    const view = pointsView(f.db, { id: f.starsi, role: 'taker' })
+    const view = pointsView(f.db, { id: f.starsi, role: 'taker' }, T3)
     expect(view.takers).toEqual([{ id: f.starsi, name: 'Starší', confirmed: 18, pending: 0 }])
     expect(JSON.stringify(view)).not.toContain('Mladší')
     expect(view.levels).toEqual({ lower: 50, upper: 100 })
@@ -30,7 +30,7 @@ describe('pointsView', () => {
 
   it('gives a giver every taker', () => {
     const f = withPoints()
-    expect(pointsView(f.db, { id: f.tata, role: 'giver' }).takers).toEqual([
+    expect(pointsView(f.db, { id: f.tata, role: 'giver' }, T3).takers).toEqual([
       { id: f.starsi, name: 'Starší', confirmed: 18, pending: 0 },
       { id: f.mladsi, name: 'Mladší', confirmed: 7, pending: 0 },
     ])
@@ -38,6 +38,6 @@ describe('pointsView', () => {
 
   it('gives a taker not in the list an empty list', () => {
     const f = withPoints()
-    expect(pointsView(f.db, { id: 999, role: 'taker' }).takers).toEqual([])
+    expect(pointsView(f.db, { id: 999, role: 'taker' }, T3).takers).toEqual([])
   })
 })
