@@ -1,7 +1,8 @@
 # Launch switches
 
 Which unfinished features the family sees (`Features` in [`src/lib/features.ts`](../../lib/features.ts)).
-One row per switch in the `feature_flags` table; the migration seeds the launch values (all off).
+One row per switch in the `feature_flags` table. Migrations 0017 and 0019 seed them off for
+the launch; 0022 turns every one on (all five features built).
 
 - `flags.ts`: `getFlags(db)`. A switch with no row reads as off; an unknown row is ignored.
 - `functions.ts`: `getFeaturesFn`, signed-in users only. The app shell (`src/routes/_app.tsx`)
@@ -29,9 +30,9 @@ With `sqlite3` on hand (dev: `.data/taskmaster.db`):
 `FEATURE_KEYS` and seed its row (off) in a new migration.
 
 Previews and e2e servers run the demo seed (`TASKMASTER_ENV=preview`, `src/server/demo/`).
-Each named seed lists the switches it turns on (`switchOnIn`, audit-logged as
-`feature.switched`): `demo`, which previews get, turns every switch on, so a feature behind a
-switch shows on its PR's preview with nothing to flip; each e2e suite's seed turns on only what
-that suite needs (`launch`: none). Production never runs that seed: its switches keep the migration's values. Turning a
+Each named seed lists the switches it turns on and turns every other one off (`setSwitchesIn`,
+audit-logged as `feature.switched`), whatever the migrations left: `demo`, which previews get,
+turns every switch on, so a feature behind a switch shows on its PR's preview with nothing to flip;
+each e2e suite's seed turns on only what that suite needs (`launch`: none). Production never runs that seed: its switches keep the migration's values. Turning a
 feature on in production is Jakub's call: by hand as above, or in a migration that belongs only
 in the PR that releases the feature (it flips production when that PR merges).
