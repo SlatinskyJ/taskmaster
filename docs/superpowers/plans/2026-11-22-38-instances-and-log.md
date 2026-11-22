@@ -109,7 +109,7 @@
 - `TaskView` gains `origin: TaskOrigin`, `templateId: number | null`, `dueAt: string | null`, `graceEndsAt: string | null` (UTC ISO).
 - `TaskHistoryAction` widens to `Extract<AuditAction, \`task.${string}\` | 'instance.created' | 'instance.self_logged'>`.
 - `proposeTaskScoreChange` on a row with `origin !== 'one_time'` → `fail('not_allowed')`.
-- A rejection read by `rejections.ts` carries `closed: boolean` (the audit entry's `after.status === 'rejected'`); `WeekItem` gains `closed?: boolean` on rejections; `rejectionLine` leaves out "Vráceno …" for a closed one (only the reason, or `cs.week.rejectedClosed` "Zamítnuto, body nejsou." when there is none).
+- A rejection read by `rejections.ts` carries `closed: boolean` (the audit entry's `after.status === 'rejected'`); `WeekItem` gains `closed?: boolean` on rejections; `rejectionLine` leaves out "Vráceno …" for a closed one (only the reason, or `cs.week.rejectedClosed` "Zamítnuto, bez bodů." when there is none).
 
 - [ ] **Step 1: Write the failing tests:**
   - `item.test.ts`: a `rejected` self-logged row round-trips through `toItem` / `columnsOf` with its completion; an on-demand row with due/grace columns gives `deadline` as `Date`s; one-time rows unchanged (origin `one_time`, deadline null).
@@ -127,7 +127,9 @@
 
 **Files:**
 - Create: `src/server/instances/instances.ts`, `src/server/instances/functions.ts`, `src/server/instances/index.ts`
-- Test: `src/server/instances/instances.test.ts`, `src/server/instances/functions.test.ts`
+- Create: `src/server/instances/parse.ts`
+- Modify: `tests/server-fn-guards.test.ts` (`EXPECTED_ROLES`: `createInstanceFn: 'giver'`, `selfLogFn: 'taker'`, `listLoggableTemplatesFn: 'taker'`)
+- Test: `src/server/instances/instances.test.ts`, `src/server/instances/functions.test.ts`, `tests/server-fn-guards.test.ts`
 
 **Interfaces:**
 - Consumes: `createInstance`, `selfLog`, `byPerson`, `findPerson` (domain); `instanceDeadline` (Task 1); `columnsOf` (Task 3); `writeAudit`; `listPeople`; `templates` row (`status === 'active'`); template deadline columns → `DeadlineRule` (reuse the row→rule mapping in `src/server/templates/templates.ts`; export it as `deadlineRuleOf(row: TemplateRow): DeadlineRule | null`).
@@ -136,7 +138,7 @@
   - `createOnDemandInstance(db: Db | Tx, giverId: number, templateId: number, now?: Date): Result<TaskRow, InstanceError>` — audit `instance.created`, `after` = `{ templateId, origin, status, score, dueAt, graceEndsAt }`.
   - `selfLogInstance(db: Db | Tx, takerId: number, templateId: number, score: number, now?: Date): Result<TaskRow, InstanceError>` — `score` is the number the taker saw; refused `score_changed` when it differs from the template's score. Row `done_unconfirmed`, `completedBy = earnerId = takerId`, `completedAt = now`, `approvalRequired = true`; audit `instance.self_logged`, `after` = the `instance.created` keys plus `completedBy`, `completedAt`, `earnerId`, `approvalRequired`.
   - `listLoggableTemplates(db: Db | Tx): { id: number; title: string; score: number }[]` — active templates, by title (Czech collation `localeCompare(…, 'cs')`).
-  - Server fns: `createInstanceFn` (`requireRole('giver')`, validator `parseTemplateId`), `selfLogFn` (`requireRole('taker')`, validator `parseApproval` from `src/server/templates/parse.ts`: `{ templateId, score }`, both positive safe integers), `listLoggableTemplatesFn` (`requireRole('taker')`). Result `{ ok: true; id: number; score: number } | { ok: false; error: InstanceError }`.
+  - Server fns: `createInstanceFn` (`requireRole('giver')`, validator `parseTemplateId`), `selfLogFn` (`requireRole('taker')`, validator `parseSelfLog` in `src/server/instances/parse.ts`: `{ templateId, score }`, both positive safe integers, built on the shared integer parsing in `src/server/templates/parse.ts`), `listLoggableTemplatesFn` (`requireRole('taker')`). Result `{ ok: true; id: number; score: number } | { ok: false; error: InstanceError }`.
 
 - [ ] **Step 1: Write the failing tests** (`instances.test.ts`, family from `~/server/tasks/testing`, template from `agreedTemplate`):
   - giver "+ Teď" on an agreed no-deadline template → open row, score 3, `origin: 'on_demand'`, `templateId` set, `dueAt` null, one `instance.created` audit row with actor Táta; twice the same minute → two rows (several per day, spec §5.3).
@@ -151,7 +153,7 @@
   - `listLoggableTemplates`: only active, sorted by Czech title ("Čistit…" after "Cvičit…").
 - [ ] **Step 2: Run** `pnpm vitest run src/server/instances` — FAIL.
 - [ ] **Step 3: Implement** in one transaction each: load template, check `active`, ask the domain (`createInstance(byPerson(p), 'on_demand', row.approvalRequired, deadline)` / `selfLog(byPerson(p), now)`), insert with `columnsOf(item)` plus `title`, `score`, `templateId`, `origin`, `dueAt`, `graceEndsAt`, `createdBy` = actor, `createdAt`/`updatedAt` = now, `agreedAt` = template's `agreedAt`, then `writeAudit`.
-- [ ] **Step 4: Write `functions.test.ts`:** the three server functions through their real handlers (pattern of `src/server/tasks/functions.test.ts`): role guard refuses the wrong role; the success result shape is exactly `{ ok, id, score }` (no row fields leak).
+- [ ] **Step 4: Add the three functions to `EXPECTED_ROLES`** in `tests/server-fn-guards.test.ts` (run it first without them: it fails on unknown server functions), then **write `functions.test.ts`:** the three server functions through their real handlers (pattern of `src/server/tasks/functions.test.ts`): role guard refuses the wrong role; the success result shape is exactly `{ ok, id, score }` (no row fields leak).
 - [ ] **Step 5: Run** — PASS. **Commit** `Server: instances on demand and self-logged chores`.
 
 ### Task 5: Úkoly: "+ Teď" on agreed templates, instance rows show their due time
@@ -164,7 +166,7 @@
 - `TemplateRow` gets an optional `onNow?: () => void` and `busy?: boolean`; with `onNow`, an active row shows a second 44 px button "+ Teď" (`cs.instances.now`) left of the price link. Both buttons sit in their own `flex flex-wrap justify-end gap-2` container in the row's action slot; at 360 px with "Vyluxovat celý obývák a chodbu" the name keeps its two readable lines and the buttons wrap under each other, each staying 44 px.
 - `formatDue(dueAt: string, graceEndsAt: string, now: Date): string` → `"do 7:00"` same Prague day, `"do zítra 7:00"` next day, else `"do st 7:00"` (weekday from `cs.bids.weekdays`, already lower case); `"po termínu"` (`cs.instances.overdue`) once `graceEndsAt <= now`. Through `toPragueWallTime`.
 - `instanceMeta(t: TaskView, now: Date): string | undefined`: `formatDue` for an instance with a deadline, else `"na vyžádání · 15:02"` (`cs.instances.onDemandAt(time)`, the creation time in Prague) for an on-demand one, else undefined. Used as the row meta on Úkoly (when nothing else fills it), on the taker's Domů Volné and Moje rows (`TakerBoard`), and on the task page's meta line.
-- `taskErrorMessage('past_grace')` → `cs.instances.errors.pastGrace` "Termín už prošel, tohle se zapsat nedá."; `score_changed` → `cs.instances.errors.scoreChanged` "Cena se mezitím změnila, podívej se znovu."; `not_agreed` keeps `cs.tasks.errors.templateNotAgreed`, anything else the existing generic text. No separate `cs.instances.error` list.
+- `taskErrorMessage('past_grace')` → `cs.instances.errors.pastGrace` "Termín už prošel, tohle už nejde." (fits Rezervovat and Hotovo alike); `score_changed` → `cs.instances.errors.scoreChanged` "Cena se mezitím změnila, podívej se znovu."; `not_agreed` keeps `cs.tasks.errors.templateNotAgreed`, anything else the existing generic text. No separate `cs.instances.error` list.
 - `GROUP_LABEL` / `GROUP_ORDER` add `rejected` (`cs.state.rejected`) and `expired` (`cs.state.expired`) at the end.
 - Strings (`cs.instances`): `now: '+ Teď'`, `toast.created: 'Přidáno do úkolů'`, `overdue`, `onDemandAt`, `errors.pastGrace`, `errors.scoreChanged`.
 - Úkoly: the top section label becomes `cs.templates.itemsSection = 'K udělání'` when `recurring` is on (it now holds instances too, and must not repeat the page title).
