@@ -55,6 +55,8 @@ export type Meeting =
         startsAt: string
         /** The week's end for its totals: now for the running week, else its end. */
         endsAt: string
+        /** Where the week ends at the latest (the header shows it while the week runs). */
+        cutoffAt: string
         running: boolean
         levels: Levels
       }
@@ -90,7 +92,8 @@ function settledIds(db: Db | Tx): Set<PeriodId> {
   )
 }
 
-function takersOf(db: Db | Tx, people: readonly Person[]) {
+/** Active takers, by id, with their display names. Schůzka and Týden list the same people. */
+export function takersOf(db: Db | Tx, people: readonly Person[]) {
   return db
     .select({ id: users.id, name: users.displayName })
     .from(users)
@@ -146,6 +149,7 @@ export function getMeeting(db: Db | Tx, now: Date): Meeting {
       id: target.id,
       startsAt: toIsoUtc(target.startsAt),
       endsAt: toIsoUtc(p.value.end),
+      cutoffAt: toIsoUtc(target.cutoffAt),
       running: isRunning(target, now),
       levels: target.levels,
     },
@@ -184,7 +188,7 @@ class Refused extends Error {
  * transaction.
  */
 export function settlePeriod(
-  db: Db,
+  db: Db | Tx,
   giverId: number,
   periodId: number,
   shown: readonly ShownTotal[],

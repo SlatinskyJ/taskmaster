@@ -1,12 +1,16 @@
 import { verify } from '@node-rs/argon2'
-import { eq, sql } from 'drizzle-orm'
+import { asc, eq, sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { login } from '~/server/auth'
-import { auditLog, tasks, templates, templateThread, users } from '~/server/db/schema'
+import { auditLog, settlements, tasks, templates, templateThread, users } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { takerPoints } from '~/server/points'
 import { listTasks } from '~/server/tasks'
 import { bootstrapAdmin } from '~/server/users'
+import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
+import { listPeriods, rollPeriods } from '~/server/periods'
+import { rejectionsSince } from '~/server/tasks/rejections'
+import { getMeeting } from '~/server/settlement/meeting'
 import { DEMO_PASSWORD, describeDemo, seedDemo } from './seed'
 
 const T0 = new Date('2026-11-17T10:00:00.000Z')
@@ -31,8 +35,27 @@ describe('demo seed (#62)', () => {
     expect(log.map((r) => [r.action, r.actorKind])).toEqual(
       Array(4).fill(['user.created', 'system']),
     )
-    const taskLog = db.select().from(auditLog).where(eq(auditLog.entityType, 'task')).all()
+    const taskLog = db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.entityType, 'task'))
+      .orderBy(asc(auditLog.id))
+      .all()
+    const done = [
+      'task.created',
+      'task.score_approved',
+      'task.agreed',
+      'task.reserved',
+      'task.completed',
+    ]
     expect(taskLog.map((r) => [r.action, r.actorKind])).toEqual([
+      // #45's past week: three approved chores, then this week's rejected one.
+      ...[
+        ...[...done, 'task.approved'],
+        ...[...done, 'task.approved'],
+        ...[...done, 'task.approved'],
+        ...[...done, 'task.rejected'],
+      ].map((action) => [action, 'user']),
       ['task.created', 'user'],
       ['task.bid_placed', 'user'],
       ['task.bid_placed', 'user'],
@@ -41,6 +64,14 @@ describe('demo seed (#62)', () => {
       ['task.bid_placed', 'user'],
       ['task.score_approved', 'user'],
       ['task.agreed', 'user'],
+      ['task.created', 'user'],
+      ['task.score_approved', 'user'],
+      ['task.agreed', 'user'],
+      ['task.score_change_proposed', 'user'],
+      ['task.created', 'user'],
+      ['task.score_approved', 'user'],
+      ['task.agreed', 'user'],
+      ['task.cancelled', 'user'],
       // #40: five tasks done (four of them approved), one left open, each agreed on one yes.
       ...[true, true, false, true, true].flatMap((approved) => [
         ['task.created', 'user'],
@@ -52,22 +83,28 @@ describe('demo seed (#62)', () => {
       ['task.created', 'user'],
       ['task.score_approved', 'user'],
       ['task.agreed', 'user'],
+      // #44's week: six approved chores, then one pending completion per boy.
+      ...[...Array<boolean>(6).fill(true), false, false].flatMap((approved) =>
+        [
+          'task.created',
+          'task.score_approved',
+          'task.agreed',
+          'task.reserved',
+          'task.completed',
+          ...(approved ? ['task.approved'] : []),
+        ].map((action) => [action, 'user']),
+      ),
     ])
   })
 
   it('seeds a task in negotiation, a plain offer and one reserved to Starší, through the real actions', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
-    const all = listTasks(db)
+    // The offers; #44's done chores are checked in their own test below.
+    const all = listTasks(db).filter((t) => t.status === 'proposed' || t.status === 'reserved')
     expect(
       all.map((t) => [t.title, t.status, t.score, t.bids.map((b) => [b.name, b.score])]),
     ).toEqual([
-      ['Umýt okna v obýváku i v ložnici', 'open', 5, []],
-      ['Pověsit prádlo', 'confirmed', 25, []],
-      ['Umýt nádobí', 'confirmed', 30, []],
-      ['Vytřít podlahu v kuchyni', 'done_unconfirmed', 12, []],
-      ['Uklidit pokoj', 'confirmed', 25, []],
-      ['Vynést tříděný odpad', 'confirmed', 15, []],
       ['Vyluxovat celý obývák a chodbu', 'reserved', 8, []],
       ['Uklidit sklep', 'proposed', 10, []],
       [
@@ -79,19 +116,33 @@ describe('demo seed (#62)', () => {
           ['Starší', 25],
         ],
       ],
+      // Rejected (#45), so back to Mladší's reservation.
+      ['Vynést sklo a plasty do kontejneru', 'reserved', 4, []],
     ])
-    expect(all.find((t) => t.status === 'reserved')?.reservedBy?.name).toBe('Starší')
+    expect(all.find((t) => t.title.startsWith('Vyluxovat'))?.reservedBy?.name).toBe('Starší')
+    // #36: Táta's new price 12 waits for the brothers; the cancelled task keeps its reason.
+    expect(
+      listTasks(db).find((t) => t.title === 'Shrabat listí na zahradě')?.scoreChange,
+    ).toMatchObject({
+      score: 12,
+      waitingFor: [{ name: 'Starší' }, { name: 'Mladší' }],
+    })
+    const cancelled = db.select().from(auditLog).where(eq(auditLog.action, 'task.cancelled')).get()
+    expect(cancelled?.reason).toBe('Udělá to firma.')
   })
 
-  it('gives both brothers points (#40): Starší below spodní 50, Mladší past it, plus an open task', () => {
+  it('gives both brothers points (#40 + #44 week): confirmed and waiting, plus an open task', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     expect(takerPoints(db).takers.map((t) => [t.name, t.confirmed, t.pending])).toEqual([
-      ['Starší', 40, 12],
-      ['Mladší', 55, 0],
+      ['Starší', 260, 14],
+      ['Mladší', 152, 3],
     ])
     const open = listTasks(db).filter((t) => t.status === 'open')
-    expect(open.map((t) => [t.title, t.score])).toEqual([['Umýt okna v obýváku i v ložnici', 5]])
+    expect(open.map((t) => [t.title, t.score])).toEqual([
+      ['Umýt okna v obýváku i v ložnici', 5],
+      ['Shrabat listí na zahradě', 10],
+    ])
   })
 
   it('demo login works for every role', async () => {
@@ -228,6 +279,72 @@ describe('demo seed (#62)', () => {
     expect(db.select().from(users).all()).toHaveLength(0)
     expect(db.select().from(templates).all()).toHaveLength(0)
     expect(db.select().from(auditLog).all()).toHaveLength(0)
+  })
+
+  it('demo seed gives a meeting with 3 pending items and totals 160 / 102 (#40 + #44, #45 carry 8)', () => {
+    const db = createTestDb()
+    seedDemo(db, PREVIEW, T0)
+    // The roller starts the week at boot, right after the seed.
+    rollPeriods(db, new Date(T0.getTime() + 60_000), DEFAULT_PERIOD_DEFAULTS)
+    const meeting = getMeeting(db, new Date(T0.getTime() + 120_000))
+    if (!meeting.period) throw new Error('no meeting')
+    expect(meeting.pending.map((t) => [t.title, t.score, t.completedBy?.name])).toEqual([
+      ['Vytřít podlahu v kuchyni', 12, 'Starší'],
+      ['Zalít kytky', 2, 'Starší'],
+      ['Vynést tříděný', 3, 'Mladší'],
+    ])
+    expect(meeting.takers.map((t) => [t.name, t.total])).toEqual([
+      ['Starší', 160],
+      ['Mladší', 102],
+    ])
+  })
+
+  it('a settled past week (#45): records, the current week from the settle, one rejection', () => {
+    const db = createTestDb()
+    seedDemo(db, PREVIEW, T0)
+    const [past, current] = listPeriods(db)
+    if (!past || !current) throw new Error('no weeks')
+    expect(past.startsAt).toEqual(new Date(T0.getTime() - 7 * 86_400_000))
+    expect(current.startsAt).toEqual(past.endedAt)
+    expect(listPeriods(db)).toHaveLength(2)
+    const name = (id: number) => db.select().from(users).where(eq(users.id, id)).get()?.username
+    expect(
+      db
+        .select()
+        .from(settlements)
+        .all()
+        .map((r) => [r.periodId, name(r.takerId), r.totalBefore, r.level, r.deducted, r.carryOver]),
+    ).toEqual([
+      [past.id, 'starsi', 108, 'upper', 100, 8],
+      [past.id, 'mladsi', 50, 'lower', 50, 0],
+    ])
+    expect(
+      rejectionsSince(db, current.startsAt).map((r) => [
+        r.title,
+        r.score,
+        name(r.earnerId),
+        r.reason,
+      ]),
+    ).toEqual([
+      [
+        'Vynést sklo a plasty do kontejneru',
+        4,
+        'mladsi',
+        'Sklo zůstalo v tašce u dveří, vynes ho prosím až dolů do kontejneru.',
+      ],
+    ])
+  })
+
+  it('the audit log is in time order (#45)', () => {
+    const db = createTestDb()
+    seedDemo(db, PREVIEW, T0)
+    const at = db
+      .select({ at: auditLog.at })
+      .from(auditLog)
+      .orderBy(asc(auditLog.id))
+      .all()
+      .map((r) => r.at)
+    expect(at).toEqual([...at].sort())
   })
 
   it('a second boot seeds nothing more', () => {

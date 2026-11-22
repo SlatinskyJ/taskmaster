@@ -113,7 +113,7 @@ function insertPeriod(tx: Tx, span: PeriodSpan, cause: Cause, actor: Actor, now:
  * `now`), then one per cutoff that has passed, oldest first. Idempotent: returns `[]` when
  * nothing is due. One transaction, so a failed audit write leaves no period behind.
  */
-export function rollPeriods(db: Db, now: Date, defaults: PeriodDefaults): Period[] {
+export function rollPeriods(db: Db | Tx, now: Date, defaults: PeriodDefaults): Period[] {
   return db.transaction((tx) => {
     const system: Actor = { kind: 'system' }
     const created: Period[] = []

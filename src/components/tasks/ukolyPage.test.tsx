@@ -53,6 +53,7 @@ const task = (id: number, title: string, over: Partial<TaskView>): TaskView => (
   completedAt: null,
   earnerId: null,
   waitingFor: [],
+  scoreChange: null,
   ...over,
 })
 

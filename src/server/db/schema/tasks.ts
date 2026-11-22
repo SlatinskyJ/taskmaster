@@ -154,3 +154,62 @@ export const taskThread = sqliteTable(
 )
 
 export type ThreadRow = typeof taskThread.$inferSelect
+
+/** How a score change of an agreed task closed (spec §5.2; saying no: Jakub 2026-11-21). */
+export const SCORE_CHANGE_CLOSINGS = ['agreed', 'declined', 'withdrawn', 'discarded'] as const
+
+/**
+ * A proposed new score for an agreed one-time task (spec §5.2 "Changing the score…"). At most
+ * one open per task; the old score stays in `tasks.score` until it closes `agreed`. Never
+ * deleted: it closes as agreed, declined, withdrawn (by its proposer) or discarded (the task
+ * left open/reserved). Approvals are `task_score_change_approvals`.
+ */
+export const taskScoreChanges = sqliteTable(
+  'task_score_changes',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    taskId: integer('task_id')
+      .notNull()
+      .references(() => tasks.id),
+    score: integer('score').notNull(),
+    proposedBy: integer('proposed_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: text('created_at').notNull(),
+    /** Null while open. */
+    closedAt: text('closed_at'),
+    closedAs: text('closed_as', { enum: SCORE_CHANGE_CLOSINGS }),
+    /** Who closed it; null when nobody did by hand. */
+    closedBy: integer('closed_by').references(() => users.id),
+  },
+  (t) => [
+    check('task_score_changes_score_check', sql`${t.score} >= 1`),
+    check(
+      'task_score_changes_closed_check',
+      sql`(${t.closedAt} IS NULL AND ${t.closedAs} IS NULL) OR (${t.closedAt} IS NOT NULL AND ${t.closedAs} IS NOT NULL AND ${t.closedAs} IN ('agreed', 'declined', 'withdrawn', 'discarded'))`,
+    ),
+    uniqueIndex('task_score_changes_open_idx')
+      .on(t.taskId)
+      .where(sql`closed_at IS NULL`),
+    index('task_score_changes_task_idx').on(t.taskId),
+  ],
+)
+
+export type TaskScoreChangeRow = typeof taskScoreChanges.$inferSelect
+
+/** Who said yes to which score change. The proposer's row is written with it. Append-only. */
+export const taskScoreChangeApprovals = sqliteTable(
+  'task_score_change_approvals',
+  {
+    changeId: integer('change_id')
+      .notNull()
+      .references(() => taskScoreChanges.id),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id),
+    approvedAt: text('approved_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.changeId, t.userId] })],
+)
+
+export type TaskScoreChangeApprovalRow = typeof taskScoreChangeApprovals.$inferSelect

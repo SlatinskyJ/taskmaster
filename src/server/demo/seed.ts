@@ -1,14 +1,21 @@
 import { hashSync } from '@node-rs/argon2'
+import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import type { Db } from '~/server/db'
 import { users } from '~/server/db/schema'
 import {
   acceptOffer,
   approveTask,
   approveTaskOffer,
+  cancelTask,
   completeTask,
   createTask,
   placeBid,
+  proposeTaskScoreChange,
+  rejectTask,
+  reserveTask,
 } from '~/server/tasks'
+import { listPeriods, rollPeriods } from '~/server/periods'
+import { getMeeting, settlePeriod } from '~/server/settlement/meeting'
 import type { Tx } from '~/server/audit'
 import { approveTemplateScoreIn, createTemplateIn } from '~/server/templates/templates'
 import type { NewTemplate } from '~/server/templates/templates'
@@ -30,7 +37,9 @@ import type { NewUser } from '~/server/users'
 // template, an open period, a past settlement), in the same transaction, through the real
 // actions. So far (#34): "Umýt auto" in negotiation (Táta offers 18, Starší bids 25, Mladší 22)
 // and "Uklidit sklep", a plain offer of 10 with no bids. #40: done and confirmed tasks for both
-// brothers' points, and an open task (see seedPoints).
+// brothers' points, and an open task (see seedPoints). #44: a week of done chores, so the
+// meeting has something to approve (3 items with #40's) and to settle. #45: a settled past
+// week before all that (Historie), carrying 8 to Starší, and one rejection.
 
 /** Known on purpose: previews are tailnet-only and hold no real data. Never used in production. */
 export const DEMO_PASSWORD = 'demo1234'
@@ -65,8 +74,10 @@ export function seedDemo(
       return { kind: 'skipped', reason: 'not_empty' } as const
     }
     const ids = new Map<string, number>()
+    // The family exists from the past week's start, so the audit log reads in time order.
+    const start = new Date(now.getTime() - PAST_WEEK_MS)
     for (const person of DEMO_USERS) {
-      const created = createUser(tx, { kind: 'system' }, { ...person, passwordHash }, now)
+      const created = createUser(tx, { kind: 'system' }, { ...person, passwordHash }, start)
       if (!created.ok)
         throw new Error(`Demo seed: cannot create "${person.username}": ${created.error}`)
       ids.set(person.username, created.value.id)
@@ -76,6 +87,7 @@ export function seedDemo(
       if (!r.ok) throw new Error(`Demo seed: ${what}: ${r.error}`)
       return r.value
     }
+    seedPastWeek(tx, id, start, now)
     const car = step(
       'offer "Umýt auto"',
       createTask(tx, id('tata'), { title: 'Umýt auto', score: 18, approvalRequired: true }, now),
@@ -104,8 +116,33 @@ export function seedDemo(
     )
     step('bid 10', placeBid(tx, id('starsi'), vacuum.id, 10, now))
     step('take 8', acceptOffer(tx, id('starsi'), vacuum.id, 8, now))
+    // #36: an open task with Táta's new price waiting for the brothers, and a cancelled one
+    // with its reason in the history.
+    const rake = step(
+      'offer "Shrabat listí na zahradě"',
+      createTask(
+        tx,
+        id('tata'),
+        { title: 'Shrabat listí na zahradě', score: 10, approvalRequired: true },
+        now,
+      ),
+    )
+    step('agree 10', approveTaskOffer(tx, id('mladsi'), rake.id, 10, now))
+    step('new price 12', proposeTaskScoreChange(tx, id('tata'), rake.id, 12, now))
+    const windows = step(
+      'offer "Umýt okna v kuchyni"',
+      createTask(
+        tx,
+        id('tata'),
+        { title: 'Umýt okna v kuchyni', score: 6, approvalRequired: true },
+        now,
+      ),
+    )
+    step('agree 6', approveTaskOffer(tx, id('starsi'), windows.id, 6, now))
+    step('cancel', cancelTask(tx, id('tata'), windows.id, 'Udělá to firma.', now))
     seedPoints(tx, id, step, now)
     seedTemplates(tx, ids, now)
+    seedWeek(tx, id, now)
     return { kind: 'seeded', usernames: DEMO_USERS.map((u) => u.username) } as const
   })
 }
@@ -177,6 +214,104 @@ function seedTemplates(tx: Tx, ids: Map<string, number>, now: Date): void {
   if (!bid.ok) throw new Error(`Demo seed: bid on "${dishes.title}": ${bid.error}`)
   const offer = counterOnTemplateIn(tx, tata, dishes.id, 4, now)
   if (!offer.ok) throw new Error(`Demo seed: offer on "${dishes.title}": ${offer.error}`)
+}
+
+const HOUR = 3_600_000
+const PAST_WEEK_MS = 7 * 24 * HOUR
+
+/** Last week (#45), settled: Starší 108 → horní, 100 off, 8 carried; Mladší 50 → spodní, 0. */
+const DEMO_PAST_WEEK: readonly { by: string; title: string; score: number }[] = [
+  { by: 'starsi', title: 'Vytřít podlahu', score: 60 },
+  { by: 'starsi', title: 'Uklidit garáž', score: 48 },
+  { by: 'mladsi', title: 'Nakrmit kočku', score: 50 },
+]
+
+/** One chore done and approved at `at`, through the real actions. */
+function doChore(tx: Tx, tata: number, boy: number, title: string, score: number, at: Date) {
+  const fail = (error: string) => new Error(`Demo seed: "${title}": ${error}`)
+  const made = createTask(tx, tata, { title, score, approvalRequired: true }, at)
+  if (!made.ok) throw fail(made.error)
+  for (const r of [
+    approveTaskOffer(tx, boy, made.value.id, score, at),
+    reserveTask(tx, boy, made.value.id, at),
+    completeTask(tx, boy, made.value.id, at),
+  ]) {
+    if (!r.ok) throw fail(r.error)
+  }
+  return made.value.id
+}
+
+/**
+ * The settled past week (#45), so Týden → Historie has a record: the first period starts at
+ * `start` (a week ago), three chores are done in it, and Táta settles it an hour before its
+ * cutoff or an hour ago, whichever is first. That starts this week. Then Táta rejects one of
+ * Mladší's chores in this week, so Týden shows a rejection. All through the real actions.
+ */
+function seedPastWeek(tx: Tx, id: (username: string) => number, start: Date, now: Date): void {
+  const tata = id('tata')
+  rollPeriods(tx, start, DEFAULT_PERIOD_DEFAULTS)
+  DEMO_PAST_WEEK.forEach((chore, i) => {
+    const at = new Date(start.getTime() + (i + 1) * HOUR)
+    const task = doChore(tx, tata, id(chore.by), chore.title, chore.score, at)
+    const approved = approveTask(tx, tata, task, at)
+    if (!approved.ok) throw new Error(`Demo seed: approve "${chore.title}": ${approved.error}`)
+  })
+  const week = listPeriods(tx)[0]
+  if (!week) throw new Error('Demo seed: no past week')
+  const settleAt = new Date(Math.min(week.cutoffAt.getTime() - HOUR, now.getTime() - HOUR))
+  const meeting = getMeeting(tx, settleAt)
+  if (!meeting.period) throw new Error('Demo seed: nothing to settle')
+  const shown = meeting.takers.map((t) => ({ takerId: t.id, total: t.total }))
+  const settled = settlePeriod(tx, tata, week.id, shown, settleAt, DEFAULT_PERIOD_DEFAULTS)
+  if (!settled.ok) throw new Error(`Demo seed: settle: ${settled.error}`)
+  const rejectAt = new Date(now.getTime() - HOUR / 2)
+  const glass = doChore(tx, tata, id('mladsi'), 'Vynést sklo a plasty do kontejneru', 4, rejectAt)
+  const rejected = rejectTask(
+    tx,
+    tata,
+    glass,
+    'Sklo zůstalo v tašce u dveří, vynes ho prosím až dolů do kontejneru.',
+    rejectAt,
+  )
+  if (!rejected.ok) throw new Error(`Demo seed: reject "Vynést sklo": ${rejected.error}`)
+}
+
+/** Done this week (#44): approved, so they count, except the last one of each boy. */
+const DEMO_WEEK: readonly { by: string; title: string; score: number; approved: boolean }[] = [
+  { by: 'starsi', title: 'Uklidit koupelnu', score: 40, approved: true },
+  { by: 'starsi', title: 'Posekat trávu', score: 50, approved: true },
+  { by: 'starsi', title: 'Vysát auto', score: 22, approved: true },
+  { by: 'mladsi', title: 'Uklidit pokoj', score: 25, approved: true },
+  { by: 'mladsi', title: 'Zamést terasu', score: 12, approved: true },
+  { by: 'mladsi', title: 'Vynést papír', score: 10, approved: true },
+  { by: 'starsi', title: 'Zalít kytky', score: 2, approved: false },
+  { by: 'mladsi', title: 'Vynést tříděný', score: 3, approved: false },
+]
+
+function seedWeek(tx: Tx, id: (username: string) => number, now: Date): void {
+  const tata = id('tata')
+  for (const chore of DEMO_WEEK) {
+    const boy = id(chore.by)
+    const fail = (what: string, error: string) =>
+      new Error(`Demo seed: ${what} "${chore.title}": ${error}`)
+    const made = createTask(
+      tx,
+      tata,
+      { title: chore.title, score: chore.score, approvalRequired: true },
+      now,
+    )
+    if (!made.ok) throw fail('offer', made.error)
+    const steps = [
+      () => approveTaskOffer(tx, boy, made.value.id, chore.score, now),
+      () => reserveTask(tx, boy, made.value.id, now),
+      () => completeTask(tx, boy, made.value.id, now),
+      ...(chore.approved ? [() => approveTask(tx, tata, made.value.id, now)] : []),
+    ]
+    for (const step of steps) {
+      const r = step()
+      if (!r.ok) throw fail('step', r.error)
+    }
+  }
 }
 
 export function describeDemo(outcome: DemoOutcome): string | null {

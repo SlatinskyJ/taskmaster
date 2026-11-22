@@ -5,6 +5,7 @@ import { auditLog, tasks, taskScoreApprovals, users } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import {
   approveTask,
+  cancelTask,
   completeTask,
   REASON_MAX,
   rejectTask,
@@ -358,5 +359,101 @@ describe('board and approval lists', () => {
       [earlier, 'Mladší'],
       [later, 'Starší'],
     ])
+  })
+})
+
+describe('cancel (spec §5.6 [call])', () => {
+  it('a giver cancels a proposed task: its thread closes', () => {
+    const f = family()
+    const id = must(
+      createTask(f.db, f.tata, { title: 'Vysát obývák', score: 10, approvalRequired: true }, T0),
+    ).id
+    expect(must(cancelTask(f.db, f.tata, id, undefined, T1)).status).toBe('cancelled')
+    expect(threadOf(f.db, id).map((e) => e.closedAs)).toEqual(['closed'])
+  })
+
+  it('a giver cancels an open and a reserved task; the reason is logged, blank is none', () => {
+    const f = family()
+    const open = openTask(f)
+    must(cancelTask(f.db, f.tata, open, '   ', T1))
+    expect(lastAudit(f.db)).toMatchObject({ action: 'task.cancelled', reason: null })
+    const reserved = openTask(f)
+    must(reserveTask(f.db, f.starsi, reserved, T1))
+    expect(must(cancelTask(f.db, f.tata, reserved, ' Už to udělala máma. ', T2))).toMatchObject({
+      status: 'cancelled',
+      reservedBy: null,
+    })
+    expect(lastAudit(f.db)).toMatchObject({
+      action: 'task.cancelled',
+      actorUserId: f.tata,
+      reason: 'Už to udělala máma.',
+    })
+    expect(json(lastAudit(f.db)?.before)).toMatchObject({
+      status: 'reserved',
+      reservedBy: f.starsi,
+    })
+  })
+
+  it('a taker and the admin cannot cancel', () => {
+    const f = family()
+    const id = openTask(f)
+    expect(cancelTask(f.db, f.starsi, id, undefined, T1)).toEqual({
+      ok: false,
+      error: 'not_a_giver',
+    })
+    expect(cancelTask(f.db, f.admin, id, undefined, T1)).toEqual({
+      ok: false,
+      error: 'not_a_giver',
+    })
+  })
+
+  it('done, confirmed and cancelled tasks cannot be cancelled', () => {
+    const f = family()
+    const done = openTask(f)
+    must(completeTask(f.db, f.starsi, done, T1))
+    expect(cancelTask(f.db, f.tata, done, undefined, T2)).toEqual({
+      ok: false,
+      error: 'wrong_state',
+    })
+    must(approveTask(f.db, f.tata, done, T2))
+    expect(cancelTask(f.db, f.tata, done, undefined, T2)).toEqual({
+      ok: false,
+      error: 'wrong_state',
+    })
+    const id = openTask(f)
+    must(cancelTask(f.db, f.tata, id, undefined, T1))
+    expect(cancelTask(f.db, f.tata, id, undefined, T2)).toEqual({
+      ok: false,
+      error: 'wrong_state',
+    })
+  })
+
+  it('a reason of exactly REASON_MAX is kept, one more is refused', () => {
+    const f = family()
+    const id = openTask(f)
+    expect(cancelTask(f.db, f.tata, id, 'x'.repeat(REASON_MAX + 1), T1)).toEqual({
+      ok: false,
+      error: 'reason_too_long',
+    })
+    must(cancelTask(f.db, f.tata, id, 'x'.repeat(REASON_MAX), T1))
+    expect(lastAudit(f.db)?.reason).toHaveLength(REASON_MAX)
+  })
+
+  it('a cancelled task leaves the board and cannot be done', () => {
+    const f = family()
+    const id = openTask(f)
+    must(reserveTask(f.db, f.starsi, id, T1))
+    must(cancelTask(f.db, f.tata, id, undefined, T1))
+    expect(completeTask(f.db, f.starsi, id, T2)).toEqual({ ok: false, error: 'wrong_state' })
+    expect(listBoard(f.db).map((t) => t.id)).not.toContain(id)
+  })
+
+  it('a failed audit write rolls the cancel back', () => {
+    const f = family()
+    const id = openTask(f)
+    must(reserveTask(f.db, f.starsi, id, T1))
+    failAuditOn(f.db, 'task.cancelled')
+    expect(() => cancelTask(f.db, f.tata, id, undefined, T2)).toThrow(/audit down/)
+    expect(row(f.db, id)).toMatchObject({ status: 'reserved', reservedBy: f.starsi })
   })
 })

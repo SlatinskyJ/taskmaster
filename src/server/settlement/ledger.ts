@@ -1,4 +1,5 @@
 import { and, eq, isNotNull, lt } from 'drizzle-orm'
+import { runningTotal } from '~/domain'
 import type { LedgerEntry } from '~/domain'
 import { toIsoUtc } from '~/domain/dates'
 import type { Tx } from '~/server/audit'
@@ -38,4 +39,32 @@ export function ledgerEntries(db: Db | Tx, until?: Date): LedgerEntry[] {
     entries.push({ kind: 'settlement', takerId: s.takerId, deducted: s.deducted })
   }
   return entries
+}
+
+/**
+ * Each taker's points now (spec §5.7): confirmed = the running total (carry-over + confirmed
+ * since), pending = the scores done and waiting for a giver, keyed by earner. Takers with neither
+ * are missing from the map (read as 0). The one points read: Týden uses it, and #162's Domů
+ * should too (#172).
+ */
+export function takerPointsNow(db: Db | Tx): Map<number, { confirmed: number; pending: number }> {
+  const entries = ledgerEntries(db)
+  const out = new Map<number, { confirmed: number; pending: number }>()
+  const at = (id: number) => {
+    let p = out.get(id)
+    if (!p) {
+      p = { confirmed: runningTotal(entries, id), pending: 0 }
+      out.set(id, p)
+    }
+    return p
+  }
+  for (const e of entries) at(e.takerId)
+  for (const t of db
+    .select({ earnerId: tasks.earnerId, score: tasks.score })
+    .from(tasks)
+    .where(and(eq(tasks.status, 'done_unconfirmed'), isNotNull(tasks.earnerId)))
+    .all()) {
+    if (t.earnerId !== null) at(t.earnerId).pending += t.score
+  }
+  return out
 }

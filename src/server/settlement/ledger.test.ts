@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { runningTotal } from '~/domain'
 import { settlements } from '~/server/db/schema'
-import { ledgerEntries } from './ledger'
+import { ledgerEntries, takerPointsNow } from './ledger'
 import { doneTask, plus, reservedTask, SAT, week } from './testing'
 
 describe('ledgerEntries', () => {
@@ -55,5 +55,60 @@ describe('ledgerEntries', () => {
     })
     expect(runningTotal(ledgerEntries(f.db, until), f.starsi)).toBe(4)
     expect(runningTotal(ledgerEntries(f.db), f.starsi)).toBe(7)
+  })
+})
+
+describe('takerPointsNow', () => {
+  it('confirmed is the running total, pending the waiting scores by earner', () => {
+    const f = week()
+    doneTask(f, { score: 60, completedAt: plus(SAT, 1000), earner: f.starsi })
+    doneTask(f, { score: 25, completedAt: plus(SAT, 1000), earner: f.mladsi })
+    f.db
+      .insert(settlements)
+      .values({
+        periodId: f.p1.id,
+        takerId: f.starsi,
+        totalBefore: 60,
+        level: 'lower',
+        deducted: 50,
+        carryOver: 10,
+        settledBy: f.tata,
+        settledAt: plus(SAT, 5000).toISOString(),
+      })
+      .run()
+    doneTask(f, {
+      score: 9,
+      completedAt: plus(SAT, 2000),
+      earner: f.starsi,
+      status: 'done_unconfirmed',
+    })
+    doneTask(f, {
+      score: 2,
+      completedAt: plus(SAT, 2000),
+      earner: f.starsi,
+      status: 'done_unconfirmed',
+    })
+    doneTask(f, {
+      score: 3,
+      completedAt: plus(SAT, 2000),
+      earner: f.mladsi,
+      status: 'done_unconfirmed',
+    })
+    reservedTask(f, f.starsi, 7)
+    const points = takerPointsNow(f.db)
+    expect(points.get(f.starsi)).toEqual({ confirmed: 10, pending: 11 })
+    expect(points.get(f.mladsi)).toEqual({ confirmed: 25, pending: 3 })
+    expect(points.get(f.tata)).toBeUndefined()
+  })
+
+  it('a taker with only pending points has confirmed 0', () => {
+    const f = week()
+    doneTask(f, {
+      score: 5,
+      completedAt: plus(SAT, 2000),
+      earner: f.mladsi,
+      status: 'done_unconfirmed',
+    })
+    expect(takerPointsNow(f.db).get(f.mladsi)).toEqual({ confirmed: 0, pending: 5 })
   })
 })

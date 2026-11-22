@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { fail, ok } from '~/domain/result'
 import type { TaskRow } from '~/server/db/schema'
-import { answered, parseAcceptBid, parseCounter } from './functions'
+import {
+  answered,
+  parseAcceptBid,
+  parseChangeAnswer,
+  parseChangeProposal,
+  parseCounter,
+  parseReject,
+} from './functions'
 
 // Input checks of the bidding server functions (Security: no empty, huge or repeated bidders
 // list, no score above TASK_SCORE_MAX).
@@ -68,5 +75,28 @@ describe('answered (what every task action returns to a screen)', () => {
   )
   it('a refusal passes through unchanged', () => {
     expect(answered(fail('offer_changed'))).toEqual({ ok: false, error: 'offer_changed' })
+  })
+})
+
+describe('price change and cancel inputs', () => {
+  it('takes whole ids, a score up to 999 and an optional reason', () => {
+    expect(parseChangeAnswer({ taskId: 1, changeId: 2 })).toEqual({ taskId: 1, changeId: 2 })
+    expect(parseChangeProposal({ taskId: 1, score: 999 })).toEqual({ taskId: 1, score: 999 })
+    expect(parseReject({ taskId: 1 })).toEqual({ taskId: 1, reason: undefined })
+    expect(parseReject({ taskId: 1, reason: 'Udělá to firma.' })).toEqual({
+      taskId: 1,
+      reason: 'Udělá to firma.',
+    })
+  })
+  it.each([
+    [parseChangeAnswer, { taskId: 1, changeId: 2.5 }],
+    [parseChangeAnswer, { taskId: '1', changeId: 2 }],
+    [parseChangeAnswer, { taskId: 1 }],
+    [parseChangeProposal, { taskId: 1, score: '20' }],
+    [parseChangeProposal, { taskId: 1, score: 1000 }],
+    [parseReject, { taskId: 1, reason: 5 }],
+    [parseReject, null],
+  ])('refuses bad input %#', (parse, input) => {
+    expect(() => parse(input)).toThrow('Invalid input')
   })
 })
