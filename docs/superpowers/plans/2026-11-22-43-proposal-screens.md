@@ -28,6 +28,9 @@
 - `periodProposals` off means no entry point anywhere, and both new routes redirect to `/tyden`. The server already answers `feature_off`.
 - Dates are Prague wall clock through `src/domain/dates.ts` only.
 - Every new route is added to `APP_PATHS` and `SCREEN_ROLES` in `src/lib/nav.ts`.
+- **Next week starts at `next.startsAt`** (= the running week's cutoff, or its end when settled early), which the server computes. Every date on these screens (the form's end, the length, "Platí od", the deadline) is counted from there, never from `running.startsAt`. The browser never computes the default next week; it shows the server's `next` span.
+- **Period agreement wording:** every taker plus one giver. The Czech text says "všichni kluci a jeden rodič", never "všichni".
+- Day counts use the Czech plural `cs.proposals.days(n)`: 1 den, 2–4 dny, 5+ dní.
 
 ## Review Focus
 
@@ -53,6 +56,9 @@
     defaults: ProposalView<PeriodDefaults> | null                    // as now
     /** The running week, or null before the first roll. */
     running: { startsAt: string; cutoffAt: string; levels: Levels } | null
+    /** Next week as it starts now: the domain's `nextPeriod(running, currentDefaults, agreed)`
+     *  (the agreed change if there is one, else the default week). Null when `running` is. */
+    next: { startsAt: string; cutoffAt: string; levels: Levels } | null
     /** The stored default week (what next week gets without a change). */
     currentDefaults: PeriodDefaults
     /** Every active taker and giver, by id: who the screens name. No admin, no usernames. */
@@ -62,9 +68,10 @@
 
 - [ ] **Step 1: Failing tests.**
   - `proposalsView` pins `running` (ISO strings), `currentDefaults` equal to `getPeriodDefaults`, and `parties` = Táta, Starší, Mladší with no admin, using `toEqual` on the whole object so no extra field slips in.
-  - Before the first roll, `running` is null.
+  - `next`: with nothing agreed, it equals `nextPeriod(running, defaults, null)` (starts at the running cutoff, default cutoff and levels). With an agreed change, it is that change's cutoff and levels.
+  - Before the first roll, `running` and `next` are null.
 - [ ] **Step 2:** Run `npx vitest run src/server/periods/proposals.test.ts`. Expected: FAIL (missing fields).
-- [ ] **Step 3:** Implement. `parties` comes from `listPeople` (active takers and givers, `displayName`), sorted by id.
+- [ ] **Step 3:** Implement. `parties` gets its own query on `users` (`id`, `displayName`, `role`, filtered to active takers and givers, sorted by id), not `listPeople`, which has no names. `next` calls the domain's `nextPeriod` with `agreedProposalFor`.
 - [ ] **Step 4:** Run it again. Expected: PASS. Also run `npx vitest run src/server/periods` (function tests pin the handler shape).
 - [ ] **Step 5:** Commit "Proposals view: the running week, the defaults and the parties".
 
@@ -75,22 +82,25 @@
 - Test: `src/components/proposals/proposalView.test.ts`
 
 **Interfaces:**
-- Consumes: `ProposalsView` (Task 1); `addPragueDays`, `fromPragueWallTime`, `toPragueWallTime` from `~/domain/dates`; `MAX_LENGTH_DAYS`; `LEVEL_MAX`.
+- Consumes: `ProposalsView` (Task 1); `addPragueDays`, `fromPragueWallTime`, `toPragueWallTime` from `~/domain/dates`; `MAX_LENGTH_DAYS`; `LEVEL_MAX`; `toTime`, `fromTime`, `setLower`, `setUpper` from `src/components/admin/defaultWeekForm.ts`. `setLower` and `setUpper` become generic over `{ levels: Levels }` so both forms share one clamp; the Správa tests stay as they are.
 - Produces:
   ```ts
   export interface NextWeekForm { lengthDays: number; hour: number; minute: number; levels: Levels }
-  /** Next week's cutoff: the Prague date of `startsAt` plus `lengthDays`, at hour:minute. */
-  export function nextWeekCutoff(startsAt: Date, f: NextWeekForm): Date
-  /** The form's start values: the default length, the default cutoff time, the default levels. */
-  export function initialNextWeek(defaults: PeriodDefaults): NextWeekForm
+  /** Next week's cutoff: the Prague date of `next.startsAt` plus `lengthDays`, at hour:minute. */
+  export function nextWeekCutoff(nextStartsAt: Date, f: NextWeekForm): Date
+  /** The form's start values, from the server's `next` span: its length in days, its cutoff
+   *  time and its levels. No default-cutoff rule in the browser. */
+  export function initialNextWeek(next: { startsAt: Date; cutoffAt: Date; levels: Levels }): NextWeekForm
   export function stepDays(f: NextWeekForm, by: 1 | -1): NextWeekForm // 1 … MAX_LENGTH_DAYS
-  export function setNextLower(f: NextWeekForm, n: number): NextWeekForm
-  export function setNextUpper(f: NextWeekForm, n: number): NextWeekForm
+  /** False when the cutoff would pass `addPragueDays(nextStartsAt, MAX_LENGTH_DAYS)` (364 days
+   *  with an end time later than the start's); the form disables "Navrhnout všem" and says why. */
+  export function withinCap(nextStartsAt: Date, f: NextWeekForm): boolean
   /** Whole Prague days between two instants (for "7 dní" on the proposal card). */
   export function lengthInDays(startsAt: Date, cutoffAt: Date): number
-  export type MyTurn = 'approve' | 'withdraw' | 'none'
-  /** approve: I'm in waitingFor; withdraw: I proposed it and it is pending; else none. */
-  export function myTurn(p: ProposalView<unknown>, me: number): MyTurn
+  /** The buttons I get on a pending proposal: approve when I'm in waitingFor; reject for every
+   *  party but the proposer while pending ([call] one no ends it, the server accepts it from any
+   *  party); withdraw for the proposer. Nothing on an agreed one. */
+  export function myActions(p: ProposalView<unknown>, me: number): { approve: boolean; reject: boolean; withdraw: boolean }
   /** Rows for "who agreed": every party, ✓ when approved, "čeká" when in waitingFor; a giver
    *  who need not approve (another giver already did) is left out. */
   export function agreementRows(p: ProposalView<unknown>, parties: ProposalsView['parties']): { id: number; name: string; agreed: boolean }[]
@@ -103,13 +113,18 @@
     - across the DST change (start Sun 22 Mar 2026 23:59, length 7) → Sun 29 Mar 23:59 Prague;
     - length 1 → the next day.
   - `stepDays` stops at 1 and at 364.
-  - `setNextLower(…, LEVEL_MAX + 5)` gives `LEVEL_MAX` and pushes upper up; `setNextUpper` below lower gives lower.
-  - `myTurn`:
-    - proposer pending → withdraw;
-    - in waitingFor → approve;
-    - agreed → none;
-    - not involved → none.
-  - `agreementRows`:
+  - `nextWeekCutoff` counts from `next.startsAt`: with next starting Sun 29 Nov 23:59 and length 7 at 23:59, the result is exactly `'2026-12-06T22:59:00.000Z'` (a fixed ISO string, not recomputed).
+  - `initialNextWeek` from a `next` that starts on a Wednesday 23:59 and ends on Sunday 23:59 → length 4, 23:59.
+  - `withinCap`: 364 days at the start's time → true; 364 days one minute later → false.
+  - `lengthInDays` over the DST change (22 Mar → 29 Mar 2026) is 7, not 6 or 8.
+  - `setLower`/`setUpper` with `{ levels }`: `LEVEL_MAX + 5` gives `LEVEL_MAX` and pushes upper up; upper below lower gives lower.
+  - `myActions`, compared as whole objects:
+    - proposer pending → `{ approve: false, reject: false, withdraw: true }`;
+    - in waitingFor → approve and reject;
+    - approved already (not in waitingFor, not the proposer) → reject only;
+    - a second giver after one giver approved → reject only;
+    - agreed, with the proposer as `me` → all false.
+  - `agreementRows`, compared as the whole list (ids, names, agreed):
     - with two givers and Táta approved, Máma is not listed;
     - with no giver approved, both givers show "čeká".
   - `waitingProposals` lists `period` only when `me` is in its waitingFor, and the same for `defaults`.
@@ -122,30 +137,46 @@
 
 **Files:**
 - Modify: `src/lib/strings.ts` (block `cs.proposals`); `src/lib/nav.ts` (`/tyden/pristi` taker+giver, `/tyden/vychozi` giver); `src/lib/nav.test.ts`
-- Create: `src/components/proposals/NextWeekScreen.tsx` (pure `NextWeekView` + stateful wrapper); `src/components/proposals/ProposalCard.tsx`; `src/components/proposals/NextWeekForm.tsx`; `src/routes/_app/tyden/pristi.tsx` (and move `tyden.tsx` to `tyden/index.tsx` if the router needs it for nesting; `routeTree.gen.ts` regenerates)
+- Create: `src/components/proposals/NextWeekScreen.tsx` (pure `NextWeekView` + stateful wrapper); `src/components/proposals/ProposalCard.tsx`; `src/components/proposals/NextWeekForm.tsx`; `src/routes/_app/tyden/pristi.tsx`
+- Move: `src/routes/_app/tyden.tsx` → `src/routes/_app/tyden/index.tsx`, as `ukoly/` does (it has no `<Outlet/>`, so the nested route needs it); `tydenPage.test.tsx` imports the new path; `routeTree.gen.ts` regenerates.
 - Test: `src/components/proposals/nextWeek.test.tsx`; `src/components/proposals/pristiPage.test.tsx` (route component outside `src/routes`, per the project rule)
 
 **Interfaces:**
 - Consumes: Task 1 and Task 2; `getProposalsFn`, `proposePeriodFn`, `approveProposalFn`, `rejectProposalFn` and `withdrawProposalFn` from `~/server/periods/proposalFunctions`; `ScoreStepper`; `Dialog`; `toast`.
-- Produces: `ProposalCard({ kind, proposal, parties, me, busy, onApprove, onReject, onWithdraw, old })`, reused by Task 4.
+- Produces: `ProposalCard({ kind, proposal, parties, me, busy, onApprove, onReject, onWithdraw, old })`, reused by Task 4. The card calls `onApprove`, `onReject` and `onWithdraw`, and the screen binds each one to its server function with the card's own `{ kind, id }`.
 
-Screen content (UI doc Period artboard):
+Screen: title "Příští týden", back button to `/tyden` (`Screen back`). Content (UI doc Period artboard):
 1. The "Tento týden" card: dates (`weekLabel`), the chip "Zamčeno", and levels.
 2. Section "Návrh na příští týden": a `ProposalCard` showing:
-   - next week's dates, length in days, and levels as old (struck through) → new;
+   - the chip "Návrh od <name>" (proposer from `parties`; violet `proposed` state);
+   - next week's dates (from `next.startsAt`), length in days, and levels. "Old" is the default week that next week would get without the change (`currentDefaults` levels and the default length), struck through, next to the proposed value. A value that doesn't change shows once.
    - the "who agreed" rows;
-   - buttons for `myTurn`: Souhlasím (ok) and Nesouhlasím (asks first in a Dialog), or Stáhnout návrh (also asks first);
-   - an agreed proposal shows a "Dohodnuto" chip and "Platí od <start>", with no buttons.
-3. The note "Změna platí, jen když souhlasí všichni před začátkem týdne. Jinak zůstane <defaults>."
-4. With no open next-week proposal: the button "Navrhnout jinak" opens `NextWeekForm` in place. It holds:
-   - a length stepper;
+   - buttons from `myActions`: Souhlasím (ok), Nesouhlasím and Stáhnout návrh. The last two ask first in a Dialog:
+     - Nesouhlasím: title "Nesouhlasit s návrhem?", text "Návrh tím skončí pro všechny. Kdo chce změnu, musí navrhnout znovu.", buttons "Nesouhlasím" (danger) and "Zpět";
+     - Stáhnout návrh: title "Stáhnout návrh?", text "Návrh zmizí. Příští týden bude podle výchozího týdne.", buttons "Stáhnout" and "Zpět".
+   - an agreed proposal shows a "Dohodnuto" chip and "Platí od <next.startsAt>", with no buttons.
+3. The note "Změna platí, jen když souhlasí všichni kluci a jeden rodič do <next.startsAt as 'ne 29. 11. 23:59'>. Jinak bude příští týden <length> a <lower> / <upper>." (the default week's values).
+4. With no open next-week proposal: the button "Navrhnout jinak" opens `NextWeekForm` in place, starting from `initialNextWeek(next)`. It holds:
+   - a length stepper in days ("Kratší" / "Delší", Czech plural), stopping at 1 and `MAX_LENGTH_DAYS`;
    - an end time input;
-   - two `ScoreStepper`s;
+   - a live line "Konec: <weekday> <date> <time>" from `nextWeekCutoff`, so the end date shows before sending;
+   - two `ScoreStepper`s for the levels;
+   - when `withinCap` is false: the line "Takhle dlouhý týden nejde, zkrať ho." and the send button disabled;
    - "Navrhnout všem" (busy label "Posílám…"), plus "Zrušit".
 5. Section "Návrh výchozího týdne", when one is pending: a `ProposalCard` (kind `defaults`) with length, end weekday and time, and levels, old → new.
 6. Giver only: the link "Výchozí týden (rodiče) ›" to `/tyden/vychozi`.
 
-Errors: each refusal code maps to a Czech message through one `proposalErrorMessage(code)`, shown in a `role="alert"` line or a toast. A thrown error shows the generic "Nepovedlo se. Zkus to znovu."; the form keeps its values, so the same button is the retry. After success: `router.invalidate()`.
+Errors: each refusal code maps to a Czech message through one `proposalErrorMessage(code)`, shown in a `role="alert"` line under the card or form:
+- `already_started`: "Příští týden už začal, návrh už neplatí."
+- `proposal_pending`: "Návrh už existuje. Obnov stránku."
+- `already_agreed`: "Změna už je dohodnutá."
+- `invalid_settings`: "Takhle to nejde: zkontroluj délku a hranice."
+- `not_pending`, `not_found`: "Návrh už neplatí. Obnov stránku."
+- `not_proposer`, `not_a_party`, `not_a_giver`, `feature_off`: "Na tohle nemáš právo."
+- `no_running_period`: "Týden ještě nezačal."
+- anything else, or a throw: "Nepovedlo se. Zkus to znovu."
+
+The form keeps its values, so the same button is the retry. After success: `router.invalidate()`.
 
 Route: `beforeLoad` runs `guardScreen` and, with `!context.features.periodProposals`, a redirect to `/tyden`. The loader calls `getProposalsFn()`.
 
@@ -154,13 +185,20 @@ Route: `beforeLoad` runs `guardScreen` and, with `!context.features.periodPropos
   - A pending proposal where I'm waiting → Souhlasím and Nesouhlasím. Nesouhlasím opens a dialog, and its confirm calls `onReject` once.
   - I proposed → only Stáhnout návrh.
   - Agreed → the "Dohodnuto" chip and no buttons.
-  - No proposal → "Navrhnout jinak" opens the form. Submitting calls `proposePeriodFn` with `cutoffAt = nextWeekCutoff(...)` as an ISO string and the levels.
+  - No proposal → "Navrhnout jinak" opens the form, which shows "Konec: ne 6. 12. 23:59". Submitting calls `proposePeriodFn` once with exactly `{ cutoffAt: '2026-12-06T22:59:00.000Z', levels: { lower: 50, upper: 100 } }` (a fixed literal, not recomputed with `nextWeekCutoff`).
+  - Wiring: with a next-week proposal of id 1 and a default-week proposal of id 1 (the ids collide on purpose), Souhlasím, Nesouhlasím (after the dialog) and Stáhnout návrh on each card call `approveProposalFn`, `rejectProposalFn` and `withdrawProposalFn` with `{ data: { kind, id } }` of that card, checked with `toHaveBeenCalledWith`.
+  - A second giver after one giver approved sees Nesouhlasím and no Souhlasím.
+  - The chip "Návrh od Starší" names the proposer.
+  - `already_started` shows "Příští týden už začal, návrh už neplatí."
+  - Day plurals: 1 den, 3 dny, 7 dní.
   - A refusal `proposal_pending` shows its Czech text; a throw shows the generic text and keeps the values.
   - Taker → no "Výchozí týden" link; giver → the link.
   - A 30-letter name renders in the agreement rows (class `break-words` on the name).
   - Busy: while a call runs, every button of the card is disabled and the pressed one shows its busy label.
 - [ ] **Step 2: Failing test** in `nav.test.ts`: `/tyden/pristi` for taker and giver, not admin; `/tyden/vychozi` for giver only.
-- [ ] **Step 3: Failing route test** in `pristiPage.test.tsx`: the switch off → the redirect to `/tyden`; on → the loader calls `getProposalsFn` once.
+- [ ] **Step 3: Failing route tests.**
+  - `pristiPage.test.tsx`: the switch off → the redirect to `/tyden`; on → the loader calls `getProposalsFn` once.
+  - `vychoziPage.test.tsx` (Task 4's route): the switch off → the redirect to `/tyden`; a taker → their landing page.
 - [ ] **Step 4:** Run `npx vitest run src/components/proposals src/lib/nav.test.ts`. Expected: FAIL.
 - [ ] **Step 5:** Implement the strings, nav, components and route; run `pnpm dev` once so `routeTree.gen.ts` regenerates.
 - [ ] **Step 6:** Run the same command again, then `pnpm typecheck`. Expected: PASS.
@@ -176,9 +214,10 @@ Route: `beforeLoad` runs `guardScreen` and, with `!context.features.periodPropos
 **Interfaces:**
 - Consumes: `DefaultWeekView`; `ProposalCard` (Task 3); `proposeDefaultsFn`.
 
-Screen:
+Screen: title "Výchozí týden", back button to `/tyden/pristi`.
 - With a pending default-week proposal: its `ProposalCard`. There is no form, because the server allows only one pending proposal (`proposal_pending`).
 - Otherwise: `DefaultWeekView` with `saved = currentDefaults`, `saveLabel` "Navrhnout všem", `busyLabel` "Posílám…", and the hint "Pošle se jako návrh. Začne platit, až souhlasí všichni kluci a jeden rodič. Běžící týden se nemění."
+- Refusals use `proposalErrorMessage` (Task 3).
 - Success → a toast "Návrh odeslán", and the card replaces the form.
 
 The route: `guardScreen(role, '/tyden/vychozi')` (giver only) plus the switch redirect.
@@ -205,6 +244,7 @@ The route: `guardScreen(role, '/tyden/vychozi')` (giver only) plus the switch re
   - `src/components/meeting/MeetingScreen.tsx` step 3: with the switch on, a ghost link "Jiné hranice" to `/tyden/pristi` (M3Plan, spec §5.9 step 3).
 - Test:
   - `src/components/week/week.test.tsx`: the card shows only with `nextWeek`.
+  - `src/components/week/tydenPage.test.tsx` and the Domů route test: with `periodProposals` off, the loader never calls `getProposalsFn`, and no proposal card or row renders; with it on, it calls it once.
   - `src/components/tasks/` WaitingForYou tests: proposal rows and the count.
   - `meeting.test.tsx`: the link shows only with the switch on.
 
@@ -227,9 +267,10 @@ The piece:
 
 It uses the server functions' cores (`proposePeriod`, `approveProposal`, `proposeDefaultsChange`) through `step(...)`, as the other pieces do.
 
-The e2e test:
-- Mladší logs in. Domů shows "Návrh na příští týden" under Čeká na tebe. "Otevřít" leads to Příští týden; Souhlasím shows the "Dohodnuto" chip.
-- Táta logs in and opens Týden, then Příští týden: the default-week proposal shows "čeká" for both brothers.
+The e2e tests run serially in one file, on one server:
+1. Táta opens Týden, then Příští týden: the default-week proposal shows "čeká" for both brothers. He opens Výchozí týden, withdraws his pending proposal (dialog), changes the length, and taps Navrhnout všem: the new pending card shows.
+2. Mladší logs in. Domů shows "Návrh na příští týden" under Čeká na tebe. "Otevřít" leads to Příští týden. Nesouhlasím and the dialog's confirm close Starší's proposal. "Navrhnout jinak" opens the form; one day shorter, then Navrhnout všem: his own pending card shows "Návrh od Mladší".
+3. Starší approves through the Domů row, then Táta approves: the card shows "Dohodnuto".
 
 - [ ] **Step 1:** Write the e2e spec and the seed test change. Run `pnpm test` for the seed tests. Expected: FAIL.
 - [ ] **Step 2:** Implement the piece and the seed.
