@@ -16,11 +16,13 @@ import { Route as AppKlicRouteImport } from './routes/_app/klic'
 import { Route as AppProfilRouteImport } from './routes/_app/profil'
 import { Route as AppSchuzkaRouteImport } from './routes/_app/schuzka'
 import { Route as AppSpravaRouteImport } from './routes/_app/sprava'
-import { Route as AppTydenRouteImport } from './routes/_app/tyden'
 import { Route as AppZapsatRouteImport } from './routes/_app/zapsat'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
 import { Route as DevUiRouteImport } from './routes/dev/ui'
 import { Route as AppSablonaTemplateIdRouteImport } from './routes/_app/sablona/$templateId'
+import { Route as AppTydenIndexRouteImport } from './routes/_app/tyden/index'
+import { Route as AppTydenPristiRouteImport } from './routes/_app/tyden/pristi'
+import { Route as AppTydenVychoziRouteImport } from './routes/_app/tyden/vychozi'
 import { Route as AppUkolTaskIdRouteImport } from './routes/_app/ukol/$taskId'
 import { Route as AppUkolyIndexRouteImport } from './routes/_app/ukoly/index'
 import { Route as AppUkolyNovyRouteImport } from './routes/_app/ukoly/novy'
@@ -59,11 +61,6 @@ const AppSpravaRoute = AppSpravaRouteImport.update({
   path: '/sprava',
   getParentRoute: () => AppRoute,
 } as any)
-const AppTydenRoute = AppTydenRouteImport.update({
-  id: '/tyden',
-  path: '/tyden',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppZapsatRoute = AppZapsatRouteImport.update({
   id: '/zapsat',
   path: '/zapsat',
@@ -82,6 +79,21 @@ const DevUiRoute = DevUiRouteImport.update({
 const AppSablonaTemplateIdRoute = AppSablonaTemplateIdRouteImport.update({
   id: '/sablona/$templateId',
   path: '/sablona/$templateId',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTydenIndexRoute = AppTydenIndexRouteImport.update({
+  id: '/tyden/',
+  path: '/tyden/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTydenPristiRoute = AppTydenPristiRouteImport.update({
+  id: '/tyden/pristi',
+  path: '/tyden/pristi',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTydenVychoziRoute = AppTydenVychoziRouteImport.update({
+  id: '/tyden/vychozi',
+  path: '/tyden/vychozi',
   getParentRoute: () => AppRoute,
 } as any)
 const AppUkolTaskIdRoute = AppUkolTaskIdRouteImport.update({
@@ -107,13 +119,15 @@ export interface FileRoutesByFullPath {
   '/profil': typeof AppProfilRoute
   '/schuzka': typeof AppSchuzkaRoute
   '/sprava': typeof AppSpravaRoute
-  '/tyden': typeof AppTydenRoute
   '/zapsat': typeof AppZapsatRoute
   '/api/health': typeof ApiHealthRoute
   '/dev/ui': typeof DevUiRoute
   '/sablona/$templateId': typeof AppSablonaTemplateIdRoute
+  '/tyden/pristi': typeof AppTydenPristiRoute
+  '/tyden/vychozi': typeof AppTydenVychoziRoute
   '/ukol/$taskId': typeof AppUkolTaskIdRoute
   '/ukoly/novy': typeof AppUkolyNovyRoute
+  '/tyden/': typeof AppTydenIndexRoute
   '/ukoly/': typeof AppUkolyIndexRoute
 }
 export interface FileRoutesByTo {
@@ -122,14 +136,16 @@ export interface FileRoutesByTo {
   '/profil': typeof AppProfilRoute
   '/schuzka': typeof AppSchuzkaRoute
   '/sprava': typeof AppSpravaRoute
-  '/tyden': typeof AppTydenRoute
   '/zapsat': typeof AppZapsatRoute
   '/api/health': typeof ApiHealthRoute
   '/dev/ui': typeof DevUiRoute
   '/': typeof AppIndexRoute
   '/sablona/$templateId': typeof AppSablonaTemplateIdRoute
+  '/tyden/pristi': typeof AppTydenPristiRoute
+  '/tyden/vychozi': typeof AppTydenVychoziRoute
   '/ukol/$taskId': typeof AppUkolTaskIdRoute
   '/ukoly/novy': typeof AppUkolyNovyRoute
+  '/tyden': typeof AppTydenIndexRoute
   '/ukoly': typeof AppUkolyIndexRoute
 }
 export interface FileRoutesById {
@@ -140,14 +156,16 @@ export interface FileRoutesById {
   '/_app/profil': typeof AppProfilRoute
   '/_app/schuzka': typeof AppSchuzkaRoute
   '/_app/sprava': typeof AppSpravaRoute
-  '/_app/tyden': typeof AppTydenRoute
   '/_app/zapsat': typeof AppZapsatRoute
   '/api/health': typeof ApiHealthRoute
   '/dev/ui': typeof DevUiRoute
   '/_app/': typeof AppIndexRoute
   '/_app/sablona/$templateId': typeof AppSablonaTemplateIdRoute
+  '/_app/tyden/pristi': typeof AppTydenPristiRoute
+  '/_app/tyden/vychozi': typeof AppTydenVychoziRoute
   '/_app/ukol/$taskId': typeof AppUkolTaskIdRoute
   '/_app/ukoly/novy': typeof AppUkolyNovyRoute
+  '/_app/tyden/': typeof AppTydenIndexRoute
   '/_app/ukoly/': typeof AppUkolyIndexRoute
 }
 export interface FileRouteTypes {
@@ -159,13 +177,15 @@ export interface FileRouteTypes {
     | '/profil'
     | '/schuzka'
     | '/sprava'
-    | '/tyden'
     | '/zapsat'
     | '/api/health'
     | '/dev/ui'
     | '/sablona/$templateId'
+    | '/tyden/pristi'
+    | '/tyden/vychozi'
     | '/ukol/$taskId'
     | '/ukoly/novy'
+    | '/tyden/'
     | '/ukoly/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -174,14 +194,16 @@ export interface FileRouteTypes {
     | '/profil'
     | '/schuzka'
     | '/sprava'
-    | '/tyden'
     | '/zapsat'
     | '/api/health'
     | '/dev/ui'
     | '/'
     | '/sablona/$templateId'
+    | '/tyden/pristi'
+    | '/tyden/vychozi'
     | '/ukol/$taskId'
     | '/ukoly/novy'
+    | '/tyden'
     | '/ukoly'
   id:
     | '__root__'
@@ -191,14 +213,16 @@ export interface FileRouteTypes {
     | '/_app/profil'
     | '/_app/schuzka'
     | '/_app/sprava'
-    | '/_app/tyden'
     | '/_app/zapsat'
     | '/api/health'
     | '/dev/ui'
     | '/_app/'
     | '/_app/sablona/$templateId'
+    | '/_app/tyden/pristi'
+    | '/_app/tyden/vychozi'
     | '/_app/ukol/$taskId'
     | '/_app/ukoly/novy'
+    | '/_app/tyden/'
     | '/_app/ukoly/'
   fileRoutesById: FileRoutesById
 }
@@ -260,13 +284,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSpravaRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/tyden': {
-      id: '/_app/tyden'
-      path: '/tyden'
-      fullPath: '/tyden'
-      preLoaderRoute: typeof AppTydenRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/zapsat': {
       id: '/_app/zapsat'
       path: '/zapsat'
@@ -293,6 +310,27 @@ declare module '@tanstack/react-router' {
       path: '/sablona/$templateId'
       fullPath: '/sablona/$templateId'
       preLoaderRoute: typeof AppSablonaTemplateIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/tyden/': {
+      id: '/_app/tyden/'
+      path: '/tyden'
+      fullPath: '/tyden/'
+      preLoaderRoute: typeof AppTydenIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/tyden/pristi': {
+      id: '/_app/tyden/pristi'
+      path: '/tyden/pristi'
+      fullPath: '/tyden/pristi'
+      preLoaderRoute: typeof AppTydenPristiRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/tyden/vychozi': {
+      id: '/_app/tyden/vychozi'
+      path: '/tyden/vychozi'
+      fullPath: '/tyden/vychozi'
+      preLoaderRoute: typeof AppTydenVychoziRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/ukol/$taskId': {
@@ -324,12 +362,14 @@ interface AppRouteChildren {
   AppProfilRoute: typeof AppProfilRoute
   AppSchuzkaRoute: typeof AppSchuzkaRoute
   AppSpravaRoute: typeof AppSpravaRoute
-  AppTydenRoute: typeof AppTydenRoute
   AppZapsatRoute: typeof AppZapsatRoute
   AppIndexRoute: typeof AppIndexRoute
   AppSablonaTemplateIdRoute: typeof AppSablonaTemplateIdRoute
+  AppTydenPristiRoute: typeof AppTydenPristiRoute
+  AppTydenVychoziRoute: typeof AppTydenVychoziRoute
   AppUkolTaskIdRoute: typeof AppUkolTaskIdRoute
   AppUkolyNovyRoute: typeof AppUkolyNovyRoute
+  AppTydenIndexRoute: typeof AppTydenIndexRoute
   AppUkolyIndexRoute: typeof AppUkolyIndexRoute
 }
 
@@ -338,12 +378,14 @@ const AppRouteChildren: AppRouteChildren = {
   AppProfilRoute: AppProfilRoute,
   AppSchuzkaRoute: AppSchuzkaRoute,
   AppSpravaRoute: AppSpravaRoute,
-  AppTydenRoute: AppTydenRoute,
   AppZapsatRoute: AppZapsatRoute,
   AppIndexRoute: AppIndexRoute,
   AppSablonaTemplateIdRoute: AppSablonaTemplateIdRoute,
+  AppTydenPristiRoute: AppTydenPristiRoute,
+  AppTydenVychoziRoute: AppTydenVychoziRoute,
   AppUkolTaskIdRoute: AppUkolTaskIdRoute,
   AppUkolyNovyRoute: AppUkolyNovyRoute,
+  AppTydenIndexRoute: AppTydenIndexRoute,
   AppUkolyIndexRoute: AppUkolyIndexRoute,
 }
 

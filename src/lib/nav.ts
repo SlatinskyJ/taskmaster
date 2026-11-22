@@ -10,6 +10,8 @@ export const APP_PATHS = [
   '/',
   '/zapsat',
   '/tyden',
+  '/tyden/pristi',
+  '/tyden/vychozi',
   '/ukoly',
   '/ukoly/novy',
   '/schuzka',
@@ -28,6 +30,10 @@ export const SCREEN_ROLES: Readonly<Record<AppPath, readonly Role[]>> = {
   '/': ['taker', 'giver'],
   '/zapsat': ['taker'],
   '/tyden': ['taker', 'giver'],
+  /** Next week's proposal and who agreed (#43, UI doc §7.2 Period). */
+  '/tyden/pristi': ['taker', 'giver'],
+  /** A parent proposes a new default week (#43, UI doc §7.2 GDefaults). */
+  '/tyden/vychozi': ['giver'],
   '/ukoly': ['giver'],
   '/ukoly/novy': ['giver'],
   '/schuzka': ['giver'],

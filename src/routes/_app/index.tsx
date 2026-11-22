@@ -17,6 +17,8 @@ import {
   listScoreChangesWaitingFn,
   listTasksFn,
 } from '~/server/tasks/functions'
+import { waitingProposals } from '~/components/proposals/proposalView'
+import { getProposalsFn } from '~/server/periods/functions'
 import { getPointsFn } from '~/server/points/functions'
 import {
   listPendingTemplateApprovalsFn,
@@ -34,12 +36,15 @@ export const Route = createFileRoute('/_app/')({
     const waitingTemplates = await listPendingTemplateApprovalsFn()
     const priceChanges = await listPendingTemplatePriceChangesFn()
     const taskPriceChanges = await listScoreChangesWaitingFn()
+    // Proposals for next week (#43): only with the launch switch on, so off means no call.
+    const proposals = context.features.periodProposals ? await getProposalsFn() : null
     if (context.user.role === 'taker') {
       return {
         waiting,
         waitingTemplates,
         priceChanges,
         taskPriceChanges,
+        proposals,
         board: await listBoardFn(),
         recurring: await listTemplatesFn(),
         toApprove: [],
@@ -53,6 +58,7 @@ export const Route = createFileRoute('/_app/')({
       waitingTemplates,
       priceChanges,
       taskPriceChanges,
+      proposals,
       board: [],
       recurring: [],
       toApprove: await listPendingCompletionsFn(),
@@ -73,6 +79,7 @@ function Home() {
     waitingTemplates,
     priceChanges,
     taskPriceChanges,
+    proposals,
     board,
     recurring,
     toApprove,
@@ -82,8 +89,13 @@ function Home() {
   } = Route.useLoaderData()
   const shownTemplates = features.recurring ? waitingTemplates : []
   const shownPriceChanges = features.recurring ? priceChanges : []
+  const proposalRows =
+    features.periodProposals && proposals && !('error' in proposals)
+      ? waitingProposals(proposals, user.id)
+      : []
   const giverIdle =
-    waiting.length +
+    proposalRows.length +
+      waiting.length +
       shownTemplates.length +
       shownPriceChanges.length +
       taskPriceChanges.length +
@@ -98,6 +110,7 @@ function Home() {
         templates={shownTemplates}
         priceChanges={shownPriceChanges}
         taskPriceChanges={taskPriceChanges}
+        proposals={proposalRows}
         me={{ id: user.id, role: user.role }}
       />
       {user.role === 'taker' ? (

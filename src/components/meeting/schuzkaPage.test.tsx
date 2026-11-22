@@ -12,7 +12,10 @@ const page = vi.hoisted(() => ({ data: {} }))
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (opts: Record<string, unknown>) => ({
     ...opts,
-    useRouteContext: () => ({ user: { id: 2, role: 'giver', displayName: 'Táta' } }),
+    useRouteContext: () => ({
+      user: { id: 2, role: 'giver', displayName: 'Táta' },
+      features: { periodProposals: false },
+    }),
     useLoaderData: () => page.data,
   }),
   redirect: vi.fn(),

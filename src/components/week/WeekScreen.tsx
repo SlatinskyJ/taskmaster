@@ -1,7 +1,10 @@
+import { Link } from '@tanstack/react-router'
+import { ChevronRight } from 'lucide-react'
 import { EmptyState } from '~/components/EmptyState'
 import { levelBadgeClass, levelLabel, weekLabel } from '~/components/period/periodView'
 import { PointsBar } from '~/components/points/PointsBar'
 import { SectionLabel } from '~/components/shell/SectionLabel'
+import { StateChip } from '~/components/tasks/StateChip'
 import { TaskRow } from '~/components/tasks/TaskRow'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { cs, formatPoints } from '~/lib/strings'
@@ -14,7 +17,31 @@ import { historyLine, itemChip, itemMeta } from './weekView'
 
 export type WeekTab = 'this' | 'history'
 
-export function WeekScreen({ week, viewerRole }: { week: Week; viewerRole: 'taker' | 'giver' }) {
+/** The way into Příští týden (#43), with "Návrh čeká" while a proposal is open. */
+export function NextWeekCard({ pending }: { pending: boolean }) {
+  return (
+    <Link
+      to="/tyden/pristi"
+      data-slot="next-week-card"
+      className="mb-3.5 flex min-h-tap items-center gap-3 rounded-card bg-surface px-4 py-2.5 font-extrabold shadow-sticker"
+    >
+      <span className="min-w-0 flex-1">{cs.proposals.entry.card}</span>
+      {pending && <StateChip state="proposed" label={cs.proposals.entry.pending} />}
+      <ChevronRight aria-hidden="true" className="shrink-0" />
+    </Link>
+  )
+}
+
+export function WeekScreen({
+  week,
+  viewerRole,
+  nextWeek,
+}: {
+  week: Week
+  viewerRole: 'taker' | 'giver'
+  /** Set with the `periodProposals` switch on: the Příští týden card shows. */
+  nextWeek?: { pending: boolean }
+}) {
   return (
     <Tabs defaultValue="this">
       <TabsList>
@@ -22,6 +49,7 @@ export function WeekScreen({ week, viewerRole }: { week: Week; viewerRole: 'take
         <TabsTrigger value="history">{cs.week.history}</TabsTrigger>
       </TabsList>
       <TabsContent value="this">
+        {nextWeek && <NextWeekCard pending={nextWeek.pending} />}
         <WeekBody week={week} tab="this" viewerRole={viewerRole} />
       </TabsContent>
       <TabsContent value="history">
