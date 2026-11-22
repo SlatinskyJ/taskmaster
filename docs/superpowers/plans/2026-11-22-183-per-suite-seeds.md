@@ -54,7 +54,7 @@ Built on [#184 Previews start with every launch switch on](https://github.com/Sl
 **Interfaces:**
 - Produces: `switchOnIn(tx: Tx, keys: readonly FeatureKey[], at: Date): void`. For each key not already on: upsert the row to `enabled = true` and `writeAudit(tx, { actor: { kind: 'system' }, action: 'feature.switched', entityType: 'feature', entityId: key, before: { enabled: false }, after: { enabled: true }, at })`. A key already on writes nothing. No "off" counterpart (YAGNI: nothing seeds a switch off; the migration's rows are off).
 
-- [ ] **Step 1: Failing tests** in `flags.test.ts`: `'switchOnIn turns the listed switches on and logs each'` (`['week', 'meeting']` → `getFlags` has those two on, the others off; two `feature.switched` entries, actor system, entity ids `week`, `meeting`); `'a switch already on writes nothing'` (second call adds no audit row); `'a missing row is created'` (delete the `log` row first, `switchOnIn(['log'])` → on). `'rolls back when the audit write fails'`: a `BEFORE INSERT ON audit_log WHEN NEW.action = 'feature.switched'` trigger raising ABORT → the call inside `db.transaction` throws and `getFlags` is still `NO_FEATURES`.
+- [ ] **Step 1: Failing tests** in `flags.test.ts`: `'switchOnIn turns the listed switches on and logs each'` (`['week', 'meeting']` → `getFlags` has those two on, the others off; two `feature.switched` entries, actor system, entity ids `week`, `meeting`, `at` equal to the passed time, not the clock); `'a switch already on writes nothing'` (second call adds no audit row); `'a missing row is created'` (delete the `log` row first, `switchOnIn(['log'])` → on). `'rolls back when the audit write fails'`: a `BEFORE INSERT ON audit_log WHEN NEW.action = 'feature.switched'` trigger raising ABORT → the call inside `db.transaction` throws and `getFlags` is still `NO_FEATURES`.
 - [ ] **Step 2: Run** `pnpm test src/server/features` → fail (no `switchOnIn`).
 - [ ] **Step 3: Implement**; add `'feature.switched'` and `'feature'` to the lists in `actions.ts`. README: a new paragraph "Previews and tests" replacing "Previews start from the same migrations, so every switch is off there too": the demo seed turns every switch on (`TASKMASTER_SEED` unset); each e2e seed lists its own; production only by a migration or by hand, as before.
 - [ ] **Step 4: Run** `pnpm test src/server/features src/server/audit && pnpm typecheck` → pass.
@@ -69,22 +69,23 @@ Built on [#184 Previews start with every launch switch on](https://github.com/Sl
   - `type SeedContext = { tx: Tx; id: (username: string) => number; now: Date; start: Date }` (`start` = `now − 7 days`, as today).
   - `type Piece = (ctx: SeedContext) => void`; pieces `pastWeek`, `negotiation` (Umýt auto with bids 25/22, Uklidit sklep, Vyluxovat reserved to Starší), `priceChange` (Shrabat listí, Táta's 12 waiting), `cancelled` (Umýt okna v kuchyni), `points` (#40), `templates` (#37/#138), `thisWeek` (#44).
   - `type Seed = { pieces: readonly Piece[]; features: readonly FeatureKey[] }`.
-  - `const SEEDS = { family: { pieces: [], features: [] }, home: { pieces: [negotiation, points], features: [] }, tasks: { pieces: [priceChange], features: [] }, week: { pieces: [pastWeek, thisWeek], features: ['week', 'meeting'] }, demo: { pieces: [pastWeek, negotiation, priceChange, cancelled, points, templates, thisWeek], features: FEATURE_KEYS } } as const satisfies Record<string, Seed>`; `type SeedName = keyof typeof SEEDS`. `demo` keeps today's order, so its audit log reads the same. `demo` uses `FEATURE_KEYS` itself, so a new switch is on in previews without touching the seed.
+  - `const SEEDS = { family: { pieces: [], features: [] }, home: { pieces: [negotiation, points], features: [] }, launch: { pieces: [negotiation, points], features: [] }, tasks: { pieces: [priceChange], features: [] }, week: { pieces: [pastWeek, thisWeek], features: ['week', 'meeting'] }, demo: { pieces: [pastWeek, negotiation, priceChange, cancelled, points, templates, thisWeek], features: FEATURE_KEYS } } as const satisfies Record<string, Seed>`; `type SeedName = keyof typeof SEEDS`. `demo` keeps today's order, so its audit log reads the same. `demo` uses `FEATURE_KEYS` itself, so a new switch is on in previews without touching the seed.
   - After the pieces, in the same transaction, `seedDemo` calls `switchOnIn(tx, seed.features, now)` (Task 0).
+
   - `DemoOutcome` seeded variant gains `seed: SeedName`: `{ kind: 'seeded'; seed: SeedName; usernames: string[] }`.
-  - `seedDemo(db, env, now)` unchanged signature. After the preview and `ADMIN_PASSWORD` guards, `name = env.TASKMASTER_SEED || 'demo'`; if not a key of `SEEDS`, throw `Error('Demo seed: unknown TASKMASTER_SEED "<name>" (known: family, home, tasks, week, demo)')` before any write.
+  - `seedDemo(db, env, now)` unchanged signature. After the preview and `ADMIN_PASSWORD` guards and **before** the empty-DB check (so a misspelt name fails every boot, not only the first), `name = env.TASKMASTER_SEED || 'demo'`; if `!Object.hasOwn(SEEDS, name)`, throw `Error(`Demo seed: unknown TASKMASTER_SEED "${name}" (known: ${Object.keys(SEEDS).join(', ')})`)` before any write.
   - `describeDemo` seeded message: `[demo] seeded <seed>: admin, tata, starsi, mladsi (password "demo1234")`.
 
 - [ ] **Step 1: Move today's content tests** ('seeds a task in negotiation…', 'gives both brothers points…', 'adds two templates…', 'leaves a score change in flight…', 'demo seed gives a meeting…', 'a settled past week…', and the full audit-order test of the first case) from `seed.test.ts` to `demo.test.ts`, unchanged except: they call `seedDemo(db, PREVIEW, T0)` (no `TASKMASTER_SEED`, so `demo`), and #183:
   - the week's Mladší chore "Uklidit pokoj" (25) becomes **"Uklidit pokoj po návštěvě"** (25), so the two confirmed "Uklidit pokoj" rows are told apart;
-  - new test `'every demo task by title and state (#183)'`: `listTasks(db).map((t) => [t.title, t.status]).sort()` equals the full sorted list of all 28 demo tasks with their states (fill from a run of the unchanged seed, then check each against the piece that makes it), replacing the proposed/reserved-only filter as the title check for #40's confirmed, pending and open tasks.
+  - new test `'every demo task by title and state (#183)'`: `listTasks(db).map((t) => [t.title, t.status]).sort()` equals the full sorted list of demo tasks with their states (fill from a run of the unchanged seed, then check each against the piece that makes it), replacing the proposed/reserved-only filter as the title check for #40's confirmed, pending and open tasks.
 - [ ] **Step 2: Write the failing tests in `seed.test.ts`:**
   - `'TASKMASTER_SEED picks the seed; unset or empty is demo'`: for `undefined` and `''` the outcome is `{ kind: 'seeded', seed: 'demo', … }`; with `'family'` it is `seed: 'family'` and `tasks`, `templates`, `periods`, `settlements` tables are empty, 4 users.
-  - `'an unknown TASKMASTER_SEED fails the boot and seeds nothing'`: `'Home'` and `'nope'` throw `/unknown TASKMASTER_SEED "Home".*known: family, home, tasks, week, demo/`; users and audit log empty.
+  - `'an unknown TASKMASTER_SEED fails the boot and seeds nothing'`: `'Home'`, `'nope'` and `'toString'` throw `/unknown TASKMASTER_SEED "Home".*known: family, home, launch, tasks, week, demo/`; users and audit log empty. Also on a seeded DB (second boot with a misspelt name): throws, and adds no row.
   - `'TASKMASTER_SEED never matters outside a preview'`: `{ TASKMASTER_SEED: 'nope' }` → `not_preview`; `{ ...PREVIEW, ADMIN_PASSWORD: 'x', TASKMASTER_SEED: 'nope' }` → `admin_password_set`; no throw.
-  - `'each seed turns on its switches and only those'`: `demo` → `getFlags` equals `ALL_FEATURES`; `week` → week + meeting on, recurring + log off; `family`, `home`, `tasks` → `NO_FEATURES`.
+  - `'each seed turns on its switches and only those'`: `demo` → `getFlags` equals `ALL_FEATURES`; `week` → week + meeting on, recurring + log off; `family`, `home`, `launch`, `tasks` → `NO_FEATURES`.
   - `'every seed: the family logs in and the audit log is in time order'`: loop over `Object.keys(SEEDS)`; login for all four roles ok; audit `at` sorted.
-  - Keep: refuses without preview, refuses non-empty, refuses with `ADMIN_PASSWORD`, both all-or-nothing tests, second boot, boot messages (update the seeded message assertion to contain the seed name).
+  - Keep: refuses without preview, refuses non-empty, refuses with `ADMIN_PASSWORD`, both all-or-nothing tests plus a third (`BEFORE INSERT ON audit_log WHEN NEW.action = 'feature.switched'` ABORT → no users, no tasks, every switch still off), second boot, boot messages (update the seeded message assertion to contain the seed name).
 - [ ] **Step 3: Run** `pnpm test src/server/demo` → the new seed tests fail (no `SEEDS`, no `seed` in outcome), the rename test fails.
 - [ ] **Step 4: Implement** `pieces.ts`, `seeds.ts`, new `seed.ts` as in Interfaces. Pieces are today's bodies moved as they are; `seedPoints`' doc comment says what this piece alone gives (Starší 40 confirmed + 12 pending, Mladší 55; #183). The `seed.ts` header comment explains pieces/seeds: previews get `demo`; each e2e suite names its seed in `playwright.config.ts`; a feature PR adds its piece to `demo` and, if its suite needs it, to that suite's seed.
 - [ ] **Step 5: Run** `pnpm test src/server/demo && pnpm typecheck && pnpm lint` → pass.
@@ -106,18 +107,19 @@ Built on [#184 Previews start with every launch switch on](https://github.com/Sl
 
 ### Task 3: One server per suite
 
-**Files:** Modify `playwright.config.ts`, all `e2e/*.spec.ts`, `CLAUDE.md`.
+**Files:** Create `e2e/suites.ts`, `tests/e2e-suites.test.ts`. Modify `playwright.config.ts`, all `e2e/*.spec.ts`, `CLAUDE.md`.
 
 **Interfaces:** Consumes `SeedName` (type-only import from `src/server/demo/seeds`).
 
-- [ ] **Step 1: Suite table** in `playwright.config.ts`: `const SUITES: readonly { name: string; spec: string; seed: SeedName; env?: Record<string, string> }[]`, rows in this order (port = `3100 + index`):
+- [ ] **Step 1: Failing test** `tests/e2e-suites.test.ts`: `'every spec file has exactly one suite, and every suite a real spec'` (`readdirSync('e2e')` `*.spec.ts` sorted equals `SUITES.map(s => s.spec)` sorted, no duplicates); `'each suite gets its own server'` (from `suiteServers()`: ports distinct, every `env.DATA_DIR` distinct, `env.TASKMASTER_SEED` equals the row's seed and is a key of `SEEDS`, `TASKMASTER_ENV=preview`). Run → fails (no `e2e/suites.ts`).
+- [ ] **Step 1b: Suite table** in `e2e/suites.ts`: `export const SUITES: readonly { name: string; spec: string; seed: SeedName; env?: Record<string, string> }[]` and `export function suiteServers(suites = SUITES)` returning `{ port, env }[]` (port = `3100 + index`, `DATA_DIR` a fresh `mkdtempSync` unless the row sets one); `playwright.config.ts` maps both into `projects` and `webServer`. Rows in this order:
 
   | name | spec | seed | extra env |
   | --- | --- | --- | --- |
   | on | passkeys.spec.ts | family | `WEBAUTHN_RP_ID=localhost`, `WEBAUTHN_ORIGIN=http://localhost:<port>` |
   | off | passkeys-off.spec.ts | family | `DATA_DIR=$TM_E2E_OFF_DATA_DIR` (spec writes a passkey row) |
   | home | home.spec.ts | home | |
-  | launch | launch.spec.ts | home | (no switches on: this suite pins the launch look) |
+  | launch | launch.spec.ts | launch | (same pieces as home, its own seed so no feature's switch ever lands in it) |
   | tasks | task-page.spec.ts | tasks | |
   | week | week.spec.ts | week | |
   | meeting | meeting.spec.ts | week | |
@@ -134,6 +136,9 @@ Built on [#184 Previews start with every launch switch on](https://github.com/Sl
 - [ ] **Step 5: Commit** `Give each e2e suite its own server and seed (#183)`.
 
 ## Rulings for the brief
+
+- Playwright starts all 7 servers at once (each migrates and seeds within the 60 s start timeout): fine on the CI runner; say so in the brief for local runs on a small machine.
+- Built after #184 merges (this branch is rebased on it first); until then the branch holds the plan only.
 
 - `demo` turns every switch on, so previews show the whole app, not the launch look. The launch look stays pinned by the `launch` e2e suite (switches off). From Jakub's 2026-11-22 ask that agents behind switches are not blocked on previews.
 - `meeting` reuses the `week` seed on its own server: same data, separate database.
