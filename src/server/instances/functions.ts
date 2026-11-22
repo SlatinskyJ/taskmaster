@@ -5,7 +5,12 @@ import type { TaskRow } from '~/server/db/schema'
 import type { Result } from '~/domain/result'
 import { parseTemplateId } from '~/server/templates/parse'
 import type { InstanceError } from './instances'
-import { createOnDemandInstance, listLoggableTemplates, selfLogInstance } from './instances'
+import {
+  createOnDemandInstance,
+  listLoggableTemplates,
+  logChoicesAt,
+  selfLogInstance,
+} from './instances'
 import { parseSelfLog } from './parse'
 
 export type { InstanceError }
@@ -28,15 +33,20 @@ export const createInstanceFn = createServerFn({ method: 'POST' })
     instanceResult(createOnDemandInstance(getDb(), context.user.id, data.templateId)),
   )
 
-/** Zapsat: a taker logs a chore he did, at the score he was shown. */
+/** Zapsat: a taker logs a chore he did, at the score he was shown and the time he picked. */
 export const selfLogFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('taker')])
   .validator(parseSelfLog)
   .handler(({ data, context }): InstanceActionResult =>
-    instanceResult(selfLogInstance(getDb(), context.user.id, data.templateId, data.score)),
+    instanceResult(
+      selfLogInstance(getDb(), context.user.id, data.templateId, data.score, new Date(), data.when),
+    ),
   )
 
-/** The tiles of Zapsat: every agreed template. */
+/** Zapsat: a tile per agreed template, and the "Kdy?" times open now. */
 export const listLoggableTemplatesFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('taker')])
-  .handler(() => listLoggableTemplates(getDb()))
+  .handler(() => {
+    const db = getDb()
+    return { tiles: listLoggableTemplates(db), choices: logChoicesAt(db, new Date()) }
+  })

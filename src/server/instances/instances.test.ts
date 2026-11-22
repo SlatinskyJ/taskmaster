@@ -3,12 +3,19 @@ import { describe, expect, it } from 'vitest'
 import { fromPragueWallTime } from '~/domain/dates'
 import { auditLog, tasks, templates } from '~/server/db/schema'
 import { takerPoints } from '~/server/points'
-import { approveTask, completeTask, rejectTask } from '~/server/tasks/lifecycle'
+import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
+import { rollPeriods } from '~/server/periods'
+import { approveTask, completeTask, rejectTask, reserveTask } from '~/server/tasks/lifecycle'
 import type { Family } from '~/server/tasks/testing'
 import { T0, T1, T2, failAuditOn, family, json, must, row } from '~/server/tasks/testing'
 import { approveTemplateScore, createTemplate } from '~/server/templates'
 import { agreedTemplate } from '~/server/templates/testing'
-import { createOnDemandInstance, listLoggableTemplates, selfLogInstance } from './instances'
+import {
+  createOnDemandInstance,
+  listLoggableTemplates,
+  logChoicesAt,
+  selfLogInstance,
+} from './instances'
 
 // "+ Teď" and Zapsat (#38, spec §5.3 origins 2 and 3).
 
@@ -199,6 +206,78 @@ describe('selfLogInstance (Zapsat)', () => {
     expect(must(selfLogInstance(f.db, f.mladsi, tpl, 5, T1)).score).toBe(5)
   })
 
+  it('refuses while the same chore is on the board, open or reserved, nothing written (Jakub 2026-11-22)', () => {
+    const f = family()
+    const tpl = agreedTemplate(f)
+    const other = binsTemplate(f)
+    const open = must(createOnDemandInstance(f.db, f.tata, tpl, T1))
+    const audits = auditRows(f).length
+    expect(selfLogInstance(f.db, f.mladsi, tpl, 3, T1)).toEqual({
+      ok: false,
+      error: 'already_open',
+    })
+    must(reserveTask(f.db, f.starsi, open.id, T1))
+    expect(selfLogInstance(f.db, f.mladsi, tpl, 3, T1)).toEqual({
+      ok: false,
+      error: 'already_open',
+    })
+    expect([taskRows(f).length, auditRows(f).length]).toEqual([1, audits + 1])
+    // Another chore is fine; so is this one once the board copy is done.
+    expect(must(selfLogInstance(f.db, f.mladsi, other, 4, T1)).status).toBe('done_unconfirmed')
+    must(completeTask(f.db, f.starsi, open.id, T1))
+    expect(must(selfLogInstance(f.db, f.mladsi, tpl, 3, T2)).status).toBe('done_unconfirmed')
+  })
+
+  it('a pending log does not block another log of the same chore', () => {
+    const f = family()
+    const tpl = agreedTemplate(f)
+    must(selfLogInstance(f.db, f.mladsi, tpl, 3, T1))
+    expect(must(selfLogInstance(f.db, f.starsi, tpl, 3, T1)).status).toBe('done_unconfirmed')
+  })
+
+  describe('"Kdy?" (Jakub 2026-11-22)', () => {
+    // T1 is Tue 17 Nov 12:00 Prague; the week started Sun 15 Nov 11:00 Prague.
+    const withWeek = () => {
+      const f = family()
+      rollPeriods(f.db, new Date('2026-11-15T10:00:00.000Z'), DEFAULT_PERIOD_DEFAULTS)
+      return f
+    }
+
+    it('yesterday: done at yesterday 18:00, written now', () => {
+      const f = withWeek()
+      const tpl = agreedTemplate(f)
+      const r = must(selfLogInstance(f.db, f.mladsi, tpl, 3, T1, 'yesterday'))
+      expect([r.completedAt, r.createdAt]).toEqual(['2026-11-16T17:00:00.000Z', T1.toISOString()])
+      const [entry] = auditRows(f).slice(-1)
+      expect(entry?.at).toBe(T1.toISOString())
+      expect(json(entry?.after)).toMatchObject({ completedAt: '2026-11-16T17:00:00.000Z' })
+    })
+
+    it('this morning: today 7:00', () => {
+      const f = withWeek()
+      const r = must(selfLogInstance(f.db, f.mladsi, agreedTemplate(f), 3, T1, 'this_morning'))
+      expect(r.completedAt).toBe('2026-11-17T06:00:00.000Z')
+    })
+
+    it('refuses a time before the running week, nothing written', () => {
+      const f = family()
+      rollPeriods(f.db, new Date('2026-11-17T09:00:00.000Z'), DEFAULT_PERIOD_DEFAULTS)
+      const tpl = agreedTemplate(f)
+      const audits = auditRows(f).length
+      expect(selfLogInstance(f.db, f.mladsi, tpl, 3, T1, 'yesterday')).toEqual({
+        ok: false,
+        error: 'too_early',
+      })
+      expect([taskRows(f).length, auditRows(f).length]).toEqual([0, audits])
+      expect(logChoicesAt(f.db, T1)).toEqual(['now'])
+    })
+
+    it('offers the choices of the running week', () => {
+      expect(logChoicesAt(withWeek().db, T1)).toEqual(['now', 'this_morning', 'yesterday'])
+      expect(logChoicesAt(family().db, T1)).toEqual(['now'])
+    })
+  })
+
   it('only a taker may: a giver and the admin are refused, nothing written', () => {
     const f = family()
     const tpl = agreedTemplate(f)
@@ -252,11 +331,16 @@ describe('listLoggableTemplates', () => {
       ).id
       must(approveTemplateScore(f.db, f.starsi, id, 2, T0))
     }
-    agreedTemplate(f)
+    const dishes = agreedTemplate(f)
     expect(listLoggableTemplates(f.db)).toEqual([
-      { id: expect.any(Number) as number, title: 'Cvičit na klavír', score: 2 },
-      { id: expect.any(Number) as number, title: 'Čistit boty', score: 2 },
-      { id: expect.any(Number) as number, title: 'Vyndat myčku', score: 3 },
+      { id: expect.any(Number) as number, title: 'Cvičit na klavír', score: 2, onBoard: false },
+      { id: expect.any(Number) as number, title: 'Čistit boty', score: 2, onBoard: false },
+      { id: dishes, title: 'Vyndat myčku', score: 3, onBoard: false },
     ])
+    // A copy on the board (open or reserved) marks the tile; a pending one does not.
+    must(selfLogInstance(f.db, f.mladsi, dishes, 3, T1))
+    expect(listLoggableTemplates(f.db).find((t) => t.id === dishes)?.onBoard).toBe(false)
+    must(createOnDemandInstance(f.db, f.tata, dishes, T1))
+    expect(listLoggableTemplates(f.db).find((t) => t.id === dishes)?.onBoard).toBe(true)
   })
 })

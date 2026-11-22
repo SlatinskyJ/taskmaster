@@ -242,8 +242,8 @@ function seedTemplates(tx: Tx, ids: Map<string, number>, now: Date): void {
 }
 
 /**
- * Instances (#38): Táta's "+ Teď" on the dishwasher (open, no deadline) and on the school bag
- * (due the next day 7:00), and Mladší's Zapsat of the dishwasher, waiting for a parent.
+ * Instances (#38): Mladší's Zapsat of the dishwasher, waiting for a parent; Starší's, rejected;
+ * and Táta's "+ Teď" on the school bag (due the next day 7:00).
  */
 function seedInstances(tx: Tx, id: (username: string) => number, step: Step, now: Date): void {
   const byTitle = (title: string) => {
@@ -253,8 +253,7 @@ function seedInstances(tx: Tx, id: (username: string) => number, step: Step, now
   }
   const dishes = byTitle('Vyndat myčku')
   const bag = byTitle('Nachystat tašku do školy')
-  step('+ Teď "Vyndat myčku"', createOnDemandInstance(tx, id('tata'), dishes.id, now))
-  step('+ Teď "Nachystat tašku do školy"', createOnDemandInstance(tx, id('tata'), bag.id, now))
+  // The logs come first: Zapsat refuses a chore already on the board (Jakub 2026-11-22).
   step('Zapsat "Vyndat myčku"', selfLogInstance(tx, id('mladsi'), dishes.id, dishes.score, now))
   // Týden and Úkoly "Zamítnuto": Starší logged the dishwasher, Táta said no without a reason (§5.5).
   const logged = step(
@@ -262,6 +261,9 @@ function seedInstances(tx: Tx, id: (username: string) => number, step: Step, now
     selfLogInstance(tx, id('starsi'), dishes.id, dishes.score, now),
   )
   step('reject "Vyndat myčku"', rejectTask(tx, id('tata'), logged.id, undefined, now))
+  // Then a board copy of the school bag: Zapsat shows its tile as "Už je na nástěnce", while
+  // the dishwasher stays loggable (e2e recurring.spec logs it, then Táta puts it on the board).
+  step('+ Teď "Nachystat tašku do školy"', createOnDemandInstance(tx, id('tata'), bag.id, now))
 }
 
 /** A job failure inside the seed must fail the seed, not be logged and skipped. */
