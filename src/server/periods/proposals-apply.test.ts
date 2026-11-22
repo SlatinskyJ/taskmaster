@@ -55,6 +55,31 @@ describe('agreed changes apply at the start', () => {
     expect(audit(f.db, 'period.proposal_lapsed')).toEqual([])
   })
 
+  it('a roll before the cutoff starts nothing and keeps a pending proposal pending', () => {
+    const f = week()
+    const { id } = must(proposePeriod(f.db, f.starsi, NEXT, AT))
+    expect(rollPeriods(f.db, plus(AT, 1), getPeriodDefaults(f.db))).toEqual([])
+    expect(rollPeriods(f.db, plus(CUTOFF, -1), getPeriodDefaults(f.db))).toEqual([])
+    expect(statusOf(f.db, id)).toBe('pending')
+    expect(audit(f.db, 'period.proposal_lapsed')).toEqual([])
+  })
+
+  it('the lapse entry: system actor, the proposal, pending → lapsed', () => {
+    const f = week()
+    const { id } = must(proposePeriod(f.db, f.starsi, NEXT, AT))
+    rollPeriods(f.db, CUTOFF, getPeriodDefaults(f.db))
+    expect(audit(f.db, 'period.proposal_lapsed')).toMatchObject([
+      {
+        actorKind: 'system',
+        actorUserId: null,
+        entityType: 'period_proposal',
+        entityId: String(id),
+        before: JSON.stringify({ status: 'pending' }),
+        after: JSON.stringify({ status: 'lapsed' }),
+      },
+    ])
+  })
+
   it('a period started from the defaults has proposalId null', () => {
     const f = week()
     rollPeriods(f.db, CUTOFF, getPeriodDefaults(f.db))
@@ -86,21 +111,28 @@ describe('agreed changes apply at the start', () => {
     expect(result).toMatchObject({ next: { startsAt: MEETING, cutoffAt: NEXT.cutoffAt } })
     expect(listPeriods(f.db)[1]?.levels).toEqual(NEXT.levels)
     expect(statusOf(f.db, id)).toBe('agreed')
+    expect(json(audit(f.db, 'period.created').at(-1)?.after)).toMatchObject({ proposalId: id })
   })
 
   it('settling early lapses a pending per-period proposal', () => {
     const f = week()
     const { id } = must(proposePeriod(f.db, f.starsi, NEXT, AT))
     settle(f, MEETING)
+    expect(json(audit(f.db, 'period.created').at(-1)?.after)).toMatchObject({ proposalId: null })
     expect(statusOf(f.db, id)).toBe('lapsed')
     expect(audit(f.db, 'period.proposal_lapsed')).toHaveLength(1)
   })
 
   it('two cutoffs missed: only the first started period takes the change', () => {
     const f = week()
-    agree(f)
+    const id = agree(f)
     const started = rollPeriods(f.db, plus(NEXT.cutoffAt, 1), getPeriodDefaults(f.db))
     expect(started.map((p) => p.levels)).toEqual([NEXT.levels, { lower: 50, upper: 100 }])
+    expect(
+      audit(f.db, 'period.created')
+        .slice(-2)
+        .map((e) => json(e.after)),
+    ).toMatchObject([{ proposalId: id }, { proposalId: null }])
   })
 
   it('a pending defaults proposal stays pending across a roll', () => {
@@ -117,5 +149,13 @@ describe('agreed changes apply at the start', () => {
     const f = week()
     agree(f)
     expect(currentLevels(f.db, plus(CUTOFF, 1), getPeriodDefaults(f.db))).toEqual(NEXT.levels)
+  })
+
+  it('between the cutoff and the roll with nothing agreed, points show the defaults', () => {
+    const f = week()
+    const defaults = getPeriodDefaults(f.db)
+    expect(currentLevels(f.db, plus(CUTOFF, 1), defaults)).toEqual(defaults.levels)
+    must(proposePeriod(f.db, f.starsi, NEXT, AT))
+    expect(currentLevels(f.db, plus(CUTOFF, 1), defaults)).toEqual(defaults.levels)
   })
 })

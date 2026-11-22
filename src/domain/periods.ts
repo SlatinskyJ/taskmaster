@@ -293,6 +293,24 @@ export function isPeriodAgreed(
   return takers.every(approved) && people.filter(isActiveGiver).some(approved)
 }
 
+/**
+ * Who still has to approve for period agreement, by id ascending: every active taker who has
+ * not, and every active giver while no giver has. Empty exactly when `isPeriodAgreed` holds.
+ */
+export function periodAgreementWaitingFor(
+  approvedBy: readonly PersonId[],
+  people: readonly Person[],
+): PersonId[] {
+  const giverApproved = people.some((p) => isActiveGiver(p) && approvedBy.includes(p.id))
+  return people
+    .filter(
+      (p) =>
+        (isActiveTaker(p) && !approvedBy.includes(p.id)) || (!giverApproved && isActiveGiver(p)),
+    )
+    .map((p) => p.id)
+    .sort((a, b) => a - b)
+}
+
 /** Promotes a pending proposal that has period agreement now. Call after people change. */
 export function resolvePeriodProposal<P extends PeriodProposal<unknown>>(
   proposal: P,

@@ -1,15 +1,16 @@
 import { and, asc, desc, eq, isNull, lte } from 'drizzle-orm'
 import { endPeriodEarly, firstPeriod, isRunning, periodAt, periodsToStart } from '~/domain'
 import type { Levels, Period, PeriodDefaults, PeriodError, PeriodId, PeriodSpan } from '~/domain'
-import { parseIsoUtc, toIsoUtc } from '~/domain/dates'
+import { toIsoUtc } from '~/domain/dates'
 import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
 import { writeAudit } from '~/server/audit'
 import type { Actor, Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { periods } from '~/server/db/schema'
-import type { PeriodRow } from '~/server/db/schema'
-import { agreedProposalFor, lapseProposals } from './proposalRows'
+import { agreedProposalFor, lapseProposals, toPeriod } from './proposalRows'
+
+export { toPeriod }
 
 // Stored periods (spec §5.8). The chain rules live in src/domain/periods.ts; this module stores
 // them. Two paths start a period, each with its audit entries in one transaction:
@@ -25,16 +26,6 @@ import { agreedProposalFor, lapseProposals } from './proposalRows'
 type Reader = Db | Tx
 
 /** A stored row as a domain period. */
-export function toPeriod(row: PeriodRow): Period {
-  return {
-    id: row.id,
-    startsAt: parseIsoUtc(row.startsAt),
-    cutoffAt: parseIsoUtc(row.cutoffAt),
-    endedAt: row.endedAt === null ? null : parseIsoUtc(row.endedAt),
-    levels: { lower: row.lowerLevel, upper: row.upperLevel },
-  }
-}
-
 /** Every period, oldest first. */
 export function listPeriods(db: Reader): Period[] {
   return db.select().from(periods).orderBy(asc(periods.startsAt)).all().map(toPeriod)

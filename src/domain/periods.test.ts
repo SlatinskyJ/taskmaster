@@ -23,6 +23,7 @@ import {
   firstPeriod,
   hasStarted,
   isPeriodAgreed,
+  periodAgreementWaitingFor,
   isValidDefaults,
   lapsePeriodSettings,
   nextPeriod,
@@ -335,6 +336,15 @@ describe('period agreement (spec §3)', () => {
 
   it('with Mum, one giver is still enough', () => {
     expect(isPeriodAgreed([MUM, OLDER, YOUNGER], withMum)).toBe(true)
+  })
+
+  it('waitingFor: takers who have not approved, and every giver while none has', () => {
+    expect(periodAgreementWaitingFor([OLDER], withMum)).toEqual(
+      [DAD, MUM, YOUNGER].sort((a, b) => a - b),
+    )
+    expect(periodAgreementWaitingFor([MUM, OLDER], withMum)).toEqual([YOUNGER])
+    expect(periodAgreementWaitingFor([JAKUB, OLDER, YOUNGER], family)).toEqual([DAD])
+    expect(periodAgreementWaitingFor([DAD, OLDER, YOUNGER], family)).toEqual([])
   })
 })
 

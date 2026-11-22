@@ -2,9 +2,8 @@ import { and, asc, eq, inArray } from 'drizzle-orm'
 import {
   approveDefaults,
   approvePeriodSettings,
-  isActiveGiver,
-  isActiveTaker,
   isRunning,
+  periodAgreementWaitingFor,
   proposeDefaults,
   proposePeriodSettings,
   rejectPeriodProposal,
@@ -119,15 +118,19 @@ function save(
   }
 }
 
-/** On agreement: audit it; a defaults change is stored now. */
+/**
+ * On agreement: audit it; a defaults change is stored now. `before` is the state it moved from,
+ * or null when it was agreed at creation (the `created` entry just before shows it).
+ */
 function onAgreed(
   tx: Tx,
   kind: ProposalKind,
   actor: Actor,
+  before: PeriodProposal<unknown> | null,
   proposal: Stored<PeriodProposal<unknown>>,
   now: Date,
 ) {
-  audit(tx, kind, 'agreed', actor, proposal.id, null, state(proposal), now)
+  audit(tx, kind, 'agreed', actor, proposal.id, before && state(before), state(proposal), now)
   if (kind === 'defaults') {
     writePeriodDefaults(tx, actor, (proposal as Stored<DefaultsProposal>).settings, now)
   }
@@ -185,7 +188,7 @@ export function proposePeriod(
       settings: periodSettingsJson(settings),
     }
     audit(tx, 'period', 'created', user(userId), row.id, null, after, now)
-    if (stored.status === 'agreed') onAgreed(tx, 'period', user(userId), stored, now)
+    if (stored.status === 'agreed') onAgreed(tx, 'period', user(userId), null, stored, now)
     return outcome(row.id, stored.status)
   })
 }
@@ -227,7 +230,7 @@ export function proposeDefaultsChange(
       .run()
     const after = { ...state(stored), settings: defaultsJson(defaults) }
     audit(tx, 'defaults', 'created', user(giverId), row.id, null, after, now)
-    if (stored.status === 'agreed') onAgreed(tx, 'defaults', user(giverId), stored, now)
+    if (stored.status === 'agreed') onAgreed(tx, 'defaults', user(giverId), null, stored, now)
     return outcome(row.id, stored.status)
   })
 }
@@ -265,7 +268,7 @@ export function approveProposal(
     const after = { ...r.value, id }
     save(tx, kind, before, after, now)
     audit(tx, kind, 'approved', user(userId), id, state(before), state(after), now)
-    if (after.status === 'agreed') onAgreed(tx, kind, user(userId), after, now)
+    if (after.status === 'agreed') onAgreed(tx, kind, user(userId), before, after, now)
     return outcome(id, after.status)
   })
 }
@@ -325,7 +328,7 @@ export function resolvePendingProposals(tx: Tx, people: Person[], now: Date): vo
     const after = { ...resolvePeriodProposal(before, people), id: row.id }
     if (after.status !== 'agreed') continue
     save(tx, 'period', before, after, now)
-    onAgreed(tx, 'period', system, after, now)
+    onAgreed(tx, 'period', system, before, after, now)
   }
   for (const row of tx
     .select()
@@ -336,7 +339,7 @@ export function resolvePendingProposals(tx: Tx, people: Person[], now: Date): vo
     const after = { ...resolvePeriodProposal(before, people), id: row.id }
     if (after.status !== 'agreed') continue
     save(tx, 'defaults', before, after, now)
-    onAgreed(tx, 'defaults', system, after, now)
+    onAgreed(tx, 'defaults', system, before, after, now)
   }
 }
 
@@ -353,18 +356,6 @@ export interface ProposalView<S> {
 export interface ProposalsView {
   period: ProposalView<{ cutoffAt: string; levels: { lower: number; upper: number } }> | null
   defaults: ProposalView<PeriodDefaults> | null
-}
-
-function waitingFor(approvedBy: readonly number[], people: readonly Person[]): number[] {
-  const givers = people.filter(isActiveGiver)
-  const giverApproved = givers.some((g) => approvedBy.includes(g.id))
-  return people
-    .filter(
-      (p) =>
-        (isActiveTaker(p) && !approvedBy.includes(p.id)) || (!giverApproved && isActiveGiver(p)),
-    )
-    .map((p) => p.id)
-    .sort((a, b) => a - b)
 }
 
 /** What a party sees: the open change for next week, and the pending default-week change. */
@@ -399,7 +390,7 @@ export function proposalsView(db: Reader, now: Date): ProposalsView {
           proposedBy: p.proposedBy,
           approvedBy: [...p.approvedBy],
           status: p.status,
-          waitingFor: waitingFor(p.approvedBy, people),
+          waitingFor: periodAgreementWaitingFor(p.approvedBy, people),
         }
       : null,
     defaults: d
@@ -409,7 +400,7 @@ export function proposalsView(db: Reader, now: Date): ProposalsView {
           proposedBy: d.proposedBy,
           approvedBy: [...d.approvedBy],
           status: d.status,
-          waitingFor: waitingFor(d.approvedBy, people),
+          waitingFor: periodAgreementWaitingFor(d.approvedBy, people),
         }
       : null,
   }

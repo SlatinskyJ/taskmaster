@@ -18,7 +18,8 @@ import { currentLevels } from '~/server/periods/periods'
 //   - #48 (corrections, adjustments) adds `adjustment` entries;
 //   - #38 (recurring instances, their own table) adds a completion entry per confirmed instance
 //     and their done, unconfirmed ones to pending.
-// `levels` are the running period's, or the stored defaults when none runs (`currentLevels`).
+// `levels` are the running period's; when none runs (`currentLevels`), the agreed change for the
+// next period, else the stored defaults.
 // `pending` is the sum of the taker's done, unconfirmed tasks. A task a giver did himself has
 // no earner and counts for nobody.
 

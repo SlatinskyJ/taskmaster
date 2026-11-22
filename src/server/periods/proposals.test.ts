@@ -67,6 +67,27 @@ function agreedNextWeek(f: Family): number {
   return id
 }
 
+const entries = (db: Db) =>
+  db
+    .select({
+      action: auditLog.action,
+      actorKind: auditLog.actorKind,
+      actorUserId: auditLog.actorUserId,
+      entityType: auditLog.entityType,
+      entityId: auditLog.entityId,
+      before: auditLog.before,
+      after: auditLog.after,
+    })
+    .from(auditLog)
+    .orderBy(asc(auditLog.id))
+    .all()
+    .filter((e) => e.action.includes('.proposal_'))
+    .map((e) => ({
+      ...e,
+      before: e.before === null ? null : (JSON.parse(e.before) as unknown),
+      after: e.after === null ? null : (JSON.parse(e.after) as unknown),
+    }))
+
 describe('proposePeriod and approvals', () => {
   it('Starší proposes 60/120 for next week; Mladší and Táta approve → agreed, audited', () => {
     const f = week()
@@ -76,6 +97,87 @@ describe('proposePeriod and approvals', () => {
       'period.proposal_created',
       'period.proposal_approved',
       'period.proposal_approved',
+      'period.proposal_agreed',
+    ])
+  })
+
+  it('audit entries name who acted, the proposal and the state before and after', () => {
+    const f = week()
+    const id = agreedNextWeek(f)
+    const e = { entityType: 'period_proposal', entityId: String(id) }
+    const settings = { cutoffAt: NEXT.cutoffAt.toISOString(), levels: NEXT.levels }
+    expect(entries(f.db)).toEqual([
+      {
+        ...e,
+        action: 'period.proposal_created',
+        actorKind: 'user',
+        actorUserId: f.starsi,
+        before: null,
+        after: { status: 'pending', approvedBy: [f.starsi], afterPeriodId: 1, settings },
+      },
+      {
+        ...e,
+        action: 'period.proposal_approved',
+        actorKind: 'user',
+        actorUserId: f.mladsi,
+        before: { status: 'pending', approvedBy: [f.starsi] },
+        after: { status: 'pending', approvedBy: [f.starsi, f.mladsi] },
+      },
+      {
+        ...e,
+        action: 'period.proposal_approved',
+        actorKind: 'user',
+        actorUserId: f.tata,
+        before: { status: 'pending', approvedBy: [f.starsi, f.mladsi] },
+        after: { status: 'agreed', approvedBy: [f.starsi, f.mladsi, f.tata] },
+      },
+      {
+        ...e,
+        action: 'period.proposal_agreed',
+        actorKind: 'user',
+        actorUserId: f.tata,
+        before: { status: 'pending', approvedBy: [f.starsi, f.mladsi] },
+        after: { status: 'agreed', approvedBy: [f.starsi, f.mladsi, f.tata] },
+      },
+    ])
+    expect(periodRow(f.db, id)?.closedAt).toBeNull()
+  })
+
+  it('the defaults created entry carries the proposed settings', () => {
+    const f = week()
+    const { id } = must(proposeDefaultsChange(f.db, f.tata, NEW_DEFAULTS, AT))
+    expect(entries(f.db)).toEqual([
+      {
+        action: 'defaults.proposal_created',
+        actorKind: 'user',
+        actorUserId: f.tata,
+        entityType: 'defaults_proposal',
+        entityId: String(id),
+        before: null,
+        after: { status: 'pending', approvedBy: [f.tata], settings: NEW_DEFAULTS },
+      },
+    ])
+  })
+
+  it('unknown ids are not_found, not a throw', () => {
+    const f = week()
+    for (const kind of ['period', 'defaults'] as const) {
+      expect(approveProposal(f.db, f.tata, kind, 99, AT)).toEqual({ ok: false, error: 'not_found' })
+      expect(rejectProposal(f.db, f.tata, kind, 99, AT)).toEqual({ ok: false, error: 'not_found' })
+      expect(withdrawProposal(f.db, f.tata, kind, 99, AT)).toEqual({
+        ok: false,
+        error: 'not_found',
+      })
+    }
+  })
+
+  it('agreed at creation (a family with no takers): agreed and audited at once', () => {
+    const f = week()
+    f.db.update(users).set({ role: 'giver' }).where(eq(users.role, 'taker')).run()
+    const { id } = must(proposePeriod(f.db, f.tata, NEXT, AT))
+    expect(periodRow(f.db, id)?.status).toBe('agreed')
+    expect(actionNames(f.db, 'period.proposal')).toEqual([
+      'period.proposal_created',
       'period.proposal_agreed',
     ])
   })
@@ -171,6 +273,15 @@ describe('proposePeriod and approvals', () => {
 })
 
 describe('default-week proposals', () => {
+  it('a second defaults proposal while one is pending is proposal_pending', () => {
+    const f = week()
+    must(proposeDefaultsChange(f.db, f.tata, NEW_DEFAULTS, AT))
+    expect(proposeDefaultsChange(f.db, f.tata, DEFAULT_PERIOD_DEFAULTS, AT)).toEqual({
+      ok: false,
+      error: 'proposal_pending',
+    })
+  })
+
   it('a taker cannot propose defaults (not_a_giver)', () => {
     const f = week()
     expect(proposeDefaultsChange(f.db, f.starsi, NEW_DEFAULTS, AT)).toEqual({
@@ -242,6 +353,33 @@ describe('people changes (role change in the admin console)', () => {
     ])
   })
 
+  it('a people change that does not complete agreement leaves both proposals pending', () => {
+    const f = week()
+    const mama = addGiver(f)
+    const period = must(proposePeriod(f.db, f.mladsi, NEXT, AT)).id
+    const defaults = must(proposeDefaultsChange(f.db, f.tata, NEW_DEFAULTS, AT)).id
+    // Máma becomes a taker who has approved neither: the hooks run, nothing is agreed.
+    must(editPerson(f.db, f.admin, mama, { role: 'taker' }, AT))
+    expect(periodRow(f.db, period)?.status).toBe('pending')
+    expect(defaultsRow(f.db, defaults)?.status).toBe('pending')
+    expect(getPeriodDefaults(f.db)).toEqual(DEFAULT_PERIOD_DEFAULTS)
+    expect(actionNames(f.db, 'period.proposal_agreed')).toEqual([])
+    expect(actionNames(f.db, 'defaults.proposal_agreed')).toEqual([])
+  })
+
+  it('the agreed entry of a people change shows the pending state it moved from', () => {
+    const f = week()
+    const { id } = must(proposePeriod(f.db, f.mladsi, NEXT, AT))
+    must(approveProposal(f.db, f.tata, 'period', id, AT))
+    must(editPerson(f.db, f.admin, f.starsi, { role: 'giver' }, AT))
+    expect(entries(f.db).at(-1)).toMatchObject({
+      action: 'period.proposal_agreed',
+      actorKind: 'system',
+      before: { status: 'pending', approvedBy: [f.mladsi, f.tata] },
+      after: { status: 'agreed', approvedBy: [f.mladsi, f.tata] },
+    })
+  })
+
   it('a role change after the cutoff, before the roll: stays pending, the roll lapses it', () => {
     const f = week()
     const { id } = must(proposePeriod(f.db, f.mladsi, NEXT, AT))
@@ -273,6 +411,19 @@ describe('proposalsView', () => {
         waitingFor: [f.mladsi],
       },
       defaults: null,
+    })
+  })
+
+  it('shows the agreed next-week change with its settings', () => {
+    const f = week()
+    const id = agreedNextWeek(f)
+    expect(proposalsView(f.db, AT).period).toEqual({
+      id,
+      settings: { cutoffAt: NEXT.cutoffAt.toISOString(), levels: NEXT.levels },
+      proposedBy: f.starsi,
+      approvedBy: [f.starsi, f.mladsi, f.tata],
+      status: 'agreed',
+      waitingFor: [],
     })
   })
 

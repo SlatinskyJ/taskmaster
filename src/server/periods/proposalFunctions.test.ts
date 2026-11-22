@@ -59,6 +59,8 @@ describe('parsePeriodProposal', () => {
     ['fraction', { ...good, levels: { lower: 1.5, upper: 9 } }],
     ['string level', { ...good, levels: { lower: '1', upper: 9 } }],
     ['null', null],
+    ['a date that rolls over (30 Feb)', { ...good, cutoffAt: '2026-02-30T12:00:00.000Z' }],
+    ['no milliseconds', { ...good, cutoffAt: '2026-12-05T19:00:00Z' }],
   ])('refuses %s', (_name, data) => {
     expect(() => parsePeriodProposal(data)).toThrow()
   })
@@ -67,6 +69,7 @@ describe('parsePeriodProposal', () => {
 describe('parseProposalRef', () => {
   it('takes a kind and an id', () => {
     expect(parseProposalRef({ kind: 'defaults', id: 3 })).toEqual({ kind: 'defaults', id: 3 })
+    expect(parseProposalRef({ kind: 'period', id: 1 })).toEqual({ kind: 'period', id: 1 })
   })
 
   it.each([

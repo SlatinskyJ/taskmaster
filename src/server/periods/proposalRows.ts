@@ -1,5 +1,11 @@
-import { and, asc, eq, inArray, sql } from 'drizzle-orm'
-import type { DefaultsProposal, PeriodProposalStatus, PeriodSettingsProposal } from '~/domain'
+import { and, asc, eq, sql } from 'drizzle-orm'
+import { lapsePeriodSettings } from '~/domain'
+import type {
+  DefaultsProposal,
+  Period,
+  PeriodProposalStatus,
+  PeriodSettingsProposal,
+} from '~/domain'
 import { parseIsoUtc, toIsoUtc } from '~/domain/dates'
 import type { Weekday } from '~/domain/dates'
 import { writeAudit } from '~/server/audit'
@@ -11,7 +17,7 @@ import {
   periodProposals,
   periods,
 } from '~/server/db/schema'
-import type { DefaultsProposalRow, PeriodProposalRow } from '~/server/db/schema'
+import type { DefaultsProposalRow, PeriodProposalRow, PeriodRow } from '~/server/db/schema'
 
 // Proposal rows ↔ domain proposals, and the two things a period start does with them (spec
 // §5.8): apply the agreed per-period change, lapse the pending ones. No import of defaults.ts or
@@ -92,28 +98,38 @@ export function agreedProposalFor(
  * `now`) lapses: it needed agreement before that start (spec §5.8). Audited by the system.
  */
 export function lapseProposals(tx: Tx, now: Date): void {
-  const at = toIsoUtc(now)
   const pending = tx
-    .select({ id: periodProposals.id, cutoffAt: periods.cutoffAt, endedAt: periods.endedAt })
+    .select({ proposal: periodProposals, period: periods })
     .from(periodProposals)
     .innerJoin(periods, eq(periods.id, periodProposals.afterPeriodId))
-    .where(inArray(periodProposals.status, ['pending']))
+    .where(eq(periodProposals.status, 'pending'))
     .all()
-  for (const p of pending) {
-    // ISO UTC with milliseconds compares as text.
-    if ((p.endedAt ?? p.cutoffAt) > at) continue
+  for (const { proposal, period } of pending) {
+    const before = toPeriodProposal(tx, proposal)
+    if (lapsePeriodSettings(before, toPeriod(period), now).status !== 'lapsed') continue
     tx.update(periodProposals)
-      .set({ status: 'lapsed', closedAt: at })
-      .where(eq(periodProposals.id, p.id))
+      .set({ status: 'lapsed', closedAt: toIsoUtc(now) })
+      .where(eq(periodProposals.id, proposal.id))
       .run()
     writeAudit(tx, {
       actor: { kind: 'system' },
       action: 'period.proposal_lapsed',
       entityType: 'period_proposal',
-      entityId: p.id,
+      entityId: proposal.id,
       before: { status: 'pending' },
       after: { status: 'lapsed' },
       at: now,
     })
+  }
+}
+
+/** A period row as the domain's `Period`. */
+export function toPeriod(row: PeriodRow): Period {
+  return {
+    id: row.id,
+    startsAt: parseIsoUtc(row.startsAt),
+    cutoffAt: parseIsoUtc(row.cutoffAt),
+    endedAt: row.endedAt === null ? null : parseIsoUtc(row.endedAt),
+    levels: { lower: row.lowerLevel, upper: row.upperLevel },
   }
 }
