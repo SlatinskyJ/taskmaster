@@ -1,7 +1,9 @@
 import { hashSync } from '@node-rs/argon2'
+import { eq } from 'drizzle-orm'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import type { Db } from '~/server/db'
-import { featureFlags, users } from '~/server/db/schema'
+import { featureFlags, templates, users } from '~/server/db/schema'
+import { createOnDemandInstance, selfLogInstance } from '~/server/instances'
 import {
   acceptOffer,
   approveTask,
@@ -147,6 +149,7 @@ export function seedDemo(
     seedPoints(tx, id, step, now)
     seedTemplates(tx, ids, now)
     seedWeek(tx, id, now)
+    seedInstances(tx, id, step, now)
     return { kind: 'seeded', usernames: DEMO_USERS.map((u) => u.username) } as const
   })
 }
@@ -184,8 +187,8 @@ function seedPoints(tx: Tx, id: (username: string) => number, step: Step, now: D
 }
 
 /**
- * Two templates (#37): the bins wait for a boy's yes, the dishwasher is agreed, with a score
- * change in flight (#138).
+ * Three templates (#37): the bins wait for a boy's yes, the dishwasher is agreed, with a score
+ * change in flight (#138), and the school bag is agreed with a deadline (#38).
  */
 const DEMO_TEMPLATES: readonly NewTemplate[] = [
   {
@@ -196,6 +199,13 @@ const DEMO_TEMPLATES: readonly NewTemplate[] = [
     deadline: { dayOffset: 1, due: { hour: 7, minute: 0 }, graceMinutes: 120 },
   },
   { title: 'Vyndat myčku', score: 3, approvalRequired: true, schedule: null, deadline: null },
+  {
+    title: 'Nachystat tašku do školy',
+    score: 2,
+    approvalRequired: true,
+    schedule: null,
+    deadline: { dayOffset: 1, due: { hour: 7, minute: 0 }, graceMinutes: 30 },
+  },
 ]
 
 function seedTemplates(tx: Tx, ids: Map<string, number>, now: Date): void {
@@ -207,10 +217,12 @@ function seedTemplates(tx: Tx, ids: Map<string, number>, now: Date): void {
     if (!created.ok) throw new Error(`Demo seed: template "${input.title}": ${created.error}`)
     return created.value
   })
-  const dishes = made[1]
-  if (!dishes) return
-  const agreed = approveTemplateScoreIn(tx, starsi, dishes.id, dishes.score, now)
-  if (!agreed.ok) throw new Error(`Demo seed: approve "${dishes.title}": ${agreed.error}`)
+  const [, dishes, bag] = made
+  if (!dishes || !bag) return
+  for (const t of [dishes, bag]) {
+    const agreed = approveTemplateScoreIn(tx, starsi, t.id, t.score, now)
+    if (!agreed.ok) throw new Error(`Demo seed: approve "${t.title}": ${agreed.error}`)
+  }
   // A score change in flight (#138): Mladší bids 5, Táta offers 4.
   const mladsi = ids.get('mladsi')
   if (mladsi === undefined) throw new Error('Demo seed: family incomplete')
@@ -218,6 +230,23 @@ function seedTemplates(tx: Tx, ids: Map<string, number>, now: Date): void {
   if (!bid.ok) throw new Error(`Demo seed: bid on "${dishes.title}": ${bid.error}`)
   const offer = counterOnTemplateIn(tx, tata, dishes.id, 4, now)
   if (!offer.ok) throw new Error(`Demo seed: offer on "${dishes.title}": ${offer.error}`)
+}
+
+/**
+ * Instances (#38): Táta's "+ Teď" on the dishwasher (open, no deadline) and on the school bag
+ * (due the next day 7:00), and Mladší's Zapsat of the dishwasher, waiting for a parent.
+ */
+function seedInstances(tx: Tx, id: (username: string) => number, step: Step, now: Date): void {
+  const byTitle = (title: string) => {
+    const t = tx.select().from(templates).where(eq(templates.title, title)).get()
+    if (!t) throw new Error(`Demo seed: no template "${title}"`)
+    return t
+  }
+  const dishes = byTitle('Vyndat myčku')
+  const bag = byTitle('Nachystat tašku do školy')
+  step('+ Teď "Vyndat myčku"', createOnDemandInstance(tx, id('tata'), dishes.id, now))
+  step('+ Teď "Nachystat tašku do školy"', createOnDemandInstance(tx, id('tata'), bag.id, now))
+  step('Zapsat "Vyndat myčku"', selfLogInstance(tx, id('mladsi'), dishes.id, dishes.score, now))
 }
 
 const HOUR = 3_600_000

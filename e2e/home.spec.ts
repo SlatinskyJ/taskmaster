@@ -30,7 +30,7 @@ test('taker sees his points and marks an open task done', async ({ page }) => {
 test('the brother’s points are not on his Domů', async ({ page }) => {
   await passwordLogin(page, 'mladsi')
   await expect(page).toHaveURL(/\/$/)
-  await expect(bar(page)).toHaveAttribute('aria-label', /^152 bodů potvrzeno, 3 čeká/)
+  await expect(bar(page)).toHaveAttribute('aria-label', /^152 bodů potvrzeno, 6 čeká/)
   await expect(page.getByText(cs.points.upperDone)).toBeVisible()
   await expect(page.locator('[data-slot="points-bar"]')).toHaveCount(1)
 })
@@ -44,7 +44,7 @@ test('a parent sees both boys’ points, approves completions and sees Úkoly by
   const bars = page.locator('[data-slot="points-bar"]')
   await expect(bars).toHaveCount(2)
   await expect(bars.nth(0)).toHaveAttribute('aria-label', /^260 bodů potvrzeno, 19 čeká/)
-  await expect(bars.nth(1)).toHaveAttribute('aria-label', /^152 bodů potvrzeno, 3 čeká/)
+  await expect(bars.nth(1)).toHaveAttribute('aria-label', /^152 bodů potvrzeno, 6 čeká/)
   const waitingOnBoys = page.getByRole('region', { name: /Čeká na kluky/ })
   await expect(waitingOnBoys.getByText('Uklidit sklep')).toBeVisible()
 

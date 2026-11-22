@@ -1,5 +1,5 @@
 import { verify } from '@node-rs/argon2'
-import { asc, eq, sql } from 'drizzle-orm'
+import { asc, eq, ne, sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { login } from '~/server/auth'
 import { auditLog, settlements, tasks, templates, templateThread, users } from '~/server/db/schema'
@@ -96,6 +96,10 @@ describe('demo seed (#62)', () => {
           ...(approved ? ['task.approved'] : []),
         ].map((action) => [action, 'user']),
       ),
+      // #38: two instances from Táta's "+ Teď", one self-logged by Mladší.
+      ['instance.created', 'user'],
+      ['instance.created', 'user'],
+      ['instance.self_logged', 'user'],
     ])
   })
 
@@ -138,9 +142,10 @@ describe('demo seed (#62)', () => {
     seedDemo(db, PREVIEW, T0)
     expect(takerPoints(db).takers.map((t) => [t.name, t.confirmed, t.pending])).toEqual([
       ['Starší', 260, 14],
-      ['Mladší', 152, 3],
+      // + 3 pending: the self-logged dishwasher (#38).
+      ['Mladší', 152, 6],
     ])
-    const open = listTasks(db).filter((t) => t.status === 'open')
+    const open = listTasks(db).filter((t) => t.status === 'open' && t.origin === 'one_time')
     expect(open.map((t) => [t.title, t.score])).toEqual([
       ['Umýt okna v obýváku i v ložnici', 5],
       ['Shrabat listí na zahradě', 10],
@@ -229,7 +234,7 @@ describe('demo seed (#62)', () => {
     expect(getFlags(db)).toEqual({ ...ALL_FEATURES, week: false })
   })
 
-  it('adds two templates (#37): one waiting for agreement, one agreed', () => {
+  it('adds three templates (#37, #38): one waiting for agreement, two agreed', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     expect(
@@ -254,6 +259,14 @@ describe('demo seed (#62)', () => {
         due: '07:00',
       },
       { title: 'Vyndat myčku', status: 'active', score: 3, days: 0, time: null, due: null },
+      {
+        title: 'Nachystat tašku do školy',
+        status: 'active',
+        score: 2,
+        days: 0,
+        time: null,
+        due: '07:00',
+      },
     ])
     const actions = db
       .select({ action: auditLog.action })
@@ -268,6 +281,28 @@ describe('demo seed (#62)', () => {
       'template.agreed',
       'template.bid_placed',
       'template.score_countered',
+      'template.created',
+      'template.score_approved',
+      'template.agreed',
+    ])
+  })
+
+  it('adds instances (#38): two from "+ Teď", one self-logged by Mladší waiting for a parent', () => {
+    const db = createTestDb()
+    seedDemo(db, PREVIEW, T0)
+    const rows = db
+      .select()
+      .from(tasks)
+      .where(ne(tasks.origin, 'one_time'))
+      .orderBy(asc(tasks.id))
+      .all()
+    expect(
+      rows.map((r) => [r.title, r.origin, r.status, r.score, r.dueAt, r.earnerId !== null]),
+    ).toEqual([
+      ['Vyndat myčku', 'on_demand', 'open', 3, null, false],
+      // T0 is Tue 17 Nov 2026 10:00Z: "next day, 7:00" Prague is Wed 06:00Z.
+      ['Nachystat tašku do školy', 'on_demand', 'open', 2, '2026-11-18T06:00:00.000Z', false],
+      ['Vyndat myčku', 'self_logged', 'done_unconfirmed', 3, null, true],
     ])
   })
 
@@ -290,7 +325,7 @@ describe('demo seed (#62)', () => {
         .from(templates)
         .all()
         .map((t) => t.score),
-    ).toEqual([4, 3])
+    ).toEqual([4, 3, 2])
   })
 
   it('all or nothing: a failing template leaves no people either', () => {
@@ -304,7 +339,7 @@ describe('demo seed (#62)', () => {
     expect(db.select().from(auditLog).all()).toHaveLength(0)
   })
 
-  it('demo seed gives a meeting with 3 pending items and totals 160 / 102 (#40 + #44, #45 carry 8)', () => {
+  it('demo seed gives a meeting with 4 pending items and totals 160 / 102 (#40 + #44, #45 carry 8, #38)', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     // The roller starts the week at boot, right after the seed.
@@ -315,6 +350,7 @@ describe('demo seed (#62)', () => {
       ['Vytřít podlahu v kuchyni', 12, 'Starší'],
       ['Zalít kytky', 2, 'Starší'],
       ['Vynést tříděný', 3, 'Mladší'],
+      ['Vyndat myčku', 3, 'Mladší'],
     ])
     expect(meeting.takers.map((t) => [t.name, t.total])).toEqual([
       ['Starší', 160],
