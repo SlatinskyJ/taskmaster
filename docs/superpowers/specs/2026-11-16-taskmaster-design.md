@@ -127,7 +127,11 @@ A template defines:
 Instances come into existence three ways:
 1. **Scheduled**: created automatically by the schedule. **[call]** If an earlier *no-deadline* instance of the same template is still open, no duplicate is created.
 2. **On demand**: a giver creates an instance whenever needed ("dishwasher is full"), possibly several times a day.
-3. **Self-logged by a taker**: a taker did a recurring chore unprompted. They log it against the template; it is created directly in **done, unconfirmed** and **always** requires giver approval, regardless of the template's approval flag.
+3. **Self-logged by a taker** (Domů, "Zapsat udělanou práci"): a taker did a recurring chore unprompted. They log it against the template; it is created directly in **done, unconfirmed** and **always** requires giver approval, regardless of the template's approval flag.
+   - **Refused while a copy is out (Jakub, 2026-11-22):** a taker cannot log a chore whose template has an **open** or **reserved** instance; they complete that one instead. A self-log or completion still waiting for approval does not block a new log.
+   - **When it was done (Jakub, 2026-11-22):** the taker picks "Kdy?" from three pills: *Teď* (now), *Dnes ráno*, *Včera*. **[call]** *Dnes ráno* = today 07:00 Prague, *Včera* = yesterday 18:00 Prague. The picked moment is the log's `completed_at` (5.5), but never earlier than the start of the running period: a pick before it is refused. The audit entry keeps the real time of the tap.
+
+A scheduled instance the scheduler creates late (the server was down at its slot, §11) is due by the template's deadline rule counted from its **slot**, not from the moment it was created (Jakub, 2026-11-22).
 
 ### 5.4 Reservation
 - Optional. Anyone may complete an open task or instance without reserving it first.
@@ -141,7 +145,7 @@ Instances come into existence three ways:
 - Flag off: completion → **confirmed** immediately.
 - Self-logged unprompted chores always need approval (5.3).
 - A giver completing a task: it is closed with no points awarded. **[call]** No approval step.
-- Every completion stores `completed_at` (the time it was marked done). The period a completion belongs to is determined by `completed_at`, not by approval time.
+- Every completion stores `completed_at` (the time it was marked done; for a self-log, the "Kdy?" pick, 5.3). The period a completion belongs to is determined by `completed_at`, not by approval time.
 
 ### 5.6 Lifecycle (one-time task and instance)
 
@@ -321,7 +325,7 @@ Jakub prefers TypeScript and React and wants to explore TanStack. Next.js was re
 - **Passkeys (Jakub, 2026-11-16):** users can log in with Face ID / Touch ID / Android fingerprint or the phone's screen lock via WebAuthn passkeys (`@simplewebauthn/server` + `@simplewebauthn/browser`). Relying-party ID `taskmaster.slatinsky.cz`. Flow: the first login uses the admin-seeded password, then the app offers "Přihlásit otiskem / obličejem" to register a passkey; later logins are one tap. Passkeys sync via iCloud Keychain / Google Password Manager. Password stays as a fallback. A user may hold several passkeys (one per device). Passkey registrations and removals are audit-logged. Not used for the shared tablet (stretch), which keeps name+PIN.
 - **Sessions [call]:** long-lived (about 90 days, sliding) on personal phones, so logging in is rare anyway.
 - **Auth [call]:** own small session auth, no auth framework. Passwords hashed with argon2id (`@node-rs/argon2`), random session tokens stored hashed in the DB, cookie `HttpOnly; Secure; SameSite=Lax`, login rate limit per user and IP kept in SQLite. The tablet name+PIN mode (stretch) becomes a second login method on the same session table. No Cloudflare Access gate in v1, because it adds too much friction for the 13-year-old.
-- **Scheduler [call]:** in-process `croner` with zone Europe/Prague. It creates scheduled instances, expires deadline instances, and rolls periods. Jobs are idempotent and catch up on boot after downtime.
+- **Scheduler [call]:** in-process `croner` with zone Europe/Prague. It creates scheduled instances, expires deadline instances, and rolls periods. Jobs are idempotent and catch up on boot after downtime; a caught-up instance takes its due time from its slot (5.3).
 - **PWA [call]:** v1 ships a web manifest and a small service worker (app shell cache only, no offline writes), so the app is installable. Push notifications (stretch) come later via `web-push` with VAPID keys; on iOS they need the app added to the home screen.
 - **UI:** Tailwind CSS v4 (Jakub, 2026-11-16; chosen for maintainability over plain CSS). The Hřiště/Pastelky tokens from the mockups (`/ui-design/` in the project files) go in `@theme` as CSS variables, with light and dark modes following the system. Keyframes and gamified effects live in one small CSS file; `canvas-confetti` handles confetti. Components: **shadcn/ui** (Jakub, 2026-11-16), copied into the repo so we own and restyle them; its CSS variables are mapped to the Hřiště/Pastelky tokens, so it must not keep the default neutral look. Likely set [call]: Button, Card, Badge, Progress (XP bar), Drawer (mobile bottom sheets for task actions), Dialog, Tabs, Sonner (toasts), form inputs, Input OTP (tablet PIN later). Czech strings are kept in one module [call].
 - **Dates [call]:** all schedule, cutoff, and deadline maths in Europe/Prague via one helper module (`date-fns` + `@date-fns/tz`); UTC instants are stored in the DB.
