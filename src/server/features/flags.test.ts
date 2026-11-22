@@ -12,7 +12,15 @@ describe('getFlags', () => {
       log: false,
       week: false,
       meeting: false,
+      periodProposals: false,
     })
+    expect(
+      createTestDb()
+        .select()
+        .from(featureFlags)
+        .where(eq(featureFlags.key, 'periodProposals'))
+        .get(),
+    ).toEqual({ key: 'periodProposals', enabled: false })
   })
 
   it('reads a switch turned on by hand in the database', () => {
@@ -25,7 +33,13 @@ describe('getFlags', () => {
     const db = createTestDb()
     db.update(featureFlags).set({ enabled: true }).run()
     db.delete(featureFlags).where(eq(featureFlags.key, 'week')).run()
-    expect(getFlags(db)).toEqual({ recurring: true, log: true, week: false, meeting: true })
+    expect(getFlags(db)).toEqual({
+      recurring: true,
+      log: true,
+      week: false,
+      meeting: true,
+      periodProposals: true,
+    })
   })
 
   it('ignores a row for a switch the code does not know', () => {
