@@ -28,7 +28,8 @@ With `sqlite3` on hand (dev: `.data/taskmaster.db`):
 `enabled` takes only `0` or `1` (a CHECK refuses anything else). A new switch: add its key to
 `FEATURE_KEYS` and seed its row (off) in a new migration.
 
-Previews start from the same migrations, so every switch is off there too. A PR that finishes a
-feature and should show it on its preview turns the switch on in a new migration; that
-migration also turns it on in production when the PR merges, so it belongs in the PR that
-releases the feature.
+Previews and e2e servers run the demo seed (`TASKMASTER_ENV=preview`, `src/server/demo/seed.ts`),
+which turns every switch on, so a feature behind a switch shows on its PR's preview with nothing
+to flip. Production never runs that seed: its switches keep the migration's values. Turning a
+feature on in production is Jakub's call: by hand as above, or in a migration that belongs only
+in the PR that releases the feature (it flips production when that PR merges).
