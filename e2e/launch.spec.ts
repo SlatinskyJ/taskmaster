@@ -1,34 +1,13 @@
-import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
-import Database from 'better-sqlite3'
 import { cs } from '../src/lib/strings'
 import { bottomBar, passwordLogin } from './helpers'
 
 // The launch switches as the migration seeds them (all off), read from the real database by
 // the app shell: a brother has no bar, a parent's bar is Domů / Úkoly, and Nový úkol has no
-// Jednorázový / Opakovaný toggle yet still creates a one-time task. The demo seed turns every
-// switch on (previews show the whole app), so this file sets them back to the migration's
-// values first and turns them on again after, for the specs that share this server.
-
-/** Sets every launch switch in the off server's database. */
-function setSwitches(enabled: boolean) {
-  const dir = process.env.TM_E2E_OFF_DATA_DIR
-  if (!dir) throw new Error('TM_E2E_OFF_DATA_DIR not set (playwright.config.ts)')
-  const db = new Database(join(dir, 'taskmaster.db'))
-  try {
-    db.prepare('UPDATE feature_flags SET enabled = ?').run(enabled ? 1 : 0)
-  } finally {
-    db.close()
-  }
-}
+// Jednorázový / Opakovaný toggle yet still creates a one-time task. Its own server on the
+// `launch` seed (#183), which turns no switch on, while previews' `demo` seed turns all on.
 
 test.use({ viewport: { width: 360, height: 800 } })
-test.beforeAll(() => {
-  setSwitches(false)
-})
-test.afterAll(() => {
-  setSwitches(true)
-})
 
 test('a brother has no bottom bar at launch', async ({ page }) => {
   await passwordLogin(page, 'starsi')

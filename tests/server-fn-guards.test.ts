@@ -11,6 +11,14 @@ import { PUBLIC_SERVER_FNS } from '~/server/auth/guards'
 /** Server function → roles allowed (`any` = every signed-in user). Add new ones here. */
 const EXPECTED_ROLES: Record<string, string> = {
   listUsersFn: 'admin',
+  getPeriodDefaultsFn: 'admin',
+  savePeriodDefaultsFn: 'admin',
+  getProposalsFn: 'giver,taker',
+  proposePeriodFn: 'giver,taker',
+  proposeDefaultsFn: 'giver',
+  approveProposalFn: 'giver,taker',
+  rejectProposalFn: 'giver,taker',
+  withdrawProposalFn: 'giver,taker',
   createUserFn: 'admin',
   updateUserFn: 'admin',
   resetPasswordFn: 'admin',

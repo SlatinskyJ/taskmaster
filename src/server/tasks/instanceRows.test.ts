@@ -112,12 +112,12 @@ describe('lifecycle on instances', () => {
   it('a rejected self-log is closed: no points, not pending, not on the board', () => {
     const f = family()
     const r = selfLogged(f)
-    const before = takerPoints(f.db).takers.find((t) => t.id === f.mladsi)
+    const before = takerPoints(f.db, T2).takers.find((t) => t.id === f.mladsi)
     expect(before?.pending).toBe(3)
     must(rejectTask(f.db, f.tata, r.id, undefined, T2))
     const saved = row(f.db, r.id)
     expect(saved).toMatchObject({ status: 'rejected', earnerId: f.mladsi })
-    expect(takerPoints(f.db).takers.find((t) => t.id === f.mladsi)).toMatchObject({
+    expect(takerPoints(f.db, T2).takers.find((t) => t.id === f.mladsi)).toMatchObject({
       confirmed: 0,
       pending: 0,
     })
@@ -129,7 +129,7 @@ describe('lifecycle on instances', () => {
     const f = family()
     const r = selfLogged(f)
     must(approveTask(f.db, f.tata, r.id, T2))
-    expect(takerPoints(f.db).takers.find((t) => t.id === f.mladsi)?.confirmed).toBe(3)
+    expect(takerPoints(f.db, T2).takers.find((t) => t.id === f.mladsi)?.confirmed).toBe(3)
   })
 
   it('an instance never takes a price change, and nothing is logged', () => {

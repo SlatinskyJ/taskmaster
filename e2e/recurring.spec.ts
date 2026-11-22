@@ -20,7 +20,7 @@ async function switchTo(page: Page, username: string) {
 test('Zapsat, + Teď, approve, then the tile is taken', async ({ page }) => {
   await passwordLogin(page, 'starsi')
   await expect(page).toHaveURL(/\/$/)
-  await expect(bar(page)).toHaveAttribute('aria-label', /^260 bodů potvrzeno, 14 čeká/)
+  await expect(bar(page)).toHaveAttribute('aria-label', /^40 bodů potvrzeno, 12 čeká/)
   await page.goto('/zapsat')
   // The school bag is already on the board in the demo data.
   await expect(
@@ -33,7 +33,7 @@ test('Zapsat, + Teď, approve, then the tile is taken', async ({ page }) => {
   await page.getByRole('button', { name: cs.log.confirm, exact: true }).click()
   await expect(page.getByText(cs.log.toast)).toBeVisible()
   await page.goto('/')
-  await expect(bar(page)).toHaveAttribute('aria-label', /^260 bodů potvrzeno, 17 čeká/)
+  await expect(bar(page)).toHaveAttribute('aria-label', /^40 bodů potvrzeno, 15 čeká/)
 
   await switchTo(page, 'tata')
   await page.goto('/ukoly')
@@ -54,7 +54,7 @@ test('Zapsat, + Teď, approve, then the tile is taken', async ({ page }) => {
   await mine.getByRole('button', { name: cs.work.approve }).click()
   await expect(page.locator('[data-slot="points-bar"]').nth(0)).toHaveAttribute(
     'aria-label',
-    /^263 bodů potvrzeno, 14 čeká/,
+    /^43 bodů potvrzeno, 12 čeká/,
   )
 
   await switchTo(page, 'starsi')

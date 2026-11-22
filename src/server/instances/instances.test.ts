@@ -187,7 +187,7 @@ describe('selfLogInstance (Zapsat)', () => {
     must(approveTask(f.db, f.tata, a.id, T2))
     must(rejectTask(f.db, f.tata, b.id, undefined, T2))
     expect(row(f.db, b.id)?.status).toBe('rejected')
-    expect(takerPoints(f.db).takers.find((t) => t.id === f.mladsi)).toMatchObject({
+    expect(takerPoints(f.db, T2).takers.find((t) => t.id === f.mladsi)).toMatchObject({
       confirmed: 3,
       pending: 0,
     })

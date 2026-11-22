@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "eb68a6ba-2968-4235-a6ce-166ddf63e465",
+  "id": "0ce83736-9e4b-449e-9611-e4defdfd88f9",
   "prevId": "64e78f64-2255-4988-aeee-e4d447aa1d28",
   "tables": {
     "audit_log": {
@@ -902,35 +902,6 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
-        },
-        "template_id": {
-          "name": "template_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "origin": {
-          "name": "origin",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": "'one_time'"
-        },
-        "due_at": {
-          "name": "due_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "grace_ends_at": {
-          "name": "grace_ends_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
         }
       },
       "indexes": {
@@ -938,13 +909,6 @@
           "name": "tasks_status_idx",
           "columns": [
             "status"
-          ],
-          "isUnique": false
-        },
-        "tasks_template_idx": {
-          "name": "tasks_template_idx",
-          "columns": [
-            "template_id"
           ],
           "isUnique": false
         }
@@ -1014,19 +978,6 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
-        },
-        "tasks_template_id_templates_id_fk": {
-          "name": "tasks_template_id_templates_id_fk",
-          "tableFrom": "tasks",
-          "tableTo": "templates",
-          "columnsFrom": [
-            "template_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1034,15 +985,7 @@
       "checkConstraints": {
         "tasks_status_check": {
           "name": "tasks_status_check",
-          "value": "\"tasks\".\"status\" IN ('proposed', 'open', 'reserved', 'done_unconfirmed', 'confirmed', 'cancelled', 'expired', 'rejected')"
-        },
-        "tasks_origin_check": {
-          "name": "tasks_origin_check",
-          "value": "\"tasks\".\"origin\" IN ('one_time', 'on_demand', 'self_logged', 'scheduled') AND (\"tasks\".\"origin\" = 'one_time') = (\"tasks\".\"template_id\" IS NULL)"
-        },
-        "tasks_deadline_check": {
-          "name": "tasks_deadline_check",
-          "value": "(\"tasks\".\"due_at\" IS NULL AND \"tasks\".\"grace_ends_at\" IS NULL) OR (\"tasks\".\"due_at\" IS NOT NULL AND \"tasks\".\"grace_ends_at\" IS NOT NULL AND \"tasks\".\"template_id\" IS NOT NULL)"
+          "value": "\"tasks\".\"status\" IN ('proposed', 'open', 'reserved', 'done_unconfirmed', 'confirmed', 'cancelled')"
         },
         "tasks_score_check": {
           "name": "tasks_score_check",
@@ -1859,6 +1802,110 @@
         "settlements_deducted_check": {
           "name": "settlements_deducted_check",
           "value": "(\"settlements\".\"level\" = 'none') = (\"settlements\".\"deducted\" = 0)"
+        }
+      }
+    },
+    "period_defaults": {
+      "name": "period_defaults",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "length_days": {
+          "name": "length_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoff_weekday": {
+          "name": "cutoff_weekday",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoff_hour": {
+          "name": "cutoff_hour",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoff_minute": {
+          "name": "cutoff_minute",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lower_level": {
+          "name": "lower_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "upper_level": {
+          "name": "upper_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "period_defaults_updated_by_users_id_fk": {
+          "name": "period_defaults_updated_by_users_id_fk",
+          "tableFrom": "period_defaults",
+          "tableTo": "users",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "period_defaults_singleton_check": {
+          "name": "period_defaults_singleton_check",
+          "value": "\"period_defaults\".\"id\" = 1"
+        },
+        "period_defaults_length_check": {
+          "name": "period_defaults_length_check",
+          "value": "\"period_defaults\".\"length_days\" BETWEEN 7 AND 364 AND \"period_defaults\".\"length_days\" % 7 = 0"
+        },
+        "period_defaults_cutoff_check": {
+          "name": "period_defaults_cutoff_check",
+          "value": "\"period_defaults\".\"cutoff_weekday\" BETWEEN 0 AND 6 AND \"period_defaults\".\"cutoff_hour\" BETWEEN 0 AND 23 AND \"period_defaults\".\"cutoff_minute\" BETWEEN 0 AND 59"
+        },
+        "period_defaults_levels_check": {
+          "name": "period_defaults_levels_check",
+          "value": "\"period_defaults\".\"lower_level\" >= 1 AND \"period_defaults\".\"lower_level\" <= \"period_defaults\".\"upper_level\""
         }
       }
     }
