@@ -1,4 +1,4 @@
-import type { PeriodDefaults } from '~/domain'
+import type { Levels, PeriodDefaults } from '~/domain'
 import type { Weekday } from '~/domain/dates'
 import { MAX_LENGTH_DAYS } from '~/domain/periods'
 import { LEVEL_MAX } from '~/lib/periodLimits'
@@ -43,13 +43,13 @@ export const canShorten = (d: PeriodDefaults) => d.lengthDays > 7
 export const canLengthen = (d: PeriodDefaults) => d.lengthDays < MAX_LENGTH_DAYS
 
 /** A new lower level; raising it above the upper one pushes the upper one up with it. */
-export function setLower(d: PeriodDefaults, lower: number): PeriodDefaults {
+export function setLower<T extends { levels: Levels }>(d: T, lower: number): T {
   const l = Math.min(LEVEL_MAX, Math.max(1, lower))
   return { ...d, levels: { lower: l, upper: Math.max(l, d.levels.upper) } }
 }
 
 /** A new upper level, never below the lower one. */
-export function setUpper(d: PeriodDefaults, upper: number): PeriodDefaults {
+export function setUpper<T extends { levels: Levels }>(d: T, upper: number): T {
   const u = Math.min(LEVEL_MAX, Math.max(d.levels.lower, upper))
   return { ...d, levels: { ...d.levels, upper: u } }
 }

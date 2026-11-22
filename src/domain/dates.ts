@@ -94,6 +94,18 @@ export function nextPragueWeekdayAt(after: Date, weekday: Weekday, hour: number,
   throw new Error('nextPragueWeekdayAt: no candidate found')
 }
 
+/**
+ * Prague calendar days from `from` to `to` (dates only, times ignored): 7 for a week over a
+ * DST switch, not 6 or 8. Negative when `to` is earlier.
+ */
+export function pragueDaysBetween(from: Date, to: Date): number {
+  const a = toPragueWallTime(from)
+  const b = toPragueWallTime(to)
+  return Math.round(
+    (Date.UTC(b.year, b.month - 1, b.day) - Date.UTC(a.year, a.month - 1, a.day)) / 86_400_000,
+  )
+}
+
 /** Serialises an instant for the DB: ISO 8601 UTC with milliseconds. */
 export function toIsoUtc(instant: Date): string {
   if (Number.isNaN(instant.getTime())) throw new RangeError('Invalid date')

@@ -40,6 +40,10 @@ export interface DefaultWeekViewProps {
   error: string | null
   onChange: (next: PeriodDefaults) => void
   onSave: () => void
+  /** The button and hint text; Správa's by default ("Uložit", "Ukládám…"). */
+  saveLabel?: string
+  busyLabel?: string
+  hint?: string
 }
 
 /**
@@ -54,6 +58,9 @@ export function DefaultWeekView({
   error,
   onChange,
   onSave,
+  saveLabel = cs.admin.save,
+  busyLabel = cs.admin.saving,
+  hint = t.hint,
 }: DefaultWeekViewProps) {
   const id = useId()
   const unchanged = sameDefaults(form, saved)
@@ -164,9 +171,9 @@ export function DefaultWeekView({
           />
         </div>
 
-        <p className="text-meta font-bold text-muted">{t.hint}</p>
+        <p className="text-meta font-bold text-muted">{hint}</p>
         <Button size="lg" className="w-full" disabled={unchanged || busy} onClick={onSave}>
-          {busy ? cs.admin.saving : cs.admin.save}
+          {busy ? busyLabel : saveLabel}
         </Button>
         {error && (
           <p role="alert" className="font-bold text-state-rejected-text">

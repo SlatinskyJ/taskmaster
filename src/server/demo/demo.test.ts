@@ -6,7 +6,7 @@ import { createTestDb } from '~/server/db/testing'
 import { takerPoints } from '~/server/points'
 import { listTasks } from '~/server/tasks'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
-import { listPeriods, rollPeriods } from '~/server/periods'
+import { listPeriods, proposalsView, rollPeriods } from '~/server/periods'
 import { rejectionsSince } from '~/server/tasks/rejections'
 import { getMeeting } from '~/server/settlement/meeting'
 import { ALL_FEATURES, NO_FEATURES } from '~/lib/features'
@@ -347,5 +347,18 @@ describe('the demo seed (previews)', () => {
         'Sklo zůstalo v tašce u dveří, vynes ho prosím až dolů do kontejneru.',
       ],
     ])
+  })
+})
+
+describe('the demo seed: proposals (#43)', () => {
+  it('a pending next week (waits for Mladší) and a pending default week (waits for both)', () => {
+    const db = createTestDb()
+    seedDemo(db, PREVIEW, T0)
+    const name = (uid: number) => db.select().from(users).where(eq(users.id, uid)).get()?.username
+    const v = proposalsView(db, T0)
+    expect(v.period?.status).toBe('pending')
+    expect(v.period?.waitingFor.map(name)).toEqual(['mladsi'])
+    expect(v.defaults?.status).toBe('pending')
+    expect(v.defaults?.waitingFor.map(name)).toEqual(['starsi', 'mladsi'])
   })
 })

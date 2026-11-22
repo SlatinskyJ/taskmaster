@@ -3,6 +3,7 @@ import {
   approveDefaults,
   approvePeriodSettings,
   isRunning,
+  nextPeriod,
   periodAgreementWaitingFor,
   proposeDefaults,
   proposePeriodSettings,
@@ -19,6 +20,7 @@ import type {
   PeriodProposalStatus,
   PeriodSettings,
   PeriodSettingsProposal,
+  PeriodSpan,
 } from '~/domain'
 import { toIsoUtc } from '~/domain/dates'
 import { fail, ok } from '~/domain/result'
@@ -32,10 +34,11 @@ import {
   periodProposalApprovals,
   periodProposals,
   periods,
+  users,
 } from '~/server/db/schema'
 import { listPeople } from '~/server/users/people'
-import { writePeriodDefaults } from './defaults'
-import { toDefaultsProposal, toPeriodProposal } from './proposalRows'
+import { getPeriodDefaults, writePeriodDefaults } from './defaults'
+import { agreedProposalFor, toDefaultsProposal, toPeriodProposal } from './proposalRows'
 import type { Stored } from './proposalRows'
 import { currentPeriod, toPeriod } from './periods'
 
@@ -149,7 +152,7 @@ const outcome = (id: number, status: PeriodProposalStatus): ProposalOutcome => o
 
 /** Any party proposes a different cutoff/levels for the period after the running one. */
 export function proposePeriod(
-  db: Db,
+  db: Db | Tx,
   userId: number,
   settings: PeriodSettings,
   now: Date,
@@ -195,7 +198,7 @@ export function proposePeriod(
 
 /** A giver proposes new default-week settings. */
 export function proposeDefaultsChange(
-  db: Db,
+  db: Db | Tx,
   giverId: number,
   defaults: PeriodDefaults,
   now: Date,
@@ -244,7 +247,7 @@ function afterPeriod(tx: Tx, proposal: Stored<PeriodSettingsProposal>) {
 
 /** A party approves; reaching period agreement is audited, and stores a defaults change. */
 export function approveProposal(
-  db: Db,
+  db: Db | Tx,
   userId: number,
   kind: ProposalKind,
   id: number,
@@ -353,9 +356,47 @@ export interface ProposalView<S> {
   waitingFor: number[]
 }
 
+export interface SpanView {
+  startsAt: string
+  cutoffAt: string
+  levels: { lower: number; upper: number }
+}
+
+export interface Party {
+  id: number
+  name: string
+  role: 'taker' | 'giver'
+}
+
 export interface ProposalsView {
   period: ProposalView<{ cutoffAt: string; levels: { lower: number; upper: number } }> | null
   defaults: ProposalView<PeriodDefaults> | null
+  /** The running week, or null before the first roll (or between a cutoff and its roll). */
+  running: SpanView | null
+  /** Next week as it starts now: the agreed change if there is one, else the default week. */
+  next: SpanView | null
+  /** Next week as the default week alone would make it, even when a change is agreed. */
+  defaultNext: SpanView | null
+  /** The stored default week. */
+  currentDefaults: PeriodDefaults
+  /** Every active taker and giver, by id: who the screens name. No admin, no usernames. */
+  parties: Party[]
+}
+
+const spanView = (s: PeriodSpan): SpanView => ({
+  startsAt: toIsoUtc(s.startsAt),
+  cutoffAt: toIsoUtc(s.cutoffAt),
+  levels: { lower: s.levels.lower, upper: s.levels.upper },
+})
+
+function listParties(db: Reader): Party[] {
+  return db
+    .select({ id: users.id, name: users.displayName, role: users.role })
+    .from(users)
+    .where(and(eq(users.active, true), inArray(users.role, ['taker', 'giver'])))
+    .orderBy(asc(users.id))
+    .all()
+    .map((u) => ({ id: u.id, name: u.name, role: u.role === 'giver' ? 'giver' : 'taker' }))
 }
 
 /** What a party sees: the open change for next week, and the pending default-week change. */
@@ -382,7 +423,14 @@ export function proposalsView(db: Reader, now: Date): ProposalsView {
     .get()
   const p = periodRow && toPeriodProposal(db, periodRow)
   const d = defaultsRow && toDefaultsProposal(db, defaultsRow)
+  const currentDefaults = getPeriodDefaults(db)
+  const agreed = current ? agreedProposalFor(db, current.id) : null
   return {
+    running: current ? spanView(current) : null,
+    next: current ? spanView(nextPeriod(current, currentDefaults, agreed)) : null,
+    defaultNext: current ? spanView(nextPeriod(current, currentDefaults, null)) : null,
+    currentDefaults,
+    parties: listParties(db),
     period: p
       ? {
           id: p.id,

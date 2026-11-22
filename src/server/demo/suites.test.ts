@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import { settlements, templates, users } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
-import { listPeriods, rollPeriods } from '~/server/periods'
+import { listPeriods, proposalsView, rollPeriods } from '~/server/periods'
 import { takerPoints } from '~/server/points'
 import { getMeeting } from '~/server/settlement/meeting'
 import { listTasks } from '~/server/tasks'
@@ -98,5 +98,24 @@ describe('e2e seeds (#183)', () => {
     expect(rejectionsSince(db, current.startsAt).map((r) => [r.title, name(r.earnerId)])).toEqual([
       ['Vynést sklo a plasty do kontejneru', 'mladsi'],
     ])
+  })
+
+  it('proposals: Starší’s next week (60/120) waits for Mladší; Táta’s 14-day default week for both boys', () => {
+    const db = seeded('proposals')
+    const id = (u: string) => db.select().from(users).where(eq(users.username, u)).get()?.id
+    const v = proposalsView(db, new Date(T0.getTime() + 120_000))
+    expect(v.period).toMatchObject({
+      status: 'pending',
+      proposedBy: id('starsi'),
+      approvedBy: [id('starsi'), id('tata')],
+      waitingFor: [id('mladsi')],
+      settings: { cutoffAt: v.defaultNext?.cutoffAt, levels: { lower: 60, upper: 120 } },
+    })
+    expect(v.defaults).toMatchObject({
+      status: 'pending',
+      proposedBy: id('tata'),
+      waitingFor: [id('starsi'), id('mladsi')],
+      settings: { lengthDays: 14, levels: { lower: 60, upper: 120 } },
+    })
   })
 })

@@ -16,11 +16,11 @@ export const Route = createFileRoute('/_app/schuzka')({
 })
 
 function Meeting() {
-  const { user } = Route.useRouteContext()
+  const { user, features } = Route.useRouteContext()
   const { meeting, plan } = Route.useLoaderData()
   return (
     <Screen title={cs.nav.meeting} user={user}>
-      <MeetingScreen meeting={meeting} plan={plan} />
+      <MeetingScreen meeting={meeting} plan={plan} otherLevels={features.periodProposals} />
     </Screen>
   )
 }

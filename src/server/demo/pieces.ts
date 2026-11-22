@@ -1,8 +1,17 @@
 import { eq } from 'drizzle-orm'
 import type { Tx } from '~/server/audit'
+import { nextPeriod } from '~/domain'
 import { templates as templateTable } from '~/server/db/schema'
 import { createOnDemandInstance, selfLogInstance } from '~/server/instances'
-import { getPeriodDefaults, listPeriods, rollPeriods } from '~/server/periods'
+import {
+  approveProposal,
+  currentPeriod,
+  getPeriodDefaults,
+  listPeriods,
+  proposeDefaultsChange,
+  proposePeriod,
+  rollPeriods,
+} from '~/server/periods'
 import { getMeeting, settlePeriod } from '~/server/settlement/meeting'
 import {
   acceptOffer,
@@ -252,4 +261,28 @@ export const instances: Piece = ({ tx, id, now }) => {
   )
   step('reject "Vyndat myčku"', rejectTask(tx, id('tata'), logged.id, undefined, now))
   step('+ Teď "Nachystat tašku do školy"', createOnDemandInstance(tx, id('tata'), bag.id, now))
+}
+
+/**
+ * #43: an open proposal of each kind, so Příští týden, Výchozí týden and the Domů rows have
+ * something to show. Starší proposes next week at 60/120 with the default end, and Táta agrees,
+ * so Mladší is still waiting; Táta proposes a 14-day default week at 60/120, waiting for both
+ * boys. Starts the first week now if no earlier piece did.
+ */
+export const proposals: Piece = ({ tx, id, now }) => {
+  const defaults = getPeriodDefaults(tx)
+  rollPeriods(tx, now, defaults)
+  const running = currentPeriod(tx, now)
+  if (!running) throw new Error('Demo seed: no running week for proposals')
+  const levels = { lower: 60, upper: 120 }
+  const next = nextPeriod(running, defaults, null)
+  const period = step(
+    'propose next week',
+    proposePeriod(tx, id('starsi'), { cutoffAt: next.cutoffAt, levels }, now),
+  )
+  step('agree next week', approveProposal(tx, id('tata'), 'period', period.id, now))
+  step(
+    'propose default week',
+    proposeDefaultsChange(tx, id('tata'), { ...defaults, lengthDays: 14, levels }, now),
+  )
 }
