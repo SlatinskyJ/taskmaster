@@ -345,6 +345,10 @@ describe('period agreement (spec §3)', () => {
     expect(periodAgreementWaitingFor([MUM, OLDER], withMum)).toEqual([YOUNGER])
     expect(periodAgreementWaitingFor([JAKUB, OLDER, YOUNGER], family)).toEqual([DAD])
     expect(periodAgreementWaitingFor([DAD, OLDER, YOUNGER], family)).toEqual([])
+    // Sorted by id whatever order the people come in.
+    expect(periodAgreementWaitingFor([], [...withMum].reverse())).toEqual(
+      [DAD, OLDER, YOUNGER, MUM].sort((a, b) => a - b),
+    )
   })
 })
 
