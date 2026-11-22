@@ -96,10 +96,12 @@ describe('demo seed (#62)', () => {
           ...(approved ? ['task.approved'] : []),
         ].map((action) => [action, 'user']),
       ),
-      // #38: two instances from Táta's "+ Teď", one self-logged by Mladší.
+      // #38: two instances from Táta's "+ Teď", logs by Mladší and Starší, Starší's rejected.
       ['instance.created', 'user'],
       ['instance.created', 'user'],
       ['instance.self_logged', 'user'],
+      ['instance.self_logged', 'user'],
+      ['task.rejected', 'user'],
     ])
   })
 
@@ -287,7 +289,7 @@ describe('demo seed (#62)', () => {
     ])
   })
 
-  it('adds instances (#38): two from "+ Teď", one self-logged by Mladší waiting for a parent', () => {
+  it('adds instances (#38): two from "+ Teď", Mladší\'s log waiting, Starší\'s rejected', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     const rows = db
@@ -303,6 +305,8 @@ describe('demo seed (#62)', () => {
       // T0 is Tue 17 Nov 2026 10:00Z: "next day, 7:00" Prague is Wed 06:00Z.
       ['Nachystat tašku do školy', 'on_demand', 'open', 2, '2026-11-18T06:00:00.000Z', false],
       ['Vyndat myčku', 'self_logged', 'done_unconfirmed', 3, null, true],
+      // Starší's log, rejected by Táta: closed, no points (§5.5).
+      ['Vyndat myčku', 'self_logged', 'rejected', 3, null, true],
     ])
   })
 
@@ -385,6 +389,7 @@ describe('demo seed (#62)', () => {
         r.reason,
       ]),
     ).toEqual([
+      ['Vyndat myčku', 3, 'starsi', null],
       [
         'Vynést sklo a plasty do kontejneru',
         4,

@@ -70,6 +70,7 @@ test('a parent sees both boys’ points, approves completions and sees Úkoly by
     cs.state.reserved,
     cs.state.pending,
     cs.state.confirmed,
+    cs.state.rejected,
     cs.state.cancelled,
   ])
 })

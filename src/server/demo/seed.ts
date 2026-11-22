@@ -247,6 +247,12 @@ function seedInstances(tx: Tx, id: (username: string) => number, step: Step, now
   step('+ Teď "Vyndat myčku"', createOnDemandInstance(tx, id('tata'), dishes.id, now))
   step('+ Teď "Nachystat tašku do školy"', createOnDemandInstance(tx, id('tata'), bag.id, now))
   step('Zapsat "Vyndat myčku"', selfLogInstance(tx, id('mladsi'), dishes.id, dishes.score, now))
+  // Týden and Úkoly "Zamítnuto": Starší logged the dishwasher, Táta said no without a reason (§5.5).
+  const logged = step(
+    'Zapsat "Vyndat myčku" (Starší)',
+    selfLogInstance(tx, id('starsi'), dishes.id, dishes.score, now),
+  )
+  step('reject "Vyndat myčku"', rejectTask(tx, id('tata'), logged.id, undefined, now))
 }
 
 const HOUR = 3_600_000
