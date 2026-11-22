@@ -47,6 +47,8 @@
 
 ### Task 0: Turning switches on from code, audit-logged
 
+Built on [#184 Previews start with every launch switch on](https://github.com/SlatinskyJ/taskmaster/pull/184), merged first: it turns all switches on in `seedDemo` with one unaudited `tx.update(featureFlags)` line, and `launch.spec.ts` flips them off through `setSwitches()` on the shared off-server DB. This task replaces that line with a per-seed, audit-logged list; Task 3 removes `setSwitches()` (the launch suite's seed has no switches on).
+
 **Files:** Modify `src/server/features/flags.ts`, `src/server/features/flags.test.ts`, `src/server/audit/actions.ts`, `src/server/features/README.md`.
 
 **Interfaces:**
@@ -125,7 +127,8 @@
   - `home.spec.ts`: back to #41's numbers: Starší `40 … 12`, after his Hotovo `40 … 17`, "Do spodní hranice chybí 10 bodů."; Mladší `55 … 0`, "Do horní hranice chybí 45 bodů."; Táta sees `40/17`, `55/0`, approves Vytřít (`52 … 5`) and Umýt okna (`57 … 0`, no "Ke schválení" left); Úkoly groups `[groupProposed, reserved, confirmed]`. Drop the "Zalít kytky" line and the #172 note.
   - `meeting.spec.ts`: approve Zalít kytky and Vynést tříděný; settle: Starší **122**, horní; plan step Starší **22**, Mladší **0** (50 is exactly spodní).
   - `week.spec.ts`: `120 ✔` (was 160) for Starší, `47 ✔` (was 102) for Mladší in Táta's view and in Starší's "not" check; history lines unchanged.
-  - `task-page.spec.ts`, `launch.spec.ts`, `passkeys*.spec.ts`: only the header comment names the seed.
+  - `launch.spec.ts`: drop `setSwitches()` and its `beforeAll`/`afterAll` (#184); its seed turns no switch on.
+  - `task-page.spec.ts`, `passkeys*.spec.ts`: only the header comment names the seed.
 - [ ] **Step 3: Run** `pnpm build && PW_CHROMIUM_PATH=/opt/pw-browsers/chromium… pnpm e2e --trace off` → all 7 projects pass. On a red spec: `superpowers:systematic-debugging`, compare with Task 2's pinned numbers first.
 - [ ] **Step 4: CLAUDE.md** "Demo data" bullet: add "The seed is built from pieces (`src/server/demo/pieces.ts`); `TASKMASTER_SEED` picks a named list of them (`seeds.ts`, default `demo`). Each e2e spec file has its own row in `playwright.config.ts`: own server, own DB, own seed. A feature PR adds its piece to `demo`, and gives its e2e suite the seed it needs. A seed lists the launch switches it turns on (`demo`: all); a feature behind a switch adds it to its suite's seed, so it is never blocked in tests or on its preview."
 - [ ] **Step 5: Commit** `Give each e2e suite its own server and seed (#183)`.
