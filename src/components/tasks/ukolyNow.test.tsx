@@ -133,6 +133,11 @@ describe('Úkoly "+ Teď" (#38)', () => {
     expect(success({ ok: true, id: 9, score: 3 })).toBe(cs.instances.toast.created)
   })
 
+  it('is enabled when nothing runs', () => {
+    render([template({})])
+    expect(page.pressed.get(cs.instances.now)?.disabled).toBe(false)
+  })
+
   it('is disabled while an action runs', () => {
     page.busy = 'now-5'
     render([template({})])

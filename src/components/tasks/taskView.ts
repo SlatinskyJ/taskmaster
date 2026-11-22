@@ -182,7 +182,7 @@ export function detailMeta(task: TaskView, me: Me): string | null {
 /** "so 10:12": weekday and time on the Prague wall clock. */
 export function threadTime(iso: string): string {
   const t = toPragueWallTime(new Date(iso))
-  const day = cs.bids.weekdays[t.weekday]
+  const day = cs.weekdays[t.weekday]
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${day} ${pad(t.hour)}:${pad(t.minute)}`
 }

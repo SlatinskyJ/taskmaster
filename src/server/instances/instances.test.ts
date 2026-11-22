@@ -15,7 +15,7 @@ import { createOnDemandInstance, listLoggableTemplates, selfLogInstance } from '
 const taskRows = (f: Family) => f.db.select().from(tasks).all()
 const auditRows = (f: Family) => f.db.select().from(auditLog).all()
 
-/** An agreed template with a deadline "next day, 7:00", grace 60 min. */
+/** An agreed template with a deadline "next day, 7:30", grace 60 min. */
 function binsTemplate(f: Family, approvalRequired = true): number {
   const id = must(
     createTemplate(
@@ -26,7 +26,7 @@ function binsTemplate(f: Family, approvalRequired = true): number {
         score: 4,
         approvalRequired,
         schedule: null,
-        deadline: { dayOffset: 1, due: { hour: 7, minute: 0 }, graceMinutes: 60 },
+        deadline: { dayOffset: 1, due: { hour: 7, minute: 30 }, graceMinutes: 60 },
       },
       T0,
     ),
@@ -77,6 +77,7 @@ describe('createOnDemandInstance ("+ Teď")', () => {
       score: 3,
       dueAt: null,
       graceEndsAt: null,
+      approvalRequired: true,
     })
   })
 
@@ -94,8 +95,8 @@ describe('createOnDemandInstance ("+ Teď")', () => {
     const tuesday6pm = fromPragueWallTime({ year: 2026, month: 11, day: 24, hour: 18, minute: 0 })
     const r = must(createOnDemandInstance(f.db, f.tata, tpl, tuesday6pm))
     expect([r.dueAt, r.graceEndsAt]).toEqual([
-      '2026-11-25T06:00:00.000Z',
-      '2026-11-25T07:00:00.000Z',
+      '2026-11-25T06:30:00.000Z',
+      '2026-11-25T07:30:00.000Z',
     ])
   })
 

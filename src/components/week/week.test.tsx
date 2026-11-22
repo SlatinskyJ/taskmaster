@@ -123,8 +123,6 @@ describe('rejectionLine', () => {
   })
   it('a rejected self-log did not go back: only the reason, or that it earned nothing', () => {
     expect(rejectionLine({ ...base, closed: true }, null)).toBe('nádobí zůstalo v dřezu')
-    expect(rejectionLine({ ...base, closed: true, reason: null }, 'Mladší')).toBe(
-      'Zamítnuto, bez bodů.',
-    )
+    expect(rejectionLine({ ...base, closed: true, reason: null }, 'Mladší')).toBe('Bez bodů.')
   })
 })

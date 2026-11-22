@@ -8,7 +8,7 @@ import type { Db } from '~/server/db'
 
 export type TaskHistoryAction = Extract<
   AuditAction,
-  `task.${string}` | 'instance.created' | 'instance.self_logged'
+  `task.${string}` | 'instance.created' | 'instance.self_logged' | 'instance.expired'
 >
 
 export interface HistoryEntry {

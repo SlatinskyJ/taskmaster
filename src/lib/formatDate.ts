@@ -37,6 +37,6 @@ export function formatDue(dueAt: string, graceEndsAt: string, now: Date): string
   const days = pragueDaysBetween(now, due)
   if (days <= 0) return cs.instances.dueToday(time)
   if (days === 1) return cs.instances.dueTomorrow(time)
-  const weekday = cs.bids.weekdays[toPragueWallTime(due).weekday]
+  const weekday = cs.weekdays[toPragueWallTime(due).weekday]
   return cs.instances.dueOn(weekday, time)
 }

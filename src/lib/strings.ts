@@ -3,6 +3,8 @@
 // Item states: UI design doc §2.2.
 
 export const cs = {
+  /** Short weekday names, Sunday first (dates.ts `Weekday`). */
+  weekdays: ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'],
   app: {
     name: 'Taskmaster',
     /** Under the name on the login screen. */
@@ -98,8 +100,6 @@ export const cs = {
       templateNotAgreed: 'Tenhle opakovaný úkol ještě není domluvený.',
     },
   },
-  /** Recurring templates (#37): GCreate recurring part, GTasks, TApprove (UI doc §7). */
-  /** Instances of a recurring chore made by a person (#38, UI doc §7.2 GTasks). */
   /** Zapsat (#38, UI doc §7.1 TLog): a brother logs a chore he did unprompted. */
   log: {
     intro: 'Udělal jsi něco sám od sebe? Zapiš to.',
@@ -112,6 +112,7 @@ export const cs = {
     toast: 'Zapsáno, čeká na schválení',
     empty: 'Zatím tu nejsou žádné opakované úkoly.',
   },
+  /** Instances of a recurring chore made by a person (#38, UI doc §7.2 GTasks). */
   instances: {
     /** A parent's button on an agreed template: one more instance right now. */
     now: '+ Teď',
@@ -128,6 +129,7 @@ export const cs = {
       scoreChanged: 'Cena se mezitím změnila, podívej se znovu.',
     },
   },
+  /** Recurring templates (#37): GCreate recurring part, GTasks, TApprove (UI doc §7). */
   templates: {
     kindOneTime: 'Jednorázový',
     kindRecurring: 'Opakovaný',
@@ -227,8 +229,6 @@ export const cs = {
     answer: 'Odpovědět',
     otherPriceShort: 'Jiná cena',
     open: 'Otevřít',
-    /** Short weekday names, Sunday first (dates.ts `Weekday`). */
-    weekdays: ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'],
     toast: { sent: 'Nabídka odeslána', agreed: 'Domluveno', agreedMine: 'Domluveno, úkol je tvůj' },
   },
   /**
@@ -426,7 +426,7 @@ export const cs = {
     returnedToMe: 'Vráceno tobě.',
     returnedTo: (name: string) => `Vráceno: ${name}.`,
     /** Under a rejected self-logged chore with no reason: it ends there (#38). */
-    rejectedClosed: 'Zamítnuto, bez bodů.',
+    rejectedClosed: 'Bez bodů.',
   },
   admin: {
     title: 'Správa',

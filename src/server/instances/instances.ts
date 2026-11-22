@@ -68,6 +68,7 @@ function insert(
     score: row.score,
     dueAt: row.dueAt,
     graceEndsAt: row.graceEndsAt,
+    approvalRequired: row.approvalRequired,
   }
   writeAudit(tx, {
     actor: { kind: 'user', userId },
@@ -82,7 +83,6 @@ function insert(
             completedBy: row.completedBy,
             completedAt: row.completedAt,
             earnerId: row.earnerId,
-            approvalRequired: row.approvalRequired,
           },
     at: now,
   })

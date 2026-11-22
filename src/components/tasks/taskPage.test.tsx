@@ -118,7 +118,11 @@ describe('task page: price, cancel, history (#36)', () => {
     vi.useRealTimers()
     expect(html).not.toContain(cs.taskPrice.change)
     expect(html).toContain(cs.cancelTask.action)
-    expect(html).toContain('do zítra 7:00')
+    expect(html).toContain('<span class="text-meta text-muted">do zítra 7:00</span>')
+  })
+
+  it('a one-time task has no due line, not even an empty one', () => {
+    expect(render(TATA)).not.toContain('<span class="text-meta text-muted"></span>')
   })
 
   it('a proposal in flight: the brother it waits for gets Souhlasím and Nesouhlasím', () => {

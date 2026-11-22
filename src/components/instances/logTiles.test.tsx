@@ -12,6 +12,7 @@ const ui = vi.hoisted(() => ({
   busy: null as string | null,
   run: vi.fn(),
   pressed: new Map<string, { onClick?: (e: unknown) => void; disabled?: boolean }>(),
+  onOpenChange: undefined as ((open: boolean) => void) | undefined,
 }))
 vi.mock('~/components/tasks/useTaskAction', () => ({
   useTaskAction: () => ({ busy: ui.busy, run: ui.run }),
@@ -35,8 +36,18 @@ vi.mock('~/components/ui/button', async (original) => {
 vi.mock('~/components/ui/dialog', () => {
   const Pass = ({ children }: { children?: ReactNode }) => <div>{children}</div>
   return {
-    Dialog: ({ open, children }: { open: boolean; children?: ReactNode }) =>
-      open ? <div data-dialog>{children}</div> : null,
+    Dialog: ({
+      open,
+      onOpenChange,
+      children,
+    }: {
+      open: boolean
+      onOpenChange?: (open: boolean) => void
+      children?: ReactNode
+    }) => {
+      ui.onOpenChange = onOpenChange
+      return open ? <div data-dialog>{children}</div> : null
+    },
     DialogContent: Pass,
     DialogHeader: Pass,
     DialogFooter: Pass,
@@ -64,6 +75,7 @@ beforeEach(() => {
   ui.busy = null
   ui.run.mockReset()
   ui.pressed.clear()
+  ui.onOpenChange = undefined
   vi.mocked(selfLogFn).mockReset()
 })
 
@@ -133,6 +145,46 @@ describe('LogConfirm', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('a second chore logs in the same visit after the first one went through', async () => {
+    ui.run.mockResolvedValue(true)
+    renderToStaticMarkup(<LogConfirm tile={tile} onClose={vi.fn()} />)
+    const press = ui.pressed.get(cs.log.confirm)?.onClick
+    press?.({ currentTarget: null })
+    await vi.waitFor(() => {
+      expect(ui.run).toHaveBeenCalledTimes(1)
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    press?.({ currentTarget: null })
+    expect(ui.run).toHaveBeenCalledTimes(2)
+  })
+
+  it('a retry after a refusal sends again', async () => {
+    ui.run.mockResolvedValue(false)
+    renderToStaticMarkup(<LogConfirm tile={tile} onClose={vi.fn()} />)
+    const press = ui.pressed.get(cs.log.confirm)?.onClick
+    press?.({ currentTarget: null })
+    await Promise.resolve()
+    await Promise.resolve()
+    press?.({ currentTarget: null })
+    expect(ui.run).toHaveBeenCalledTimes(2)
+  })
+
+  it('Zpět, Esc or a tap outside closes without logging', () => {
+    const onClose = vi.fn()
+    renderToStaticMarkup(<LogConfirm tile={tile} onClose={onClose} />)
+    ui.onOpenChange?.(true)
+    expect(onClose).not.toHaveBeenCalled()
+    ui.onOpenChange?.(false)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(ui.run).not.toHaveBeenCalled()
+  })
+
+  it('the confirm button is enabled when idle', () => {
+    renderToStaticMarkup(<LogConfirm tile={tile} onClose={vi.fn()} />)
+    expect(ui.pressed.get(cs.log.confirm)?.disabled).toBe(false)
   })
 
   it('the confirm button is disabled while busy', () => {
