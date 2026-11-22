@@ -11,6 +11,8 @@ import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import { listPeriods, rollPeriods } from '~/server/periods'
 import { rejectionsSince } from '~/server/tasks/rejections'
 import { getMeeting } from '~/server/settlement/meeting'
+import { ALL_FEATURES, NO_FEATURES } from '~/lib/features'
+import { getFlags } from '~/server/features'
 import { DEMO_PASSWORD, describeDemo, seedDemo } from './seed'
 
 const T0 = new Date('2026-11-17T10:00:00.000Z')
@@ -204,6 +206,19 @@ describe('demo seed (#62)', () => {
     db.run(sql`DROP TRIGGER boom`)
     expect(seedDemo(db, PREVIEW, T0).kind).toBe('seeded')
     expect(db.select().from(users).all()).toHaveLength(4)
+  })
+
+  it('turns every launch switch on, so a preview shows the whole app (prod stays off)', () => {
+    const db = createTestDb()
+    expect(getFlags(db)).toEqual(NO_FEATURES)
+    seedDemo(db, PREVIEW, T0)
+    expect(getFlags(db)).toEqual(ALL_FEATURES)
+  })
+
+  it('leaves the switches alone when it does not seed', () => {
+    const db = createTestDb()
+    seedDemo(db, { NODE_ENV: 'production' }, T0)
+    expect(getFlags(db)).toEqual(NO_FEATURES)
   })
 
   it('adds two templates (#37): one waiting for agreement, one agreed', () => {

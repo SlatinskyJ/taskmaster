@@ -1,7 +1,7 @@
 import { hashSync } from '@node-rs/argon2'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import type { Db } from '~/server/db'
-import { users } from '~/server/db/schema'
+import { featureFlags, users } from '~/server/db/schema'
 import {
   acceptOffer,
   approveTask,
@@ -39,7 +39,8 @@ import type { NewUser } from '~/server/users'
 // and "Uklidit sklep", a plain offer of 10 with no bids. #40: done and confirmed tasks for both
 // brothers' points, and an open task (see seedPoints). #44: a week of done chores, so the
 // meeting has something to approve (3 items with #40's) and to settle. #45: a settled past
-// week before all that (Historie), carrying 8 to Starší, and one rejection.
+// week before all that (Historie), carrying 8 to Starší, and one rejection. Every launch switch
+// is on, so a preview shows features that production still hides.
 
 /** Known on purpose: previews are tailnet-only and hold no real data. Never used in production. */
 export const DEMO_PASSWORD = 'demo1234'
@@ -87,6 +88,9 @@ export function seedDemo(
       if (!r.ok) throw new Error(`Demo seed: ${what}: ${r.error}`)
       return r.value
     }
+    // Previews show the whole app: every launch switch on (src/lib/features.ts). Production
+    // never runs this seed, so its switches keep the migration's values until Jakub flips them.
+    tx.update(featureFlags).set({ enabled: true }).run()
     seedPastWeek(tx, id, start, now)
     const car = step(
       'offer "Umýt auto"',
