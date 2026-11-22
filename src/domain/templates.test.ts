@@ -5,6 +5,8 @@ import {
   MAX_DUE_DAY_OFFSET,
   MAX_GRACE_MINUTES,
   instanceDeadline,
+  latestSlot,
+  slotOutcome,
   validateTemplateDefinition,
 } from './templates'
 
@@ -140,5 +142,79 @@ describe('instanceDeadline (spec §5.3 deadline rule)', () => {
     expect(instanceDeadline(rule(0, 2, 30), prague(3, 29, 3, 45)).dueAt.toISOString()).toBe(
       '2026-03-30T00:30:00.000Z',
     )
+  })
+})
+
+const prague = (y: number, mo: number, d: number, h: number, mi = 0) =>
+  fromPragueWallTime({ year: y, month: mo, day: d, hour: h, minute: mi })
+
+describe('latestSlot (#39)', () => {
+  const tue6pm = { days: [2] as Weekday[], time: SIX_PM }
+
+  it('the slot itself counts (inclusive), a minute before it is last week', () => {
+    expect(latestSlot(tue6pm, prague(2026, 11, 24, 18)).toISOString()).toBe(
+      '2026-11-24T17:00:00.000Z',
+    )
+    expect(latestSlot(tue6pm, prague(2026, 11, 24, 17, 59)).toISOString()).toBe(
+      '2026-11-17T17:00:00.000Z',
+    )
+    expect(latestSlot(tue6pm, prague(2026, 11, 25, 9)).toISOString()).toBe(
+      '2026-11-24T17:00:00.000Z',
+    )
+  })
+
+  it('no time = the start of the Prague day', () => {
+    const mwf = { days: [1, 3, 5] as Weekday[], time: null }
+    expect(latestSlot(mwf, prague(2026, 11, 26, 10)).toISOString()).toBe('2026-11-24T23:00:00.000Z')
+  })
+
+  it('DST: a time in the spring gap moves forward, a doubled one is the second occurrence', () => {
+    const sun0230 = { days: [0] as Weekday[], time: { hour: 2, minute: 30 } }
+    expect(latestSlot(sun0230, prague(2026, 3, 30, 12)).toISOString()).toBe(
+      '2026-03-29T01:30:00.000Z',
+    )
+    expect(latestSlot(sun0230, prague(2026, 10, 26, 12)).toISOString()).toBe(
+      '2026-10-25T01:30:00.000Z',
+    )
+  })
+
+  it('every day at 7:00, just before 7:00 → yesterday', () => {
+    const daily = { days: [0, 1, 2, 3, 4, 5, 6] as Weekday[], time: SEVEN_AM }
+    expect(latestSlot(daily, prague(2026, 11, 24, 6, 59)).toISOString()).toBe(
+      prague(2026, 11, 23, 7).toISOString(),
+    )
+  })
+})
+
+describe('slotOutcome (#39, spec §5.3)', () => {
+  const slot = prague(2026, 11, 24, 18)
+  const rule = { dayOffset: 1, due: SEVEN_AM, graceMinutes: 60 }
+  const base = {
+    slot,
+    agreedAt: prague(2026, 11, 20, 10),
+    lastSlotAt: null,
+    hasOpenInstance: false,
+    deadline: null,
+  }
+  const ms = (d: Date, n: number) => new Date(d.getTime() + n)
+
+  it('only slots at or after the agreement count', () => {
+    expect(slotOutcome({ ...base, agreedAt: slot })).toBe('make')
+    expect(slotOutcome({ ...base, agreedAt: ms(slot, 1) })).toBe('none')
+  })
+
+  it('a slot already handled is not handled again', () => {
+    expect(slotOutcome({ ...base, lastSlotAt: slot })).toBe('none')
+    expect(slotOutcome({ ...base, lastSlotAt: ms(slot, -7 * 86_400_000) })).toBe('make')
+    expect(slotOutcome({ ...base, lastSlotAt: null })).toBe('make')
+  })
+
+  it('no deadline: an open or reserved instance means skip (no duplicate)', () => {
+    expect(slotOutcome({ ...base, hasOpenInstance: true })).toBe('skip')
+    expect(slotOutcome({ ...base, hasOpenInstance: false })).toBe('make')
+  })
+
+  it('with a deadline an open instance does not block', () => {
+    expect(slotOutcome({ ...base, deadline: rule, hasOpenInstance: true })).toBe('make')
   })
 })
