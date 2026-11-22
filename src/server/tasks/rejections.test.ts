@@ -20,8 +20,15 @@ describe('rejectionsSince', () => {
     const b = reservedTask(f, f.starsi, 4)
     doneAndRejected(f, a, plus(SAT, H), 'nádobí zůstalo v dřezu')
     doneAndRejected(f, b, plus(SAT, 2 * H))
+    const entryOf = (task: number) =>
+      f.db
+        .select()
+        .from(auditLog)
+        .all()
+        .find((e) => e.action === 'task.rejected' && e.entityId === String(task))?.id
     expect(rejectionsSince(f.db, SAT)).toEqual([
       {
+        entryId: entryOf(b),
         taskId: b,
         title: 'Vynést koš',
         score: 4,
@@ -31,6 +38,7 @@ describe('rejectionsSince', () => {
         closed: false,
       },
       {
+        entryId: entryOf(a),
         taskId: a,
         title: 'Vynést koš',
         score: 7,

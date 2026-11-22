@@ -8,9 +8,11 @@ import type { TaskAuditView } from './lifecycle'
 // Rejected completions (spec §5.5). Rejecting sends the task back to reserved or open (a
 // self-logged instance ends `rejected`), so the rejection itself lives only in its `task.rejected` audit entry. This read sits next to the
 // writer (lifecycle.ts `auditView`) so the stored shape has one owner. Týden (#45) lists them;
-// Rozporovat on a rejected completion (#46) builds on the same read.
+// A dispute on a rejected completion (#46) names it by the entry's id (`entryId`).
 
 export interface Rejection {
+  /** The `task.rejected` audit entry's id: names this one rejection (a dispute's key, #46). */
+  entryId: number
   taskId: number
   title: string
   /** The score of the rejected completion (the entry's `before`). */
@@ -32,6 +34,7 @@ export interface Rejection {
 export function rejectionsSince(db: Db | Tx, since: Date): Rejection[] {
   const entries = db
     .select({
+      id: auditLog.id,
       entityId: auditLog.entityId,
       at: auditLog.at,
       before: auditLog.before,
@@ -59,6 +62,7 @@ export function rejectionsSince(db: Db | Tx, since: Date): Rejection[] {
     if (before.earnerId === null) continue
     const taskId = Number(e.entityId)
     out.push({
+      entryId: e.id,
       taskId,
       title: titles.get(taskId) ?? '',
       score: before.score,
