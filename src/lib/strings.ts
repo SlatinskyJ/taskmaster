@@ -100,6 +100,18 @@ export const cs = {
   },
   /** Recurring templates (#37): GCreate recurring part, GTasks, TApprove (UI doc §7). */
   /** Instances of a recurring chore made by a person (#38, UI doc §7.2 GTasks). */
+  /** Zapsat (#38, UI doc §7.1 TLog): a brother logs a chore he did unprompted. */
+  log: {
+    intro: 'Udělal jsi něco sám od sebe? Zapiš to.',
+    tileLabel: (title: string, n: number) => `${title}, ${String(n)} b.`,
+    points: (n: number) => `${String(n)} b.`,
+    confirmTitle: 'Zapsat úkol?',
+    confirmBody: (title: string, n: number) =>
+      `${title} za ${String(n)} b. Rodič to ještě schválí.`,
+    confirm: 'Zapsat',
+    toast: 'Zapsáno, čeká na schválení',
+    empty: 'Zatím tu nejsou žádné opakované úkoly.',
+  },
   instances: {
     /** A parent's button on an agreed template: one more instance right now. */
     now: '+ Teď',
