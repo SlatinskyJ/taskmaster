@@ -9,6 +9,10 @@ import { int, record } from '~/server/periods/validators'
 import { disputeMarks, markKey, openDisputeIn } from './disputes'
 import type { DisputeMark, OpenDisputeError } from './disputes'
 import { listDisputes } from './list'
+
+export type { DisputeItem } from './targets'
+export type { DisputeMark } from './disputes'
+export type { DisputeListEntry } from './list'
 import type { DisputeListEntry } from './list'
 
 // Server functions for disputes (#46, spec §5.11), behind the launch switch `disputes`: with it
