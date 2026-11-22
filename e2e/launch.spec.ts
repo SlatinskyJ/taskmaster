@@ -4,7 +4,8 @@ import { bottomBar, passwordLogin } from './helpers'
 
 // The launch switches as the migration seeds them (all off), read from the real database by
 // the app shell: a brother has no bar, a parent's bar is Domů / Úkoly, and Nový úkol has no
-// Jednorázový / Opakovaný toggle yet still creates a one-time task.
+// Jednorázový / Opakovaný toggle yet still creates a one-time task. Its own server on the
+// `launch` seed (#183), which turns no switch on, while previews' `demo` seed turns all on.
 
 test.use({ viewport: { width: 360, height: 800 } })
 

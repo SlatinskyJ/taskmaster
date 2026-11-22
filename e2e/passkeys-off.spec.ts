@@ -10,7 +10,7 @@ import { logout, passwordLogin } from './helpers'
 /** A passkey left from a time passkeys were on (it can't be made with them off). */
 function addOldPasskey(username: string) {
   const dir = process.env.TM_E2E_OFF_DATA_DIR
-  if (!dir) throw new Error('TM_E2E_OFF_DATA_DIR not set (playwright.config.ts)')
+  if (!dir) throw new Error('TM_E2E_OFF_DATA_DIR not set (e2e/suites.ts)')
   const db = new Database(join(dir, 'taskmaster.db'))
   try {
     const user = db.prepare('SELECT id FROM users WHERE username = ?').get(username) as {
