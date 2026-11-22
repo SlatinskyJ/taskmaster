@@ -29,7 +29,7 @@ test('Táta withdraws his default week and proposes another', async ({ page }) =
   await expect(page).toHaveURL(/\/tyden\/vychozi$/)
   await defaultsCard(page).getByRole('button', { name: t.withdraw }).click()
   const dialog = page.getByRole('dialog')
-  await expect(dialog).toContainText(t.confirm.withdraw.body)
+  await expect(dialog).toContainText(t.confirm.withdraw.bodyDefaults)
   await dialog.getByRole('button', { name: t.confirm.withdraw.yes }).click()
   await expect(page.getByText(t.done.withdraw)).toBeVisible()
   await page.getByRole('button', { name: cs.admin.defaults.longer }).click()
