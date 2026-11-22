@@ -45,8 +45,18 @@ describe('historyLine', () => {
     ['task.score_change_discarded', 'návrh ceny 8 b propadl'],
     ['instance.created', 'přidáno za 8 b'],
     ['instance.self_logged', 'zapsáno za 8 b'],
+    ['instance.expired', 'prošlo'],
   ])('%s', (action, text) => {
     expect(historyLine(entry({ action }), 9)).toBe(`so 21. 11. 10:12 · Táta: ${text}`)
+  })
+
+  it('the scheduler: a scheduled instance is "added by the schedule", an expired one "prošlo" (#39)', () => {
+    expect(historyLine(entry({ action: 'instance.created', by: null, score: 4 }), 2)).toBe(
+      'so 21. 11. 10:12 · přidáno podle rozvrhu za 4 b',
+    )
+    expect(historyLine(entry({ action: 'instance.expired', by: null }), 2)).toBe(
+      'so 21. 11. 10:12 · prošlo',
+    )
   })
 
   it('names me "ty", leaves out the system, and names who an agreement reserved it to', () => {

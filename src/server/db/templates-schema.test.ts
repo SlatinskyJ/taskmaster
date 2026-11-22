@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { templates, templateScoreApprovals, templateThread, users } from './schema'
+import { templates, templateScoreApprovals, templateSlots, templateThread, users } from './schema'
 import { createTestDb } from './testing'
 
 // The DB backs up the domain's checks (spec §5.3): a template row that makes no sense can't be
@@ -170,5 +170,23 @@ describe('template_thread table (spec §5.1)', () => {
         .values(row(taker, 'taker', 0))
         .run(),
     ).toThrow(/CHECK/)
+  })
+})
+
+describe('template_slots table (#39)', () => {
+  it('keeps one last handled slot per existing template', () => {
+    const { db, valid } = setup()
+    const id = db.insert(templates).values(valid).returning().get().id
+    db.insert(templateSlots).values({ templateId: id, lastSlotAt: AT }).run()
+    expect(db.select().from(templateSlots).all()).toEqual([{ templateId: id, lastSlotAt: AT }])
+    expect(() => db.insert(templateSlots).values({ templateId: id, lastSlotAt: AT }).run()).toThrow(
+      /UNIQUE|PRIMARY KEY/,
+    )
+    expect(() =>
+      db
+        .insert(templateSlots)
+        .values({ templateId: id + 99, lastSlotAt: AT })
+        .run(),
+    ).toThrow(/FOREIGN KEY/)
   })
 })

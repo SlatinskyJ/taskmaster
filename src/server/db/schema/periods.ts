@@ -2,8 +2,8 @@ import { sql } from 'drizzle-orm'
 import { check, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 
 // Periods (spec §5.8): the weeks points are settled in. A period is half-open,
-// [starts_at, ended_at ?? cutoff_at). Rows are written by the roller (src/server/periods/) at
-// each cutoff, and by a settlement that ends the running period early. Once a period has
+// [starts_at, ended_at ?? cutoff_at). Rows are written by the scheduler's periods job
+// (src/server/scheduler/) at each cutoff, and by a settlement that ends the running period early. Once a period has
 // started, its cutoff and levels never change; `ended_at` is the only column ever updated, once,
 // from null. Never deleted. Times are UTC ISO 8601 with milliseconds, so they compare as text.
 export const periods = sqliteTable(

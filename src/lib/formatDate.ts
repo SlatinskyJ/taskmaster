@@ -40,3 +40,17 @@ export function formatDue(dueAt: string, graceEndsAt: string, now: Date): string
   const weekday = cs.weekdays[toPragueWallTime(due).weekday]
   return cs.instances.dueOn(weekday, time)
 }
+
+/**
+ * When something appeared, from `now`: "dnes 7:00", "včera 7:00", earlier "po 16. 11." (a
+ * bare weekday would read as the coming one).
+ */
+export function formatSince(iso: string, now: Date): string {
+  const at = parseIsoUtc(iso)
+  const time = formatPragueTime(iso)
+  const days = pragueDaysBetween(at, now)
+  if (days <= 0) return cs.instances.today(time)
+  if (days === 1) return cs.instances.yesterday(time)
+  const { weekday, day, month } = toPragueWallTime(at)
+  return `${cs.weekdays[weekday]} ${String(day)}. ${String(month)}.`
+}

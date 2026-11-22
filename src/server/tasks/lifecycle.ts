@@ -4,15 +4,17 @@ import {
   byPerson,
   cancelItem,
   completeItem,
+  expireItem,
   findPerson,
   rejectCompletion,
   releaseReservation,
   reserveItem,
+  SYSTEM,
 } from '~/domain'
-import type { Item, LifecycleError, Person } from '~/domain'
+import type { Actor, Item, LifecycleError, Person } from '~/domain'
 import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
-import type { AuditAction, Tx } from '~/server/audit'
+import type { Actor as AuditActor, AuditAction, Tx } from '~/server/audit'
 import { REASON_MAX as REASON_LIMIT } from '~/lib/taskLimits'
 import { writeAudit } from '~/server/audit'
 import type { Db } from '~/server/db'
@@ -34,21 +36,18 @@ export type LifecycleActionError = LifecycleError | 'not_found' | 'reason_too_lo
 
 export const REASON_MAX = REASON_LIMIT
 
-type Step = (
-  item: Item,
-  actor: ReturnType<typeof byPerson>,
-  now: Date,
-) => Result<Item, LifecycleError>
+type Step = (item: Item, actor: Actor, now: Date) => Result<Item, LifecycleError>
 
 /**
- * Loads the task, runs one lifecycle step as `userId`, saves the new state and writes `action`
+ * Loads the task, runs one lifecycle step as `actor`, saves the new state and writes `action`
  * to the audit log, all in one transaction. `extra` runs after the save and before the audit
  * entry (e.g. reopening the offer of a released bid-won task), so the entry and the returned row
  * show the final state.
  */
 function runStep(
   db: Db | Tx,
-  userId: number,
+  /** Who runs the step: a signed-in person, or the scheduler (#39). */
+  actor: AuditActor,
   taskId: number,
   action: AuditAction,
   step: Step,
@@ -63,13 +62,16 @@ function runStep(
     const row = tx.select().from(tasks).where(eq(tasks.id, taskId)).get()
     if (!row) return fail('not_found')
     const people = listPeople(tx)
-    const person = findPerson(people, userId)
-    if (!person) return fail('not_allowed')
-    const next = step(toItem(row), byPerson(person), now)
+    let stepActor: Actor = SYSTEM
+    if (actor.kind === 'user') {
+      const person = findPerson(people, actor.userId)
+      if (!person) return fail('not_allowed')
+      stepActor = byPerson(person)
+    }
+    const next = step(toItem(row), stepActor, now)
     if (!next.ok) return next
     const { row: stepped, accepted, closed } = saveItem(tx, row, next.value, {}, now)
     const saved = opts.extra ? opts.extra(tx, row, stepped, people) : stepped
-    const actor = { kind: 'user', userId } as const
     writeAudit(tx, {
       actor,
       action,
@@ -111,7 +113,7 @@ function auditView(row: TaskRow) {
 
 /** A taker reserves an open task ("Rezervovat", spec §5.4). */
 export function reserveTask(db: Db | Tx, userId: number, taskId: number, now: Date = new Date()) {
-  return runStep(db, userId, taskId, 'task.reserved', reserveItem, now)
+  return runStep(db, { kind: 'user', userId }, taskId, 'task.reserved', reserveItem, now)
 }
 
 /**
@@ -122,7 +124,7 @@ export function reserveTask(db: Db | Tx, userId: number, taskId: number, now: Da
 export function releaseTask(db: Db, userId: number, taskId: number, now: Date = new Date()) {
   return runStep(
     db,
-    userId,
+    { kind: 'user', userId },
     taskId,
     'task.released',
     (item, actor) => releaseReservation(item, actor),
@@ -141,14 +143,14 @@ export function releaseTask(db: Db, userId: number, taskId: number, now: Date = 
  * else confirmed. A giver ("Hotovo bez bodů"): closed with no points and no approval step.
  */
 export function completeTask(db: Db | Tx, userId: number, taskId: number, now: Date = new Date()) {
-  return runStep(db, userId, taskId, 'task.completed', completeItem, now)
+  return runStep(db, { kind: 'user', userId }, taskId, 'task.completed', completeItem, now)
 }
 
 /** A giver approves a pending completion: the points are confirmed (spec §5.5). */
 export function approveTask(db: Db | Tx, userId: number, taskId: number, now: Date = new Date()) {
   return runStep(
     db,
-    userId,
+    { kind: 'user', userId },
     taskId,
     'task.approved',
     (item, actor) => approveCompletion(item, actor),
@@ -178,7 +180,7 @@ export function cancelTask(
   if (!why) return fail('reason_too_long')
   return runStep(
     db,
-    userId,
+    { kind: 'user', userId },
     taskId,
     'task.cancelled',
     (item, actor) => cancelItem(item, actor),
@@ -204,11 +206,30 @@ export function rejectTask(
   if (!why) return fail('reason_too_long')
   return runStep(
     db,
-    userId,
+    { kind: 'user', userId },
     taskId,
     'task.rejected',
     (item, actor) => rejectCompletion(item, actor),
     now,
     { reason: why.text },
+  )
+}
+
+/**
+ * The scheduler expires a deadline instance nobody finished before its grace window ended
+ * (spec §5.3, #39). Audited as `instance.expired` by the system.
+ */
+export function expireTask(
+  db: Db | Tx,
+  taskId: number,
+  now: Date = new Date(),
+): Result<TaskRow, LifecycleActionError> {
+  return runStep(
+    db,
+    { kind: 'system' },
+    taskId,
+    'instance.expired',
+    (item, _actor, at) => expireItem(item, SYSTEM, at),
+    now,
   )
 }

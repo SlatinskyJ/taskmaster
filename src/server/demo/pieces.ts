@@ -2,7 +2,12 @@ import { eq } from 'drizzle-orm'
 import type { Tx } from '~/server/audit'
 import { nextPeriod } from '~/domain'
 import { templates as templateTable } from '~/server/db/schema'
-import { createOnDemandInstance, selfLogInstance } from '~/server/instances'
+import {
+  createOnDemandInstance,
+  createScheduledInstances,
+  expireOverdueInstances,
+  selfLogInstance,
+} from '~/server/instances'
 import {
   approveProposal,
   currentPeriod,
@@ -188,6 +193,19 @@ const PAST_WEEK: readonly { by: string; title: string; score: number }[] = [
  * writes at `start`, and the audit log reads in time order.
  */
 export const pastWeek: Piece = (ctx) => {
+  pastWeekWith(ctx, [])
+}
+
+/**
+ * The past week with the everyday schedule (#39) running in it: `schedule` goes between the
+ * chores and the settlement, so the audit log stays in time order. Previews get this one.
+ */
+export const pastWeekScheduled: Piece = (ctx) => {
+  pastWeekWith(ctx, [schedule])
+}
+
+/** `during` runs after the past week's chores and before Táta settles it. */
+function pastWeekWith(ctx: SeedContext, during: readonly Piece[]): void {
   const { tx, id, start, now } = ctx
   const tata = id('tata')
   rollPeriods(tx, start, getPeriodDefaults(tx))
@@ -196,6 +214,7 @@ export const pastWeek: Piece = (ctx) => {
     const task = doChore(ctx, chore.by, chore.title, chore.score, at)
     step(`approve "${chore.title}"`, approveTask(tx, tata, task, at))
   })
+  for (const piece of during) piece(ctx)
   const week = listPeriods(tx)[0]
   if (!week) throw new Error('Demo seed: no past week')
   const settleAt = new Date(Math.min(week.cutoffAt.getTime() - HOUR, now.getTime() - HOUR))
@@ -261,6 +280,59 @@ export const instances: Piece = ({ tx, id, now }) => {
   )
   step('reject "Vyndat myčku"', rejectTask(tx, id('tata'), logged.id, undefined, now))
   step('+ Teď "Nachystat tašku do školy"', createOnDemandInstance(tx, id('tata'), bag.id, now))
+}
+
+/** A job failure inside the seed must fail the seed, not be logged and skipped. */
+const SEED_LOG = {
+  error: (message: string, err?: unknown) => {
+    throw new Error(`Demo seed: ${message}`, { cause: err })
+  },
+}
+
+/** Two templates on an everyday schedule (#39), so previews show scheduled rows at any hour. */
+const DEMO_SCHEDULED: readonly NewTemplate[] = [
+  {
+    title: 'Vyměnit kočce vodu',
+    score: 1,
+    approvalRequired: true,
+    schedule: { days: [0, 1, 2, 3, 4, 5, 6], time: { hour: 7, minute: 0 } },
+    deadline: null,
+  },
+  {
+    title: 'Nakrmit rybičky',
+    score: 1,
+    approvalRequired: true,
+    schedule: { days: [0, 1, 2, 3, 4, 5, 6], time: { hour: 18, minute: 0 } },
+    // A slot's grace ends 25 h after it: the one made below has always expired by `now`.
+    deadline: { dayOffset: 1, due: { hour: 18, minute: 0 }, graceMinutes: 60 },
+  },
+]
+
+/**
+ * #39, early in the past week (only through `pastWeekScheduled`): Táta makes both everyday
+ * templates and Starší agrees, then a scheduler tick a day later makes one instance of each.
+ * The rest happens at the boot tick (`bootTick`).
+ */
+const schedule: Piece = ({ tx, id, start }) => {
+  const agreeAt = new Date(start.getTime() + 4 * HOUR)
+  for (const input of DEMO_SCHEDULED) {
+    const made = step(`template "${input.title}"`, createTemplateIn(tx, id('tata'), input, agreeAt))
+    step(
+      `approve "${input.title}"`,
+      approveTemplateScoreIn(tx, id('starsi'), made.id, input.score, agreeAt),
+    )
+  }
+  createScheduledInstances(tx, new Date(agreeAt.getTime() + 26 * HOUR), SEED_LOG)
+}
+
+/**
+ * The scheduler's boot tick (#39), as a preview's first boot runs it; last in a seed. With
+ * `pastWeekScheduled`: the fish's earlier copy expires and its latest missed slot is made, the
+ * cat's water stays open.
+ */
+export const bootTick: Piece = ({ tx, now }) => {
+  expireOverdueInstances(tx, now, SEED_LOG)
+  createScheduledInstances(tx, now, SEED_LOG)
 }
 
 /**
