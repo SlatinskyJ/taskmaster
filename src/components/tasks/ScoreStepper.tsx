@@ -11,12 +11,17 @@ export function ScoreStepper({
   label,
   min = 1,
   max = TASK_SCORE_MAX,
+  lessLabel = cs.tasks.less,
+  moreLabel = cs.tasks.more,
 }: {
   value: number
   onChange: (n: number) => void
   label: string
   min?: number
   max?: number
+  /** Accessible names of − and +, when one screen has several steppers. */
+  lessLabel?: string
+  moreLabel?: string
 }) {
   return (
     <div className="flex items-center gap-2.5">
@@ -24,7 +29,7 @@ export function ScoreStepper({
         type="button"
         variant="ghost"
         size="icon"
-        aria-label={cs.tasks.less}
+        aria-label={lessLabel}
         disabled={value <= min}
         onClick={() => {
           onChange(Math.max(min, value - 1))
@@ -37,7 +42,7 @@ export function ScoreStepper({
         type="button"
         variant="ghost"
         size="icon"
-        aria-label={cs.tasks.more}
+        aria-label={moreLabel}
         disabled={value >= max}
         onClick={() => {
           onChange(Math.min(max, value + 1))

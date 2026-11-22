@@ -421,6 +421,24 @@ export const cs = {
     resetDone: 'Heslo změněno',
     you: 'ty',
     selfHint: 'Svou roli ani heslo tady neměníš.',
+    /** Výchozí týden on Správa (#47, spec §5.8). Level labels: `cs.meeting.level`. */
+    defaults: {
+      title: 'Výchozí týden',
+      length: 'Délka',
+      days: (n: number) => `${String(n)} dní`,
+      shorter: 'Kratší',
+      longer: 'Delší',
+      less: (field: string) => `Méně: ${field}`,
+      more: (field: string) => `Více: ${field}`,
+      cutoff: 'Konec',
+      weekday: 'Den',
+      time: 'Čas',
+      /** Full day names, Sunday first like `Weekday`; the list shows them Monday first. */
+      weekdayNames: ['neděle', 'pondělí', 'úterý', 'středa', 'čtvrtek', 'pátek', 'sobota'],
+      hint: 'Platí od dalšího týdne, který ještě nezačal. Běžící týden se nemění.',
+      failed: 'Uložení se nepovedlo. Zkus to znovu.',
+      invalidSettings: 'Takhle to nejde: horní hranice musí být aspoň spodní.',
+    },
     errors: {
       invalidUsername:
         'Jen malá písmena bez diakritiky, číslice a . _ -, 2 až 32 znaků, začíná písmenem.',
