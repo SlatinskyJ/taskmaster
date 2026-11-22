@@ -336,7 +336,11 @@ describe('instanceMeta (#38)', () => {
       templateId: 1,
       createdAt: '2026-11-24T17:00:00.000Z',
     })
-    expect(instanceMeta(t, now)).toBe('podle rozvrhu · út 18:00')
+    // When first, so a cut-off row keeps it; "dnes"/"včera" so an old one isn't read as next week.
+    expect(instanceMeta(t, now)).toBe('dnes 18:00 · podle rozvrhu')
+    expect(instanceMeta({ ...t, createdAt: '2026-11-16T06:00:00.000Z' }, now)).toBe(
+      'po 16. 11. · podle rozvrhu',
+    )
   })
   it('a scheduled one with a deadline: its due time (#39)', () => {
     const t = view({
@@ -348,6 +352,16 @@ describe('instanceMeta (#38)', () => {
       graceEndsAt: '2026-11-25T07:00:00.000Z',
     })
     expect(instanceMeta(t, now)).toBe('do zítra 7:00')
+  })
+  it('an expired instance: nothing, its Prošlo chip says it (#39)', () => {
+    const t = view({
+      status: 'expired',
+      origin: 'scheduled',
+      templateId: 1,
+      dueAt: '2026-11-23T06:00:00.000Z',
+      graceEndsAt: '2026-11-23T07:00:00.000Z',
+    })
+    expect(instanceMeta(t, now)).toBeUndefined()
   })
   it('a one-time task or a self-log: nothing', () => {
     expect(instanceMeta(view({ status: 'open' }), now)).toBeUndefined()

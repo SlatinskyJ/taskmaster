@@ -57,12 +57,9 @@ test('scheduled and expired instances', async ({ page }) => {
   await expect(page).toHaveURL(/\/$/)
   await page.goto('/ukoly')
   await expect(
-    page
-      .getByRole('listitem')
-      .filter({ hasText: 'Vyměnit kočce vodu' })
-      .filter({
-        hasText: /podle rozvrhu · \S+ 7:00/,
-      }),
+    page.getByRole('listitem').filter({ hasText: 'Vyměnit kočce vodu' }).filter({
+      hasText: ' · podle rozvrhu',
+    }),
   ).toBeVisible()
   const expired = page
     .getByRole('region', { name: new RegExp(`^${cs.state.expired}`) })

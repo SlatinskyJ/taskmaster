@@ -48,7 +48,7 @@ export interface InstanceBirth {
 
 /**
  * Inserts the instance row and its birth entry (`instance.created` / `instance.self_logged`).
- * `extra` adds fields to the entry's `after` (the scheduler's `slotAt`).
+ * `extra` adds the scheduler's `slotAt` to the entry's `after`.
  */
 export function insertInstance(
   tx: Tx,
@@ -56,7 +56,7 @@ export function insertInstance(
   template: TemplateRow,
   origin: Origin,
   item: Item,
-  extra: Record<string, unknown> = {},
+  extra: { slotAt?: string } = {},
 ): TaskRow {
   const now = birth.loggedAt ?? birth.createdAt
   const at = toIsoUtc(now)

@@ -124,8 +124,13 @@ export const cs = {
     overdue: 'po termínu',
     /** An on-demand instance without a deadline: when a parent made it. */
     onDemandAt: (time: string) => `na vyžádání · ${time}`,
-    /** A scheduled instance without a deadline (#39): the slot it was made for. */
-    scheduledAt: (weekday: string, time: string) => `podle rozvrhu · ${weekday} ${time}`,
+    /**
+     * A scheduled instance without a deadline (#39): when its slot was, first, so a row cut at
+     * 360 px still shows it ("včera 7:00 · podle rozvrhu").
+     */
+    scheduledAt: (when: string) => `${when} · podle rozvrhu`,
+    today: (time: string) => `dnes ${time}`,
+    yesterday: (time: string) => `včera ${time}`,
     errors: {
       pastGrace: 'Termín už prošel, tohle už nejde.',
       scoreChanged: 'Cena se mezitím změnila, podívej se znovu.',

@@ -303,7 +303,6 @@ const nameMap = (db: Db | Tx) =>
       .map((u) => [u.id, u.name]),
   )
 
-/** A template row's deadline rule for the domain (`dueTime` is stored as "HH:MM"), or null. */
 /** The stored schedule as the domain's `TemplateSchedule`, or null when there is none. */
 export function scheduleOf(row: TemplateRow): TemplateSchedule | null {
   if (row.scheduleDays === 0) return null
@@ -311,6 +310,7 @@ export function scheduleOf(row: TemplateRow): TemplateSchedule | null {
   return { days: maskToDays(row.scheduleDays), time: row.scheduleTime ? { hour, minute } : null }
 }
 
+/** A template row's deadline rule for the domain (`dueTime` is stored as "HH:MM"), or null. */
 export function deadlineRuleOf(row: TemplateRow): DeadlineRule | null {
   if (row.dueDayOffset === null || row.dueTime === null || row.graceMinutes === null) return null
   const [hour = 0, minute = 0] = row.dueTime.split(':').map(Number)
