@@ -6,6 +6,7 @@ import {
   pastWeek,
   points,
   priceChange,
+  proposals,
   templates,
   thisWeek,
 } from './pieces'
@@ -33,9 +34,11 @@ export const SEEDS = {
   tasks: { pieces: [priceChange], features: [] },
   /** Týden and the weekly meeting (#44, #45). */
   week: { pieces: [pastWeek, thisWeek], features: ['week', 'meeting'] },
+  /** Příští týden and Výchozí týden (#43): an open proposal of each kind. */
+  proposals: { pieces: [thisWeek, proposals], features: ['week', 'periodProposals'] },
   /** Previews and dev: everything. */
   demo: {
-    pieces: [pastWeek, negotiation, priceChange, cancelled, points, templates, thisWeek],
+    pieces: [pastWeek, negotiation, priceChange, cancelled, points, templates, thisWeek, proposals],
     features: FEATURE_KEYS,
   },
 } as const satisfies Record<string, Seed>

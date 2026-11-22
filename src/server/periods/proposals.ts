@@ -152,7 +152,7 @@ const outcome = (id: number, status: PeriodProposalStatus): ProposalOutcome => o
 
 /** Any party proposes a different cutoff/levels for the period after the running one. */
 export function proposePeriod(
-  db: Db,
+  db: Db | Tx,
   userId: number,
   settings: PeriodSettings,
   now: Date,
@@ -198,7 +198,7 @@ export function proposePeriod(
 
 /** A giver proposes new default-week settings. */
 export function proposeDefaultsChange(
-  db: Db,
+  db: Db | Tx,
   giverId: number,
   defaults: PeriodDefaults,
   now: Date,
@@ -247,7 +247,7 @@ function afterPeriod(tx: Tx, proposal: Stored<PeriodSettingsProposal>) {
 
 /** A party approves; reaching period agreement is audited, and stores a defaults change. */
 export function approveProposal(
-  db: Db,
+  db: Db | Tx,
   userId: number,
   kind: ProposalKind,
   id: number,
