@@ -75,8 +75,8 @@
 - Produces:
   - `getPeriodDefaults(db: Db | Tx): PeriodDefaults` — the row as domain defaults; `DEFAULT_PERIOD_DEFAULTS` when there is no row (ruling 2).
   - `type SetDefaultsError = PeriodError` (`'not_admin' | 'invalid_settings'` in practice)
-  - `writePeriodDefaults(tx: Tx, actor: Actor, defaults: PeriodDefaults, now: Date): void` — the one write path (no role check; callers check): upsert row `id = 1` with `updated_at = toIsoUtc(now)`, `updated_by` = the actor's user id, `writeAudit` `settings.changed` / `settings` / entityId `1`, `before` (null if there was no row) and `after` as `{ lengthDays, cutoff: { weekday, hour, minute }, levels: { lower, upper } }`. #43 reuses it when an agreed default proposal applies.
-  - `savePeriodDefaults(db: Db, adminId: number, defaults: PeriodDefaults, now: Date): Result<PeriodDefaults, SetDefaultsError>` — one transaction: `listPeople(tx)`, domain `setDefaults(people, adminId, defaults)`, then `rollPeriods(tx, now, getPeriodDefaults(tx))` (ruling 7), then `writePeriodDefaults`. Saving the same values again is allowed and audited (an explicit admin action).
+  - `writePeriodDefaults(tx: Tx, actor: Actor, defaults: PeriodDefaults, now: Date): void` — the one write path (no role check; callers check): first `rollPeriods(tx, now, getPeriodDefaults(tx))` (ruling 7, so no caller can skip it, #43 included), then upsert row `id = 1` with `updated_at = toIsoUtc(now)`, `updated_by` = the actor's user id, `writeAudit` `settings.changed` / `settings` / entityId `1`, `before` (null if there was no row) and `after` as `{ lengthDays, cutoff: { weekday, hour, minute }, levels: { lower, upper } }`. #43 reuses it when an agreed default proposal applies.
+  - `savePeriodDefaults(db: Db, adminId: number, defaults: PeriodDefaults, now: Date): Result<PeriodDefaults, SetDefaultsError>` — one transaction: `listPeople(tx)`, domain `setDefaults(people, adminId, defaults)`, then `writePeriodDefaults` (which rolls first). Saving the same values again is allowed and audited (an explicit admin action).
   - `startPeriodRoller(db: Db, opts?: RollerOptions)` — **drops the `defaults` parameter**; each tick calls `rollPeriods(db, at, getPeriodDefaults(db))`. `rollPeriods` keeps its signature (Track A's job runner calls it). The `[periods] started` log line adds the levels (`… levels 50/100`).
   - `settlePeriod(db, giverId, periodId, shown, now)` — **drops the `defaults` parameter**, reads `getPeriodDefaults(tx)` inside its transaction (ruling 4). `settlePeriodFn` and the demo seed stop passing the constant.
 
@@ -84,7 +84,7 @@
   - `reads the seeded defaults` → `toEqual(DEFAULT_PERIOD_DEFAULTS)`
   - `reads the code defaults when the row is gone`
   - `admin saves 14 days, Saturday 20:00, 60/120` → `ok`, read back equal, one audit row `settings.changed` with `before` 7/Sun 23:59/50/100 and `after` the new values, actor the admin, `updated_by` = admin
-  - `a save recreates a deleted row`
+  - `a save recreates a deleted row` → its audit `before` is `null`
   - `a giver's save is refused` → `not_admin`, row and audit unchanged
   - `invalid defaults write nothing` → `{ lower: 60, upper: 50 }`, `lengthDays: 10` → `invalid_settings`, no audit row
   - `a save does not change the running period; the next roll uses it` → `rollPeriods` at T0 with stored defaults, save 60/120, the running period still 50/100; roll after its cutoff → new period 60/120 with the saved weekday's cutoff
@@ -139,14 +139,14 @@ Strings (`cs.admin.defaults`): `title: 'Výchozí týden'`, `length: 'Délka'`, 
   - form helpers: `toTime(23, 59) === '23:59'`, `toTime(8, 5) === '08:05'`, `fromTime('20:00')` → `{20, 0}`, `fromTime('')` → null, `sameDefaults` true/false.
   - route: `src/routes/_app/sprava.tsx` page test renders the card from the loader (real entry point, as `schuzkaPage.test.tsx` does)
   - card: shows `Ukládám…` and a disabled button while `onSave` is pending; a network failure (rejected promise) shows the generic error and keeps the values
-  - card: renders `7 dní`, `neděle`, `23:59`, `50`, `100` from the seeded defaults; Uložit disabled until a change; `+` on Délka shows `14 dní` and enables Uložit; picking `sobota` + `20:00` and lower 60 / upper 120 each − / + has its own accessible name (`Méně: Spodní hranice`, `Kratší`, …); calls `onSave` with `{ lengthDays: 14, cutoff: { weekday: 6, hour: 20, minute: 0 }, levels: { lower: 60, upper: 120 } }`; raising lower above upper raises upper; an error string from `onSave` is shown.
+  - card: renders `7 dní`, `neděle`, `23:59`, `50`, `100` from the seeded defaults; Uložit disabled until a change; `+` on Délka shows `14 dní` and enables Uložit; picking `sobota` + `20:00` and lower 60 / upper 120 `Kratší` is disabled at 7 days and `Delší` at 364 days; each − / + has its own accessible name (`Méně: Spodní hranice`, `Kratší`, …); calls `onSave` with `{ lengthDays: 14, cutoff: { weekday: 6, hour: 20, minute: 0 }, levels: { lower: 60, upper: 120 } }`; raising lower above upper raises upper; an error string from `onSave` is shown.
 - [ ] **Step 2–4:** FAIL → implement → PASS. **Step 5:** `pnpm lint && pnpm typecheck` clean. **Step 6:** commit `Správa: edit the default week`.
 
 ### Task 5: End to end
 
 **Files:** Create `e2e/default-week.spec.ts`; Modify `playwright.config.ts`: a project `default-week` with `testMatch: 'default-week.spec.ts'` and its own server (port 3105, own data folder), since the save is stored and must not leak 60/120 into other specs. If the per-suite seed setup from [#183](https://github.com/SlatinskyJ/taskmaster/issues/183) has landed first, use its way of adding a suite instead.
 
-- [ ] **Step 1:** `admin changes the default week`: log in as `admin` / `demo1234`, Správa shows `Výchozí týden` with `7 dní`, `ne`, `23:59`, `50`, `100`; set lower 60 and upper 120, Uložit → toast `Uloženo`; reload → 60 / 120 stay. Then log in as `tata` and open `/tyden` directly (the `week` flag only hides the tab): it still shows this week's levels 50 / 100 (the running week never changes). Always asserted.
+- [ ] **Step 1:** `admin changes the default week`: log in as `admin` / `demo1234`, Správa shows `Výchozí týden` with `7 dní`, `neděle`, `23:59`, `50`, `100`; set lower 60 and upper 120, Uložit → toast `Uloženo`; reload → 60 / 120 stay. Then log in as `tata` and open `/tyden` directly (the `week` flag only hides the tab): it still shows this week's levels 50 / 100 (the running week never changes). Always asserted.
 - [ ] **Step 2:** `pnpm build && pnpm exec playwright test e2e/default-week.spec.ts --trace off` PASS. **Step 3:** commit `E2E: admin edits the default week`.
 
 ### Task 6: Finish
