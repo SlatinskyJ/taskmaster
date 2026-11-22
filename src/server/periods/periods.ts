@@ -25,7 +25,6 @@ export { toPeriod }
 
 type Reader = Db | Tx
 
-/** A stored row as a domain period. */
 /** Every period, oldest first. */
 export function listPeriods(db: Reader): Period[] {
   return db.select().from(periods).orderBy(asc(periods.startsAt)).all().map(toPeriod)
