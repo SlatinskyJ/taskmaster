@@ -137,3 +137,18 @@ export const templateThread = sqliteTable(
 )
 
 export type TemplateThreadRow = typeof templateThread.$inferSelect
+
+/**
+ * The scheduler's memory (#39): the latest schedule slot it has handled for a template, made or
+ * skipped. A slot at or before it never makes an instance again, so a restart or a second tick
+ * can't double one. Bookkeeping, not a state change people see: no audit entry.
+ */
+export const templateSlots = sqliteTable('template_slots', {
+  templateId: integer('template_id')
+    .primaryKey()
+    .references(() => templates.id),
+  /** UTC instant, ISO 8601 with milliseconds. */
+  lastSlotAt: text('last_slot_at').notNull(),
+})
+
+export type TemplateSlotRow = typeof templateSlots.$inferSelect

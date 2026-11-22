@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDue, formatPragueDate } from './formatDate'
+import { formatDue, formatPragueDate, formatSince } from './formatDate'
 
 describe('formatPragueDate', () => {
   it.each([
@@ -29,5 +29,21 @@ describe('formatDue (#38: an instance row)', () => {
     expect(formatDue(due, now.toISOString(), now)).toBe('po termínu')
     const later = new Date(now.getTime() + 1).toISOString()
     expect(formatDue(due, later, now)).toBe('do 16:00')
+  })
+})
+
+describe('formatSince (#39: when a scheduled instance appeared)', () => {
+  // Tue 24 Nov 2026, 18:00 Prague = 17:00Z.
+  const now = new Date('2026-11-24T17:00:00.000Z')
+  it.each([
+    ['2026-11-24T06:00:00.000Z', 'dnes 7:00'],
+    // 23:30Z on the 23rd is already Tuesday 0:30 in Prague: today.
+    ['2026-11-23T23:30:00.000Z', 'dnes 0:30'],
+    ['2026-11-23T22:59:00.000Z', 'včera 23:59'],
+    ['2026-11-23T06:00:00.000Z', 'včera 7:00'],
+    ['2026-11-22T17:00:00.000Z', 'ne 22. 11.'],
+    ['2026-11-16T06:00:00.000Z', 'po 16. 11.'],
+  ])('%s → %s', (iso, text) => {
+    expect(formatSince(iso, now)).toBe(text)
   })
 })

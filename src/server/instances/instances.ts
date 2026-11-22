@@ -15,7 +15,7 @@ import { toIsoUtc } from '~/domain/dates'
 import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
 import { writeAudit } from '~/server/audit'
-import type { Tx } from '~/server/audit'
+import type { Actor as AuditActor, Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { tasks, templates } from '~/server/db/schema'
 import type { TaskRow, TemplateRow } from '~/server/db/schema'
@@ -27,12 +27,13 @@ import { listPeople } from '~/server/users/people'
 // demand) and a taker's Zapsat (self-logged). An instance is a row of `tasks` with `origin` and
 // `template_id`, so every later step is the one-time task's (src/server/tasks/lifecycle.ts).
 // Title, score and approval flag are copied from the template when the row is made: a later
-// price change of the template never touches it (spec §4). Scheduled instances are #39.
+// price change of the template never touches it (spec §4). Scheduled instances (#39) are
+// ./scheduled.ts, through the same `insertInstance`.
 
 export type InstanceError =
   LifecycleError | 'not_found' | 'not_agreed' | 'score_changed' | 'already_open' | 'too_early'
 
-type Origin = 'on_demand' | 'self_logged'
+type Origin = 'on_demand' | 'self_logged' | 'scheduled'
 
 /** Loads the template and the acting person, and checks the template is agreed. */
 function load(tx: Tx, userId: number, templateId: number) {
@@ -44,15 +45,31 @@ function load(tx: Tx, userId: number, templateId: number) {
   return ok({ template, actor: byPerson(person) })
 }
 
-/** Inserts the instance row and its birth entry (`instance.created` / `instance.self_logged`). */
-function insert(
+/**
+ * Who makes an instance: the audit actor, the row's `created_by`, when it is born (`created_at`)
+ * and when that is written (`loggedAt`, the audit entry's time; default `createdAt`). A
+ * scheduled instance is born at its slot but written at the tick, later after downtime.
+ */
+export interface InstanceBirth {
+  actor: AuditActor
+  createdBy: number
+  createdAt: Date
+  loggedAt?: Date
+}
+
+/**
+ * Inserts the instance row and its birth entry (`instance.created` / `instance.self_logged`).
+ * `extra` adds the scheduler's `slotAt` to the entry's `after`.
+ */
+export function insertInstance(
   tx: Tx,
-  userId: number,
+  birth: InstanceBirth,
   template: TemplateRow,
   origin: Origin,
   item: Item,
-  now: Date,
+  extra: { slotAt?: string } = {},
 ): TaskRow {
+  const now = birth.loggedAt ?? birth.createdAt
   const at = toIsoUtc(now)
   const row = tx
     .insert(tasks)
@@ -65,8 +82,8 @@ function insert(
       origin,
       dueAt: item.deadline ? toIsoUtc(item.deadline.dueAt) : null,
       graceEndsAt: item.deadline ? toIsoUtc(item.deadline.graceEndsAt) : null,
-      createdBy: userId,
-      createdAt: at,
+      createdBy: birth.createdBy,
+      createdAt: toIsoUtc(birth.createdAt),
       updatedAt: at,
       agreedAt: template.agreedAt,
     })
@@ -82,23 +99,30 @@ function insert(
     approvalRequired: row.approvalRequired,
   }
   writeAudit(tx, {
-    actor: { kind: 'user', userId },
-    action: origin === 'on_demand' ? 'instance.created' : 'instance.self_logged',
+    actor: birth.actor,
+    action: origin === 'self_logged' ? 'instance.self_logged' : 'instance.created',
     entityType: 'task',
     entityId: row.id,
     after:
-      origin === 'on_demand'
-        ? born
+      origin !== 'self_logged'
+        ? { ...born, ...extra }
         : {
             ...born,
             completedBy: row.completedBy,
             completedAt: row.completedAt,
             earnerId: row.earnerId,
+            ...extra,
           },
     at: now,
   })
   return row
 }
+
+const byUser = (userId: number, now: Date): InstanceBirth => ({
+  actor: { kind: 'user', userId },
+  createdBy: userId,
+  createdAt: now,
+})
 
 /** "+ Teď": a giver makes an open instance now; a deadline template is due by its rule from now. */
 export function createOnDemandInstance(
@@ -119,7 +143,7 @@ export function createOnDemandInstance(
       rule ? instanceDeadline(rule, now) : null,
     )
     if (!item.ok) return item
-    return ok(insert(tx, giverId, template, 'on_demand', item.value, now))
+    return ok(insertInstance(tx, byUser(giverId, now), template, 'on_demand', item.value))
   })
 }
 
@@ -163,7 +187,7 @@ export function selfLogInstance(
     if (template.score !== score) return fail('score_changed')
     if (onBoard(tx, template.id)) return fail('already_open')
     if (!logChoicesAt(tx, now).includes(when)) return fail('too_early')
-    return ok(insert(tx, takerId, template, 'self_logged', item.value, now))
+    return ok(insertInstance(tx, byUser(takerId, now), template, 'self_logged', item.value))
   })
 }
 

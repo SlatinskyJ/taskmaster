@@ -1,12 +1,12 @@
 import type { Weekday } from './dates'
-import { fromPragueWallTime, toPragueWallTime } from './dates'
+import { addPragueDays, fromPragueWallTime, startOfPragueDay, toPragueWallTime } from './dates'
 import type { Deadline } from './lifecycle'
 import type { Result } from './result'
 import { fail, ok } from './result'
 
 // What a recurring template defines besides its score (spec §5.3): an optional schedule and an
-// optional deadline rule. This module only checks that a definition makes sense; when an
-// instance actually appears is #39; when it is due is `instanceDeadline` below.
+// optional deadline rule. This module checks that a definition makes sense; when a scheduled
+// instance appears is `latestSlot` and `slotOutcome` (#39); when it is due is `instanceDeadline`.
 //
 // Deadline rule (Jakub 2026-11-18): the due time is `dayOffset` Prague days after the instance
 // appears, at the `due` clock time ("next day, 7:00"). If that moment has already passed when
@@ -98,4 +98,47 @@ export function instanceDeadline(rule: DeadlineRule, appearsAt: Date): Deadline 
   let dueAt = dueOn(rule.dayOffset)
   if (dueAt.getTime() <= appearsAt.getTime()) dueAt = dueOn(rule.dayOffset + 1)
   return { dueAt, graceEndsAt: new Date(dueAt.getTime() + rule.graceMinutes * 60_000) }
+}
+
+/**
+ * The latest schedule slot at or before `at`: one of `schedule.days` at `schedule.time`, or at
+ * the start of the Prague day when `time` is null. Slot times follow the DST rules in `dates.ts`.
+ */
+export function latestSlot(schedule: TemplateSchedule, at: Date): Date {
+  const today = startOfPragueDay(at)
+  for (let back = 0; back <= 7; back++) {
+    const day = toPragueWallTime(addPragueDays(today, -back))
+    if (!schedule.days.includes(day.weekday)) continue
+    const slot = fromPragueWallTime({
+      year: day.year,
+      month: day.month,
+      day: day.day,
+      hour: schedule.time?.hour ?? 0,
+      minute: schedule.time?.minute ?? 0,
+    })
+    if (slot.getTime() <= at.getTime()) return slot
+  }
+  throw new RangeError('latestSlot: schedule has no days')
+}
+
+/** What a slot does: nothing, nothing but counts as handled, or makes an instance. */
+export type SlotOutcome = 'none' | 'skip' | 'make'
+
+/**
+ * Whether a slot makes an instance (spec §5.3). Slots before the template was agreed, or not
+ * after the last handled slot, do nothing. A slot of a template without a deadline is skipped
+ * while an open or reserved instance of it still exists (no duplicates).
+ */
+export function slotOutcome(input: {
+  slot: Date
+  agreedAt: Date
+  lastSlotAt: Date | null
+  hasOpenInstance: boolean
+  deadline: DeadlineRule | null
+}): SlotOutcome {
+  const slot = input.slot.getTime()
+  if (slot < input.agreedAt.getTime()) return 'none'
+  if (input.lastSlotAt && slot <= input.lastSlotAt.getTime()) return 'none'
+  if (!input.deadline && input.hasOpenInstance) return 'skip'
+  return 'make'
 }

@@ -1,11 +1,12 @@
 import { verify } from '@node-rs/argon2'
-import { asc, eq, sql } from 'drizzle-orm'
+import { and, asc, eq, sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
-import { auditLog, settlements, templates, templateThread, users } from '~/server/db/schema'
+import { auditLog, settlements, tasks, templates, templateThread, users } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { takerPoints } from '~/server/points'
 import { listTasks } from '~/server/tasks'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
+import { fromPragueWallTime } from '~/domain/dates'
 import { listPeriods, proposalsView, rollPeriods } from '~/server/periods'
 import { rejectionsSince } from '~/server/tasks/rejections'
 import { getMeeting } from '~/server/settlement/meeting'
@@ -56,8 +57,11 @@ describe('the demo seed (previews)', () => {
         ...[...done, 'task.approved'],
         ...[...done, 'task.approved'],
         ...[...done, 'task.approved'],
-        ...[...done, 'task.rejected'],
       ].map((action) => [action, 'user']),
+      // #39: a scheduler tick in the past week makes the water and the fish.
+      ['instance.created', 'system'],
+      ['instance.created', 'system'],
+      ...[...done, 'task.rejected'].map((action) => [action, 'user']),
       ['task.created', 'user'],
       ['task.bid_placed', 'user'],
       ['task.bid_placed', 'user'],
@@ -101,6 +105,9 @@ describe('the demo seed (previews)', () => {
       ['instance.self_logged', 'user'],
       ['task.rejected', 'user'],
       ['instance.created', 'user'],
+      // #39: the boot tick expires that fish and makes today's; the water is still open.
+      ['instance.expired', 'system'],
+      ['instance.created', 'system'],
     ])
   })
 
@@ -114,6 +121,8 @@ describe('the demo seed (previews)', () => {
     ).toEqual([
       ['Nachystat tašku do školy', 'open'], // #38 + Teď
       ['Nakrmit kočku', 'confirmed'], // #45 past week
+      ['Nakrmit rybičky', 'expired'], // #39 tick in the past week
+      ['Nakrmit rybičky', 'open'], // #39 boot tick
       ['Posekat trávu', 'confirmed'], // #44 week
       ['Pověsit prádlo', 'confirmed'], // #40
       ['Shrabat listí na zahradě', 'open'], // #36 price change
@@ -127,6 +136,7 @@ describe('the demo seed (previews)', () => {
       ['Umýt okna v kuchyni', 'cancelled'], // #36
       ['Umýt okna v obýváku i v ložnici', 'open'], // #40
       ['Vyluxovat celý obývák a chodbu', 'reserved'], // #150
+      ['Vyměnit kočce vodu', 'open'], // #39
       ['Vyndat myčku', 'done_unconfirmed'], // #38 Zapsat, Mladší
       ['Vyndat myčku', 'rejected'], // #38 Zapsat, Starší
       ['Vynést papír', 'confirmed'], // #44
@@ -184,9 +194,11 @@ describe('the demo seed (previews)', () => {
     ])
     const open = listTasks(db).filter((t) => t.status === 'open')
     expect(open.map((t) => [t.title, t.score])).toEqual([
+      ['Nakrmit rybičky', 1], // #39 boot tick
       ['Nachystat tašku do školy', 2], // #38 + Teď
       ['Umýt okna v obýváku i v ložnici', 5],
       ['Shrabat listí na zahradě', 10],
+      ['Vyměnit kočce vodu', 1], // #39
     ])
   })
 
@@ -205,7 +217,7 @@ describe('the demo seed (previews)', () => {
     expect(getFlags(db)).toEqual({ ...ALL_FEATURES, week: false })
   })
 
-  it('adds three templates (#37, #38): one waiting for agreement, two agreed', () => {
+  it('adds five templates (#37, #38, #39): one waiting for agreement, four agreed', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     expect(
@@ -221,6 +233,23 @@ describe('the demo seed (previews)', () => {
         .from(templates)
         .all(),
     ).toEqual([
+      // #39's everyday templates, made in the past week.
+      {
+        title: 'Vyměnit kočce vodu',
+        status: 'active',
+        score: 1,
+        days: 127,
+        time: '07:00',
+        due: null,
+      },
+      {
+        title: 'Nakrmit rybičky',
+        status: 'active',
+        score: 1,
+        days: 127,
+        time: '18:00',
+        due: '18:00',
+      },
       {
         title: 'Vynést koše',
         status: 'proposed',
@@ -246,7 +275,10 @@ describe('the demo seed (previews)', () => {
       .all()
       .map((r) => r.action)
     expect(actions).toEqual([
-      // By template (the entity index): the bins, the dishwasher, then the school bag.
+      // By template (the entity index): #39's water and fish, the bins, the dishwasher, then
+      // the school bag.
+      ...['template.created', 'template.score_approved', 'template.agreed'],
+      ...['template.created', 'template.score_approved', 'template.agreed'],
       'template.created',
       'template.created',
       'template.score_approved',
@@ -278,7 +310,7 @@ describe('the demo seed (previews)', () => {
         .from(templates)
         .all()
         .map((t) => t.score),
-    ).toEqual([4, 3, 2])
+    ).toEqual([1, 1, 4, 3, 2])
   })
 
   it('all or nothing: a failing template leaves no people either', () => {
@@ -347,6 +379,55 @@ describe('the demo seed (previews)', () => {
         'Sklo zůstalo v tašce u dveří, vynes ho prosím až dolů do kontejneru.',
       ],
     ])
+  })
+
+  // Previews seed with the real clock: every weekday, morning and evening, gives the same rows.
+  const NOWS = [16, 17, 18, 19, 20, 21, 22].flatMap((day) =>
+    [8, 20].map((hour) => fromPragueWallTime({ year: 2026, month: 11, day, hour, minute: 0 })),
+  )
+  it.each(
+    NOWS.flatMap((now) => (['demo', 'scheduler'] as const).map((seed) => [seed, now] as const)),
+  )(
+    "scheduled rows (#39), seed %s at %s: water open, today's fish open, an expired fish",
+    (seed, now) => {
+      const db = createTestDb()
+      seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: seed }, now)
+      const rows = db
+        .select()
+        .from(tasks)
+        .where(eq(tasks.origin, 'scheduled'))
+        .orderBy(asc(tasks.id))
+        .all()
+      expect(rows.map((r) => [r.title, r.status, r.dueAt !== null])).toEqual([
+        ['Vyměnit kočce vodu', 'open', false],
+        ['Nakrmit rybičky', 'expired', true],
+        ['Nakrmit rybičky', 'open', true],
+      ])
+      const [, , fish] = rows
+      expect(new Date(fish?.graceEndsAt ?? 0).getTime()).toBeGreaterThan(now.getTime())
+      const expired = db
+        .select()
+        .from(auditLog)
+        .where(
+          and(eq(auditLog.action, 'instance.expired'), eq(auditLog.entityId, String(rows[1]?.id))),
+        )
+        .all()
+      expect(expired.map((e) => e.actorKind)).toEqual(['system'])
+      const at = db
+        .select({ at: auditLog.at })
+        .from(auditLog)
+        .orderBy(asc(auditLog.id))
+        .all()
+        .map((r) => r.at)
+      expect(at).toEqual([...at].sort())
+    },
+  )
+
+  it('the scheduler seed: the expired fish is task 5 (e2e opens /ukol/5)', () => {
+    const db = createTestDb()
+    seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: 'scheduler' }, T0)
+    const fish = db.select().from(tasks).where(eq(tasks.id, 5)).get()
+    expect([fish?.title, fish?.status]).toEqual(['Nakrmit rybičky', 'expired'])
   })
 })
 

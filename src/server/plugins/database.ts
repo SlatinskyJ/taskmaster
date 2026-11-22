@@ -2,7 +2,8 @@ import { definePlugin } from 'nitro'
 import { databasePath, getDb } from '~/server/db'
 import { describeDemo, seedDemo } from '~/server/demo'
 import { describePasskeys, passkeyConfig } from '~/server/passkeys/config'
-import { startPeriodRoller } from '~/server/periods'
+import { getPeriodDefaults } from '~/server/periods'
+import { startScheduler, schedulerJobs } from '~/server/scheduler'
 import { bootstrapAdmin, describeBootstrap } from '~/server/users'
 
 // Boot: open the database and apply pending migrations before the first request is served.
@@ -10,9 +11,10 @@ import { bootstrapAdmin, describeBootstrap } from '~/server/users'
 // Then, in a preview (TASKMASTER_ENV=preview), fill an empty database with demo data (#62);
 // otherwise create the first admin from ADMIN_PASSWORD if there is none yet (spec §6). Demo
 // first: it brings its own admin, so the bootstrap then has nothing to do or warn about.
-// Last, once every config check has passed, start the period roller (spec §5.8): it rolls the
-// first period or catches up missed cutoffs now, then at each cutoff. Its failures are logged
-// and retried, never thrown. Nitro's `close` hook stops it, so a dev reload leaves no second loop.
+// Last, once every config check has passed, start the scheduler (#39, src/server/scheduler):
+// its first tick runs now and catches up what downtime missed (periods, expiry, scheduled
+// instances), then it ticks every 15 minutes. A failing job is logged and retried next tick, never
+// thrown. Nitro's `close` hook stops it, so a dev reload leaves no second loop.
 export default definePlugin((nitroApp) => {
   const db = getDb()
   console.info(`[db] ready at ${databasePath()}`)
@@ -32,8 +34,9 @@ export default definePlugin((nitroApp) => {
       '[auth] TRUST_PROXY is not 1: the per-IP login limit sees the proxy, not the client',
     )
   }
-  const roller = startPeriodRoller(db)
+  // The stored default week (#186), read on every tick, so an admin's change applies.
+  const scheduler = startScheduler(schedulerJobs(db, () => getPeriodDefaults(db)))
   nitroApp.hooks.hook('close', () => {
-    roller.stop()
+    scheduler.stop()
   })
 })

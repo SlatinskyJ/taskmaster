@@ -1,10 +1,12 @@
 import { FEATURE_KEYS } from '~/lib/features'
 import type { FeatureKey } from '~/lib/features'
 import {
+  bootTick,
   cancelled,
   instances,
   negotiation,
   pastWeek,
+  pastWeekScheduled,
   points,
   priceChange,
   proposals,
@@ -37,12 +39,14 @@ export const SEEDS = {
   week: { pieces: [pastWeek, thisWeek], features: ['week', 'meeting'] },
   /** Recurring chores made by a person (#38): + Teď and Zapsat. */
   recurring: { pieces: [points, templates, instances], features: ['recurring', 'log'] },
+  /** The scheduler (#39): everyday templates through the past week, then the boot tick. */
+  scheduler: { pieces: [pastWeekScheduled, bootTick], features: ['recurring'] },
   /** Příští týden and Výchozí týden (#43): an open proposal of each kind. */
   proposals: { pieces: [thisWeek, proposals], features: ['week', 'periodProposals'] },
   /** Previews and dev: everything. */
   demo: {
     pieces: [
-      pastWeek,
+      pastWeekScheduled,
       negotiation,
       priceChange,
       cancelled,
@@ -51,6 +55,7 @@ export const SEEDS = {
       thisWeek,
       instances,
       proposals,
+      bootTick,
     ],
     features: FEATURE_KEYS,
   },
