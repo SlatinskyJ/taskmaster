@@ -33,7 +33,16 @@ type Week = Extract<Meeting, { period: object }>
  * State lives in `meetingFlow.ts`; this file renders it. See PR #175 rulings for the
  * second-tap confirm, staying on step 3 after a confirm, and the refusal toasts.
  */
-export function MeetingScreen({ meeting, plan }: { meeting: Meeting; plan: readonly TaskView[] }) {
+export function MeetingScreen({
+  meeting,
+  plan,
+  otherLevels = false,
+}: {
+  meeting: Meeting
+  plan: readonly TaskView[]
+  /** The `periodProposals` switch: step 3 links to Příští týden ("Jiné hranice", #43). */
+  otherLevels?: boolean
+}) {
   const router = useRouter()
   const [ui, dispatch] = useReducer(reduce, START)
   const confirm = useMemo(
@@ -57,6 +66,7 @@ export function MeetingScreen({ meeting, plan }: { meeting: Meeting; plan: reado
       ui={ui}
       dispatch={dispatch}
       onConfirm={() => void confirm(meeting)}
+      otherLevels={otherLevels}
     />
   )
 }
@@ -68,12 +78,14 @@ export function MeetingBody({
   ui,
   dispatch,
   onConfirm,
+  otherLevels = false,
 }: {
   meeting: Meeting
   plan: readonly TaskView[]
   ui: MeetingUi
   dispatch: (event: MeetingEvent) => void
   onConfirm: () => void
+  otherLevels?: boolean
 }) {
   const step = stepOf(meeting, ui)
   return (
@@ -100,7 +112,9 @@ export function MeetingBody({
       {step === 2 && meeting.period && (
         <StepSettle meeting={meeting} ui={ui} dispatch={dispatch} onConfirm={onConfirm} />
       )}
-      {step === 3 && <StepPlan ui={ui} plan={plan} nothing={!ui.result} />}
+      {step === 3 && (
+        <StepPlan ui={ui} plan={plan} nothing={!ui.result} otherLevels={otherLevels} />
+      )}
     </div>
   )
 }
@@ -274,10 +288,12 @@ function StepPlan({
   ui,
   plan,
   nothing,
+  otherLevels,
 }: {
   ui: MeetingUi
   plan: readonly TaskView[]
   nothing: boolean
+  otherLevels: boolean
 }) {
   const result = ui.result
   const starting = startingTotals(ui)
@@ -319,6 +335,11 @@ function StepPlan({
             </div>
           )}
         </div>
+      )}
+      {otherLevels && (
+        <Link to="/tyden/pristi" className={cn(buttonVariants({ variant: 'ghost' }), 'w-full')}>
+          {cs.proposals.entry.otherLevels}
+        </Link>
       )}
       <SectionLabel id="plan-label">{cs.meeting.planTasks}</SectionLabel>
       {plan.length === 0 ? (

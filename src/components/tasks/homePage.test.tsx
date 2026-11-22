@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cs } from '~/lib/strings'
+import { getProposalsFn } from '~/server/periods/functions'
 import type { TaskView } from '~/server/tasks/functions'
+import { periodProposal, proposalsView } from '../proposals/fixtures'
 import type { TemplateView } from '~/server/templates/functions'
 
 // Domů itself (#138), rendered statically through its route, so the wiring of the price change
@@ -29,7 +31,13 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
 }))
 // Launch switches (the app shell's `context.features`): all on unless a test turns one off.
-const features = vi.hoisted(() => ({ recurring: true, log: true, week: true, meeting: true }))
+const features = vi.hoisted(() => ({
+  recurring: true,
+  log: true,
+  week: true,
+  meeting: true,
+  periodProposals: false,
+}))
 vi.mock('./useTaskAction', () => ({ useTaskAction: () => ({ busy: null, run: vi.fn() }) }))
 vi.mock('./bidCalls', () => ({ callBid: vi.fn(), BID_CALLS: {} }))
 // The loader's server calls, each returning a marker so the test can see where it went.
@@ -51,6 +59,9 @@ const points = vi.hoisted(() => ({
       pending: number
     }[],
   },
+}))
+vi.mock('~/server/periods/functions', () => ({
+  getProposalsFn: vi.fn(() => Promise.resolve('proposals')),
 }))
 vi.mock('~/server/points/functions', () => ({
   getPointsFn: vi.fn(() => Promise.resolve(['points'])),
@@ -95,6 +106,7 @@ function render(user: PageUser, recurring: TemplateView[], over: Record<string, 
     bids: [],
     tasks: [],
     points: points.value,
+    proposals: null,
     ...over,
   }
   const Page = (Route as unknown as { component: () => ReactNode }).component
@@ -243,9 +255,26 @@ describe('Domů points (#40)', () => {
 })
 
 describe('Domů loader', () => {
-  type Loader = (args: { context: { user: { role: string } } }) => Promise<Record<string, unknown>>
-  const load = (role: string) =>
-    (Route as unknown as { loader: Loader }).loader({ context: { user: { role } } })
+  type Loader = (args: {
+    context: { user: { role: string }; features: { periodProposals: boolean } }
+  }) => Promise<Record<string, unknown>>
+  const load = (role: string, periodProposals = false) =>
+    (Route as unknown as { loader: Loader }).loader({
+      context: { user: { role }, features: { periodProposals } },
+    })
+  beforeEach(() => {
+    vi.mocked(getProposalsFn).mockClear()
+  })
+
+  it('switch off: no proposals call; on: one call, for brothers and parents', async () => {
+    expect((await load('taker')).proposals).toBeNull()
+    expect((await load('giver')).proposals).toBeNull()
+    expect(getProposalsFn).not.toHaveBeenCalled()
+    expect((await load('taker', true)).proposals).toBe('proposals')
+    expect(getProposalsFn).toHaveBeenCalledTimes(1)
+    expect((await load('giver', true)).proposals).toBe('proposals')
+    expect(getProposalsFn).toHaveBeenCalledTimes(2)
+  })
 
   it('a brother gets the price changes and the recurring chores', async () => {
     expect(await load('taker')).toEqual({
@@ -253,6 +282,7 @@ describe('Domů loader', () => {
       waitingTemplates: ['waitingTemplates'],
       priceChanges: ['priceChanges'],
       taskPriceChanges: ['taskPriceChanges'],
+      proposals: null,
       board: ['board'],
       recurring: ['recurring'],
       toApprove: [],
@@ -268,6 +298,7 @@ describe('Domů loader', () => {
       waitingTemplates: ['waitingTemplates'],
       priceChanges: ['priceChanges'],
       taskPriceChanges: ['taskPriceChanges'],
+      proposals: null,
       board: [],
       recurring: [],
       toApprove: ['toApprove'],
@@ -365,5 +396,45 @@ describe('Giver Domů (GHome, #41)', () => {
     expect(html).not.toContain('Kluci tento týden')
     expect(html).not.toContain('Čeká na kluky')
     expect(html.split('data-slot="points-bar"')).toHaveLength(2)
+  })
+})
+
+describe('Domů proposal rows (#43)', () => {
+  const mladsi = { id: 4, role: 'taker', displayName: 'Mladší' } as const
+  const view = proposalsView({ period: periodProposal() })
+  afterEach(() => {
+    features.periodProposals = false
+  })
+
+  it('switch on: a row for the proposal waiting for me, counted, with Otevřít', () => {
+    features.periodProposals = true
+    const html = render(mladsi, [], { priceChanges: [], proposals: view })
+    expect(html).toContain(cs.proposals.entry.periodRow)
+    expect(html).toContain(`${cs.home.waiting} (1)`)
+    expect(html).toContain(cs.proposals.entry.open)
+  })
+
+  it('switch off: no row even with data', () => {
+    const html = render(mladsi, [], { priceChanges: [], proposals: view })
+    expect(html).not.toContain(cs.proposals.entry.periodRow)
+  })
+
+  it('the proposer gets no row for his own proposal', () => {
+    features.periodProposals = true
+    const html = render({ id: 3, role: 'taker', displayName: 'Starší' }, [], {
+      priceChanges: [],
+      proposals: view,
+    })
+    expect(html).not.toContain(cs.proposals.entry.periodRow)
+  })
+
+  it('a parent waiting on a proposal is not idle', () => {
+    features.periodProposals = true
+    const html = render({ id: 2, role: 'giver', displayName: 'Táta' }, [], {
+      priceChanges: [],
+      proposals: view,
+    })
+    expect(html).toContain(cs.proposals.entry.periodRow)
+    expect(html).not.toContain(cs.home.giverEmpty)
   })
 })

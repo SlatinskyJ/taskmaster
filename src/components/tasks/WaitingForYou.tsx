@@ -31,6 +31,7 @@ export function WaitingForYou({
   templates = [],
   priceChanges,
   taskPriceChanges,
+  proposals = [],
   me,
 }: {
   items: readonly TaskView[]
@@ -39,13 +40,20 @@ export function WaitingForYou({
   priceChanges: readonly TemplateView[]
   /** Required too: one-time tasks whose new price waits for this person (#36). */
   taskPriceChanges: readonly TaskView[]
+  /** Proposals for next week or the default week waiting for this person (#43). */
+  proposals?: readonly ('period' | 'defaults')[]
   me: Me
 }) {
   const router = useRouter()
   const [busyKey, setBusyKey] = useState<string | null>(null)
   const action = useTaskAction()
   const anyBusy = busyKey !== null || action.busy !== null
-  const count = items.length + templates.length + priceChanges.length + taskPriceChanges.length
+  const count =
+    items.length +
+    templates.length +
+    priceChanges.length +
+    taskPriceChanges.length +
+    proposals.length
   if (count === 0) return null
 
   async function approve(
@@ -175,6 +183,21 @@ export function WaitingForYou({
               meta={cs.taskPrice.rowMeta(t.score, t.scoreChange?.score ?? t.score)}
               action={pageLink(t, cs.bids.answer)}
             />
+          </li>
+        ))}
+        {proposals.map((kind) => (
+          <li key={`proposal-${kind}`}>
+            <div
+              data-slot="proposal-row"
+              className="flex min-h-tap items-center gap-3 rounded-card border-l-4 border-l-state-proposed bg-surface py-2.5 pr-2.5 pl-3 shadow-sticker"
+            >
+              <span className="min-w-0 flex-1 text-row font-bold break-words">
+                {kind === 'period' ? cs.proposals.entry.periodRow : cs.proposals.entry.defaultsRow}
+              </span>
+              <Link to="/tyden/pristi" className={buttonVariants({ variant: 'ghost' })}>
+                {cs.proposals.entry.open}
+              </Link>
+            </div>
           </li>
         ))}
       </ul>

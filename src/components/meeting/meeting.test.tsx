@@ -5,6 +5,7 @@ import type * as ButtonModule from '~/components/ui/button'
 import type { Meeting } from '~/server/settlement/functions'
 import type { TaskView } from '~/server/tasks/functions'
 import { pendingWeek, period, settledOk, task, week } from './fixtures'
+import { cs } from '~/lib/strings'
 import { MeetingBody } from './MeetingScreen'
 import { reduce, START } from './meetingFlow'
 import type { MeetingEvent, MeetingUi } from './meetingFlow'
@@ -44,12 +45,24 @@ const names = [
   { id: 4, name: 'Mladší' },
 ]
 
-function render(meeting: Meeting, ui: MeetingUi = START, plan: TaskView[] = []) {
+function render(
+  meeting: Meeting,
+  ui: MeetingUi = START,
+  plan: TaskView[] = [],
+  otherLevels = false,
+) {
   pressed.clear()
   const dispatch = vi.fn<(e: MeetingEvent) => void>()
   const onConfirm = vi.fn()
   const html = renderToStaticMarkup(
-    <MeetingBody meeting={meeting} plan={plan} ui={ui} dispatch={dispatch} onConfirm={onConfirm} />,
+    <MeetingBody
+      meeting={meeting}
+      plan={plan}
+      ui={ui}
+      dispatch={dispatch}
+      onConfirm={onConfirm}
+      otherLevels={otherLevels}
+    />,
   )
   return { html, dispatch, onConfirm }
 }
@@ -145,6 +158,11 @@ describe('step 2: Vyúčtovat', () => {
 })
 
 describe('step 3: Plánovat', () => {
+  it('Jiné hranice links to Příští týden only with the switch on (#43)', () => {
+    expect(render(week(), done).html).not.toContain(cs.proposals.entry.otherLevels)
+    expect(render(week(), done, [], true).html).toContain(cs.proposals.entry.otherLevels)
+  })
+
   it("shows each taker's carry-over by takerId and the new week from the response", () => {
     const { html } = render(week(), done)
     expect(html).toMatch(/data-step="current".*Plánovat/s)
