@@ -13,6 +13,8 @@ export const AUDIT_ACTIONS = [
   'user.created',
   'user.updated',
   'settings.changed',
+  // Launch switches turned on by the demo seed (#183)
+  'feature.switched',
   // One-time tasks (§5.2)
   'task.created',
   'task.score_offered',
@@ -100,5 +102,6 @@ export const ENTITY_TYPES = [
   'adjustment',
   'dispute',
   'app_meta',
+  'feature',
 ] as const
 export type EntityType = (typeof ENTITY_TYPES)[number]
