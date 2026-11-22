@@ -37,6 +37,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'meeting', spec: 'meeting.spec.ts', seed: 'week' },
   // Its own server: the save changes the default week for good.
   { name: 'default-week', spec: 'default-week.spec.ts', seed: 'week' },
+  // Its own server: it adds instances and approves a log.
+  { name: 'recurring', spec: 'recurring.spec.ts', seed: 'recurring' },
 ]
 
 /** Passkeys on (localhost) for the `on` suite only, at its own port. */

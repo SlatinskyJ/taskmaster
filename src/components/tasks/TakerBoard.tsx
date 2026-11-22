@@ -4,7 +4,7 @@ import { SectionLabel } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
 import { reserveTaskFn, type TaskView } from '~/server/tasks/functions'
-import { canWorkOn } from './taskView'
+import { canWorkOn, instanceMeta } from './taskView'
 import { TaskRow } from './TaskRow'
 import { useTaskAction } from './useTaskAction'
 import { DoneButton, WorkButtons } from './WorkButtons'
@@ -18,6 +18,7 @@ import { DoneButton, WorkButtons } from './WorkButtons'
  */
 export function TakerBoard({ items, me }: { items: readonly TaskView[]; me: number }) {
   const { busy, run } = useTaskAction()
+  const now = new Date()
   const mine = items.filter(
     (t) => t.reservedBy?.id === me || (t.status === 'done_unconfirmed' && t.earnerId === me),
   )
@@ -36,6 +37,7 @@ export function TakerBoard({ items, me }: { items: readonly TaskView[]; me: numb
                     name={t.title}
                     state="reserved"
                     points={t.score}
+                    meta={instanceMeta(t, now)}
                     action={<WorkButtons task={t} busy={busy} run={run} />}
                   />
                 ) : (
@@ -58,6 +60,7 @@ export function TakerBoard({ items, me }: { items: readonly TaskView[]; me: numb
                   name={t.title}
                   state="open"
                   points={t.score}
+                  meta={instanceMeta(t, now)}
                   action={
                     <div className="flex gap-2">
                       <Button

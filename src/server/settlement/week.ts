@@ -26,6 +26,8 @@ export interface WeekItem {
   at: string
   /** Rejections only: the giver's reason, else null. */
   reason: string | null
+  /** Rejections only: a rejected self-log, which did not go back to the taker. */
+  closed?: boolean
 }
 
 export interface WeekTaker {
@@ -182,6 +184,7 @@ function weekItems(db: Db | Tx, ids: number[], start: Date): Map<number, WeekIte
       status: 'rejected',
       at: r.at,
       reason: r.reason,
+      closed: r.closed,
     })
   }
   for (const list of out.values())

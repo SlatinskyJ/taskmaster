@@ -12,12 +12,10 @@ import { currentLevels } from '~/server/periods/periods'
 //
 // `confirmed` is the running total (spec §5.9): confirmed points − deducted by settlements ±
 // adjustments, computed by the domain's `runningTotal` over ledger entries. Today the only
-// entries are completions (confirmed one-time tasks with an earner). Owners of the rest:
+// entries are completions (confirmed tasks with an earner, one-time or instance). Owners of the rest:
 //   - #172 (points subtract settlements) switches this to #44's `ledgerEntries`, which adds
 //     `settlement` entries, the points each settlement deducted;
 //   - #48 (corrections, adjustments) adds `adjustment` entries;
-//   - #38 (recurring instances, their own table) adds a completion entry per confirmed instance
-//     and their done, unconfirmed ones to pending.
 // `levels` are the running period's; when none runs (`currentLevels`), the agreed change for the
 // next period, else the stored defaults.
 // `pending` is the sum of the taker's done, unconfirmed tasks. A task a giver did himself has

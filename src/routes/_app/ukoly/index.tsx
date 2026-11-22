@@ -4,7 +4,7 @@ import { EmptyState } from '~/components/EmptyState'
 import { Screen } from '~/components/shell/Screen'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { TaskGroups } from '~/components/tasks/TaskGroups'
-import { waitingText } from '~/components/tasks/taskView'
+import { instanceMeta, waitingText } from '~/components/tasks/taskView'
 import { TemplateRow } from '~/components/templates/TemplateRow'
 import { useTaskAction } from '~/components/tasks/useTaskAction'
 import { Button, buttonVariants } from '~/components/ui/button'
@@ -21,6 +21,7 @@ import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { completeTaskFn, listTasksFn, releaseTaskFn, type TaskView } from '~/server/tasks/functions'
 import { listTemplatesFn } from '~/server/templates/functions'
+import { createInstanceFn } from '~/server/instances/functions'
 
 // Úkoly: all one-time tasks grouped by state, active first (UI doc §7.2 GTasks, #41), givers only. A giver can release a
 // reservation or mark an open task done themselves (spec §5.4–§5.5). Recurring templates are
@@ -47,7 +48,7 @@ function Tasks() {
     }
     if (t.status === 'reserved' && t.reservedBy) return `${cs.work.reservedBy} ${t.reservedBy.name}`
     if (t.completedBy) return `${cs.work.doneBy} ${t.completedBy.name}`
-    return undefined
+    return instanceMeta(t, new Date())
   }
 
   function action(t: TaskView) {
@@ -107,7 +108,7 @@ function Tasks() {
         aria-labelledby={features.recurring ? 'one-time-label' : undefined}
       >
         {features.recurring && (
-          <SectionLabel id="one-time-label">{cs.templates.oneTimeSection}</SectionLabel>
+          <SectionLabel id="one-time-label">{cs.templates.itemsSection}</SectionLabel>
         )}
         {list.length === 0 ? (
           <EmptyState>{cs.tasks.empty}</EmptyState>
@@ -124,7 +125,17 @@ function Tasks() {
             <ul className="grid gap-2">
               {templates.map((t) => (
                 <li key={t.id}>
-                  <TemplateRow template={t} />
+                  <TemplateRow
+                    template={t}
+                    busy={busy !== null}
+                    onNow={() => {
+                      void run(
+                        `now-${String(t.id)}`,
+                        () => createInstanceFn({ data: { templateId: t.id } }),
+                        () => cs.instances.toast.created,
+                      )
+                    }}
+                  />
                 </li>
               ))}
             </ul>

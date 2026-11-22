@@ -28,7 +28,7 @@ export function levelLabel(level: Level): string {
 
 /** "st 25. 11.": short day name and date. */
 export function dayLabel(iso: string): string {
-  return `${cs.bids.weekdays[wall(iso).weekday]} ${dayMonth(iso)}`
+  return `${cs.weekdays[wall(iso).weekday]} ${dayMonth(iso)}`
 }
 
 /** "ne 29. 11. 20:00": short day, date and time (for "Vyúčtováno"). */

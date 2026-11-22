@@ -6,28 +6,33 @@ import { tasks } from '~/server/db/schema'
 import type { TaskRow } from '~/server/db/schema'
 import { closeThread } from './thread'
 
-// A one-time task row and the domain's `Item` (src/domain/lifecycle.ts), both ways, and the one
+// A task row (one-time task or instance) and the domain's `Item` (src/domain/lifecycle.ts), both ways, and the one
 // place that writes a task's state: every lifecycle step and every agreement saves through
 // `saveItem`, so a task that leaves `proposed` always closes its negotiation thread.
 
 /** The domain's view of a task row. Only states past agreement have lifecycle meaning here. */
 export function toItem(row: TaskRow): Item {
   const base = {
-    origin: 'one_time',
+    origin: row.origin,
     approvalRequired: row.approvalRequired,
-    deadline: null,
-  } as const
+    deadline:
+      row.dueAt !== null && row.graceEndsAt !== null
+        ? { dueAt: parseIsoUtc(row.dueAt), graceEndsAt: parseIsoUtc(row.graceEndsAt) }
+        : null,
+  }
   const reservation = reservationOf(row)
   switch (row.status) {
     case 'proposed':
     case 'open':
     case 'cancelled':
+    case 'expired':
       return { ...base, status: row.status }
     case 'reserved':
       if (!reservation) throw new Error(`task ${String(row.id)} reserved without a taker`)
       return { ...base, status: 'reserved', reservation }
     case 'done_unconfirmed':
-    case 'confirmed': {
+    case 'confirmed':
+    case 'rejected': {
       if (row.completedBy === null || row.completedAt === null) {
         throw new Error(`task ${String(row.id)} completed without completion data`)
       }
@@ -72,11 +77,13 @@ export function columnsOf(item: Item) {
     case 'proposed':
     case 'open':
     case 'cancelled':
+    case 'expired':
       return { status: item.status, ...none }
     case 'reserved':
       return { status: item.status, ...none, ...res(item.reservation) }
     case 'done_unconfirmed':
     case 'confirmed':
+    case 'rejected':
       return {
         status: item.status,
         ...res(item.completion.reservation),
@@ -84,9 +91,6 @@ export function columnsOf(item: Item) {
         completedAt: toIsoUtc(item.completion.completedAt),
         earnerId: item.completion.earner,
       }
-    case 'expired':
-    case 'rejected':
-      throw new Error(`one-time tasks never become ${item.status}`)
   }
 }
 

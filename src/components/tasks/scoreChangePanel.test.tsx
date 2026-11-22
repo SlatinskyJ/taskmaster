@@ -64,6 +64,11 @@ const pending: TaskView = {
   completedBy: null,
   completedAt: null,
   earnerId: null,
+  origin: 'one_time',
+  templateId: null,
+  dueAt: null,
+  graceEndsAt: null,
+  createdAt: '2026-11-17T10:00:00.000Z',
   waitingFor: [],
   scoreChange: {
     id: 7,

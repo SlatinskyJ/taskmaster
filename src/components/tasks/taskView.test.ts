@@ -8,6 +8,7 @@ import {
   changeAnswer,
   changeHint,
   detailMeta,
+  instanceMeta,
   lowestText,
   myBid,
   sendButton,
@@ -37,6 +38,11 @@ const view = (over: Partial<TaskView>): TaskView => ({
   completedBy: null,
   completedAt: null,
   earnerId: null,
+  origin: 'one_time',
+  templateId: null,
+  dueAt: null,
+  graceEndsAt: null,
+  createdAt: '2026-11-17T10:00:00.000Z',
   waitingFor: [],
   scoreChange: null,
   ...over,
@@ -299,5 +305,34 @@ describe('waitingOnTakers (GHome "Čeká na kluky", #41)', () => {
     expect(
       waitingOnTakers([keep, withBids, waitsForMe, nobody, open, alsoKeep], TATA).map((t) => t.id),
     ).toEqual([1, 6])
+  })
+})
+
+describe('instanceMeta (#38)', () => {
+  const now = new Date('2026-11-24T17:00:00.000Z') // Tue 18:00 Prague
+  it('a deadline instance: its due time', () => {
+    const t = view({
+      status: 'open',
+      origin: 'on_demand',
+      templateId: 1,
+      dueAt: '2026-11-25T06:00:00.000Z',
+      graceEndsAt: '2026-11-25T07:00:00.000Z',
+    })
+    expect(instanceMeta(t, now)).toBe('do zítra 7:00')
+  })
+  it('an on-demand one without a deadline: when it was made', () => {
+    const t = view({
+      status: 'open',
+      origin: 'on_demand',
+      templateId: 1,
+      createdAt: '2026-11-24T14:02:00.000Z',
+    })
+    expect(instanceMeta(t, now)).toBe('na vyžádání · 15:02')
+  })
+  it('a one-time task or a self-log: nothing', () => {
+    expect(instanceMeta(view({ status: 'open' }), now)).toBeUndefined()
+    expect(
+      instanceMeta(view({ status: 'done_unconfirmed', origin: 'self_logged', templateId: 1 }), now),
+    ).toBeUndefined()
   })
 })

@@ -27,7 +27,8 @@ import { reopenOffer } from './tasks'
 // reject. The lifecycle rules live in src/domain/lifecycle.ts; this module runs a step on the
 // task's `Item` (./item) and saves it through `saveItem`, the one writer of a task's state, with
 // its audit entry in one transaction.
-// Recurring instances (#38) reuse the same domain functions with their own table.
+// Recurring instances (#38) are rows of the same `tasks` table (`origin`, `template_id`), so
+// every step here works on them unchanged.
 
 export type LifecycleActionError = LifecycleError | 'not_found' | 'reason_too_long'
 

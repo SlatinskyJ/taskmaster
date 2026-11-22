@@ -3,6 +3,8 @@
 // Item states: UI design doc §2.2.
 
 export const cs = {
+  /** Short weekday names, Sunday first (dates.ts `Weekday`). */
+  weekdays: ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'],
   app: {
     name: 'Taskmaster',
     /** Under the name on the login screen. */
@@ -98,6 +100,42 @@ export const cs = {
       templateNotAgreed: 'Tenhle opakovaný úkol ještě není domluvený.',
     },
   },
+  /** Zapsat (#38, UI doc §7.1 TLog): a brother logs a chore he did unprompted. */
+  log: {
+    intro: 'Udělal jsi něco sám od sebe? Zapiš to.',
+    tileLabel: (title: string, n: number) => `${title}, ${String(n)} b.`,
+    points: (n: number) => `${String(n)} b.`,
+    confirmTitle: 'Zapsat úkol?',
+    confirmBody: (title: string, n: number) =>
+      `${title} za ${String(n)} b. Rodič to ještě schválí.`,
+    confirm: 'Zapsat',
+    toast: 'Zapsáno, čeká na schválení',
+    /** A chore with a copy on the board can't be logged (Jakub 2026-11-22): take that one. */
+    onBoard: 'Už je zadaný na Domů',
+    tileOnBoardLabel: (title: string) => `${title}, už je zadaný na Domů`,
+    /** "Kdy?" (Jakub 2026-11-22): Dnes ráno = today 7:00, Včera = yesterday 18:00. */
+    when: { label: 'Kdy?', now: 'Teď', this_morning: 'Dnes ráno', yesterday: 'Včera' },
+    empty: 'Zatím tu nejsou žádné domluvené opakované úkoly. Až je rodiče přidají, objeví se tady.',
+  },
+  /** Instances of a recurring chore made by a person (#38, UI doc §7.2 GTasks). */
+  instances: {
+    /** A parent's button on an agreed template: one more instance right now. */
+    now: '+ Teď',
+    toast: { created: 'Přidáno do úkolů' },
+    /** An instance row: its due time ("do zítra 7:00"). */
+    dueToday: (time: string) => `do ${time}`,
+    dueTomorrow: (time: string) => `do zítra ${time}`,
+    dueOn: (weekday: string, time: string) => `do ${weekday} ${time}`,
+    overdue: 'po termínu',
+    /** An on-demand instance without a deadline: when a parent made it. */
+    onDemandAt: (time: string) => `na vyžádání · ${time}`,
+    errors: {
+      pastGrace: 'Termín už prošel, tohle už nejde.',
+      scoreChanged: 'Cena se mezitím změnila, podívej se znovu.',
+      alreadyOpen: 'Tenhle úkol už je zadaný. Najdeš ho na Domů.',
+      tooEarly: 'Tohle už patří do minulého týdne.',
+    },
+  },
   /** Recurring templates (#37): GCreate recurring part, GTasks, TApprove (UI doc §7). */
   templates: {
     kindOneTime: 'Jednorázový',
@@ -106,6 +144,8 @@ export const cs = {
     section: 'Opakované',
     /** Section above the one-time tasks on Úkoly, so its empty line can't read as "no tasks". */
     oneTimeSection: 'Jednorázové',
+    /** Úkoly's top section once it holds instances of recurring chores too (#38). */
+    itemsSection: 'K udělání',
     empty: 'Zatím žádné opakované úkoly.',
     when: 'Kdy vzniká',
     /** Index = weekday, 0 = Sunday (src/domain/dates.ts). */
@@ -196,8 +236,6 @@ export const cs = {
     answer: 'Odpovědět',
     otherPriceShort: 'Jiná cena',
     open: 'Otevřít',
-    /** Short weekday names, Sunday first (dates.ts `Weekday`). */
-    weekdays: ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'],
     toast: { sent: 'Nabídka odeslána', agreed: 'Domluveno', agreedMine: 'Domluveno, úkol je tvůj' },
   },
   /**
@@ -318,6 +356,9 @@ export const cs = {
     changeWithdrawn: 'návrh ceny stažen',
     changed: (n: number) => `nová cena ${String(n)} b`,
     changeDiscarded: (n: number) => `návrh ceny ${String(n)} b propadl`,
+    /** A recurring chore's instance (#38): "+ Teď" by a parent, or logged by a boy. */
+    instanceCreated: (n: number) => `přidáno za ${String(n)} b`,
+    selfLogged: (n: number) => `zapsáno za ${String(n)} b`,
     other: 'změna',
   },
   home: {
@@ -391,6 +432,8 @@ export const cs = {
     /** Under a rejected item: the chore is back with the boy (spec §5.5). */
     returnedToMe: 'Vráceno tobě.',
     returnedTo: (name: string) => `Vráceno: ${name}.`,
+    /** Under a rejected self-logged chore with no reason: it ends there (#38). */
+    rejectedClosed: 'Bez bodů.',
   },
   admin: {
     title: 'Správa',

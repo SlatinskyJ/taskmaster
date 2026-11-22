@@ -2,6 +2,7 @@ import { FEATURE_KEYS } from '~/lib/features'
 import type { FeatureKey } from '~/lib/features'
 import {
   cancelled,
+  instances,
   negotiation,
   pastWeek,
   points,
@@ -33,9 +34,11 @@ export const SEEDS = {
   tasks: { pieces: [priceChange], features: [] },
   /** Týden and the weekly meeting (#44, #45). */
   week: { pieces: [pastWeek, thisWeek], features: ['week', 'meeting'] },
+  /** Recurring chores made by a person (#38): + Teď and Zapsat. */
+  recurring: { pieces: [points, templates, instances], features: ['recurring', 'log'] },
   /** Previews and dev: everything. */
   demo: {
-    pieces: [pastWeek, negotiation, priceChange, cancelled, points, templates, thisWeek],
+    pieces: [pastWeek, negotiation, priceChange, cancelled, points, templates, thisWeek, instances],
     features: FEATURE_KEYS,
   },
 } as const satisfies Record<string, Seed>

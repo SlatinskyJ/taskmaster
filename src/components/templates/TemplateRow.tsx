@@ -1,13 +1,24 @@
 import { Link } from '@tanstack/react-router'
 import { TaskRow } from '~/components/tasks/TaskRow'
-import { buttonVariants } from '~/components/ui/button'
+import { Button, buttonVariants } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
 import { templateDetail } from '~/lib/templateText'
 import type { TemplateView } from '~/server/templates/functions'
 import { templateChip } from './priceView'
 
-/** A template on Úkoly (GTasks): an agreed one links to its price page (#138). */
-export function TemplateRow({ template: t }: { template: TemplateView }) {
+/**
+ * A template on Úkoly (GTasks): an agreed one links to its price page (#138). With `onNow`, an
+ * agreed one also has "+ Teď" (#38): one more instance right now.
+ */
+export function TemplateRow({
+  template: t,
+  onNow,
+  busy = false,
+}: {
+  template: TemplateView
+  onNow?: () => void
+  busy?: boolean
+}) {
   const active = t.status === 'active'
   const chip = templateChip(t)
   // A parent's turn when bids are open (same word as Domů); else he may start a change (#138).
@@ -22,13 +33,21 @@ export function TemplateRow({ template: t }: { template: TemplateView }) {
       detail={templateDetail(t)}
       action={
         active ? (
-          <Link
-            to="/sablona/$templateId"
-            params={{ templateId: String(t.id) }}
-            className={buttonVariants({ variant: 'ghost' })}
-          >
-            {label}
-          </Link>
+          // Stacked: two buttons side by side would squeeze the name to one word at 360 px.
+          <div className="grid shrink-0 gap-2">
+            {onNow && (
+              <Button variant="ghost" disabled={busy} onClick={onNow}>
+                {cs.instances.now}
+              </Button>
+            )}
+            <Link
+              to="/sablona/$templateId"
+              params={{ templateId: String(t.id) }}
+              className={buttonVariants({ variant: 'ghost' })}
+            >
+              {label}
+            </Link>
+          </div>
         ) : undefined
       }
     />

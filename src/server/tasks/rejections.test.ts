@@ -28,6 +28,7 @@ describe('rejectionsSince', () => {
         earnerId: f.starsi,
         at: plus(SAT, 2 * H).toISOString(),
         reason: null,
+        closed: false,
       },
       {
         taskId: a,
@@ -36,6 +37,7 @@ describe('rejectionsSince', () => {
         earnerId: f.starsi,
         at: plus(SAT, H).toISOString(),
         reason: 'nádobí zůstalo v dřezu',
+        closed: false,
       },
     ])
   })
