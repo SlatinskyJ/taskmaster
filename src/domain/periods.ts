@@ -63,6 +63,8 @@ export interface PeriodDefaults {
 }
 
 export const DEFAULT_LENGTH_DAYS = 7
+/** [call] The longest default period: 52 weeks. */
+export const MAX_LENGTH_DAYS = 364
 /** The end of Sunday, 23:59 Europe/Prague (Jakub 2026-11-21, spec §5.8). */
 export const DEFAULT_CUTOFF: CutoffTime = { weekday: 0, hour: 23, minute: 59 }
 /** Default lower/upper levels (Jakub 2026-11-21, the spec's example numbers). */
@@ -113,7 +115,7 @@ const isWholeIn = (n: number, min: number, max: number) =>
 export function isValidDefaults(defaults: PeriodDefaults): boolean {
   const { lengthDays, cutoff, levels } = defaults
   return (
-    isWholeIn(lengthDays, 7, 364) &&
+    isWholeIn(lengthDays, 7, MAX_LENGTH_DAYS) &&
     lengthDays % 7 === 0 &&
     isWholeIn(cutoff.weekday, 0, 6) &&
     isWholeIn(cutoff.hour, 0, 23) &&

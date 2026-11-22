@@ -1,6 +1,5 @@
-import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import type { Tx } from '~/server/audit'
-import { listPeriods, rollPeriods } from '~/server/periods'
+import { getPeriodDefaults, listPeriods, rollPeriods } from '~/server/periods'
 import { getMeeting, settlePeriod } from '~/server/settlement/meeting'
 import {
   acceptOffer,
@@ -169,7 +168,7 @@ const PAST_WEEK: readonly { by: string; title: string; score: number }[] = [
 export const pastWeek: Piece = (ctx) => {
   const { tx, id, start, now } = ctx
   const tata = id('tata')
-  rollPeriods(tx, start, DEFAULT_PERIOD_DEFAULTS)
+  rollPeriods(tx, start, getPeriodDefaults(tx))
   PAST_WEEK.forEach((chore, i) => {
     const at = new Date(start.getTime() + (i + 1) * HOUR)
     const task = doChore(ctx, chore.by, chore.title, chore.score, at)
@@ -181,7 +180,7 @@ export const pastWeek: Piece = (ctx) => {
   const meeting = getMeeting(tx, settleAt)
   if (!meeting.period) throw new Error('Demo seed: nothing to settle')
   const shown = meeting.takers.map((t) => ({ takerId: t.id, total: t.total }))
-  step('settle', settlePeriod(tx, tata, week.id, shown, settleAt, DEFAULT_PERIOD_DEFAULTS))
+  step('settle', settlePeriod(tx, tata, week.id, shown, settleAt))
   const rejectAt = new Date(now.getTime() - HOUR / 2)
   const glass = doChore(ctx, 'mladsi', 'Vynést sklo a plasty do kontejneru', 4, rejectAt)
   step(

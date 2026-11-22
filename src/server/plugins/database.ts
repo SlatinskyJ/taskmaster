@@ -1,7 +1,6 @@
 import { definePlugin } from 'nitro'
 import { databasePath, getDb } from '~/server/db'
 import { describeDemo, seedDemo } from '~/server/demo'
-import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import { describePasskeys, passkeyConfig } from '~/server/passkeys/config'
 import { startPeriodRoller } from '~/server/periods'
 import { bootstrapAdmin, describeBootstrap } from '~/server/users'
@@ -33,7 +32,7 @@ export default definePlugin((nitroApp) => {
       '[auth] TRUST_PROXY is not 1: the per-IP login limit sees the proxy, not the client',
     )
   }
-  const roller = startPeriodRoller(db, DEFAULT_PERIOD_DEFAULTS)
+  const roller = startPeriodRoller(db)
   nitroApp.hooks.hook('close', () => {
     roller.stop()
   })

@@ -12,7 +12,6 @@ import type {
   Level,
   Levels,
   Period,
-  PeriodDefaults,
   PeriodError,
   PeriodId,
   Person,
@@ -27,7 +26,7 @@ import type { Actor, Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { settlements, users } from '~/server/db/schema'
 import type { SettlementRow } from '~/server/db/schema'
-import { endRunningPeriod, listPeriods } from '~/server/periods'
+import { endRunningPeriod, getPeriodDefaults, listPeriods } from '~/server/periods'
 import { listPendingCompletions } from '~/server/tasks/tasks'
 import type { TaskView } from '~/server/tasks/tasks'
 import { listPeople } from '~/server/users/people'
@@ -182,8 +181,8 @@ class Refused extends Error {
  * The giver confirms step 2 for `periodId` with the totals the screen showed. Refused unless
  * that period is the one to settle now, nothing is pending before its end, and the totals are
  * unchanged. Writes a final record and a `settlement.created` audit entry per active taker; if
- * the week is still running, ends it now and starts the next one (`defaults` give the next
- * week's length and levels). Refused with `no_takers` while there is no active taker: settled
+ * the week is still running, ends it now and starts the next one with the default week stored
+ * at that moment (read inside this transaction). Refused with `no_takers` while there is no active taker: settled
  * is read from the records, so a week settled with none would be offered again forever. One
  * transaction.
  */
@@ -193,7 +192,6 @@ export function settlePeriod(
   periodId: number,
   shown: readonly ShownTotal[],
   now: Date,
-  defaults: PeriodDefaults,
 ): Result<{ period: Period; records: SettlementRow[]; next: Period | null }, SettleError> {
   try {
     return db.transaction((tx) => {
@@ -242,7 +240,7 @@ export function settlePeriod(
       let next: Period | null = null
       let period = target
       if (isRunning(target, now)) {
-        const ended = endRunningPeriod(tx, actor, target.id, now, defaults)
+        const ended = endRunningPeriod(tx, actor, target.id, now, getPeriodDefaults(tx))
         // Throwing rolls back the records written above.
         if (!ended.ok) throw new Refused(ended.error)
         next = ended.value.next

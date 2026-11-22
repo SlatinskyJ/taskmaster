@@ -42,7 +42,7 @@ describe('e2e seeds (#183)', () => {
   for (const seed of ['home', 'launch'] as const) {
     it(`${seed}: Starší 40 + 12, Mladší 55 + 0, and a task in each state Domů and Úkoly show`, () => {
       const db = seeded(seed)
-      expect(takerPoints(db).takers.map((t) => [t.name, t.confirmed, t.pending])).toEqual([
+      expect(takerPoints(db, T0).takers.map((t) => [t.name, t.confirmed, t.pending])).toEqual([
         ['Starší', 40, 12],
         ['Mladší', 55, 0],
       ])

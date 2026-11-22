@@ -1,8 +1,7 @@
-import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import { fromPragueWallTime, toIsoUtc } from '~/domain/dates'
 import { tasks } from '~/server/db/schema'
 import type { TaskRow } from '~/server/db/schema'
-import { listPeriods, rollPeriods } from '~/server/periods'
+import { getPeriodDefaults, listPeriods, rollPeriods } from '~/server/periods'
 import { family } from '~/server/tasks/testing'
 import type { Family } from '~/server/tasks/testing'
 
@@ -20,7 +19,7 @@ export const MEETING = prague(2026, 11, 29, 20)
 /** The family with P1 rolled at SAT. */
 export function week() {
   const f = family()
-  rollPeriods(f.db, SAT, DEFAULT_PERIOD_DEFAULTS)
+  rollPeriods(f.db, SAT, getPeriodDefaults(f.db))
   const p1 = listPeriods(f.db)[0]
   if (!p1) throw new Error('no period')
   return { ...f, p1 }
