@@ -14,6 +14,8 @@ export const FEATURE_KEYS = [
   'meeting',
   /** Proposals for next week and for the default week (#43). */
   'periodProposals',
+  /** Disputes and corrections (#46–#48), one switch for both (Jakub 2026-11-22). */
+  'disputes',
 ] as const
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number]
@@ -28,6 +30,7 @@ export const NO_FEATURES: Readonly<Features> = {
   week: false,
   meeting: false,
   periodProposals: false,
+  disputes: false,
 }
 
 /** Every switch on: the full app as designed (UI doc §6). */
@@ -37,4 +40,5 @@ export const ALL_FEATURES: Readonly<Features> = {
   week: true,
   meeting: true,
   periodProposals: true,
+  disputes: true,
 }

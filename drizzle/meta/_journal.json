@@ -162,6 +162,20 @@
       "when": 1795351314697,
       "tag": "0022_launch_switches_on",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1795352916884,
+      "tag": "0023_disputes",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1795352917461,
+      "tag": "0024_disputes_switch",
+      "breakpoints": true
     }
   ]
 }

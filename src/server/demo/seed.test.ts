@@ -81,7 +81,7 @@ describe('demo seed (#62)', () => {
     const db = createTestDb()
     db.run(sql`UPDATE feature_flags SET enabled = 0 WHERE key = 'week'`)
     seedDemo(db, { NODE_ENV: 'production' }, T0)
-    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, week: false })
+    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, week: false, disputes: false })
   })
 
   it('the audit log is in time order (#45)', () => {
@@ -207,6 +207,6 @@ describe('demo seed (#62)', () => {
     expect(() => seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: 'launch' }, T0)).toThrow('boom')
     expect(db.select().from(users).all()).toHaveLength(0)
     expect(db.select().from(tasks).all()).toHaveLength(0)
-    expect(getFlags(db)).toEqual(ALL_FEATURES)
+    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, disputes: false })
   })
 })

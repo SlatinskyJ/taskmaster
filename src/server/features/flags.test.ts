@@ -6,13 +6,14 @@ import { createTestDb } from '~/server/db/testing'
 import { getFlags, setSwitchesIn } from './flags'
 
 describe('getFlags', () => {
-  it('reads the values the migrations leave: everything on since the release (0022)', () => {
+  it('reads the values the migrations leave: on since the release (0022), disputes off (0024)', () => {
     expect(getFlags(createTestDb())).toEqual({
       recurring: true,
       log: true,
       week: true,
       meeting: true,
       periodProposals: true,
+      disputes: false,
     })
     expect(
       createTestDb()
@@ -26,7 +27,7 @@ describe('getFlags', () => {
   it('reads a switch turned off by hand in the database', () => {
     const db = createTestDb()
     db.run(sql`UPDATE feature_flags SET enabled = 0 WHERE key = 'recurring'`)
-    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, recurring: false })
+    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, recurring: false, disputes: false })
   })
 
   it('reads a switch with no row as off', () => {
@@ -39,13 +40,14 @@ describe('getFlags', () => {
       week: false,
       meeting: true,
       periodProposals: true,
+      disputes: true,
     })
   })
 
   it('ignores a row for a switch the code does not know', () => {
     const db = createTestDb()
     db.insert(featureFlags).values({ key: 'teleport', enabled: false }).run()
-    expect(getFlags(db)).toEqual(ALL_FEATURES)
+    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, disputes: false })
   })
 
   it('refuses a hand edit that is not 0 or 1', () => {
