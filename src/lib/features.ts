@@ -1,8 +1,8 @@
-// Launch switches (family launch 2026-11-22: one-time tasks only; every switch on since migration
-// 0022). A switched-off feature keeps its code and routes; only its entry points are hidden. The
-// values live in the database table `feature_flags` (src/server/features); the app shell reads them
-// on every page load and screens get them as `context.features`. A new unfinished feature gets a
-// new switch, off, and turns it on when its issue lands.
+// Launch switches (family launch 2026-11-22: one-time tasks only; every switch on since
+// migration 0022). A switched-off feature keeps its code and routes; only its entry points are
+// hidden. The values live in the database table `feature_flags` (src/server/features); the app
+// shell reads them on every page load and screens get them as `context.features`. A new
+// unfinished feature gets a new switch, off, and turns it on when its issue lands.
 /** The switches, in the order the seed migration writes them. */
 export const FEATURE_KEYS = [
   /** Recurring templates: the Opakovaný kind, template lists, approvals and price changes (#38). */
