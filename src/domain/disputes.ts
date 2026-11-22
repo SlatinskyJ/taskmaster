@@ -7,6 +7,8 @@ import type { Adjustment, PeriodId, SettlementCorrection } from './settlement'
 
 // Disputes on locked items (spec §5.11, Jakub 2026-11-16).
 //
+// Locked items: an agreed task or template score, a confirmed completion, a rejected completion
+// (kind `rejection`: one `task.rejected` audit entry), a settlement record, a manual adjustment.
 // Any taker or giver flags a locked item as disputed, with a reason. The item keeps its values
 // and state; [call] a dispute blocks nothing (the meeting and settlement go ahead). Only the
 // admin resolves it:
@@ -32,7 +34,7 @@ export type DisputeError =
   | 'wrong_correction'
 
 export type DisputeKind =
-  'task_score' | 'template_score' | 'completion' | 'settlement' | 'adjustment'
+  'task_score' | 'template_score' | 'completion' | 'rejection' | 'settlement' | 'adjustment'
 
 /**
  * Which record a dispute is about. `id` is that record's id. A settlement also carries the key
@@ -42,7 +44,11 @@ export type DisputeRef =
   | { kind: Exclude<DisputeKind, 'settlement'>; id: number }
   | { kind: 'settlement'; id: number; periodId: PeriodId; takerId: PersonId }
 
-/** A completion record's outcome; only a confirmed or rejected one is locked. */
+/**
+ * A completion record's outcome; only a confirmed one is locked here. A rejected completion is
+ * kind `rejection` (one `task.rejected` audit entry: a task can be rejected several times), so
+ * it has exactly one name and the one-open-dispute check holds.
+ */
 export type CompletionOutcome = 'pending' | 'confirmed' | 'rejected'
 
 /** The disputed record with the state that decides whether it is locked. */
@@ -50,6 +56,7 @@ export type DisputeTarget =
   | { kind: 'task_score'; id: number; agreement: OneTimeAgreement['status'] }
   | { kind: 'template_score'; id: number; agreement: TemplateAgreement['status'] }
   | { kind: 'completion'; id: number; outcome: CompletionOutcome }
+  | { kind: 'rejection'; id: number }
   | { kind: 'settlement'; id: number; periodId: PeriodId; takerId: PersonId }
   | { kind: 'adjustment'; id: number }
 
@@ -63,7 +70,8 @@ export function isLocked(target: DisputeTarget): boolean {
     case 'template_score':
       return target.agreement !== 'proposed'
     case 'completion':
-      return target.outcome !== 'pending'
+      return target.outcome === 'confirmed'
+    case 'rejection':
     case 'settlement':
     case 'adjustment':
       return true
