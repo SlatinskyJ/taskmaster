@@ -7,8 +7,8 @@ import type { Db } from '~/server/db'
 import { settlements, tasks } from '~/server/db/schema'
 
 // The records a running total is built from (spec §5.9, §5.10): confirmed completions credited
-// to their earner, and every settlement's deduction. Adjustments join when the admin screen
-// (#47/#36) stores them. A completion belongs to the period of its `completed_at`, not its
+// to their earner, and every settlement's deduction. Adjustments join when corrections
+// (#48) store them. A completion belongs to the period of its `completed_at`, not its
 // approval time (spec §5.5), so `until` filters on `completed_at` and is exclusive.
 
 /**
@@ -44,8 +44,8 @@ export function ledgerEntries(db: Db | Tx, until?: Date): LedgerEntry[] {
 /**
  * Each taker's points now (spec §5.7): confirmed = the running total (carry-over + confirmed
  * since), pending = the scores done and waiting for a giver, keyed by earner. Takers with neither
- * are missing from the map (read as 0). The one points read: Týden uses it, and #162's Domů
- * should too (#172).
+ * are missing from the map (read as 0). The one points read: Týden and Domů (`takerPoints`) use
+ * it.
  */
 export function takerPointsNow(db: Db | Tx): Map<number, { confirmed: number; pending: number }> {
   const entries = ledgerEntries(db)
