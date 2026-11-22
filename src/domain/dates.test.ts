@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  pragueDaysBetween,
   addPragueDays,
   fromPragueWallTime,
   nextPragueWeekdayAt,
@@ -170,5 +171,18 @@ describe('ISO UTC round trip', () => {
 
   it('refuses to serialise an invalid date', () => {
     expect(() => toIsoUtc(new Date('nope'))).toThrow(RangeError)
+  })
+})
+
+describe('pragueDaysBetween', () => {
+  const at = (month: number, day: number, hour: number, minute = 0) =>
+    fromPragueWallTime({ year: 2026, month, day, hour, minute })
+  it('counts calendar days, 7 over the spring and autumn DST switches', () => {
+    expect(pragueDaysBetween(at(3, 22, 23, 59), at(3, 29, 23, 59))).toBe(7)
+    expect(pragueDaysBetween(at(10, 18, 23, 59), at(10, 25, 23, 59))).toBe(7)
+  })
+  it('ignores the time of day; earlier is negative', () => {
+    expect(pragueDaysBetween(at(12, 2, 23, 59), at(12, 3, 0, 1))).toBe(1)
+    expect(pragueDaysBetween(at(12, 6, 0, 0), at(12, 2, 23, 0))).toBe(-4)
   })
 })

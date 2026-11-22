@@ -41,6 +41,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'recurring', spec: 'recurring.spec.ts', seed: 'recurring' },
   // Its own server: the scheduled and expired rows of #39.
   { name: 'scheduler', spec: 'scheduler.spec.ts', seed: 'scheduler' },
+  // Its own server: the proposals change for good.
+  { name: 'proposals', spec: 'proposals.spec.ts', seed: 'proposals' },
 ]
 
 /** Passkeys on (localhost) for the `on` suite only, at its own port. */

@@ -5,7 +5,7 @@ import { requireRole } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
 import type { Db } from '~/server/db'
 import { getFlags } from '~/server/features'
-import { int, parseDefaults, record } from './functions'
+import { int, parseDefaults, record } from './validators'
 import {
   approveProposal,
   proposalsView,

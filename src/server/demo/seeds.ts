@@ -9,6 +9,7 @@ import {
   pastWeekScheduled,
   points,
   priceChange,
+  proposals,
   templates,
   thisWeek,
 } from './pieces'
@@ -40,6 +41,8 @@ export const SEEDS = {
   recurring: { pieces: [points, templates, instances], features: ['recurring', 'log'] },
   /** The scheduler (#39): everyday templates through the past week, then the boot tick. */
   scheduler: { pieces: [pastWeekScheduled, bootTick], features: ['recurring'] },
+  /** Příští týden and Výchozí týden (#43): an open proposal of each kind. */
+  proposals: { pieces: [thisWeek, proposals], features: ['week', 'periodProposals'] },
   /** Previews and dev: everything. */
   demo: {
     pieces: [
@@ -51,6 +54,7 @@ export const SEEDS = {
       templates,
       thisWeek,
       instances,
+      proposals,
       bootTick,
     ],
     features: FEATURE_KEYS,

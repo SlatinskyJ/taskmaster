@@ -401,7 +401,8 @@ describe('proposalsView', () => {
     const { id } = must(proposePeriod(f.db, f.starsi, NEXT, AT))
     expect(proposalsView(f.db, AT).period?.waitingFor).toEqual([f.tata, f.mladsi, mama])
     must(approveProposal(f.db, f.tata, 'period', id, AT))
-    expect(proposalsView(f.db, AT)).toEqual({
+    const { period, defaults } = proposalsView(f.db, AT)
+    expect({ period, defaults }).toEqual({
       period: {
         id,
         settings: { cutoffAt: NEXT.cutoffAt.toISOString(), levels: NEXT.levels },
@@ -438,5 +439,71 @@ describe('proposalsView', () => {
       status: 'pending',
       waitingFor: [f.starsi, f.mladsi],
     })
+  })
+})
+
+describe('proposalsView context for the screens', () => {
+  const span = (startsAt: Date, cutoffAt: Date, levels = DEFAULT_PERIOD_DEFAULTS.levels) => ({
+    startsAt: startsAt.toISOString(),
+    cutoffAt: cutoffAt.toISOString(),
+    levels,
+  })
+  const DEFAULT_NEXT_CUTOFF = prague(2026, 12, 6, 23, 59)
+
+  it('names the running week, the defaults and the parties (no admin); next = the default week', () => {
+    const f = week()
+    expect(proposalsView(f.db, AT)).toEqual({
+      period: null,
+      defaults: null,
+      running: span(SAT, CUTOFF),
+      next: span(CUTOFF, DEFAULT_NEXT_CUTOFF),
+      defaultNext: span(CUTOFF, DEFAULT_NEXT_CUTOFF),
+      currentDefaults: getPeriodDefaults(f.db),
+      parties: [
+        { id: f.tata, name: 'Táta', role: 'giver' },
+        { id: f.starsi, name: 'Starší', role: 'taker' },
+        { id: f.mladsi, name: 'Mladší', role: 'taker' },
+      ],
+    })
+  })
+
+  it('an agreed change makes next; defaultNext stays the default week', () => {
+    const f = week()
+    agreedNextWeek(f)
+    const v = proposalsView(f.db, AT)
+    expect(v.next).toEqual(span(CUTOFF, NEXT.cutoffAt, NEXT.levels))
+    expect(v.defaultNext).toEqual(span(CUTOFF, DEFAULT_NEXT_CUTOFF))
+  })
+
+  it('a running week that ends on a Wednesday: defaultNext is the default rule, not 7 days', () => {
+    const f = week()
+    const wed = prague(2026, 12, 2, 23, 59)
+    const { id } = must(proposePeriod(f.db, f.starsi, { cutoffAt: wed, levels: NEXT.levels }, AT))
+    must(approveProposal(f.db, f.mladsi, 'period', id, AT))
+    must(approveProposal(f.db, f.tata, 'period', id, AT))
+    rollPeriods(f.db, CUTOFF, DEFAULT_PERIOD_DEFAULTS)
+    const v = proposalsView(f.db, prague(2026, 12, 1, 12))
+    expect(v.running).toEqual(span(CUTOFF, wed, NEXT.levels))
+    // Sunday nearest Wed 9 Dec is Sun 6 Dec: 4 days, not addPragueDays(wed, 7).
+    expect(v.defaultNext).toEqual(span(wed, DEFAULT_NEXT_CUTOFF))
+    expect(v.defaultNext?.cutoffAt).not.toBe(addPragueDays(wed, 7).toISOString())
+    expect(v.next).toEqual(v.defaultNext)
+  })
+
+  it('before the first roll: running, next and defaultNext are null', () => {
+    const f = family()
+    const v = proposalsView(f.db, AT)
+    expect([v.running, v.next, v.defaultNext]).toEqual([null, null, null])
+  })
+
+  it('a second giver is a party', () => {
+    const f = week()
+    const mama = addGiver(f)
+    expect(proposalsView(f.db, AT).parties.map((p) => p.id)).toEqual([
+      f.tata,
+      f.starsi,
+      f.mladsi,
+      mama,
+    ])
   })
 })
