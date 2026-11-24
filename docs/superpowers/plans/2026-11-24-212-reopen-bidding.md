@@ -137,7 +137,7 @@
 - `reopenBiddingHandler(db, userId, { taskId }, now): RefusalResult` — `feature_off` when `getFlags(db).reopenBidding` is false, else `answered(reopenBidding(…))`.
 - `reopenBiddingFn`: POST, `requireRole('giver', 'taker')`, `parseTaskId`.
 
-- [ ] **Step 1: Failing tests:** switch off → `feature_off`, nothing written; on → `{ ok: true, … }` and the task has `biddingFrom`; Review Focus 8 (switch on: Jiná cena on open → `not_changeable`, on reserved → ok; switch off: open → ok); guard list entry `reopenBiddingFn: ['giver', 'taker']`; error and history text cases.
+- [ ] **Step 1: Failing tests:** switch off → `feature_off`, nothing written; on → `{ ok: true, … }` and the task has `biddingFrom`; Review Focus 8 (switch on: Jiná cena on open → `not_changeable`, on reserved → ok; switch off: open → ok); `proposeTaskScoreChangeFn` calls `proposeTaskScoreChangeHandler` (its handler body is one line, same wiring as `turnDownBidsFn`; a test greps nothing, the e2e in PR 2 exercises it, and the guards test lists the fn); history text cases: `task.bidding_reopened`, `task.bidding_closed`, and a `task.bids_turned_down` without bids reading "vyjednávání skončilo"; guard list entry `reopenBiddingFn: ['giver', 'taker']`; error and history text cases.
 - [ ] **Step 2:** run → FAIL.
 - [ ] **Step 3:** implement.
 - [ ] **Step 4:** `pnpm test`, `pnpm typecheck`, `pnpm lint` → clean.
