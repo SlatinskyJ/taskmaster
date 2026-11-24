@@ -8,7 +8,15 @@ import { rejectTask } from '~/server/tasks'
 import { rejectionsSince } from '~/server/tasks/rejections'
 import { createTemplate } from '~/server/templates/templates'
 import { failAuditOn, json, must, rawTask, T0 } from '~/server/tasks/testing'
-import { disputeMarks, dismissDisputeIn, insertOpen, listDisputes, markKey, openDisputeIn } from '.'
+import {
+  disputeMarks,
+  dismissDisputeIn,
+  insertOpen,
+  listDisputes,
+  listOpenForAdmin,
+  markKey,
+  openDisputeIn,
+} from '.'
 
 // Opening a dispute (spec §5.11, #46): the store side of the domain rule. Keys: README.md.
 const AT = MEETING
@@ -615,3 +623,49 @@ function must1<T>(xs: readonly T[]): T {
     throw new Error(`expected one row, got ${String(xs.length)}`)
   return x
 }
+
+describe('listOpenForAdmin (#47)', () => {
+  it("lists every open dispute oldest first, with the item's value now", () => {
+    const f = setup()
+    const early = new Date(AT.getTime() - 60_000)
+    const sid = settlement(f, f.mladsi)
+    const onSettlement = must(
+      openDisputeIn(f.db, f.mladsi, { kind: 'settlement', id: sid }, 'Málo.', AT),
+    ).id
+    const onCompletion = must(
+      openDisputeIn(f.db, f.starsi, { kind: 'completion', id: f.confirmed }, 'Víc.', early),
+    ).id
+    const other = doneTask(f, { score: 3, completedAt: SAT, earner: f.starsi })
+    const closed = must(
+      openDisputeIn(f.db, f.starsi, { kind: 'completion', id: other }, 'x', early),
+    ).id
+    must(dismissDisputeIn(f.db, f.admin, closed, { score: 3 }, 'Sedí.', AT))
+    f.db.update(tasks).set({ score: 30 }).where(eq(tasks.id, f.confirmed)).run()
+
+    const list = listOpenForAdmin(f.db)
+    expect(list.map((e) => e.id)).toEqual([onCompletion, onSettlement])
+    expect(list[0]).toMatchObject({
+      item: { kind: 'completion', id: f.confirmed },
+      takerName: 'Starší',
+      openedByName: 'Starší',
+      reason: 'Víc.',
+      value: { score: 30 },
+    })
+    expect(list[1]).toMatchObject({
+      item: { kind: 'settlement', id: sid },
+      title: '',
+      week: { startsAt: f.p1.startsAt.toISOString(), endsAt: expect.any(String) as string },
+      value: { level: 'lower', deducted: 50 },
+    })
+  })
+
+  it('includes disputes no taker but their own could see', () => {
+    const f = setup()
+    const id = must(
+      openDisputeIn(f.db, f.starsi, { kind: 'completion', id: f.confirmed }, 'moje', AT),
+    ).id
+    expect(listOpenForAdmin(f.db).map((e) => e.id)).toEqual([id])
+    expect(listDisputes(f.db, { id: f.mladsi, role: 'taker' })).toEqual([])
+    expect(listDisputes(f.db, { id: f.admin, role: 'admin' })).toEqual([])
+  })
+})
