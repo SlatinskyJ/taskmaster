@@ -6,8 +6,9 @@ import type { Result } from '~/domain/result'
 import type { Actor, Tx } from '~/server/audit'
 import { writeAudit } from '~/server/audit'
 import { endUserSessions } from '~/server/auth'
+import { endOtherSessions } from '~/server/auth/sessions'
 import type { Db } from '~/server/db'
-import { USER_ROLES, users } from '~/server/db/schema'
+import { sessions, USER_ROLES, users } from '~/server/db/schema'
 import type { UserRole, UserRow } from '~/server/db/schema'
 import { PEOPLE_CHANGE_HOOKS } from './hooks'
 import type { PeopleChangeHook } from './people'
@@ -18,7 +19,9 @@ import { runPeopleChangeHooks } from './people'
 // change is one transaction with its audit entry, and the people-change hooks run in it when
 // who takes part changes (added, role, active).
 //
-// Who may call: an active admin (`{ kind: 'user' }`), or the system for the bootstrap.
+// Who may call: an active admin (`{ kind: 'user' }`), or the system for the bootstrap. One
+// exception: `setOwnPasswordHash` is the writer a signed-in non-admin causes, for their own row
+// only (Profil, #210); it does not run `mayManage`, the caller has checked the current password.
 // Nobody is ever deleted: deactivate instead, so history keeps pointing at a real row.
 
 export type UserError =
@@ -150,6 +153,50 @@ export function setPasswordHash(
     audit(tx, by, 'user.updated', row.id, auditView(row), after, now)
     return ok(updated)
   })
+}
+
+/**
+ * Sets a user's own new password hash (Profil → Změnit heslo, spec §6), inside the caller's
+ * transaction (it also releases the rate-limit attempt there). `expectedHash` is the hash the
+ * caller checked the current password against: if it changed meanwhile (an admin reset, a second
+ * tab), or the calling session ended during the check, nothing is written (`changed`). With
+ * `logOutOthers` every other session of the user ends; the calling one always stays.
+ */
+export function setOwnPasswordHash(
+  tx: Tx,
+  userId: number,
+  sessionId: number,
+  expectedHash: string,
+  passwordHash: string,
+  logOutOthers: boolean,
+  now: Date,
+): Result<{ sessionsEnded: number }, 'not_found' | 'changed' | 'invalid_hash'> {
+  if (!validHash(passwordHash)) return fail('invalid_hash')
+  const row = tx.select().from(users).where(eq(users.id, userId)).get()
+  if (!row) return fail('not_found')
+  if (row.passwordHash !== expectedHash) return fail('changed')
+  const calling = tx
+    .select({ id: sessions.id })
+    .from(sessions)
+    .where(and(eq(sessions.id, sessionId), eq(sessions.userId, userId)))
+    .get()
+  if (!calling) return fail('changed')
+  const updated = tx
+    .update(users)
+    .set({ passwordHash, updatedAt: toIsoUtc(now) })
+    .where(eq(users.id, row.id))
+    .returning()
+    .get()
+  const sessionsEnded = logOutOthers ? endOtherSessions(tx, userId, sessionId) : 0
+  // Keys with "password" are redacted by the audit module: hashChanged, othersLoggedOut.
+  const after = {
+    ...auditView(updated),
+    hashChanged: true,
+    othersLoggedOut: logOutOthers,
+    sessionsEnded,
+  }
+  audit(tx, { kind: 'user', userId }, 'user.updated', row.id, auditView(row), after, now)
+  return ok({ sessionsEnded })
 }
 
 function mayManage(tx: Tx, by: Actor): boolean {
