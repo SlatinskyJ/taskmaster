@@ -1,10 +1,12 @@
-import { eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import {
   acceptLowestBid,
   acceptOneTimeOffer,
   counterOneTimeOffer,
   isActiveAs,
+  isAgreedOneTime,
   placeOneTimeBid,
+  reopenOneTimeBidding,
   turnDownOneTimeBids,
   withdrawOneTimeBid,
 } from '~/domain'
@@ -15,12 +17,14 @@ import { toIsoUtc } from '~/domain/dates'
 import { writeAudit } from '~/server/audit'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
-import { taskScoreApprovals, tasks } from '~/server/db/schema'
+import { taskScoreApprovals, taskThread, tasks } from '~/server/db/schema'
 import type { TaskRow, ThreadRow } from '~/server/db/schema'
 import { listPeople } from '~/server/users/people'
 import type { AgreedOneTime, TaskError } from './tasks'
+import { openChangeOf } from './changeRows'
+import { saveItem, toItem } from './item'
 import { agree, agreementOf } from './tasks'
-import { addEntry, closeRows, openBids, openOffer } from './thread'
+import { addEntry, closeRows, openBids, openOffer, openOfferOrNull } from './thread'
 
 // Bidding on a one-time task (spec §5.2 path 2; Jakub 2026-11-17 and 2026-11-18). The rules live
 // in src/domain/bidding.ts; each action here loads the task, asks the domain, and writes the
@@ -33,6 +37,8 @@ import { addEntry, closeRows, openBids, openOffer } from './thread'
 // - acceptLowestTaskBid: any active giver [call]; the lowest open bid and its bidders as he saw them.
 // - withdrawBid: an active taker with an open bid (Nechci); turnDownBids: any active giver, the
 //   bids as he saw them (Jakub 2026-11-24).
+// - reopenBidding: any active giver or taker [call], on an open one-time task (#212). The round
+//   runs through the same actions; the task stays open at its agreed score until it agrees.
 
 interface Ctx {
   tx: Tx
@@ -122,7 +128,7 @@ export function counterOffer(
     const result = counterOneTimeOffer(agreementOf(tx, task), people, giverId, score, bidders)
     if (!result.ok) return result
     const actor = { kind: 'user', userId: giverId } as const
-    if (result.value.status !== 'proposed') {
+    if (isAgreedOneTime(result.value)) {
       // The counter goes into the thread too (spec §5.2: every bid and counter), accepted with
       // the bids at its number.
       const { entry, replaced } = addEntry(
@@ -132,6 +138,24 @@ export function counterOffer(
       )
       const counter = { entryId: entry.id, replaced }
       return ok(acceptBids(tx, { task, people }, result.value, actor, now, counter))
+    }
+    if (result.value.status === 'rebidding') {
+      // A counter in a reopened round (#212): only the thread changes; the agreed score stays.
+      const { entry, replaced } = addEntry(
+        tx,
+        { taskId, userId: giverId, side: 'giver', score },
+        now,
+      )
+      writeAudit(tx, {
+        actor,
+        action: 'task.score_countered',
+        entityType: 'task',
+        entityId: taskId,
+        before: replaced ? { score: replaced.score, entryId: replaced.id } : { score: task.score },
+        after: { score, entryId: entry.id },
+        at: now,
+      })
+      return ok(task)
     }
     const { saved, entry, old } = newOfferRound(tx, task, giverId, score, now)
     const { offerRound } = saved
@@ -214,6 +238,7 @@ export function turnDownBids(
     const book = seen.map((b) => ({ by: b.takerId, score: b.score }))
     const result = turnDownOneTimeBids(agreementOf(tx, task), people, giverId, book)
     if (!result.ok) return result
+    if (task.status === 'open') return ok(endRound(tx, task, giverId, now))
     const bids = openBids(tx, taskId)
     closeRows(
       tx,
@@ -250,9 +275,10 @@ export function acceptOffer(
   return onTask(db, taskId, ({ tx, task, people }) => {
     const result = acceptOneTimeOffer(agreementOf(tx, task), people, takerId, score)
     if (!result.ok) return result
-    if (result.value.status === 'proposed') throw new Error('an accepted offer is agreed')
+    if (!isAgreedOneTime(result.value)) throw new Error('an accepted offer is agreed')
     const offer = openOffer(tx, taskId)
-    approve(tx, task, takerId, task.offerRound, score, now)
+    // A reopened round (#212) keeps no approvals: the counter and this yes agree it.
+    if (task.status === 'proposed') approve(tx, task, takerId, task.offerRound, score, now)
     const actor = { kind: 'user', userId: takerId } as const
     writeAudit(tx, {
       actor,
@@ -281,7 +307,7 @@ export function acceptLowestTaskBid(
   return onTask(db, taskId, ({ tx, task, people }) => {
     const result = acceptLowestBid(agreementOf(tx, task), people, giverId, score, bidders)
     if (!result.ok) return result
-    if (result.value.status === 'proposed') throw new Error('an accepted bid is agreed')
+    if (!isAgreedOneTime(result.value)) throw new Error('an accepted bid is agreed')
     return ok(
       acceptBids(tx, { task, people }, result.value, { kind: 'user', userId: giverId }, now),
     )
@@ -316,4 +342,68 @@ function acceptBids(
   })
   const accepted = counter ? [...entryIds, counter.entryId] : entryIds
   return agree(tx, task, agreed, accepted, actor, now)
+}
+
+/**
+ * A giver turns a reopened round down (#212): every open row of the round closes, the task stays
+ * open at its agreed score. With no bids it stops the round or takes back his counter.
+ */
+function endRound(tx: Tx, task: TaskRow, giverId: number, now: Date): TaskRow {
+  const bids = openBids(tx, task.id)
+  const counter = openOfferOrNull(tx, task.id)
+  const { row } = saveItem(tx, task, toItem(task), { endBidding: true }, now)
+  writeAudit(tx, {
+    actor: { kind: 'user', userId: giverId },
+    action: 'task.bids_turned_down',
+    entityType: 'task',
+    entityId: task.id,
+    before: {
+      score: counter?.score ?? task.score,
+      entryIds: bids.map((b) => b.id),
+      offerEntryId: counter?.id ?? null,
+    },
+    after: { status: 'open', score: row.score },
+    at: now,
+  })
+  return row
+}
+
+/**
+ * Reopens bidding on an open one-time task (#212, spec §5.2): a new round from the task's newest
+ * thread row; the agreed score stays in force. Refused while a score change is still open.
+ */
+export function reopenBidding(
+  db: Db | Tx,
+  userId: number,
+  taskId: number,
+  now: Date = new Date(),
+): Result<TaskRow, TaskError> {
+  return onTask(db, taskId, ({ tx, task, people }) => {
+    if (task.status !== 'open' || task.origin !== 'one_time') return fail('not_changeable')
+    const result = reopenOneTimeBidding(agreementOf(tx, task), people, userId)
+    if (!result.ok) return result
+    if (openChangeOf(tx, taskId)) return fail('change_pending')
+    const newest = tx
+      .select({ id: taskThread.id })
+      .from(taskThread)
+      .where(eq(taskThread.taskId, taskId))
+      .orderBy(desc(taskThread.id))
+      .get()
+    const biddingFrom = newest?.id ?? 0
+    const saved = tx
+      .update(tasks)
+      .set({ biddingFrom, updatedAt: toIsoUtc(now) })
+      .where(eq(tasks.id, taskId))
+      .returning()
+      .get()
+    writeAudit(tx, {
+      actor: { kind: 'user', userId },
+      action: 'task.bidding_reopened',
+      entityType: 'task',
+      entityId: taskId,
+      after: { score: task.score, biddingFrom },
+      at: now,
+    })
+    return ok(saved)
+  })
 }

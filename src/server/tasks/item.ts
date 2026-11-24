@@ -99,11 +99,15 @@ export interface SaveOptions {
   set?: { score?: number; agreedAt?: string | null; offerRound?: number }
   /** Thread rows the task was agreed at, closed as `accepted` when it leaves `proposed`. */
   accepted?: readonly number[]
+  /** A reopened round (#212) ends although the task stays open: it agreed, or was turned down. */
+  endBidding?: boolean
 }
 
 /**
  * Saves `item` as the task's new state (plus `opts.set` and `updatedAt`). When the task leaves
- * `proposed`, its thread closes: `opts.accepted` as accepted, every other open row as closed.
+ * `proposed`, its thread closes: `opts.accepted` as accepted, every other open row as closed. A
+ * reopened round (#212) ends the same way, and `bidding_from` goes back to null, when the task
+ * leaves `open` (reserved, done, cancelled) or `opts.endBidding` says so. The one writer of that.
  */
 export function saveItem(
   tx: Tx,
@@ -112,15 +116,23 @@ export function saveItem(
   opts: SaveOptions,
   now: Date,
 ): { row: TaskRow; accepted: number[]; closed: number[] } {
+  const leftProposed = before.status === 'proposed' && item.status !== 'proposed'
+  const roundEnds =
+    before.biddingFrom !== null && (item.status !== 'open' || opts.endBidding === true)
   const row = tx
     .update(tasks)
-    .set({ ...columnsOf(item), ...opts.set, updatedAt: toIsoUtc(now) })
+    .set({
+      ...columnsOf(item),
+      ...opts.set,
+      ...(roundEnds ? { biddingFrom: null } : {}),
+      updatedAt: toIsoUtc(now),
+    })
     .where(eq(tasks.id, before.id))
     .returning()
     .get()
-  const leftProposed = before.status === 'proposed' && item.status !== 'proposed'
-  const ended = leftProposed
-    ? closeThread(tx, before.id, opts.accepted ?? [], now)
-    : { accepted: [], closed: [] }
+  const ended =
+    leftProposed || roundEnds
+      ? closeThread(tx, before.id, opts.accepted ?? [], now)
+      : { accepted: [], closed: [] }
   return { row, ...ended }
 }

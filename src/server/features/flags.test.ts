@@ -15,6 +15,7 @@ describe('getFlags', () => {
       periodProposals: true,
       disputes: false,
       bidRefusals: false,
+      reopenBidding: false,
     })
     expect(
       createTestDb()
@@ -33,6 +34,7 @@ describe('getFlags', () => {
       recurring: false,
       disputes: false,
       bidRefusals: false,
+      reopenBidding: false,
     })
   })
 
@@ -54,13 +56,19 @@ describe('getFlags', () => {
       periodProposals: true,
       disputes: true,
       bidRefusals: true,
+      reopenBidding: true,
     })
   })
 
   it('ignores a row for a switch the code does not know', () => {
     const db = createTestDb()
     db.insert(featureFlags).values({ key: 'teleport', enabled: false }).run()
-    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, disputes: false, bidRefusals: false })
+    expect(getFlags(db)).toEqual({
+      ...ALL_FEATURES,
+      disputes: false,
+      bidRefusals: false,
+      reopenBidding: false,
+    })
   })
 
   it('refuses a hand edit that is not 0 or 1', () => {

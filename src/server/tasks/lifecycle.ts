@@ -82,6 +82,17 @@ function runStep(
       reason: opts.reason,
       at: now,
     })
+    // A reopened round (#212) ends when the task leaves open: its own history line.
+    if (row.biddingFrom !== null && saved.biddingFrom === null) {
+      writeAudit(tx, {
+        actor,
+        action: 'task.bidding_closed',
+        entityType: 'task',
+        entityId: taskId,
+        after: { entryIds: closed },
+        at: now,
+      })
+    }
     // A score change in flight ends once the task can't change score any more (spec §5.2);
     // logged after the step that ends it, so the history reads cause, then effect.
     discardStaleChange(tx, saved, actor, people, now)

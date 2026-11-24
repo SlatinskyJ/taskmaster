@@ -49,13 +49,20 @@ export function addEntry(
 
 /** The task's current offer. A proposed task always has one. */
 export function openOffer(db: Db | Tx, taskId: number): ThreadRow {
-  const row = db
-    .select()
-    .from(taskThread)
-    .where(and(open(taskId), eq(taskThread.side, 'giver')))
-    .get()
+  const row = openOfferOrNull(db, taskId)
   if (!row) throw new Error(`task ${String(taskId)} proposed without an open offer`)
   return row
+}
+
+/** The open giver row, if any: a reopened round has none until a giver counters (#212). */
+export function openOfferOrNull(db: Db | Tx, taskId: number): ThreadRow | null {
+  return (
+    db
+      .select()
+      .from(taskThread)
+      .where(and(open(taskId), eq(taskThread.side, 'giver')))
+      .get() ?? null
+  )
 }
 
 /** The task's open bids, oldest first. */
@@ -70,9 +77,10 @@ export function openBids(db: Db | Tx, taskId: number): ThreadRow[] {
 
 /**
  * Each taker's newest bid since the newest giver row (a counter, a re-offer, a turn-down), open
- * or closed: the same-number rule (spec §5.2, Jakub 2026-11-24). Oldest first.
+ * or closed: the same-number rule (spec §5.2, Jakub 2026-11-24). In a reopened round (#212) only
+ * rows above `since` (its start) count: the floor is the newer of the two. Oldest first.
  */
-export function lastBids(db: Db | Tx, taskId: number): ThreadRow[] {
+export function lastBids(db: Db | Tx, taskId: number, since = 0): ThreadRow[] {
   const giver = db
     .select({ id: taskThread.id })
     .from(taskThread)
@@ -86,7 +94,7 @@ export function lastBids(db: Db | Tx, taskId: number): ThreadRow[] {
       and(
         eq(taskThread.taskId, taskId),
         eq(taskThread.side, 'taker'),
-        gt(taskThread.id, giver?.id ?? 0),
+        gt(taskThread.id, Math.max(since, giver?.id ?? 0)),
       ),
     )
     .orderBy(asc(taskThread.id))

@@ -86,6 +86,7 @@ describe('demo seed (#62)', () => {
       week: false,
       disputes: false,
       bidRefusals: false,
+      reopenBidding: false,
     })
   })
 
@@ -215,6 +216,11 @@ describe('demo seed (#62)', () => {
     expect(() => seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: 'launch' }, T0)).toThrow('boom')
     expect(db.select().from(users).all()).toHaveLength(0)
     expect(db.select().from(tasks).all()).toHaveLength(0)
-    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, disputes: false, bidRefusals: false })
+    expect(getFlags(db)).toEqual({
+      ...ALL_FEATURES,
+      disputes: false,
+      bidRefusals: false,
+      reopenBidding: false,
+    })
   })
 })

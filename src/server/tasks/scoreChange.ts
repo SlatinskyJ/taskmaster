@@ -60,6 +60,8 @@ export function proposeTaskScoreChange(
     const loaded = load(tx, taskId)
     if (!loaded) return fail('not_found')
     const { task, people } = loaded
+    // A reopened round (#212) negotiates the score already.
+    if (task.biddingFrom !== null) return fail('bidding_open')
     const pending = openChangeOf(tx, taskId)
     const proposal = proposeOneTimeScoreChange(
       toItem(task),
