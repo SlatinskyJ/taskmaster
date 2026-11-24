@@ -228,7 +228,7 @@ function AdjustmentRow({
       stateLabel={row.stateLabel}
       points={row.points}
       meta={row.meta}
-      detail={adjustment.reason}
+      detail={row.detail}
       footer={d && <DisputeControl {...d} mark={adjustment.dispute?.mark ?? null} />}
     />
   )

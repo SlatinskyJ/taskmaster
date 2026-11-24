@@ -465,13 +465,8 @@ describe('the demo seed: disputes (#46)', () => {
       seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: seed }, T0)
       const name = (uid: number | null) =>
         uid === null ? null : db.select().from(users).where(eq(users.id, uid)).get()?.username
-      // The corrections piece (#48) adds an adjustment dispute in `demo`: not this piece's.
-      const rows = db
-        .select()
-        .from(disputes)
-        .orderBy(asc(disputes.id))
-        .all()
-        .filter((d) => d.itemKind !== 'adjustment')
+      // The corrections piece (#48) runs later in `demo` and opens two more: not this piece's.
+      const rows = db.select().from(disputes).orderBy(asc(disputes.id)).all().slice(0, 2)
       expect(
         rows.map((d) => [d.itemKind, name(d.openedBy), d.status, name(d.resolvedBy), d.note]),
       ).toEqual([
@@ -515,7 +510,7 @@ describe('the demo seed: disputes (#46)', () => {
 
 describe('the demo seed: corrections (#48)', () => {
   it.each(['demo', 'corrections'])(
-    "%s: a manual +5 for Starší he disputes; Mladší's past week corrected to none",
+    "%s: a manual +5 for Starší he disputes; Mladší's past week corrected to none, he disputes it",
     (seed) => {
       const db = createTestDb()
       seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: seed }, T0)
@@ -541,9 +536,16 @@ describe('the demo seed: corrections (#48)', () => {
         ['starsi', 5, 'manual'],
         ['mladsi', 50, 'correction'],
       ])
-      const open = db.select().from(disputes).where(eq(disputes.itemKind, 'adjustment')).all()
-      expect(open.map((d) => [d.itemId, name(d.openedBy), d.status])).toEqual([
-        [adjustments[0]?.id, 'starsi', 'open'],
+      const open = db
+        .select()
+        .from(disputes)
+        .where(eq(disputes.status, 'open'))
+        .orderBy(asc(disputes.id))
+        .all()
+        .filter((d) => d.itemKind !== 'completion')
+      expect(open.map((d) => [d.itemKind, d.itemId, name(d.openedBy)])).toEqual([
+        ['settlement', record?.id, 'mladsi'],
+        ['adjustment', adjustments[0]?.id, 'starsi'],
       ])
       const actions = db
         .select()

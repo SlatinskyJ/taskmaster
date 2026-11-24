@@ -10,6 +10,7 @@ import {
   pointsPreview,
   sendLabel,
   weekDifference,
+  weekOf,
 } from './fixDraft'
 import type { FixStart } from './fixDraft'
 
@@ -109,6 +110,10 @@ describe('fixDraft', () => {
     )
     expect(pointsPreview(points(direct, { takerId: 3, amount: '' }), fixable)).toBeNull()
     expect(belowZero(points(direct, { takerId: 4, amount: '5', sign: -1 }), fixable)).toBe(true)
+    expect(pointsPreview(points(direct, { takerId: 4, amount: '5', sign: -1 }), fixable)).toBe(
+      'Mladší: 4 → −1 b.',
+    )
+    expect(belowZero(points(direct, { takerId: null, amount: '5', sign: -1 }), fixable)).toBe(false)
     expect(belowZero(points(direct, { takerId: 4, amount: '4', sign: -1 }), fixable)).toBe(false)
     expect(belowZero(points(direct, { takerId: 4, amount: '9', sign: 1 }), fixable)).toBe(false)
   })
@@ -156,5 +161,44 @@ describe('fixDraft', () => {
       cs.admin.fix.sendRemove(5, 'Starší'),
     )
     expect(sendLabel(points(direct, { takerId: null, amount: '5' }), fixable)).toBeNull()
+  })
+
+  it("two boys with two weeks each: the second boy's older week is found and previewed", () => {
+    const older = { ...week, settlementId: 3, levels: { lower: 30, upper: 80 }, deducted: 80 }
+    const two: FixTaker[] = [
+      {
+        id: 3,
+        name: 'Starší',
+        total: 62,
+        weeks: [
+          { ...week, settlementId: 8 },
+          { ...week, settlementId: 5 },
+        ],
+      },
+      {
+        id: 4,
+        name: 'Mladší',
+        total: 4,
+        weeks: [
+          { ...week, settlementId: 9 },
+          { ...older, level: 'upper' },
+        ],
+      },
+    ]
+    expect(weekOf(two, 3)?.taker.name).toBe('Mladší')
+    expect(weekOf(two, 3)?.week.settlementId).toBe(3)
+    expect(weekOf(two, 4)).toBeUndefined()
+    const s: FixStart = { mode: 'week', takerId: null, settlementId: null, dispute: null }
+    const d = { ...initialDraft(s, 'x'), takerId: 4, settlementId: 3, level: 'lower' as const }
+    expect(weekDifference(d, two)).toBe(50) // 80 deducted → Spodní 30
+    expect(weekDifference({ ...d, level: 'none' }, two)).toBe(80)
+    expect(sendLabel(d, two)).toBe(cs.admin.fix.sendCorrect('Spodní hranice', 'Mladší'))
+  })
+
+  it('a week picked but no level yet: no difference, no named button', () => {
+    const s: FixStart = { mode: 'week', takerId: 3, settlementId: 7, dispute: null }
+    const d = initialDraft(s, 'x')
+    expect(weekDifference(d, fixable)).toBeNull()
+    expect(sendLabel(d, fixable)).toBeNull()
   })
 })

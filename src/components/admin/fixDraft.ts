@@ -1,4 +1,5 @@
 import { levelLabel } from '~/components/period/periodView'
+import { deductionFor } from '~/domain'
 import type { Level } from '~/domain'
 import { ADJUST_POINTS_MAX } from '~/lib/disputeLimits'
 import { cs } from '~/lib/strings'
@@ -65,9 +66,6 @@ export function weekOf(
   return undefined
 }
 
-const deductionOf = (week: FixWeek, level: Level) =>
-  level === 'none' ? 0 : level === 'lower' ? week.levels.lower : week.levels.upper
-
 /** What the request sends, or null while something is missing (or the level is unchanged). */
 export function fixRequest(
   d: FixDraft,
@@ -111,7 +109,7 @@ export function belowZero(d: FixDraft, fixable: readonly FixTaker[]): boolean {
 export function weekDifference(d: FixDraft, fixable: readonly FixTaker[]): number | null {
   const found = weekOf(fixable, d.settlementId)
   if (!found || d.level === null) return null
-  return found.week.deducted - deductionOf(found.week, d.level)
+  return found.week.deducted - deductionFor(d.level, found.week.levels)
 }
 
 /** The send button's text, naming the action and the boy; null until it can say so. */

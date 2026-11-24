@@ -62,6 +62,11 @@ export function levelReached(total: number, levels: Levels): Level {
 }
 
 /** One taker's settlement of one period (spec §5.9). Carry-over is stored, not recomputed. */
+/** What a level deducts: none nothing, lower and upper their own points. */
+export function deductionFor(level: Level, levels: Levels): number {
+  return level === 'upper' ? levels.upper : level === 'lower' ? levels.lower : 0
+}
+
 export interface SettlementRecord {
   periodId: PeriodId
   takerId: PersonId
@@ -86,7 +91,7 @@ export function settle(
   if (!isValidLevels(levels)) return fail('invalid_levels')
   if (!isPoints(totalBefore)) return fail('invalid_total')
   const level = levelReached(totalBefore, levels)
-  const deducted = level === 'upper' ? levels.upper : level === 'lower' ? levels.lower : 0
+  const deducted = deductionFor(level, levels)
   return ok({ periodId, takerId, totalBefore, level, deducted, carryOver: totalBefore - deducted })
 }
 

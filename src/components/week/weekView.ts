@@ -27,12 +27,16 @@ export function historyLine(r: HistoryRecord): string {
   return `${w.total} ${String(r.totalBefore)} · ${w.deducted} ${String(r.deducted)} · ${w.carry} ${String(r.carryOver)}`
 }
 
-/** An adjustment row on Týden (#48): its name, chip, meta line and signed points. */
+/**
+ * An adjustment row on Týden (#48): its name, chip, day, signed points, and the reason under it
+ * (a correction's week first: it wraps there, the meta line is cut).
+ */
 export function adjustmentRow(a: WeekAdjustment): {
   name: string
   state: ItemStateKey
   stateLabel: string
   meta: string
+  detail: string
   points: string
 } {
   const w = cs.week
@@ -40,9 +44,10 @@ export function adjustmentRow(a: WeekAdjustment): {
     name: a.fromWeek ? w.correctionRow : w.adjustment,
     state: a.waiting ? 'pending' : 'confirmed',
     stateLabel: a.waiting ? w.waiting : w.counted,
-    meta: a.fromWeek
-      ? `${w.fromWeek(weekLabel(a.fromWeek.startsAt, a.fromWeek.endsAt))} · ${dayLabel(a.at)}`
-      : dayLabel(a.at),
+    meta: dayLabel(a.at),
+    detail: a.fromWeek
+      ? `${w.fromWeek(weekLabel(a.fromWeek.startsAt, a.fromWeek.endsAt))} · ${a.reason}`
+      : a.reason,
     points: w.adjustmentPoints(a.points),
   }
 }

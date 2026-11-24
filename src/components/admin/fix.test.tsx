@@ -114,6 +114,7 @@ describe('FixForm points mode', () => {
     const html = view(direct)
     for (const b of html.match(/<button[^>]*>/g) ?? []) expect(b).toContain('min-h-tap')
     expect(html).toMatch(/maxlength="1000"/i)
+    expect(html).toMatch(/enterkeyhint="next"/i)
   })
 
   it('no boys: says so', () => {
@@ -151,6 +152,8 @@ describe('FixForm week mode', () => {
     expect(pill(html, 'Horní hranice')).toContain('aria-pressed="true"')
     expect(html).toContain(t.difference(-50))
     expect(submit(html)?.[1]).toBe(t.sendCorrect('Horní hranice', longName))
+    // The level's label stays in its own form: never after "na" (Czech case).
+    expect(submit(html)?.[1]).toBe(`Opravit: Horní hranice – ${longName}`)
   })
 
   it('from a settlement dispute: only that week, the boy locked', () => {

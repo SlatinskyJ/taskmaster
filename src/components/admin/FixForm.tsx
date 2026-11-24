@@ -37,7 +37,7 @@ function Pill({
       aria-pressed={pressed}
       disabled={disabled}
       className={cn(
-        'h-auto min-h-tap max-w-full px-3 py-2 text-left break-words whitespace-normal',
+        'h-auto min-h-tap max-w-full justify-start px-3 py-2 text-left break-words whitespace-normal',
         pressed ? 'bg-accent/10 ring-3 ring-accent-strong' : 'ring-2 ring-track',
       )}
       onClick={onClick}
@@ -140,6 +140,7 @@ export function FixForm({ start, fixable, draft, busy, error, onChange, onSend }
               inputMode="numeric"
               pattern="[0-9]*"
               autoComplete="off"
+              enterKeyHint="next"
               maxLength={String(ADJUST_POINTS_MAX).length}
               value={draft.amount}
               onChange={(e) => {

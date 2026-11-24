@@ -94,7 +94,9 @@ test('Opravit týden: Starší’s past week to Spodní hranice; his Historie sh
   await page.getByRole('tab', { name: cs.week.history }).click()
   const record = page.locator('main [data-record]')
   await expect(record).toContainText(lower)
-  await expect(record).toContainText(`Opraveno na ${lower} (původně ${cs.meeting.level.upper})`)
+  await expect(record).toContainText(
+    `Opraveno na úroveň ${lower} (původně ${cs.meeting.level.upper})`,
+  )
   await expect(record).toContainText(reason)
 })
 

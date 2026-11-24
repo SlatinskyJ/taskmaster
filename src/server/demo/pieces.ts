@@ -313,7 +313,8 @@ export const CORRECTION_REASON = 'Kapesné za minulý týden nedostal, body se m
 /**
  * Corrections and adjustments (#48), after `disputes`: the admin adds 5 points to Starší by hand
  * and corrects Mladší's past week to Bez kapesného (a correction down gives points back, so it
- * can never go below zero); Starší disputes his adjustment, so Sporné shows Opravit on one.
+ * can never go below zero); Mladší disputes the corrected week and Starší his adjustment, so
+ * Sporné shows Opravit on both kinds.
  */
 export const corrections: Piece = ({ tx, id, now }) => {
   const admin = id('admin')
@@ -340,6 +341,16 @@ export const corrections: Piece = ({ tx, id, now }) => {
       admin,
       { settlementId: record.id, level: 'none', reason: CORRECTION_REASON },
       null,
+      now,
+    ),
+  )
+  step(
+    'dispute the corrected week',
+    openDisputeIn(
+      tx,
+      id('mladsi'),
+      { kind: 'settlement', id: record.id },
+      'Kapesné jsem nakonec dostal, tak to má být Spodní hranice.',
       now,
     ),
   )

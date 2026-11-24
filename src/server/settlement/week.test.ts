@@ -463,6 +463,20 @@ describe('getWeek adjustment rows and corrections (#48 screens)', () => {
     ])
   })
 
+  it("a settled week's record starts exactly at its start: one a millisecond before is not in it", () => {
+    const f = week()
+    doneTask(f, { score: 60, completedAt: plus(SAT, H), earner: f.starsi })
+    adjustment(f, f.starsi, 1, plus(SAT, -1), 'Před týdnem')
+    const onStart = adjustment(f, f.starsi, 2, SAT, 'Na začátku')
+    rollPeriods(f.db, MONDAY, D)
+    settle(f.db, f.tata, MONDAY)
+    const w = getWeek(f.db, starsi(f), MONDAY)
+    expect(w.history[0]?.startsAt).toBe(at(SAT))
+    expect(w.history[0]?.records[0]?.adjustments).toEqual([
+      manual(onStart, 2, SAT, false, 'Na začátku'),
+    ])
+  })
+
   it('no settlement and no period yet: every adjustment of his is listed, waiting', () => {
     const f = family()
     const id = adjustment(f, f.starsi, 4, SAT)

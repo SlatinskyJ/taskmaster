@@ -73,6 +73,19 @@ test.describe('Správa, the fix sheet (#48)', () => {
     }
   })
 
+  test('Opravit on a disputed week, the tallest sheet: Důvod stays visible', async ({ page }) => {
+    await page
+      .locator('[data-admin-dispute]')
+      .filter({ hasText: 'Kapesné jsem nakonec dostal' })
+      .getByRole('button', { name: new RegExp(`^${cs.admin.disputes.fix}: `) })
+      .click()
+    const sheet = page.getByRole('dialog')
+    await sheet.getByRole('button', { name: cs.meeting.level.lower, exact: true }).click()
+    const field = sheet.getByLabel(t.reason)
+    await openKeyboard(page, field)
+    await expectAboveKeyboard(page, field)
+  })
+
   test('Opravit týden: Důvod stays visible under the week and level pills', async ({ page }) => {
     await page.getByRole('button', { name: t.correct }).click()
     const sheet = page.getByRole('dialog')

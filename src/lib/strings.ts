@@ -454,7 +454,7 @@ export const cs = {
     adjustmentPoints: (n: number) => signedPoints(n),
     /** Under a corrected settled week on Historie. */
     correctedLine: (now: string, was: string, diff: number, date: string, reason: string) =>
-      `Opraveno na ${now} (původně ${was}): ${signedPoints(diff)} · ${date} · ${reason}`,
+      `Opraveno na úroveň ${now} (původně ${was}): ${signedPoints(diff)} · ${date} · ${reason}`,
   },
   /** Disputes on locked items (#46, spec §5.11, UI doc §7.1 TDispute). Chip text: `state.disputed`. */
   disputes: {
@@ -584,7 +584,7 @@ export const cs = {
       corrected: 'opraveno',
       /** Points mode: his confirmed total now and after the fix. */
       preview: (name: string, before: number, after: number) =>
-        `${name}: ${String(before)} → ${String(after)} b.`,
+        `${name}: ${String(before)} → ${after < 0 ? `−${String(-after)}` : String(after)} b.`,
       belowZero: 'Tolik bodů nemá.',
       /** Week mode: what the correction moves on today's total (current deduction − new). */
       difference: (n: number) => `Rozdíl: ${signedPoints(n)} k dnešku`,
@@ -592,7 +592,7 @@ export const cs = {
       hintDispute: 'Důvod uvidí rodina i jako odpověď na rozpor.',
       sendAdd: (n: number, name: string) => `Přidat ${String(n)} b. – ${name}`,
       sendRemove: (n: number, name: string) => `Ubrat ${String(n)} b. – ${name}`,
-      sendCorrect: (level: string, name: string) => `Opravit na ${level} – ${name}`,
+      sendCorrect: (level: string, name: string) => `Opravit: ${level} – ${name}`,
       saving: 'Ukládám…',
       done: 'Opraveno.',
       noTakers: 'Nikdo tu nesbírá body.',
