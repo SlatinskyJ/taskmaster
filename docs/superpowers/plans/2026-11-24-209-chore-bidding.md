@@ -6,18 +6,18 @@
 
 **Issue:** [#209 Bid on a proposed recurring chore](https://github.com/SlatinskyJ/taskmaster/issues/209). Stacked on #236 (stack 229: #225 → #228 → #234 → #236 → this).
 
-**Architecture:** The domain wraps the one-time bidding functions (`src/domain/bidding.ts`, #208) instead of copying them: a proposed template is fed to them as a one-time Návrh, and any agreed result (`reserved` or `open`) comes back as an agreed template (no reservation). Bids and counters of a proposed template are rows in the existing `template_thread` table, the same table that later holds score changes of the active template; `templates.score` stays the current offer. The four existing template actions branch on the template's status; two new actions (Nechci, turn-down) cover proposed templates only (#232 extends them to `/sablona`).
+**Architecture:** The domain wraps the one-time bidding functions (`src/domain/bidding.ts`, #208) instead of copying them: a proposed template is fed to them as a one-time Návrh, and any agreed result (`reserved` or `open`) comes back as an agreed template (no reservation). Bids and counters of a proposed template are rows in the existing `template_thread` table, the same table that later holds score changes of the active template; `templates.score` stays the current offer. Approvals follow the one-time task pattern: a new `templates.offer_round` counts offers, and `template_score_approvals` gets an `offer_round` column in its key, so a counter starts a fresh set of approvals by appending rows, never by overwriting one. The four existing template actions branch on the template's status; two new actions (Nechci, turn-down) cover proposed templates only (#232 extends them to `/sablona`).
 
 **Tech Stack:** TypeScript, Drizzle/SQLite, Vitest, TanStack Start server functions.
 
 **Spec:** `docs/superpowers/specs/2026-11-16-taskmaster-design.md` §5.1 (first-score bidding bullet, #225), §5.2 path 2 (same number, a taker's no, a giver's turn-down), §3 (agreement).
 
-**Size:** about 420 changed lines without tests and the migration (domain ~110, server actions ~200, views and functions ~110). One PR: the screens come separately.
+**Size:** about 450 changed lines without tests and the migration (domain ~110, server actions ~220, views, parsers and functions ~120). One PR: the screens come separately.
 
 ## Global Constraints
 
 - Spec §5.1: "while a template is proposed, takers may bid on its first score the same way as on a one-time task (5.2 path 2, including the same-number rule, a taker's no and a giver's turn-down), with **no reservation**. When the giver side accepts the lowest bid (a tie at the lowest is fine), counters at exactly an open bid, or a taker who bid says yes to the current offer, the template becomes active at that score. Instances never get bidding."
-- Launch switch `choreBidding`, off in production (migration 0029 seeds the row with `enabled = 0`). Switch off = today's behaviour exactly: every bidding action on a proposed template answers `not_agreed`, as now.
+- Launch switch `choreBidding`, off in production (migration 0029 seeds the row with `enabled = 0`; the same migration adds `templates.offer_round` and the approvals' `offer_round`, existing rows 0). Switch off = today's behaviour exactly: every bidding action on a proposed template answers `not_agreed`, as now.
 - Every state change writes its audit entry in the same transaction (`writeAudit`).
 - Czech UI text only in `src/lib/strings.ts`; this PR adds no UI text.
 - `src/domain/` stays framework-free.
@@ -25,7 +25,7 @@
 
 ## Review Focus
 
-1. A counter changes `templates.score`; an old approval at another score must not count toward agreement (a giver approved 10, a counter to 12, a taker says yes at 12 → agreed at 12 with the counter's giver, and the stale 10 never revives). Task 2 test "approvals count only at the current score".
+1. A counter changes `templates.score`; an approval of an earlier offer must not count, and the giver who gave it must be able to approve the new one (Máma approves 10, Táta counters 12, Máma taps Souhlasím at 12 → a new approval row, no key clash). Task 2 test "approvals count only in the current offer round", Task 3 test "a second giver approves after a counter".
 2. Agreement by Souhlasím (path 1) while bids are open must close every open thread row, or the active template inherits the bids as a fake score change. Task 3 test "path-1 agreement closes the first-price bids".
 3. People change (`resolveProposedTemplates`) activating a template with open bids: same duty. Task 3 test.
 4. Switch off: a bid on a proposed template must answer `not_agreed` and write nothing (no thread row, no audit). Task 4 test.
@@ -75,19 +75,24 @@
 
 **Files:**
 - Modify: `src/server/templates/thread.ts` (add `lastBids`)
-- Modify: `src/server/templates/templates.ts` (`agreementOf`, `approvers`)
+- Modify: `src/server/templates/templates.ts` (`agreementOf`, `approvers`, `approveIn`), `src/server/db/schema/templates.ts`
+- Create: `drizzle/0029_chore_bidding.sql` via `pnpm db:generate --name chore_bidding`, then append the switch row `INSERT INTO feature_flags (key, enabled) VALUES ('choreBidding', 0);` in the same new file before committing it
 - Test: `src/server/templates/templates.test.ts`, `src/server/templates/thread.test.ts`
 
 **Interfaces:**
 - Produces:
   - `lastBids(db, templateId): TemplateThreadRow[]`: each taker's newest taker row after the newest giver row, open or closed, oldest first (same rule as `src/server/tasks/thread.ts` `lastBids`).
-  - `agreementOf(db, row)` for a proposed row: `proposal = { score: row.score, proposedBy: <newest giver row's userId, else row.createdBy>, approvedBy: approvers(db, row.id, row.score) }`, `book` = open taker rows, `lastBids` from `lastBids()`.
-  - `approvers(db, templateId, score)`: only approvals stored at `score`.
+  - `lastBids(db, templateId, since = 0)`: the floor is the newer of `since` and the newest giver row (as the task helper). This PR passes 0; #232 passes the agreement's last thread row so first-price bids never block a later change.
+  - `agreementOf(db, row)` for a proposed row: `proposal = { score: row.score, proposedBy: <newest giver row's userId, else row.createdBy>, approvedBy: approvers(db, row.id, row.offerRound) }`, `book` = open taker rows, `lastBids` from `lastBids()`.
+  - `approvers(db, templateId, offerRound)`: approvals of that round only.
+  - Schema (`src/server/db/schema/templates.ts`): `templates.offerRound integer not null default 0`; `templateScoreApprovals.offerRound integer not null default 0`, primary key `(templateId, userId, offerRound)`. Doc comments on both tables rewritten (a proposed template's score now changes by counters; approvals are per offer round, append-only; `template_thread` also holds a proposed template's first-price bidding).
+  - `approveIn(tx, row, userId, now)` in `templates.ts`: the one helper that writes an approval row at `row.offerRound` (used by create, Souhlasím, counter, turn-down).
 
 - [ ] **Step 1: Write the failing tests:**
   - thread.test `lastBids counts from the newest giver row, closed bids included`
   - templates.test `agreementOf reads a proposed template's offer, bids and last bids from its thread`
-  - templates.test `approvals count only at the current score` (Review Focus 1: approval rows at 10 and 12, `row.score` 12 → only the 12 row)
+  - templates.test `approvals count only in the current offer round` (Review Focus 1: rows in round 0 and 1, `offerRound` 1 → only the round-1 rows)
+  - thread.test `lastBids with since ignores bids at or below it`
 - [ ] **Step 2:** run them → FAIL.
 - [ ] **Step 3:** Implement.
 - [ ] **Step 4:** run → PASS.
@@ -104,7 +109,7 @@
 **Interfaces:**
 - Consumes: Task 1 functions, Task 2 `agreementOf`, `lastBids`.
 - Produces:
-  - The four existing actions (`bidOnTemplateIn`, `counterOnTemplateIn`, `acceptLowestBidOnTemplateIn`, `acceptOfferOnTemplateIn`) take a sixth argument `opts: { choreBidding: boolean }`. On a proposed row: `!opts.choreBidding` → `fail('not_agreed')` before any write; else the Task 1 function. On an active row: unchanged.
+  - The four existing actions (`bidOnTemplateIn`, `counterOnTemplateIn`, `acceptLowestBidOnTemplateIn`, `acceptOfferOnTemplateIn`) take an optional sixth argument `opts: { choreBidding: boolean } = { choreBidding: false }` (callers in `src/server/demo/pieces.ts` and existing tests keep working unchanged). On a proposed row: `!opts.choreBidding` → `fail('not_agreed')` before any write; else the Task 1 function. On an active row: unchanged.
   - New `withdrawTemplateBidIn(tx, takerId, templateId, now, opts)` and `turnDownTemplateBidsIn(tx, giverId, templateId, seen: {takerId, score}[], now, opts)`; on an active row both `fail('not_proposed')` (until #232). With `inTransaction` twins `withdrawTemplateBid`, `turnDownTemplateBids`.
   - Writes on a proposed template:
 
@@ -112,19 +117,20 @@
 | --- | --- | --- | --- |
 | bid | `addEntry` taker row (replaces his open bid) | — | `template.bid_placed` (existing shape) |
 | Nechci | his open bid closes `closed` | — | `template.bid_withdrawn` before `{entryId, score}` |
-| turn-down | every open bid closes `closed`; new giver row at `row.score` (replaces the open offer row, if any) | — | `template.bids_turned_down` before `{score, entryIds}` after `{entryId}` |
-| counter, no agreement | new giver row (replaces) | `score` = counter | `template.score_countered` before `{score}` after `{entryId, score}` |
-| any agreement | `closeThread` (accepted: the bids at the score, and the counter row when a counter agreed it) | `score`, `status 'active'`, `agreedAt` | `template.agreed` after `{status: 'active', score, by: 'bid' \| 'offer' \| 'counter' \| 'approval', entryIds, closedIds}` |
+| turn-down | every open bid closes `closed`; new giver row at `row.score` (replaces the open offer row, if any); his approval at the new round | `offerRound` + 1 | `template.bids_turned_down` before `{score, offerRound, entryIds, replacedOffer?: {entryId, score}}` after `{score, offerRound, entryId}` |
+| counter, no agreement | new giver row (replaces); his approval at the new round | `score` = counter, `offerRound` + 1 | `template.score_countered` before `{score, offerRound, replacedOffer?: {entryId, score}}` after `{score, offerRound, entryId}` |
+| any agreement | `closeThread`; accepted: the bids at the score, plus the offer row when the agreement is at the offer (a bidder's yes, a Souhlasím) or the counter row when a counter agreed it; the rest `closed` | `score`, `status 'active'`, `agreedAt` | `template.agreed` after `{status: 'active', score, by: 'bid' \| 'offer' \| 'counter' \| 'approval', entryIds, closedIds}` |
 
-  - Counter and turn-down also upsert the giver's approval at the new `row.score` (`template_score_approvals`, `onConflictDoUpdate` on `(templateId, userId)` setting `score`, `approvedAt`), so path 1 (Souhlasím by any brother, `approveTemplateScoreIn`) still agrees against the current offer.
-  - `approveTemplateScoreIn` and `resolveProposedTemplates`: when the template becomes active, `closeThread(tx, id, [], now)` and put `entryIds`/`closedIds` in the `template.agreed` entry (Review Focus 2, 3). Switch-independent: with the switch off there are no rows, so nothing changes.
+  - Approvals are only ever appended (`approveIn`, Task 2): nothing is overwritten, so the audit entries above plus `template.score_approved` (now with `offerRound`) are the whole history (§5.10).
+  - `approveTemplateScoreIn` and `resolveProposedTemplates`: when the template becomes active, `closeThread(tx, id, <open offer row id, if any>, now)` and put `entryIds`/`closedIds` in the `template.agreed` entry (Review Focus 2, 3). Switch-independent: with the switch off there are no rows, so nothing changes.
 
 - [ ] **Step 1: Write the failing tests** in `proposedBidding.test.ts` (demo people from `~/server/templates/testing`; a template proposed at 10 by Táta; `on = { choreBidding: true }`):
-  - `switch off: a bid answers not_agreed and writes nothing` (no thread row, no audit row; Review Focus 4)
+  - `switch off: each of the six actions answers not_agreed and writes nothing` (one `it.each` over bid, counter, accept lowest, accept offer, Nechci, turn-down: no thread row, no audit row, template unchanged; Review Focus 4)
   - `a bid writes a taker row and template.bid_placed; the template stays proposed at 10`
-  - `Nechci closes his bid; the same number again is same_score` (Review Focus 5)
+  - `Nechci closes only his bid: Mladší's stays open; his same number again is same_score` (Review Focus 5)
   - `a turn-down closes the bids, re-offers 10, and the same number is allowed again` (Review Focus 5)
-  - `a counter moves the offer: score 12, a giver row, his approval at 12; a brother's Souhlasím at 12 agrees` (Review Focus 1 end to end)
+  - `a counter moves the offer: score 12, offerRound 1, a giver row, his approval in round 1; the replaced offer row is in the audit entry; a brother's Souhlasím at 12 agrees and the counter row is accepted` (Review Focus 1 end to end)
+  - `a second giver approves after a counter` (Máma's approval in round 0, Táta counters, Máma's Souhlasím at 12 → ok, a round-1 row, no throw; Review Focus 1)
   - `accept lowest: active at the lowest, bids at it accepted, the rest closed, template.agreed by bid`
   - `a tie at the lowest agrees too, both bids accepted`
   - `a counter at an open bid agrees at it, counter and bid rows accepted`
@@ -144,20 +150,19 @@
 
 **Files:**
 - Modify: `src/lib/features.ts` (`choreBidding` key after `reopenBidding`, in `NO_FEATURES`/`ALL_FEATURES`), `src/server/features/README.md`
-- Create: `drizzle/0029_chore_bidding_switch.sql` via `pnpm db:generate --name chore_bidding_switch --custom`: `INSERT INTO feature_flags (key, enabled) VALUES ('choreBidding', 0);`
 - Modify: `src/server/templates/functions.ts`, `src/server/templates/parse.ts`
 - Modify: `src/server/templates/templates.ts` (`TemplateView.bidding`)
-- Modify: `src/server/demo/seeds.ts` (`demo` turns `choreBidding` on; no new piece in this PR: PR 2 adds the sample chore with the screens)
+- Modify: `src/server/demo/seeds.ts` (`demo` turns `choreBidding` on; no new piece in this PR: PR 2 adds the sample chore with the screens). `src/server/demo/pieces.ts` keeps its calls (the `opts` default).
 - Test: `src/server/templates/functions.test.ts`, `tests/server-fn-guards.test.ts`, `src/server/templates/templates.test.ts`, `src/lib/features.test.ts` (if it lists keys), `src/server/features/*.test.ts`
 
 **Interfaces:**
 - Produces:
-  - Handlers (plain functions, tested directly, like `withdrawBidHandler` in `src/server/tasks/functions.ts`): `bidTemplateScoreHandler`, `counterTemplateScoreHandler`, `acceptTemplateBidHandler`, `acceptTemplateOfferHandler`, `withdrawTemplateBidHandler`, `turnDownTemplateBidsHandler`, each `(db, userId, data, now) → TemplateActionResult`, reading `getFlags(db).choreBidding` and passing it as `opts`. The four existing `…Fn` call them; new `withdrawTemplateBidFn` (role `taker`, `parseTemplateId`) and `turnDownTemplateBidsFn` (role `giver`, new `parseTemplateTurnDown`: `{ templateId, bids: { takerId, score }[] }`, at most 20 bids, whole numbers ≥ 1, else the parse error the other parsers throw).
+  - Handlers (plain functions, tested directly, like `withdrawBidHandler` in `src/server/tasks/functions.ts`): `bidTemplateScoreHandler`, `counterTemplateScoreHandler`, `acceptTemplateBidHandler`, `acceptTemplateOfferHandler`, `withdrawTemplateBidHandler`, `turnDownTemplateBidsHandler`, each `(db, userId, data, now) → TemplateActionResult`, reading `getFlags(db).choreBidding` and passing it as `opts`. The four existing `…Fn` call them; new `withdrawTemplateBidFn` (role `taker`, `parseTemplateId`) and `turnDownTemplateBidsFn` (role `giver`, new `parseTemplateTurnDown`: `{ templateId, bids: { takerId, score }[] }`, at most 20 bids, else the parse error the other parsers throw). Every template score a person sends (`parseApproval` for approve, bid, counter and both accepts; each turn-down bid) is capped at `TASK_SCORE_MAX` (999, `src/lib/taskLimits.ts`) like the task parsers.
   - `TemplateView.bidding: TemplateChangeView & { lastBids: { takerId: number; score: number }[] } | null`: proposed templates only (null when agreed), offer = the current proposal `{ score, byName }`, live bids lowest first, `lowest`, `lastBids`. `change` stays agreed-only.
 
 - [ ] **Step 1: Write the failing tests:**
   - guards test: `withdrawTemplateBidFn` → `taker`, `turnDownTemplateBidsFn` → `giver`
-  - functions.test: `each handler with the switch off on a proposed template answers not_agreed`; `with it on, a bid answers ok with score 10`; `turn-down parse refuses 21 bids, a 0 score, a missing templateId`
+  - functions.test: `each handler with the switch off on a proposed template answers not_agreed`; `with it on, a bid answers ok with score 10`; `with it on, Nechci closes Starší's bid and a turn-down with the bids he saw (mapped from {takerId, score}) closes them` (both handlers end to end); `turn-down parse takes 20 bids, refuses 21, a 0 score, a missing templateId`; `parseApproval takes 999 and refuses 1000`
   - templates.test: `a proposed template's view has its bidding; an agreed one has bidding null` (pin the exact shape with `toEqual`: no user ids beyond `takerId`, no timestamps)
   - features test: the migration's row reads `choreBidding: false`; `demo` seed turns it on
 - [ ] **Step 2:** run → FAIL.
