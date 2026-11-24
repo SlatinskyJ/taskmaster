@@ -180,6 +180,8 @@ describe('priceToast', () => {
   it('a change someone else agreed meanwhile does not read as mine', () => {
     // The page showed 3; Starší accepted 4 meanwhile; Mladší's bid of 6 only opens a new change.
     expect(priceToast(call('bid', 6), ok(4))).toBe('Nabídka odeslána')
+    // An agreed chore: a bid the server takes at the number sent agrees (§5.1 score change).
+    expect(priceToast(call('bid', 4), ok(4))).toBe('Domluveno')
   })
 })
 
