@@ -253,6 +253,9 @@ export const cs = {
     history: 'Historie ceny',
     noHistory: 'Zatím beze změny ceny.',
     now: (score: number) => `Platí ${String(score)} b.`,
+    /** A proposed chore's page (#205): the score is not agreed yet. */
+    proposed: (score: number) => `Navržená cena: ${String(score)} b.`,
+    startsWhenAll: 'Začne platit, až souhlasí všichni.',
     futureOnly: 'Nová cena platí jen pro nově vzniklé úkoly.',
     /** A brother's Domů: agreed templates, each with "Jiná cena" (until Zapsat #38). */
     recurring: 'Opakované úkoly',
