@@ -37,6 +37,11 @@ vi.mock('~/server/disputes/functions', () => ({
   getAdminDisputesFn: vi.fn(() => Promise.resolve([])),
   dismissDisputeFn: vi.fn(),
 }))
+vi.mock('~/server/corrections/functions', () => ({
+  getFixableFn: vi.fn(() => Promise.resolve([])),
+  adjustPointsFn: vi.fn(),
+  correctSettlementFn: vi.fn(),
+}))
 vi.mock('~/server/periods/functions', () => ({
   getPeriodDefaultsFn: vi.fn(() => Promise.resolve('defaults')),
   savePeriodDefaultsFn: vi.fn(),
@@ -55,6 +60,7 @@ describe('Správa route', () => {
       passkeys: {},
       defaults: 'defaults',
       disputes: [],
+      fixable: [],
     })
     expect(getPeriodDefaultsFn).toHaveBeenCalled()
     expect(listUsersFn).toHaveBeenCalled()
@@ -71,7 +77,13 @@ describe('Správa route', () => {
   })
 
   it('renders Výchozí týden before Lidé', () => {
-    page.data = { people: [], passkeys: {}, defaults: DEFAULT_PERIOD_DEFAULTS, disputes: [] }
+    page.data = {
+      people: [],
+      passkeys: {},
+      defaults: DEFAULT_PERIOD_DEFAULTS,
+      disputes: [],
+      fixable: [],
+    }
     const Page = route.component
     const html = renderToStaticMarkup(<Page />)
     const week = html.indexOf(cs.admin.defaults.title)
@@ -88,13 +100,14 @@ describe('Správa: Sporné (#47)', () => {
     title: 'Vysát auto',
     week: null,
     takerName: 'Starší',
+    takerId: 3,
     openedByName: 'Starší',
     reason: 'Vysával jsem i kufr.',
     openedAt: '2026-11-22T10:00:00.000Z',
     value: { score: 8 },
   }
-  const render = (disputes: unknown) => {
-    page.data = { people: [], passkeys: {}, defaults: DEFAULT_PERIOD_DEFAULTS, disputes }
+  const render = (disputes: unknown, fixable: unknown = []) => {
+    page.data = { people: [], passkeys: {}, defaults: DEFAULT_PERIOD_DEFAULTS, disputes, fixable }
     const Page = route.component
     return renderToStaticMarkup(<Page />)
   }
@@ -115,5 +128,24 @@ describe('Správa: Sporné (#47)', () => {
     const html = render({ error: 'load' })
     expect(html).toContain(cs.admin.disputes.loadError)
     expect(html).toContain(cs.admin.disputes.retry)
+  })
+
+  it('Opravy bodů sits under Sporné, above Výchozí týden (#48)', () => {
+    const html = render([entry])
+    const fix = html.indexOf(cs.admin.fix.title)
+    expect(fix).toBeGreaterThan(html.indexOf(cs.admin.disputes.title(1)))
+    expect(fix).toBeLessThan(html.indexOf(cs.admin.defaults.title))
+    expect(html).toContain(`>${cs.admin.disputes.fix}<`)
+  })
+
+  it('switch off: no Opravy bodů and no Opravit', () => {
+    const html = render({ error: 'feature_off' }, { error: 'feature_off' })
+    expect(html).not.toContain(cs.admin.fix.title)
+    expect(html).not.toContain(`>${cs.admin.disputes.fix}<`)
+  })
+
+  it('a failed fix fetch: its load error and retry', () => {
+    const html = render([], { error: 'load' })
+    expect(html).toContain(cs.admin.fix.loadError)
   })
 })

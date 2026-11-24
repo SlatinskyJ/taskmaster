@@ -1,7 +1,7 @@
-import { dayLabel } from '~/components/period/periodView'
+import { dayLabel, dayMonth, levelLabel, weekLabel } from '~/components/period/periodView'
 import { cs } from '~/lib/strings'
 import type { ItemStateKey } from '~/lib/strings'
-import type { HistoryRecord, WeekItem } from '~/server/settlement/functions'
+import type { HistoryRecord, WeekAdjustment, WeekItem } from '~/server/settlement/functions'
 
 // Labels for Týden (#45).
 
@@ -25,4 +25,45 @@ export function itemMeta(item: WeekItem): string {
 export function historyLine(r: HistoryRecord): string {
   const w = cs.week
   return `${w.total} ${String(r.totalBefore)} · ${w.deducted} ${String(r.deducted)} · ${w.carry} ${String(r.carryOver)}`
+}
+
+/**
+ * An adjustment row on Týden (#48): its name, chip, day, signed points, and the reason under it
+ * (a correction's week first: it wraps there, the meta line is cut).
+ */
+export function adjustmentRow(a: WeekAdjustment): {
+  name: string
+  state: ItemStateKey
+  stateLabel: string
+  meta: string
+  detail: string
+  points: string
+} {
+  const w = cs.week
+  return {
+    name: a.fromWeek ? w.correctionRow : w.adjustment,
+    state: a.waiting ? 'pending' : 'confirmed',
+    stateLabel: a.waiting ? w.waiting : w.counted,
+    meta: dayLabel(a.at),
+    detail: a.fromWeek
+      ? `${w.fromWeek(weekLabel(a.fromWeek.startsAt, a.fromWeek.endsAt))} · ${a.reason}`
+      : a.reason,
+    points: w.adjustmentPoints(a.points),
+  }
+}
+
+/**
+ * Under a corrected settled week: the corrected and original levels, the net change on his
+ * total (settled deduction − corrected), the latest correction's date and reason; else null.
+ */
+export function correctionLine(r: HistoryRecord): string | null {
+  const c = r.correction
+  if (!c) return null
+  return cs.week.correctedLine(
+    levelLabel(c.level),
+    levelLabel(r.level),
+    r.deducted - c.deducted,
+    dayMonth(c.at),
+    c.reason,
+  )
 }

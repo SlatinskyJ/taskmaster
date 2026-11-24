@@ -5,6 +5,8 @@ import {
   auditLog,
   disputes,
   featureFlags,
+  pointAdjustments,
+  settlementCorrections,
   settlements,
   tasks,
   templates,
@@ -21,6 +23,7 @@ import { rejectionsSince } from '~/server/tasks/rejections'
 import { getMeeting } from '~/server/settlement/meeting'
 import { ALL_FEATURES } from '~/lib/features'
 import { getFlags } from '~/server/features'
+import { CORRECTION_REASON } from './pieces'
 import { DEMO_PASSWORD, seedDemo } from './seed'
 
 const T0 = new Date('2026-11-17T10:00:00.000Z')
@@ -199,8 +202,8 @@ describe('the demo seed (previews)', () => {
     seedDemo(db, PREVIEW, T0)
     // Last week's settlement took 100 from Starší and 50 from Mladší (#172): the meeting's totals.
     expect(takerPoints(db, T0).takers.map((t) => [t.name, t.confirmed, t.pending])).toEqual([
-      ['Starší', 160, 14],
-      ['Mladší', 102, 6],
+      ['Starší', 165, 14],
+      ['Mladší', 152, 6],
     ])
     const open = listTasks(db).filter((t) => t.status === 'open')
     expect(open.map((t) => [t.title, t.score])).toEqual([
@@ -334,7 +337,7 @@ describe('the demo seed (previews)', () => {
     expect(db.select().from(auditLog).all()).toHaveLength(0)
   })
 
-  it('demo seed gives a meeting with 4 pending items and totals 160 / 102 (#40 + #44, #45 carry 8)', () => {
+  it('demo seed gives a meeting with 4 pending items and totals 165 / 152 (#40 + #44, #45 carry 8, #48 fixes)', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     // The roller starts the week at boot, right after the seed.
@@ -348,8 +351,8 @@ describe('the demo seed (previews)', () => {
       ['Vyndat myčku', 3, 'Mladší'], // #38 Zapsat
     ])
     expect(meeting.takers.map((t) => [t.name, t.total])).toEqual([
-      ['Starší', 160],
-      ['Mladší', 102],
+      ['Starší', 165],
+      ['Mladší', 152],
     ])
   })
 
@@ -462,7 +465,8 @@ describe('the demo seed: disputes (#46)', () => {
       seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: seed }, T0)
       const name = (uid: number | null) =>
         uid === null ? null : db.select().from(users).where(eq(users.id, uid)).get()?.username
-      const rows = db.select().from(disputes).orderBy(asc(disputes.id)).all()
+      // The corrections piece (#48) runs later in `demo` and opens two more: not this piece's.
+      const rows = db.select().from(disputes).orderBy(asc(disputes.id)).all().slice(0, 2)
       expect(
         rows.map((d) => [d.itemKind, name(d.openedBy), d.status, name(d.resolvedBy), d.note]),
       ).toEqual([
@@ -487,6 +491,7 @@ describe('the demo seed: disputes (#46)', () => {
         .where(eq(auditLog.entityType, 'dispute'))
         .orderBy(asc(auditLog.id))
         .all()
+        .filter((e) => rows.some((d) => String(d.id) === e.entityId))
       expect(log.map((e) => [e.action, e.entityId])).toEqual([
         ['dispute.opened', String(rows[0]?.id)],
         ['dispute.opened', String(rows[1]?.id)],
@@ -499,6 +504,55 @@ describe('the demo seed: disputes (#46)', () => {
       })
       expect(JSON.parse(log[2]?.before ?? 'null')).toEqual({ status: 'open' })
       expect(getFlags(db).disputes).toBe(true)
+    },
+  )
+})
+
+describe('the demo seed: corrections (#48)', () => {
+  it.each(['demo', 'corrections'])(
+    "%s: a manual +5 for Starší he disputes; Mladší's past week corrected to none, he disputes it",
+    (seed) => {
+      const db = createTestDb()
+      seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: seed }, T0)
+      const name = (uid: number) => db.select().from(users).where(eq(users.id, uid)).get()?.username
+      const corrections = db.select().from(settlementCorrections).all()
+      expect(corrections.map((c) => [c.level, c.deducted, c.reason, c.disputeId])).toEqual([
+        ['none', 0, CORRECTION_REASON, null],
+      ])
+      const record = db
+        .select()
+        .from(settlements)
+        .where(eq(settlements.id, corrections[0]?.settlementId ?? 0))
+        .get()
+      expect(name(record?.takerId ?? 0)).toBe('mladsi')
+      const adjustments = db.select().from(pointAdjustments).orderBy(asc(pointAdjustments.id)).all()
+      expect(
+        adjustments.map((a) => [
+          name(a.takerId),
+          a.points,
+          a.correctionId === null ? 'manual' : 'correction',
+        ]),
+      ).toEqual([
+        ['starsi', 5, 'manual'],
+        ['mladsi', 50, 'correction'],
+      ])
+      const open = db
+        .select()
+        .from(disputes)
+        .where(eq(disputes.status, 'open'))
+        .orderBy(asc(disputes.id))
+        .all()
+        .filter((d) => d.itemKind !== 'completion')
+      expect(open.map((d) => [d.itemKind, d.itemId, name(d.openedBy)])).toEqual([
+        ['settlement', record?.id, 'mladsi'],
+        ['adjustment', adjustments[0]?.id, 'starsi'],
+      ])
+      const actions = db
+        .select()
+        .from(auditLog)
+        .all()
+        .map((e) => e.action)
+      expect(actions).toEqual(expect.arrayContaining(['points.adjusted', 'settlement.corrected']))
     },
   )
 })

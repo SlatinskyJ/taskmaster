@@ -267,6 +267,7 @@ describe('admin handlers (#47)', () => {
         reason: 'Víc.',
         openedAt: MEETING.toISOString(),
         value: { score: 22 },
+        takerId: f.starsi,
       },
     ])
   })

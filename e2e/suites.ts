@@ -45,9 +45,14 @@ export const SUITES: readonly Suite[] = [
   { name: 'proposals', spec: 'proposals.spec.ts', seed: 'proposals' },
   // Its own server: it opens a dispute for good.
   { name: 'disputes', spec: 'disputes.spec.ts', seed: 'disputes' },
+  // Its own server: it writes fixes for good.
+  { name: 'corrections', spec: 'corrections.spec.ts', seed: 'corrections' },
   // Forms with the simulated phone keyboard open (e2e/keyboard.ts). Read-only: dialogs are
   // opened, never sent. `tasks` has a task Táta gave, for Zrušit úkol?.
   { name: 'keyboard', spec: 'keyboard.spec.ts', seed: 'tasks' },
+  // The fix sheet with the keyboard open (#48): it needs the disputes switch and open disputes.
+  // Read-only: sheets are opened, never sent.
+  { name: 'keyboard-fix', spec: 'keyboard-fix.spec.ts', seed: 'corrections' },
 ]
 
 /** Passkeys on (localhost) for the `on` suite only, at its own port. */

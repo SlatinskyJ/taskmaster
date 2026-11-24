@@ -1,5 +1,5 @@
 import { useReducer } from 'react'
-import type { DismissOutcome } from '~/components/disputes/disputeCalls'
+import type { AdminOutcome } from '~/components/disputes/disputeCalls'
 import type { AdminDisputeLines } from '~/components/disputes/disputeProps'
 import { sectionLabelClass } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
@@ -100,13 +100,13 @@ export interface DismissState {
 export type DismissAction =
   | { type: 'note'; note: string }
   | { type: 'send' }
-  | { type: 'answer'; outcome: DismissOutcome }
+  | { type: 'answer'; outcome: AdminOutcome }
   | { type: 'close' }
 
 export const DISMISS_START: DismissState = { note: '', busy: false, error: null }
 
 /** Kept, or refused because the row is stale: the dialog closes (the page toasts and reloads). */
-export const closesDialog = (o: DismissOutcome) => o.ok || o.reload
+export const closesDialog = (o: AdminOutcome) => o.ok || o.reload
 
 /**
  * What each step does to the dialog. A refusal that leaves the row valid (an empty note, a
@@ -136,9 +136,9 @@ export function DismissDialog({
   lines: AdminDisputeLines | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onConfirm: (note: string) => Promise<DismissOutcome>
+  onConfirm: (note: string) => Promise<AdminOutcome>
   /** Kept, or refused because the row is stale: the page closes, toasts and reloads. */
-  onDone: (outcome: DismissOutcome) => Promise<void>
+  onDone: (outcome: AdminOutcome) => Promise<void>
 }) {
   const [state, dispatch] = useReducer(dismissReducer, DISMISS_START)
 

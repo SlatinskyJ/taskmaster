@@ -28,17 +28,17 @@ export type DismissDisputeCall = (args: {
   data: DismissDisputeInput
 }) => Promise<DismissDisputeResult>
 
-/** What the keep dialog does next: done, or a Czech message and whether the list is stale. */
-export type DismissOutcome = { ok: true } | { ok: false; message: string; reload: boolean }
+/** What an admin dialog (Ponechat, Opravit) does next: done, or a Czech message and whether the list is stale. */
+export type AdminOutcome = { ok: true } | { ok: false; message: string; reload: boolean }
 
 /** The row no longer matches the server (changed, closed, gone): close and reload the list. */
-const STALE: readonly string[] = ['value_changed', 'not_open', 'not_found']
+export const STALE: readonly string[] = ['value_changed', 'not_open', 'not_found']
 
 /** Sends the admin's dismissal with the value the row showed. */
 export async function sendDismiss(
   call: DismissDisputeCall,
   input: DismissDisputeInput,
-): Promise<DismissOutcome> {
+): Promise<AdminOutcome> {
   try {
     const r = await call({ data: input })
     if (r.ok) return { ok: true }

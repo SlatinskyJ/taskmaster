@@ -8,11 +8,19 @@ import { toIsoUtc } from '~/domain/dates'
 import { getMeeting, settlePeriod } from './meeting'
 import type { Meeting, MeetingTaker, SettleError, ShownTotal } from './meeting'
 import { getWeek } from './week'
-import type { HistoryRecord, HistoryWeek, Viewer, Week, WeekItem, WeekTaker } from './week'
+import type {
+  HistoryRecord,
+  HistoryWeek,
+  Viewer,
+  Week,
+  WeekAdjustment,
+  WeekItem,
+  WeekTaker,
+} from './week'
 import type { CurrentUser } from '~/server/auth/sessions'
 
 export type { Meeting, MeetingTaker, SettleError }
-export type { HistoryRecord, HistoryWeek, Week, WeekItem, WeekTaker }
+export type { HistoryRecord, HistoryWeek, Week, WeekAdjustment, WeekItem, WeekTaker }
 
 // Server functions for the weekly meeting (#44). Giver only: the guard here, and the domain's
 // `settle` again inside (`not_a_giver`). The giver is always the signed-in user, never input.

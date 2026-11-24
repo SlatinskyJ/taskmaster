@@ -6,7 +6,7 @@ import type { AdminDisputeEntry, DismissDisputeInput } from '~/server/disputes/f
 
 // Sporné on Správa (#47, UI doc §7.5 ADisputes, spec §5.11): every open dispute, oldest first,
 // with who opened it, what it is, its value now and the reason. Ponechat keeps the item as it is
-// with a note (DismissDialog); #48 adds Opravit beside it. Pure: Správa holds the state.
+// with a note (DismissDialog); Opravit (#48) opens the fix sheet. Pure: Správa holds the state.
 
 const t = cs.admin.disputes
 
@@ -32,10 +32,12 @@ export function dismissInput(entry: AdminDisputeEntry, note: string): DismissDis
 export function DisputesCard({
   data,
   onKeep,
+  onFix,
   onRetry,
 }: {
   data: AdminDisputeEntry[] | { error: 'load' }
   onKeep: (entry: AdminDisputeEntry) => void
+  onFix: (entry: AdminDisputeEntry) => void
   onRetry: () => void
 }) {
   const failed = !Array.isArray(data)
@@ -81,6 +83,15 @@ export function DisputesCard({
                     }}
                   >
                     {t.keep}
+                  </Button>
+                  <Button
+                    type="button"
+                    aria-label={t.fixFor(cs.disputes.what[e.item.kind], l.name)}
+                    onClick={() => {
+                      onFix(e)
+                    }}
+                  >
+                    {t.fix}
                   </Button>
                 </div>
               </li>

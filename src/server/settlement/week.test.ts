@@ -4,6 +4,7 @@ import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import type { Db } from '~/server/db'
 import { settlements, tasks } from '~/server/db/schema'
 import { listPeriods, rollPeriods } from '~/server/periods'
+import { correctSettlementIn } from '~/server/corrections'
 import { openDisputeIn } from '~/server/disputes'
 import { approveTask, completeTask, rejectTask } from '~/server/tasks/lifecycle'
 import { rejectionsSince } from '~/server/tasks/rejections'
@@ -88,6 +89,7 @@ describe('getWeek', () => {
           carriedIn: 0,
           unsettled: 0,
           items: [],
+          adjustments: [],
         },
         {
           id: f.mladsi,
@@ -97,6 +99,7 @@ describe('getWeek', () => {
           carriedIn: 0,
           unsettled: 0,
           items: [],
+          adjustments: [],
         },
       ],
       history: [],
@@ -137,6 +140,7 @@ describe('getWeek', () => {
                   },
                 }),
           })),
+          adjustments: [],
         },
       ],
       history: [],
@@ -182,6 +186,8 @@ describe('getWeek', () => {
             deducted: 100,
             carryOver: 14,
             dispute: null,
+            correction: null,
+            adjustments: [],
           },
           {
             id: expect.any(Number) as number,
@@ -192,6 +198,8 @@ describe('getWeek', () => {
             deducted: 0,
             carryOver: 47,
             dispute: null,
+            correction: null,
+            adjustments: [],
           },
         ],
       },
@@ -321,6 +329,7 @@ describe('getWeek', () => {
         carriedIn: 0,
         unsettled: 0,
         items: [],
+        adjustments: [],
       },
     ])
   })
@@ -407,5 +416,165 @@ describe('getWeek adjustments (#48)', () => {
     adjustment(f, f.starsi, 3, plus(SAT, -1))
     const [t] = getWeek(f.db, starsi(f), MEETING).takers
     expect([t?.confirmed, t?.unsettled]).toEqual([4, 3])
+  })
+})
+
+describe('getWeek adjustment rows and corrections (#48 screens)', () => {
+  const at = (d: Date) => d.toISOString()
+  const manual = (
+    id: number,
+    points: number,
+    d: Date,
+    waiting: boolean,
+    reason = 'Pomoc s nákupem.',
+  ) => ({
+    id,
+    points,
+    reason,
+    at: at(d),
+    fromWeek: null,
+    waiting,
+    dispute: { item: { kind: 'adjustment', id }, mark: null },
+  })
+
+  it('an ended, unsettled week: its adjustment is listed this week as waiting; one at the start is not waiting', () => {
+    const f = week()
+    const before = adjustment(f, f.starsi, 5, plus(CUTOFF, -H))
+    rollPeriods(f.db, MONDAY, D) // P2 starts at CUTOFF; P1 waits for its meeting
+    const onStart = adjustment(f, f.starsi, 2, CUTOFF)
+    const [t] = getWeek(f.db, starsi(f), MONDAY).takers
+    expect(t?.adjustments).toEqual([
+      manual(before, 5, plus(CUTOFF, -H), true),
+      manual(onStart, 2, CUTOFF, false),
+    ])
+  })
+
+  it('after the meeting: a settled week keeps its own adjustments; one exactly at its end is this week only', () => {
+    const f = week()
+    doneTask(f, { score: 60, completedAt: plus(SAT, H), earner: f.starsi })
+    const inP1 = adjustment(f, f.starsi, 5, plus(SAT, 2 * H))
+    rollPeriods(f.db, MONDAY, D)
+    const onEnd = adjustment(f, f.starsi, 3, CUTOFF)
+    settle(f.db, f.tata, MONDAY)
+    const w = getWeek(f.db, starsi(f), MONDAY)
+    expect(w.takers[0]?.adjustments).toEqual([manual(onEnd, 3, CUTOFF, false)])
+    expect(w.history[0]?.records[0]?.adjustments).toEqual([
+      manual(inP1, 5, plus(SAT, 2 * H), false),
+    ])
+  })
+
+  it("a settled week's record starts exactly at its start: one a millisecond before is not in it", () => {
+    const f = week()
+    doneTask(f, { score: 60, completedAt: plus(SAT, H), earner: f.starsi })
+    adjustment(f, f.starsi, 1, plus(SAT, -1), 'Před týdnem')
+    const onStart = adjustment(f, f.starsi, 2, SAT, 'Na začátku')
+    rollPeriods(f.db, MONDAY, D)
+    settle(f.db, f.tata, MONDAY)
+    const w = getWeek(f.db, starsi(f), MONDAY)
+    expect(w.history[0]?.startsAt).toBe(at(SAT))
+    expect(w.history[0]?.records[0]?.adjustments).toEqual([
+      manual(onStart, 2, SAT, false, 'Na začátku'),
+    ])
+  })
+
+  it('no settlement and no period yet: every adjustment of his is listed, waiting', () => {
+    const f = family()
+    const id = adjustment(f, f.starsi, 4, SAT)
+    const [t] = getWeek(f.db, { id: f.starsi, role: 'taker' }, MEETING).takers
+    expect(t?.adjustments).toEqual([manual(id, 4, SAT, true)])
+  })
+
+  it("a taker never gets another boy's adjustment rows or reasons; a giver's records hold only their boy's", () => {
+    const f = week()
+    doneTask(f, { score: 60, completedAt: plus(SAT, H), earner: f.starsi })
+    doneTask(f, { score: 60, completedAt: plus(SAT, H), earner: f.mladsi })
+    adjustment(f, f.starsi, 1, plus(SAT, 2 * H), 'Starší minulý')
+    adjustment(f, f.mladsi, 1, plus(SAT, 2 * H), 'Mladší minulý')
+    rollPeriods(f.db, MONDAY, D)
+    settle(f.db, f.tata, MONDAY)
+    adjustment(f, f.starsi, 1, plus(MONDAY, H), 'Starší teď')
+    adjustment(f, f.mladsi, 1, plus(MONDAY, H), 'Mladší teď')
+    const mine = getWeek(f.db, starsi(f), plus(MONDAY, 2 * H))
+    expect(JSON.stringify(mine)).not.toContain('Mladší')
+    expect(mine.takers[0]?.adjustments.map((a) => a.reason)).toEqual(['Starší teď'])
+    expect(mine.history[0]?.records[0]?.adjustments.map((a) => a.reason)).toEqual(['Starší minulý'])
+    const all = getWeek(f.db, giver(f), plus(MONDAY, 2 * H))
+    expect(all.takers.map((t) => t.adjustments.map((a) => a.reason))).toEqual([
+      ['Starší teď'],
+      ['Mladší teď'],
+    ])
+    expect(all.history[0]?.records.map((r) => r.adjustments.map((a) => a.reason))).toEqual([
+      ['Starší minulý'],
+      ['Mladší minulý'],
+    ])
+  })
+
+  it('a record corrected twice shows the second correction; its adjustments come from that week', () => {
+    const f = week()
+    doneTask(f, { score: 160, completedAt: plus(SAT, H), earner: f.starsi })
+    rollPeriods(f.db, MONDAY, D)
+    settle(f.db, f.tata, MONDAY) // upper 100, carry 60
+    const s = f.db.select().from(settlements).where(eq(settlements.takerId, f.starsi)).get()
+    const first = plus(MONDAY, H)
+    const second = plus(MONDAY, 2 * H)
+    must(
+      correctSettlementIn(
+        f.db,
+        f.admin,
+        { settlementId: s?.id ?? 0, level: 'lower', reason: 'A' },
+        null,
+        first,
+      ),
+    )
+    must(
+      correctSettlementIn(
+        f.db,
+        f.admin,
+        { settlementId: s?.id ?? 0, level: 'none', reason: 'B' },
+        null,
+        second,
+      ),
+    )
+    const w = getWeek(f.db, starsi(f), plus(MONDAY, 3 * H))
+    const record = w.history[0]?.records[0]
+    expect(record?.correction).toEqual({ level: 'none', deducted: 0, reason: 'B', at: at(second) })
+    expect([record?.level, record?.deducted]).toEqual(['upper', 100])
+    const p1 = { startsAt: at(SAT), endsAt: at(CUTOFF) }
+    expect(w.takers[0]?.adjustments).toEqual([
+      {
+        id: expect.any(Number) as number,
+        points: 50,
+        reason: 'A',
+        at: at(first),
+        fromWeek: p1,
+        waiting: false,
+        dispute: null,
+      },
+      {
+        id: expect.any(Number) as number,
+        points: 50,
+        reason: 'B',
+        at: at(second),
+        fromWeek: p1,
+        waiting: false,
+        dispute: null,
+      },
+    ])
+  })
+
+  it('an uncorrected record has correction null; a disputed manual adjustment carries its open mark', () => {
+    const f = week()
+    doneTask(f, { score: 60, completedAt: plus(SAT, H), earner: f.starsi })
+    const id = adjustment(f, f.starsi, 5, plus(SAT, 2 * H))
+    must(
+      openDisputeIn(f.db, f.starsi, { kind: 'adjustment', id }, 'Bylo to za 10', plus(SAT, 3 * H)),
+    )
+    const w = getWeek(f.db, starsi(f), plus(SAT, 4 * H))
+    expect(w.takers[0]?.adjustments[0]?.dispute?.mark).toEqual(
+      expect.objectContaining({ status: 'open' }),
+    )
+    rollPeriods(f.db, MONDAY, D)
+    settle(f.db, f.tata, MONDAY)
+    expect(getWeek(f.db, starsi(f), MONDAY).history[0]?.records[0]?.correction).toBeNull()
   })
 })

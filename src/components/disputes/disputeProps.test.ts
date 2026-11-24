@@ -4,6 +4,7 @@ import type { TaskView } from '~/server/tasks/functions'
 import type { TemplateView } from '~/server/templates/functions'
 import { weekLabel } from '~/components/period/periodView'
 import {
+  adjustmentDispute,
   adminDisputeLines,
   recordDispute,
   taskDisputes,
@@ -58,6 +59,37 @@ describe('recordDispute', () => {
     expect(recordDispute(w, r, false).value).toBe(
       '14. 11. – 21. 11. · Celkem 108 · odečteno 100 · převod 8',
     )
+  })
+  it('a corrected record names its value as corrected (#48)', () => {
+    const c = { ...r, correction: { level: 'lower' as const, deducted: 50, reason: 'x', at: '' } }
+    expect(recordDispute(w, c, false).value).toBe(
+      '14. 11. – 21. 11. · Spodní hranice · odečteno 50',
+    )
+  })
+})
+
+describe('adjustmentDispute (#48)', () => {
+  const manual = {
+    id: 31,
+    points: -3,
+    reason: 'Rozbitý hrnek.',
+    at: '2026-11-25T10:00:00.000Z',
+    fromWeek: null,
+    waiting: false,
+    dispute: { item: { kind: 'adjustment' as const, id: 31 }, mark: null },
+  }
+  it('names the adjustment itself, with the reason and the signed points', () => {
+    expect(adjustmentDispute(manual, 'Starší')).toEqual({
+      item: { kind: 'adjustment', id: 31 },
+      what: 'Úprava bodů',
+      value: 'Starší · Rozbitý hrnek. · −3 body',
+      name: 'Úprava od správce',
+    })
+    expect(adjustmentDispute(manual, null)?.value).toBe('Rozbitý hrnek. · −3 body')
+  })
+  it('one from a correction is disputed via its settlement: none here', () => {
+    const fromWeek = { startsAt: '2026-11-14T19:00:00.000Z', endsAt: '2026-11-21T19:00:00.000Z' }
+    expect(adjustmentDispute({ ...manual, fromWeek, dispute: null }, null)).toBeNull()
   })
 })
 
@@ -125,6 +157,7 @@ describe('adminDisputeLines (#47)', () => {
     openedByName: 'Starší',
     reason: 'Bylo toho víc.',
     openedAt: '2026-11-22T23:30:00.000Z',
+    takerId: null,
   }
 
   it('a task score: what, title and points; opened by and the Prague date', () => {

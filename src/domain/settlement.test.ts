@@ -3,6 +3,7 @@ import type { Person } from './parties'
 import type { Result } from './result'
 import type { LedgerEntry, Levels, SettlementError, SettlementRecord } from './settlement'
 import {
+  deductionFor,
   adjustPoints,
   correctSettlement,
   isValidLevels,
@@ -359,5 +360,14 @@ describe('who settles (spec §5.9)', () => {
     const exDad = family.map((p) => (p.id === DAD ? { ...p, active: false } : p))
     expect(error(settle(exDad, DAD, WEEK, OLDER, 80, LEVELS))).toBe('not_a_giver')
     expect(error(settle(family, DAD, WEEK, JAKUB, 80, LEVELS))).toBe('not_a_taker')
+  })
+})
+
+describe('deductionFor (#48)', () => {
+  it('none deducts nothing, lower and upper their own level', () => {
+    const levels = { lower: 30, upper: 80 }
+    expect(deductionFor('none', levels)).toBe(0)
+    expect(deductionFor('lower', levels)).toBe(30)
+    expect(deductionFor('upper', levels)).toBe(80)
   })
 })

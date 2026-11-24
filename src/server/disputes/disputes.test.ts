@@ -693,4 +693,32 @@ describe('an adjustment dispute in Rozporováno (#48)', () => {
     expect(titles(f.mladsi, 'taker')).toEqual(['Rozbitý hrnek.'])
     expect(titles(f.tata, 'giver')).toEqual(['Rozbitý hrnek.'])
   })
+
+  it("only an adjustment's title is hidden: his own dispute on another boy's task keeps its title", () => {
+    const f = setup()
+    const task = doneTask(f, { score: 3, completedAt: SAT, earner: f.mladsi })
+    must(openDisputeIn(f.db, f.starsi, { kind: 'completion', id: task }, 'Dělal jsem to já.', AT))
+    const mine = listDisputes(f.db, { id: f.starsi, role: 'taker' }).filter(
+      (e) => e.item.kind === 'completion' && e.item.id === task,
+    )
+    expect(mine.map((e) => e.title)).toEqual(['Vyndat myčku'])
+  })
+})
+
+describe('the admin entry carries whose item it is (#48 screens)', () => {
+  it("takerId on the admin's entry only: the item's boy, null for a score; never on a taker's list", () => {
+    const f = setup()
+    must(openDisputeIn(f.db, f.starsi, { kind: 'completion', id: f.confirmed }, 'Víc.', AT))
+    const sid = settlement(f, f.mladsi)
+    must(openDisputeIn(f.db, f.mladsi, { kind: 'settlement', id: sid }, 'Málo.', AT))
+    must(openDisputeIn(f.db, f.starsi, { kind: 'task_score', id: f.confirmed }, 'Cena.', AT))
+    expect(listOpenForAdmin(f.db).map((e) => [e.item.kind, e.takerId])).toEqual([
+      ['completion', f.starsi],
+      ['settlement', f.mladsi],
+      ['task_score', null],
+    ])
+    for (const e of listDisputes(f.db, { id: f.starsi, role: 'taker' })) {
+      expect(e).not.toHaveProperty('takerId')
+    }
+  })
 })

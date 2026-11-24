@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm'
-import { adjustPoints, correctDispute, correctSettlement, fail, ok } from '~/domain'
+import { adjustPoints, correctDispute, correctSettlement, deductionFor, fail, ok } from '~/domain'
 import type {
   Dispute,
   DisputeCorrection,
@@ -196,8 +196,10 @@ export function correctSettlementIn(
       ? tx.select().from(periods).where(eq(periods.id, original.periodId)).get()
       : undefined
     if (!original || !period) return fail('not_found')
-    const deducted =
-      input.level === 'none' ? 0 : input.level === 'lower' ? period.lowerLevel : period.upperLevel
+    const deducted = deductionFor(input.level, {
+      lower: period.lowerLevel,
+      upper: period.upperLevel,
+    })
     const latest = latestCorrection(tx, original.id)
     const fixed = correctSettlement(
       listPeople(tx),
