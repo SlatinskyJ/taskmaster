@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ButtonModule from '~/components/ui/button'
@@ -48,7 +49,23 @@ vi.mock('~/server/tasks/functions', () => ({
   releaseTaskFn: vi.fn(),
   reserveTaskFn: vi.fn(),
 }))
-vi.mock('@tanstack/react-router', () => ({ useRouter: () => ({ invalidate: vi.fn() }) }))
+vi.mock('@tanstack/react-router', () => ({
+  useRouter: () => ({ invalidate: vi.fn() }),
+  // A plain anchor with the route's real path, so a row's link can be checked.
+  Link: ({
+    params,
+    children,
+    className,
+  }: {
+    params: { taskId: string }
+    children: ReactNode
+    className?: string
+  }) => (
+    <a href={`/ukol/${params.taskId}`} className={className}>
+      {children}
+    </a>
+  ),
+}))
 
 const STARSI = { id: 3, role: 'taker' } as const
 const MLADSI = { id: 4, role: 'taker' } as const
@@ -224,6 +241,26 @@ describe('TakerBoard Volné row (Domů, #40)', () => {
     renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
     expect(action.pressed.get(cs.work.reserve)?.disabled).toBe(true)
     expect(action.pressed.get(cs.work.done)?.disabled).toBe(true)
+  })
+})
+
+describe('TakerBoard Volné row in reopened bidding (#212)', () => {
+  it('with the switch on a free one-time task links to its page; off, plain name', () => {
+    const open = view({ status: 'open', reservedBy: null })
+    const on = renderToStaticMarkup(<TakerBoard items={[open]} me={3} rebid />)
+    expect(on).toMatch(/<a[^>]*href="\/ukol\/1"[^>]*>Vyluxovat/)
+    const off = renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
+    expect(off).not.toContain('href="/ukol/1"')
+  })
+  it('a round shows Vyjednává se on the row', () => {
+    const open = view({
+      status: 'open',
+      reservedBy: null,
+      rebidding: { offer: 6, offeredBy: null },
+    })
+    expect(renderToStaticMarkup(<TakerBoard items={[open]} me={3} rebid />)).toContain(
+      cs.state.negotiating,
+    )
   })
 })
 

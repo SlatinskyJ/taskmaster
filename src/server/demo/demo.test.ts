@@ -86,6 +86,16 @@ describe('the demo seed (previews)', () => {
       ['task.score_approved', 'user'],
       ['task.agreed', 'user'],
       ['task.score_change_proposed', 'user'],
+      // #212: the attic agreed after Starší's bid, reopened, Mladší bids; the terrace agreed.
+      ['task.created', 'user'],
+      ['task.bid_placed', 'user'],
+      ['task.score_approved', 'user'],
+      ['task.agreed', 'user'],
+      ['task.bidding_reopened', 'user'],
+      ['task.bid_placed', 'user'],
+      ['task.created', 'user'],
+      ['task.score_approved', 'user'],
+      ['task.agreed', 'user'],
       ['task.created', 'user'],
       ['task.score_approved', 'user'],
       ['task.agreed', 'user'],
@@ -153,12 +163,14 @@ describe('the demo seed (previews)', () => {
       ['Vyndat myčku', 'rejected'], // #38 Zapsat, Starší
       ['Vynést papír', 'confirmed'], // #44
       ['Vynést sklo a plasty do kontejneru', 'reserved'], // #45, rejected
+      ['Vynést staré věci na půdu', 'open'], // #212, in a round
       ['Vynést tříděný odpad', 'confirmed'], // #40
       ['Vynést tříděný', 'done_unconfirmed'], // #44
       ['Vysát auto', 'confirmed'], // #44
       ['Vytřít podlahu v kuchyni', 'done_unconfirmed'], // #40
       ['Vytřít podlahu', 'confirmed'], // #45
       ['Zalít kytky', 'done_unconfirmed'], // #44
+      ['Zamést chodník před domem', 'open'], // #212
       ['Zamést terasu', 'confirmed'], // #44
     ])
   })
@@ -210,6 +222,8 @@ describe('the demo seed (previews)', () => {
       ['Nakrmit rybičky', 1], // #39 boot tick
       ['Nachystat tašku do školy', 2], // #38 + Teď
       ['Umýt okna v obýváku i v ložnici', 5],
+      ['Zamést chodník před domem', 6], // #212, never reopened
+      ['Vynést staré věci na půdu', 12], // #212, in a round
       ['Shrabat listí na zahradě', 10],
       ['Vyměnit kočce vodu', 1], // #39
     ])

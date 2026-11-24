@@ -30,6 +30,7 @@ import {
   placeBid,
   proposeTaskScoreChange,
   rejectTask,
+  reopenBidding,
   reserveTask,
 } from '~/server/tasks'
 import { approveTemplateScoreIn, createTemplateIn } from '~/server/templates/templates'
@@ -81,6 +82,22 @@ export const negotiation: Piece = (ctx) => {
   const vacuum = offer(ctx, 'Vyluxovat celý obývák a chodbu', 8)
   step('bid 10', placeBid(tx, id('starsi'), vacuum.id, 10, now))
   step('take 8', acceptOffer(tx, id('starsi'), vacuum.id, 8, now))
+}
+
+/**
+ * #212: "Vynést staré věci na půdu", agreed at 12 by Mladší's yes after Starší bid 14 (that row
+ * is an earlier round, hidden on screen), now in a round Starší reopened, with Mladší's bid 15.
+ * "Zamést chodník před domem", free at 6, never reopened: the reopen button.
+ */
+export const rebidding: Piece = (ctx) => {
+  const { tx, id, now } = ctx
+  const attic = offer(ctx, 'Vynést staré věci na půdu', 12)
+  step('bid 14', placeBid(tx, id('starsi'), attic.id, 14, now))
+  step('agree 12', approveTaskOffer(tx, id('mladsi'), attic.id, 12, now))
+  step('reopen', reopenBidding(tx, id('starsi'), attic.id, now))
+  step('bid 15', placeBid(tx, id('mladsi'), attic.id, 15, now))
+  const terrace = offer(ctx, 'Zamést chodník před domem', 6)
+  step('agree 6', approveTaskOffer(tx, id('starsi'), terrace.id, 6, now))
 }
 
 /** #36: an open task at 10 with Táta's new price 12 waiting for the brothers. */

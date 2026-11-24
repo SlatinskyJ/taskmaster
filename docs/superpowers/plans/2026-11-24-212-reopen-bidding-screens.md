@@ -132,11 +132,11 @@
 - Modify: `e2e/suites.ts` (row `{ name: 'rebid', spec: 'rebidding.spec.ts', seed: 'rebid' }`, comment "Its own server: a round changes the task for good"), `e2e/launch.spec.ts` (switch off)
 
 **Interfaces:**
-- Produces: piece `rebidding`: "Vynést staré věci na půdu" offered by Táta at 12, agreed by Mladší's yes; Starší bids 14 in the Návrh first (so a hidden old row exists), then the round: Starší reopens, Mladší bids 15. A second task "Zamést terasu", open at 6, never reopened (the reopen button). Real actions through `step(...)`, as the other pieces.
+- Produces: piece `rebidding`: "Vynést staré věci na půdu" offered by Táta at 12, agreed by Mladší's yes; Starší bids 14 in the Návrh first (so a hidden old row exists), then the round: Starší reopens, Mladší bids 15. A second task "Zamést chodník před domem", open at 6, never reopened (the reopen button). Real actions through `step(...)`, as the other pieces.
 - Seed `rebid`: `{ pieces: [rebidding], features: ['reopenBidding', 'bidRefusals'] }`.
 
 - [ ] **Step 1: Write the e2e test** `e2e/rebidding.spec.ts`:
-  - `'Starší reopens a free task and Táta accepts his bid'`: Starší opens "Zamést terasu", taps "Vyjednat novou cenu" → toast "Vyjednávání otevřeno", chip "Vyjednává se", "Zatím žádná nabídka."; picks 8, Nabídnout → his row "chceš 8"; logout; Táta opens it, taps the accept-lowest button (`cs.bids.acceptBid(8, 'Starší')`) → toast "Domluveno", the page shows Starší's reservation.
+  - `'Starší reopens a free task and Táta accepts his bid'`: Starší opens "Zamést chodník před domem", taps "Vyjednat novou cenu" → toast "Vyjednávání otevřeno", chip "Vyjednává se", "Zatím žádná nabídka."; picks 8, Nabídnout → his row "chceš 8"; logout; Táta opens it, taps the accept-lowest button (`cs.bids.acceptBid(8, 'Starší')`) → toast "Domluveno", the page shows Starší's reservation.
   - `'a brother's Domů shows the round'`: Mladší's Domů Volné row "Vynést staré věci na půdu" contains `cs.state.negotiating` ("Vyjednává se", the StateChip label).
   - `'the round shows only its own bids'`: Táta opens "Vynést staré věci na půdu": inside the Vyjednávání region the thread holds Mladší's 15 and not Starší's old 14 (`threadRow` pattern of bid-refusals.spec.ts, `/chce 14\b/` count 0 in that region only); "Ukončit vyjednávání" is not shown (there is a bid) but "Odmítnout nabídky" is; tapping it → "Nabídky odmítnuty", chip back to Volné at 12.
   - No keyboard case: `ScoreStepper` has no text field (CLAUDE.md's keyboard rule covers text fields).

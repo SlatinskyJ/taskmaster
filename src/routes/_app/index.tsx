@@ -115,7 +115,7 @@ function Home() {
       />
       {user.role === 'taker' ? (
         <>
-          <TakerBoard items={board} me={user.id} />
+          <TakerBoard items={board} me={user.id} rebid={features.reopenBidding} />
           {features.recurring && <RecurringList items={recurring} waiting={priceChanges} />}
         </>
       ) : (

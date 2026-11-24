@@ -109,6 +109,13 @@ describe('Úkoly grouped by state (#41)', () => {
     expect(html).toContain('Čeká se na: Starší nebo Mladší')
   })
 
+  it('with reopenBidding on a free task’s name links to its page, others do not (#212)', () => {
+    const html = render(all)
+    expect(html).toContain('<a>Volný</a>')
+    expect(html).not.toContain('<a>Rezervovaný</a>')
+    expect(html).not.toContain('<a>Hotový</a>')
+  })
+
   it('shows the empty line when there are no tasks', () => {
     expect(render([])).toContain(cs.tasks.empty)
   })

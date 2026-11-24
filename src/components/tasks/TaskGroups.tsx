@@ -3,6 +3,7 @@ import { SectionLabel } from '~/components/shell/SectionLabel'
 import type { TaskView } from '~/server/tasks/functions'
 import { groupTasks } from './taskGroups'
 import { lowestText, taskChipState } from './taskView'
+import { TaskLink } from './TaskLink'
 import { TaskRow } from './TaskRow'
 
 /** Úkoly's one-time tasks, one labelled group per state (UI doc §7.2 GTasks, #41). */
@@ -10,10 +11,13 @@ export function TaskGroups({
   list,
   meta,
   action,
+  linked = () => false,
 }: {
   list: readonly TaskView[]
   meta: (t: TaskView) => string | undefined
   action: (t: TaskView) => ReactNode
+  /** Rows whose name links to the task page (#212: free tasks with reopenBidding on). */
+  linked?: (t: TaskView) => boolean
 }) {
   return groupTasks(list).map((g) => (
     <section key={g.status} className="grid gap-2" aria-labelledby={`group-${g.status}`}>
@@ -24,7 +28,7 @@ export function TaskGroups({
         {g.tasks.map((t) => (
           <li key={t.id}>
             <TaskRow
-              name={t.title}
+              name={linked(t) ? <TaskLink id={t.id} title={t.title} /> : t.title}
               state={taskChipState(t)}
               points={t.score}
               meta={meta(t)}

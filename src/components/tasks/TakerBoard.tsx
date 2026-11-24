@@ -5,6 +5,7 @@ import { Button } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
 import { reserveTaskFn, type TaskView } from '~/server/tasks/functions'
 import { canWorkOn, instanceMeta, taskChipState } from './taskView'
+import { TaskLink } from './TaskLink'
 import { TaskRow } from './TaskRow'
 import { useTaskAction } from './useTaskAction'
 import { DoneButton, WorkButtons } from './WorkButtons'
@@ -14,9 +15,19 @@ import { DoneButton, WorkButtons } from './WorkButtons'
  * approval) and "Volné" (open). An open task can be marked done without reserving it (spec
  * §5.4, #40). On both rows the main action, Hotovo, keeps its label and the other one is a
  * 44 px icon button (↶ Uvolnit on "Moje", Rezervovat on "Volné"), so a long name and the chip
- * read in full at 360 px (mockup Main, #148). The task page keeps both labelled.
+ * read in full at 360 px (mockup Main, #148). The task page keeps both labelled. With `rebid`
+ * (switch `reopenBidding`, #212) a free one-time task's name links to its page, where a brother
+ * reopens or answers the bidding.
  */
-export function TakerBoard({ items, me }: { items: readonly TaskView[]; me: number }) {
+export function TakerBoard({
+  items,
+  me,
+  rebid = false,
+}: {
+  items: readonly TaskView[]
+  me: number
+  rebid?: boolean
+}) {
   const { busy, run } = useTaskAction()
   const now = new Date()
   const mine = items.filter(
@@ -57,7 +68,13 @@ export function TakerBoard({ items, me }: { items: readonly TaskView[]; me: numb
             {free.map((t) => (
               <li key={t.id}>
                 <TaskRow
-                  name={t.title}
+                  name={
+                    rebid && t.origin === 'one_time' ? (
+                      <TaskLink id={t.id} title={t.title} />
+                    ) : (
+                      t.title
+                    )
+                  }
                   state={taskChipState(t)}
                   points={t.score}
                   meta={instanceMeta(t, now)}

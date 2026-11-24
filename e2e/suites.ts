@@ -34,6 +34,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'tasks', spec: 'task-page.spec.ts', seed: 'tasks' },
   // Its own server: Nechci and the turn-down close bids for good (#208).
   { name: 'bids', spec: 'bid-refusals.spec.ts', seed: 'bids' },
+  // Its own server: a round changes the task for good (#212).
+  { name: 'rebid', spec: 'rebidding.spec.ts', seed: 'rebid' },
   { name: 'week', spec: 'week.spec.ts', seed: 'week' },
   // Its own server: settling changes the week for good.
   { name: 'meeting', spec: 'meeting.spec.ts', seed: 'week' },

@@ -113,7 +113,12 @@ function Tasks() {
         {list.length === 0 ? (
           <EmptyState>{cs.tasks.empty}</EmptyState>
         ) : (
-          <TaskGroups list={list} meta={meta} action={action} />
+          <TaskGroups
+            list={list}
+            meta={meta}
+            action={action}
+            linked={(t) => features.reopenBidding && t.status === 'open'}
+          />
         )}
       </section>
       {features.recurring && (
