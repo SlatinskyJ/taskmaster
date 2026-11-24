@@ -1,11 +1,12 @@
-import { and, asc, eq, isNull } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, isNull } from 'drizzle-orm'
 import { toIsoUtc } from '~/domain/dates'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { templateThread } from '~/server/db/schema'
 import type { TemplateThreadRow } from '~/server/db/schema'
 
-// The score change thread of an agreed template (spec §5.1): giver-side offers and takers' bids.
+// A template's bidding thread (spec §5.1): giver-side offers and takers' bids, on a proposed
+// template's first score (#209) and on score changes of the agreed template.
 // Reads and writes rows only; the rules live in src/domain and the actions in ./scoreChange.
 // Same shape as src/server/tasks/thread.ts over its own table.
 
@@ -61,6 +62,35 @@ export function openRows(db: Db | Tx, templateId: number): TemplateThreadRow[] {
     .where(open(templateId))
     .orderBy(asc(templateThread.id))
     .all()
+}
+
+/**
+ * Each taker's newest bid since the newest giver row (a counter, a re-offer, a turn-down), open
+ * or closed: the same-number rule (spec §5.2, Jakub 2026-11-24). Only rows above `since` count:
+ * the floor is the newer of the two (a later caller passes the last row of an agreement, so
+ * first-price bids never block a score change). Oldest first.
+ */
+export function lastBids(db: Db | Tx, templateId: number, since = 0): TemplateThreadRow[] {
+  const giver = db
+    .select({ id: templateThread.id })
+    .from(templateThread)
+    .where(and(eq(templateThread.templateId, templateId), eq(templateThread.side, 'giver')))
+    .orderBy(desc(templateThread.id))
+    .get()
+  const rows = db
+    .select()
+    .from(templateThread)
+    .where(
+      and(
+        eq(templateThread.templateId, templateId),
+        eq(templateThread.side, 'taker'),
+        gt(templateThread.id, Math.max(since, giver?.id ?? 0)),
+      ),
+    )
+    .orderBy(asc(templateThread.id))
+    .all()
+  const newest = new Map(rows.map((r) => [r.userId, r]))
+  return [...newest.values()].sort((a, b) => a.id - b.id)
 }
 
 /**

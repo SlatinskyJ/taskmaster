@@ -5,7 +5,9 @@ import { auditLog, templates, templateScoreApprovals, users } from '~/server/db/
 import { createTestDb } from '~/server/db/testing'
 import { updateUser } from '~/server/users/manage'
 import type { NewTemplate } from './templates'
+import { addEntry } from './thread'
 import {
+  agreementOf,
   approveTemplateScore,
   createTemplate,
   getTemplateDetail,
@@ -88,7 +90,7 @@ describe('createTemplate (spec §5.1, §5.3)', () => {
       agreedAt: null,
     })
     expect(db.select().from(templateScoreApprovals).all()).toEqual([
-      { templateId: row.id, userId: tata, score: 4, approvedAt: T0.toISOString() },
+      { templateId: row.id, userId: tata, score: 4, offerRound: 1, approvedAt: T0.toISOString() },
     ])
     expect(audit(db).map((a) => [a.action, a.actor])).toEqual([['template.created', tata]])
   })
@@ -170,9 +172,15 @@ describe('approveTemplateScore (spec §3 score agreement)', () => {
       ['template.score_approved', starsi],
       ['template.agreed', starsi],
     ])
-    expect(JSON.parse(entries[1]?.after ?? 'null')).toEqual({ score: 4 })
-    expect(JSON.parse(entries[2]?.before ?? 'null')).toEqual({ status: 'proposed' })
-    expect(JSON.parse(entries[2]?.after ?? 'null')).toEqual({ status: 'active', score: 4 })
+    expect(JSON.parse(entries[1]?.after ?? 'null')).toEqual({ score: 4, offerRound: 1 })
+    expect(JSON.parse(entries[2]?.before ?? 'null')).toEqual({ status: 'proposed', score: 4 })
+    expect(JSON.parse(entries[2]?.after ?? 'null')).toEqual({
+      status: 'active',
+      score: 4,
+      by: 'approval',
+      entryIds: [],
+      closedIds: [],
+    })
   })
 
   it("a second giver's yes alone keeps it proposed", () => {
@@ -227,6 +235,51 @@ describe('approveTemplateScore (spec §3 score agreement)', () => {
     expect(db.select().from(templates).get()).toMatchObject({ status: 'proposed', agreedAt: null })
     expect(db.select().from(templateScoreApprovals).all()).toHaveLength(1)
     expect(audit(db).map((a) => a.action)).toEqual(['template.created'])
+  })
+})
+
+describe('a proposed template read for bidding (#209)', () => {
+  it("agreementOf reads a proposed template's offer, bids and last bids from its thread", () => {
+    const { db, tata, mama, starsi, mladsi } = family()
+    const { id } = must(createTemplate(db, tata, BINS, T0))
+    db.transaction((tx) => {
+      addEntry(tx, { templateId: id, userId: starsi, side: 'taker', score: 6 }, T1)
+      addEntry(tx, { templateId: id, userId: mama, side: 'giver', score: 5 }, T1)
+      addEntry(tx, { templateId: id, userId: mladsi, side: 'taker', score: 7 }, T1)
+    })
+    const row = db.select().from(templates).where(eq(templates.id, id)).get()
+    if (!row) throw new Error('no row')
+    expect(agreementOf(db, row)).toEqual({
+      status: 'proposed',
+      proposal: { score: 4, proposedBy: mama, approvedBy: [tata] },
+      book: {
+        bids: [
+          { by: starsi, score: 6 },
+          { by: mladsi, score: 7 },
+        ],
+      },
+      lastBids: [{ by: mladsi, score: 7 }],
+    })
+  })
+
+  it('approvals count only in the current offer round', () => {
+    const { db, tata, mama } = family()
+    const { id } = must(createTemplate(db, tata, BINS, T0))
+    db.update(templates).set({ offerRound: 2, score: 5 }).where(eq(templates.id, id)).run()
+    db.insert(templateScoreApprovals)
+      .values({
+        templateId: id,
+        userId: mama,
+        score: 5,
+        offerRound: 2,
+        approvedAt: T1.toISOString(),
+      })
+      .run()
+    const row = db.select().from(templates).where(eq(templates.id, id)).get()
+    if (!row) throw new Error('no row')
+    const agreement = agreementOf(db, row)
+    expect(agreement.status === 'proposed' && agreement.proposal.approvedBy).toEqual([mama])
+    expect(listTemplates(db, tata).find((t) => t.id === id)?.approvedBy).toEqual(['Máma'])
   })
 })
 

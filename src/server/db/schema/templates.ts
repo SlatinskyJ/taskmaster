@@ -28,8 +28,16 @@ export const templates = sqliteTable(
     /** What to do, e.g. "Vynést koše". */
     title: text('title').notNull(),
     status: text('status', { enum: TEMPLATE_STATUSES }).notNull(),
-    /** Whole points from 1: the proposed score while proposed, the agreed score after. */
+    /**
+     * Whole points from 1: the current offer while proposed (a giver's counter moves it, #209),
+     * the agreed score after.
+     */
     score: integer('score').notNull(),
+    /**
+     * Counts the offers of a proposed template, from 1: a counter or a turn-down starts the next
+     * round (#209). Approvals count only in the current round. Unchanged once agreed.
+     */
+    offerRound: integer('offer_round').notNull().default(1),
     /** Spec §5.5: on → a completion waits for a giver's approval. */
     approvalRequired: integer('approval_required', { mode: 'boolean' }).notNull(),
     /** Schedule weekdays as bits: `1 << weekday` (0 = Sunday … 6 = Saturday). 0 = no schedule. */
@@ -72,10 +80,11 @@ export const templates = sqliteTable(
 export type TemplateRow = typeof templates.$inferSelect
 
 /**
- * Who approved a proposed template's score (spec §5.1). A proposed template's score never
- * changes, so there is no offer round; score changes after agreement are `template_thread`
- * below. The proposer's row is written with the template: proposing counts as approving.
- * Append-only.
+ * Who approved a proposed template's offer, per offer round (spec §5.1, #209): a counter or a
+ * turn-down starts a new round, and only approvals of the current round count. The proposer's
+ * row is written with the template, a countering giver's with his counter: offering counts as
+ * approving. Append-only: a new round adds rows, nothing is overwritten. Score changes after
+ * agreement are `template_thread` below.
  */
 export const templateScoreApprovals = sqliteTable(
   'template_score_approvals',
@@ -88,18 +97,21 @@ export const templateScoreApprovals = sqliteTable(
       .references(() => users.id),
     score: integer('score').notNull(),
     approvedAt: text('approved_at').notNull(),
+    offerRound: integer('offer_round').notNull().default(1),
   },
-  (t) => [primaryKey({ columns: [t.templateId, t.userId] })],
+  (t) => [primaryKey({ columns: [t.templateId, t.offerRound, t.userId] })],
 )
 
 export type TemplateScoreApprovalRow = typeof templateScoreApprovals.$inferSelect
 
 /**
- * A score change of an agreed template (spec §5.1; runs like bidding, §5.2): the giver side's
- * offers and takers' bids. Same shape and closings as `task_thread`. Rows are never deleted, so
- * every offer and bid stays in the history. At most one open giver row per template (the offer to
- * every taker, whoever made it) and one open bid per taker. No open rows = no change in flight.
- * `templates.score` changes only when a change is accepted; then every open row closes.
+ * A template's bidding (spec §5.1; runs like bidding, §5.2): the giver side's offers and takers'
+ * bids, first on a proposed template's first score (#209: a counter also moves `templates.score`,
+ * the current offer), then on score changes of the agreed template. Same shape and closings as
+ * `task_thread`. Rows are never deleted, so every offer and bid stays in the history. At most one
+ * open giver row per template (the offer to every taker, whoever made it) and one open bid per
+ * taker. Agreement closes every open row. On an agreed template no open rows = no change in
+ * flight, and `templates.score` changes only when a change is accepted.
  */
 export const templateThread = sqliteTable(
   'template_thread',
