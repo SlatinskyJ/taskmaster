@@ -85,7 +85,7 @@
   - `wrong actor`: giver withdraws → `not_a_taker`; taker turns down → `not_a_giver`.
   - functions.test: the two server functions pass `bidRefusals` from the flags; return shape `{ok, id, score, status}` pinned.
 - [ ] **Step 2:** run → FAIL.
-- [ ] **Step 3:** implement. `markBidsFrom` runs in `agreeIn`, `changeScore` and both turn-downs (proposed and active) after their rows are written. `lastBids(db, id, row.bidsFrom)` (its giver-row floor stays). Turn-down with an offer re-uses `addEntry` for the giver row; no `offerRound` change on an active template. `pnpm db:check` passes.
+- [ ] **Step 3:** implement. `markBidsFrom` runs in `agreeIn`, `changeScore` and both turn-downs (proposed and active) after their rows are written, and returns the old and new value; each of those audit entries (`template.agreed`, `template.score_changed`, `template.bids_turned_down`) records them as `before.bidsFrom` / `after.bidsFrom`, as #212's `task.bidding_reopened` records `biddingFrom`. The audit tests of Step 1 pin `after.bidsFrom` on an agreement and on both turn-downs. `lastBids(db, id, row.bidsFrom)` (its giver-row floor stays). Turn-down with an offer re-uses `addEntry` for the giver row; no `offerRound` change on an active template. `pnpm db:check` passes.
 - [ ] **Step 4:** `pnpm vitest run src/server/templates` + typecheck → PASS.
 - [ ] **Step 5: Commit** `feat(templates): Nechci and turn-down on a chore price change (#232)`.
 
