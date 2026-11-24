@@ -17,7 +17,7 @@
 ## Global Constraints
 
 - Spec §5.1: "while a template is proposed, takers may bid on its first score the same way as on a one-time task (5.2 path 2, including the same-number rule, a taker's no and a giver's turn-down), with **no reservation**. When the giver side accepts the lowest bid (a tie at the lowest is fine), counters at exactly an open bid, or a taker who bid says yes to the current offer, the template becomes active at that score. Instances never get bidding."
-- Launch switch `choreBidding`, off in production (migration 0029 seeds the row with `enabled = 0`; the same migration adds `templates.offer_round` and the approvals' `offer_round`, existing rows 0). Switch off = today's behaviour exactly: every bidding action on a proposed template answers `not_agreed`, as now.
+- Launch switch `choreBidding`, off in production (migration 0029 seeds the row with `enabled = 0`; the same migration adds `templates.offer_round` and the approvals' `offer_round`, existing rows 1). Switch off = today's behaviour exactly: every bidding action on a proposed template answers `not_agreed`, as now.
 - Every state change writes its audit entry in the same transaction (`writeAudit`).
 - Czech UI text only in `src/lib/strings.ts`; this PR adds no UI text.
 - `src/domain/` stays framework-free.
@@ -85,13 +85,13 @@
   - `lastBids(db, templateId, since = 0)`: the floor is the newer of `since` and the newest giver row (as the task helper). This PR passes 0; #232 passes the agreement's last thread row so first-price bids never block a later change.
   - `agreementOf(db, row)` for a proposed row: `proposal = { score: row.score, proposedBy: <newest giver row's userId, else row.createdBy>, approvedBy: approvers(db, row.id, row.offerRound) }`, `book` = open taker rows, `lastBids` from `lastBids()`.
   - `approvers(db, templateId, offerRound)`: approvals of that round only.
-  - Schema (`src/server/db/schema/templates.ts`): `templates.offerRound integer not null default 0`; `templateScoreApprovals.offerRound integer not null default 0`, primary key `(templateId, userId, offerRound)`. Doc comments on both tables rewritten (a proposed template's score now changes by counters; approvals are per offer round, append-only; `template_thread` also holds a proposed template's first-price bidding).
+  - Schema (`src/server/db/schema/templates.ts`): `templates.offerRound integer not null default 1`; `templateScoreApprovals.offerRound integer not null default 1` (rounds start at 1, as tasks' do), primary key `(templateId, userId, offerRound)`. Doc comments on both tables rewritten (a proposed template's score now changes by counters; approvals are per offer round, append-only; `template_thread` also holds a proposed template's first-price bidding).
   - `approveIn(tx, row, userId, now)` in `templates.ts`: the one helper that writes an approval row at `row.offerRound` (used by create, Souhlasím, counter, turn-down).
 
 - [ ] **Step 1: Write the failing tests:**
   - thread.test `lastBids counts from the newest giver row, closed bids included`
   - templates.test `agreementOf reads a proposed template's offer, bids and last bids from its thread`
-  - templates.test `approvals count only in the current offer round` (Review Focus 1: rows in round 0 and 1, `offerRound` 1 → only the round-1 rows)
+  - templates.test `approvals count only in the current offer round` (Review Focus 1: rows in round 1 and 2, `offerRound` 2 → only the round-2 rows)
   - thread.test `lastBids with since ignores bids at or below it`
 - [ ] **Step 2:** run them → FAIL.
 - [ ] **Step 3:** Implement.
@@ -128,9 +128,9 @@
   - `switch off: each of the six actions answers not_agreed and writes nothing` (one `it.each` over bid, counter, accept lowest, accept offer, Nechci, turn-down: no thread row, no audit row, template unchanged; Review Focus 4)
   - `a bid writes a taker row and template.bid_placed; the template stays proposed at 10`
   - `Nechci closes only his bid: Mladší's stays open; his same number again is same_score` (Review Focus 5)
-  - `a turn-down closes the bids, re-offers 10, and the same number is allowed again` (Review Focus 5)
-  - `a counter moves the offer: score 12, offerRound 1, a giver row, his approval in round 1; the replaced offer row is in the audit entry; a brother's Souhlasím at 12 agrees and the counter row is accepted` (Review Focus 1 end to end)
-  - `a second giver approves after a counter` (Máma's approval in round 0, Táta counters, Máma's Souhlasím at 12 → ok, a round-1 row, no throw; Review Focus 1)
+  - `a turn-down closes the bids, re-offers 10 in offerRound 2 with his round-2 approval, logs replacedOffer when a counter row was open, and the same number is allowed again` (Review Focus 5)
+  - `a counter moves the offer: score 12, offerRound 2, a giver row, his approval in round 2; the replaced offer row is in the audit entry; a brother's Souhlasím at 12 agrees and the counter row is accepted` (Review Focus 1 end to end)
+  - `a second giver approves after a counter` (Máma's approval in round 1, Táta counters, Máma's Souhlasím at 12 → ok, a round-2 row, no throw; Review Focus 1)
   - `accept lowest: active at the lowest, bids at it accepted, the rest closed, template.agreed by bid`
   - `a tie at the lowest agrees too, both bids accepted`
   - `a counter at an open bid agrees at it, counter and bid rows accepted`
