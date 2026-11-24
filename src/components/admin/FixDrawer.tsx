@@ -14,6 +14,20 @@ import { FixForm } from './FixForm'
 // outcome to Správa, which closes it, toasts and reloads. The reason lives in Správa (`reason`,
 // `onReason`) so a reload keeps it. Správa remounts this per start (`key`).
 
+/**
+ * The week mode's pills make the sheet taller than what the keyboard leaves: once the sheet has
+ * moved up (vaul follows the keyboard), scroll the focused field into its part of the sheet.
+ */
+const KEYBOARD_SETTLE_MS = 300
+
+function revealField(e: React.FocusEvent) {
+  const el = e.target
+  if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return
+  setTimeout(() => {
+    el.scrollIntoView({ block: 'nearest' })
+  }, KEYBOARD_SETTLE_MS)
+}
+
 export function FixDrawer({
   open,
   onOpenChange,
@@ -54,7 +68,7 @@ export function FixDrawer({
             {start.mode === 'points' ? cs.admin.fix.sheetAdjust : cs.admin.fix.sheetCorrect}
           </DrawerTitle>
         </DrawerHeader>
-        <div className="-mx-1 min-h-0 overflow-y-auto px-1">
+        <div className="-mx-1 min-h-0 overflow-y-auto px-1" onFocus={revealField}>
           <FixForm
             start={start}
             fixable={fixable}

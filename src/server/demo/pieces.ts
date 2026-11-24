@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import type { Tx } from '~/server/audit'
 import { nextPeriod } from '~/domain'
 import { settlements, tasks as taskTable, templates as templateTable } from '~/server/db/schema'
+import { adjustPointsIn, correctSettlementIn } from '~/server/corrections'
 import { dismissDisputeIn, loadTarget, openDisputeIn } from '~/server/disputes'
 import {
   createOnDemandInstance,
@@ -303,6 +304,54 @@ export const disputes: Piece = ({ tx, id, now }) => {
   step(
     'keep Mladší’s settlement',
     dismissDisputeIn(tx, id('admin'), opened.id, kept, DISMISS_NOTE, now),
+  )
+}
+
+export const ADJUSTMENT_REASON = 'Pomohl s velkým nákupem navíc a odnesl tašky až nahoru.'
+export const CORRECTION_REASON = 'Kapesné za minulý týden nedostal, body se mu vrací.'
+
+/**
+ * Corrections and adjustments (#48), after `disputes`: the admin adds 5 points to Starší by hand
+ * and corrects Mladší's past week to Bez kapesného (a correction down gives points back, so it
+ * can never go below zero); Starší disputes his adjustment, so Sporné shows Opravit on one.
+ */
+export const corrections: Piece = ({ tx, id, now }) => {
+  const admin = id('admin')
+  const plus = step(
+    'adjust Starší +5',
+    adjustPointsIn(
+      tx,
+      admin,
+      { takerId: id('starsi'), points: 5, reason: ADJUSTMENT_REASON },
+      null,
+      now,
+    ),
+  )
+  const record = tx
+    .select({ id: settlements.id })
+    .from(settlements)
+    .where(eq(settlements.takerId, id('mladsi')))
+    .get()
+  if (!record) throw new Error('Demo seed: no settlement for Mladší')
+  step(
+    'correct Mladší’s past week',
+    correctSettlementIn(
+      tx,
+      admin,
+      { settlementId: record.id, level: 'none', reason: CORRECTION_REASON },
+      null,
+      now,
+    ),
+  )
+  step(
+    'dispute the +5',
+    openDisputeIn(
+      tx,
+      id('starsi'),
+      { kind: 'adjustment', id: plus.adjustmentId },
+      'Nákup byl obrovský, bylo to spíš za 10.',
+      now,
+    ),
   )
 }
 

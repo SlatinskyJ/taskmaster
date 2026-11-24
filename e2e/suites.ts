@@ -45,8 +45,11 @@ export const SUITES: readonly Suite[] = [
   { name: 'proposals', spec: 'proposals.spec.ts', seed: 'proposals' },
   // Its own server: it opens a dispute for good.
   { name: 'disputes', spec: 'disputes.spec.ts', seed: 'disputes' },
-  // Forms with the simulated phone keyboard open (e2e/keyboard.ts). Read-only.
-  { name: 'keyboard', spec: 'keyboard.spec.ts', seed: 'family' },
+  // Its own server: it writes fixes for good.
+  { name: 'corrections', spec: 'corrections.spec.ts', seed: 'corrections' },
+  // Forms with the simulated phone keyboard open (e2e/keyboard.ts). Read-only. The fix sheet
+  // needs the disputes switch and an open dispute, so it runs on the corrections seed.
+  { name: 'keyboard', spec: 'keyboard.spec.ts', seed: 'corrections' },
 ]
 
 /** Passkeys on (localhost) for the `on` suite only, at its own port. */
