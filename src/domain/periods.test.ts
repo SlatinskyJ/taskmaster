@@ -761,6 +761,9 @@ describe('settle only on the last day (#211, spec §5.8, Jakub 2026-11-24)', () 
     expect(isLastDay(monday, prague(2026, 11, 22, 10))).toBe(true)
     expect(canSettle(monday, prague(2026, 11, 22, 10), true)).toBe(true)
     expect(canSettle(monday, prague(2026, 11, 21, 23, 59), true)).toBe(false)
+    // At the cutoff instant itself the week has ended: settling is allowed, though it is no longer the last day.
+    expect(isLastDay(monday, prague(2026, 11, 23, 0, 0))).toBe(false)
+    expect(canSettle(monday, prague(2026, 11, 23, 0, 0), true)).toBe(true)
   })
 
   it('daylight saving: the week ending Sunday 25 Oct 2026, in Prague time', () => {

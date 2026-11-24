@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { fail, ok } from '~/domain/result'
 import type { SettlementRow } from '~/server/db/schema'
 import type { Period } from '~/domain'
-import { parseSettle, settled, viewerOf } from './functions'
+import { settled } from './actions'
+import { parseSettle, viewerOf } from './functions'
 
 // Input checks and the response shape of the meeting server functions.
 

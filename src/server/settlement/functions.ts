@@ -44,7 +44,6 @@ export function parseSettle(data: unknown): { periodId: number; shown: ShownTota
 }
 
 export type { SettleResult } from './actions'
-export { settled } from './actions'
 
 export const getMeetingFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver')])
