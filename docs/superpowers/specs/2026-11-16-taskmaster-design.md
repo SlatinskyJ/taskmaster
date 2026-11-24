@@ -74,6 +74,7 @@ Role rules:
 | **Task (one-time)** | A single piece of work with its own score |
 | **Template (recurring)** | A reusable chore definition (name, score, schedule, deadline rules, approval flag). Not itself done |
 | **Instance** | One occurrence of a template that can be done. Takes the template's score **at the moment it is created** |
+| **Description** | Optional plain text on a one-time task or a template: what "done" means (acceptance criteria). Up to 1000 characters, line breaks kept, no formatting (Jakub, 2026-11-24) |
 | **Score** | Points awarded to the taker who completes it |
 | **Agreement** | The state in which a score is accepted by the required parties. Nothing can be reserved or completed for points before agreement |
 | **Bid** | A negotiation between one taker and the giver side over a one-time task's score |
@@ -95,6 +96,7 @@ Role rules:
   - Each party has at most one open bid in the change; bidding again replaces it. Every bid is kept in the history.
   - When the giver side accepts, it accepts the lowest open bid. The template gets that score; nobody is reserved anything.
 - A score change applies only to instances created after the change is agreed. Existing instances keep their score, consistent with "score fixed at creation" (Jakub, 2026-11-17).
+- **Description of a template** (Jakub, 2026-11-24; see 5.2 "Description of a one-time task"): any giver may write or change it. While the template is *proposed*, the change applies at once and needs nobody's OK. After agreement, the change needs **one taker's OK**; until then the old description stays. **[call]** Like the score, a changed description applies only to instances created after the OK; an existing instance keeps the description it was created with.
 
 ### 5.2 Score agreement — one-time tasks
 A giver creates a one-time task with an initial offer (score). From there, two paths run in parallel, and the first to complete wins:
@@ -115,9 +117,18 @@ Details:
   - if reserved: needs that taker + a giver;
   - if open (unreserved): any party may propose it; needs score agreement (a giver + a taker), and the old score stays until then;
   - once completed: the score is frozen (only the admin can correct, via adjustment).
+- **Description of a one-time task** (Jakub, 2026-11-24). The description is the task's acceptance criteria, so changing it can change the work and therefore the fair score:
+  - any giver may write or change it; a taker never does;
+  - while the task is **proposed** (offer or bidding): the change applies at once and needs nobody's OK. Every taker sees the new text before he agrees or bids;
+  - once agreed and **reserved**: the change needs the OK of the taker who reserved it;
+  - once agreed and **open** (unreserved): the change needs the OK of **any one taker**;
+  - until that OK the old description stays in force, and the change is shown to the takers as waiting. **[call]** One description change may be in flight per task; a giver's new change replaces it. A taker's "no" closes it and the old description stays. The OK changes only the description, never the score: a taker who thinks the work grew proposes a new score (above);
+  - once completed: the description is frozen.
+  - Every change, OK and "no" is logged (5.10).
 
 ### 5.3 Recurring instances
 A template defines:
+- **Description** (optional, see 4 and 5.1). An instance takes the template's description **at the moment it is created**, like its score.
 - **Schedule** (optional): the days (and optionally a time) an instance is created automatically, e.g. trash every Tuesday, bins Sunday evening.
 - **Deadline mode**, one of:
   - **No deadline** (e.g. dishwasher): the instance stays open until someone does it.
