@@ -1,4 +1,4 @@
-import { and, desc, eq, ne } from 'drizzle-orm'
+import { and, asc, desc, eq, ne } from 'drizzle-orm'
 import type { Role } from '~/domain'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
@@ -7,12 +7,13 @@ import type { DisputeRow } from '~/server/db/schema'
 import { toMark } from './disputes'
 import type { DisputeMark } from './disputes'
 import { loadTarget } from './targets'
-import type { DisputeItem } from './targets'
+import type { DisputeItem, DisputeValue } from './targets'
 
 // Rozporováno (#46): the disputes a viewer is involved in, on Týden →
 // Historie, so an outcome stays visible after its week. A giver sees every dispute; a taker the
 // ones he opened, the ones on his own completions, rejections and settlements, and every score
 // dispute (scores are shared by all parties). Every open one, plus the most recently closed.
+// Sporné on Správa (#47): the admin's queue, every open dispute with its item's value now.
 
 /** How many closed disputes the list keeps (open ones are never cut). */
 export const DISPUTE_LIST_CLOSED_MAX = 5
@@ -30,6 +31,9 @@ export interface DisputeListEntry {
   openedAt: string
   mark: DisputeMark
 }
+
+/** A row of the admin's Sporné: what the item is and its value now (null: no longer loads). */
+export type AdminDisputeEntry = Omit<DisputeListEntry, 'mark'> & { value: DisputeValue | null }
 
 interface Viewer {
   id: number
@@ -65,31 +69,44 @@ export function seesItemDisputes(db: Db | Tx, viewer: Viewer, item: DisputeItem)
   return mine !== undefined && visibleTo(viewer, viewer.id, takerId)
 }
 
-export function listDisputes(db: Db | Tx, viewer: Viewer): DisputeListEntry[] {
-  if (viewer.role !== 'giver' && viewer.role !== 'taker') return []
-  const names = new Map(
+function userNames(db: Db | Tx): Map<number, string> {
+  return new Map(
     db
       .select({ id: users.id, name: users.displayName })
       .from(users)
       .all()
       .map((u) => [u.id, u.name]),
   )
-  const entry = (r: DisputeRow): DisputeListEntry | null => {
-    const item = { kind: r.itemKind, id: r.itemId }
-    const about = loadTarget(db, item)?.about ?? null
-    const takerId = about?.takerId ?? null
-    if (!visibleTo(viewer, r.openedBy, takerId)) return null
-    return {
+}
+
+/** A dispute row with its item described; `takerId` decides who may see it. */
+function describe(db: Db | Tx, names: Map<number, string>, r: DisputeRow) {
+  const item = { kind: r.itemKind, id: r.itemId }
+  const loaded = loadTarget(db, item)
+  const takerId = loaded?.about.takerId ?? null
+  return {
+    takerId,
+    value: loaded?.value ?? null,
+    entry: {
       id: r.id,
       item,
-      title: about?.title ?? '',
-      week: about?.week ?? null,
+      title: loaded?.about.title ?? '',
+      week: loaded?.about.week ?? null,
       takerName: takerId === null ? null : (names.get(takerId) ?? null),
       openedByName: names.get(r.openedBy) ?? '',
       reason: r.reason,
       openedAt: r.openedAt,
-      mark: toMark(r),
-    }
+    },
+  }
+}
+
+export function listDisputes(db: Db | Tx, viewer: Viewer): DisputeListEntry[] {
+  if (viewer.role !== 'giver' && viewer.role !== 'taker') return []
+  const names = userNames(db)
+  const entry = (r: DisputeRow): DisputeListEntry | null => {
+    const d = describe(db, names, r)
+    if (!visibleTo(viewer, r.openedBy, d.takerId)) return null
+    return { ...d.entry, mark: toMark(r) }
   }
   // The viewer filter runs before the cap, so other boys' disputes never take a taker's places.
   // Open ones newest opened first; then the most recently closed ones.
@@ -112,4 +129,19 @@ export function listDisputes(db: Db | Tx, viewer: Viewer): DisputeListEntry[] {
     if (e) closed.push(e)
   }
   return [...open, ...closed]
+}
+
+/** The admin's queue: every open dispute, oldest opened first, with the item's value now. */
+export function listOpenForAdmin(db: Db | Tx): AdminDisputeEntry[] {
+  const names = userNames(db)
+  return db
+    .select()
+    .from(disputes)
+    .where(eq(disputes.status, 'open'))
+    .orderBy(asc(disputes.openedAt), asc(disputes.id))
+    .all()
+    .map((r) => {
+      const d = describe(db, names, r)
+      return { ...d.entry, value: d.value }
+    })
 }

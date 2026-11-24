@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, or } from 'drizzle-orm'
-import { openDispute } from '~/domain'
-import type { Dispute, DisputeError, DisputeRef, Result } from '~/domain'
+import { dismissDispute, openDispute } from '~/domain'
+import type { Dispute, DisputeError, DisputeRef, DisputeTarget, Result } from '~/domain'
 import { fail, ok } from '~/domain'
 import { toIsoUtc } from '~/domain/dates'
 import { writeAudit } from '~/server/audit'
@@ -10,13 +10,19 @@ import { disputes } from '~/server/db/schema'
 import type { DisputeRow } from '~/server/db/schema'
 import { listPeople } from '~/server/users/people'
 import { loadTarget } from './targets'
-import type { DisputeItem } from './targets'
+import type { DisputeItem, DisputeValue } from './targets'
 
-// Opening a dispute (spec §5.11, #46) and the marks screens show on items. The rule is the
-// domain's `openDispute`; this module loads the record, runs it and writes the row with its
-// audit entry in one transaction. Closing (dismiss #47, correct #48) comes later.
+// Opening (#46) and dismissing (#47) a dispute (spec §5.11), and the marks screens show on
+// items. The rules are the domain's `openDispute` and `dismissDispute`; this module loads the
+// record, runs the rule and writes the row with its audit entry in one transaction. Correcting
+// comes with #48.
 
-export type OpenDisputeError = DisputeError | 'not_found'
+/**
+ * What the dispute store refuses with: a domain refusal, an unknown item or dispute, or
+ * (closing only) an item whose value changed since the admin saw it.
+ */
+export type DisputeServerError = DisputeError | 'not_found' | 'value_changed'
+export type OpenDisputeError = Exclude<DisputeServerError, 'value_changed'>
 
 /** What an item shows: an open dispute, or the newest closed one's outcome with the note. */
 export type DisputeMark = { status: 'open' } | { status: 'dismissed' | 'corrected'; note: string }
@@ -86,11 +92,7 @@ export function openDisputeIn(
       const opener = people.find((p) => p.id === userId)
       return fail(opener && opener.role !== 'admin' ? 'not_found' : 'not_a_party')
     }
-    const t = loaded.target
-    const ref: DisputeRef =
-      t.kind === 'settlement'
-        ? { kind: 'settlement', id: t.id, periodId: t.periodId, takerId: t.takerId }
-        : { kind: t.kind, id: t.id }
+    const ref = refOf(loaded.target)
     const existing = openOn(tx, item).map((d): Dispute => ({
       item: ref,
       openedBy: d.openedBy,
@@ -117,6 +119,71 @@ export function openDisputeIn(
       at: now,
     })
     return ok(inserted.value)
+  })
+}
+
+/** The domain's name for a disputed record. */
+export function refOf(t: DisputeTarget): DisputeRef {
+  return t.kind === 'settlement'
+    ? { kind: 'settlement', id: t.id, periodId: t.periodId, takerId: t.takerId }
+    : { kind: t.kind, id: t.id }
+}
+
+/** A value with only its own fields, so two reads compare equal whatever else they carry. */
+const plain = (v: DisputeValue | null) =>
+  v === null ? null : 'score' in v ? { score: v.score } : { level: v.level, deducted: v.deducted }
+
+/** Whether the item's value moved since the admin saw it (dismiss #47, correct #48). */
+export function valueMoved(seen: DisputeValue | null, now: DisputeValue | null): boolean {
+  return JSON.stringify(plain(seen)) !== JSON.stringify(plain(now))
+}
+
+/**
+ * The admin keeps a disputed item as it is, with a note (stored trimmed). `seen` is the item's
+ * value the admin's list showed: when it changed since (a score change agreed meanwhile), the
+ * dismissal is refused, so a note never lands on a value nobody reviewed.
+ */
+export function dismissDisputeIn(
+  db: Db | Tx,
+  adminId: number,
+  disputeId: number,
+  seen: DisputeValue | null,
+  note: string,
+  now: Date,
+): Result<{ id: number }, DisputeServerError> {
+  return db.transaction((tx): Result<{ id: number }, DisputeServerError> => {
+    const row = tx.select().from(disputes).where(eq(disputes.id, disputeId)).get()
+    // Disputed records are never deleted, so a missing target means a missing dispute too.
+    const loaded = row ? loadTarget(tx, { kind: row.itemKind, id: row.itemId }) : null
+    if (!row || !loaded) return fail('not_found')
+    const base = { item: refOf(loaded.target), openedBy: row.openedBy, reason: row.reason }
+    // A closed row only needs to read as not open; the domain refuses it before its fields.
+    const dispute: Dispute =
+      row.status === 'open'
+        ? { ...base, status: 'open' }
+        : { ...base, status: 'dismissed', resolvedBy: row.resolvedBy ?? 0, note: row.note ?? '' }
+    const kept = dismissDispute(dispute, listPeople(tx), adminId, note)
+    if (!kept.ok) return kept
+    if (kept.value.status !== 'dismissed') throw new Error('dismissDispute: not dismissed')
+    const value = plain(loaded.value)
+    if (valueMoved(seen, value)) return fail('value_changed')
+    const text = kept.value.note
+    const changed = tx
+      .update(disputes)
+      .set({ status: 'dismissed', resolvedBy: adminId, resolvedAt: toIsoUtc(now), note: text })
+      .where(and(eq(disputes.id, disputeId), eq(disputes.status, 'open')))
+      .run()
+    if (changed.changes !== 1) return fail('not_open')
+    writeAudit(tx, {
+      actor: { kind: 'user', userId: adminId },
+      action: 'dispute.dismissed',
+      entityType: 'dispute',
+      entityId: disputeId,
+      before: { status: 'open' },
+      after: { status: 'dismissed', note: text, value },
+      at: now,
+    })
+    return ok({ id: disputeId })
   })
 }
 

@@ -27,7 +27,7 @@ export const disputes = sqliteTable(
     openedBy: integer('opened_by')
       .notNull()
       .references(() => users.id),
-    /** Stored trimmed, 1–200 characters. */
+    /** Stored trimmed, 1–1000 characters (Jakub 2026-11-24). */
     reason: text('reason').notNull(),
     openedAt: text('opened_at').notNull(),
     status: text('status', { enum: DISPUTE_STATUSES }).notNull(),
@@ -42,7 +42,7 @@ export const disputes = sqliteTable(
       sql`${t.itemKind} IN ('task_score', 'template_score', 'completion', 'rejection', 'settlement', 'adjustment')`,
     ),
     check('disputes_status_check', sql`${t.status} IN ('open', 'dismissed', 'corrected')`),
-    check('disputes_reason_check', sql`length(trim(${t.reason})) BETWEEN 1 AND 200`),
+    check('disputes_reason_check', sql`length(trim(${t.reason})) BETWEEN 1 AND 1000`),
     check(
       'disputes_resolution_check',
       sql`(${t.status} = 'open' AND ${t.resolvedBy} IS NULL AND ${t.resolvedAt} IS NULL AND ${t.note} IS NULL) OR (${t.status} <> 'open' AND ${t.resolvedBy} IS NOT NULL AND ${t.resolvedAt} IS NOT NULL AND ${t.note} IS NOT NULL)`,
