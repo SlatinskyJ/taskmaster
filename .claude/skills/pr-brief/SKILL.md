@@ -63,6 +63,8 @@ Screenshots: Playwright against the dev server, the iPhone 15 Pro screen: viewpo
 
 A screenshot shows exactly what a phone shows: one 393×852 screen, never the whole page. Use `page.screenshot()` with no `fullPage` (or `fullPage: false`), so every file is 1179×2556 px; never `fullPage: true`, never an element screenshot taller than the screen. When the part that matters sits below the fold, scroll to it (`locator.scrollIntoViewIfNeeded()` or `window.scrollTo`) and take another 393×852 screenshot of that spot. Check each file's size before you publish it; one that is not 1179×2556 is retaken.
 
+**Keyboard open.** A changed screen with a text field gets a second screenshot with the phone keyboard open: `useKeyboard(page)` before the first `goto`, then `openKeyboard(page, field)` on the field a person fills last (`e2e/keyboard.ts`, a simulated iPhone keyboard). Same 393×852 screen, never full-page. It shows what a person sees while typing: the field must be on it. Caption it `s klávesnicí`.
+
 Screenshots on the page keep their natural aspect ratio, big enough to read. Put every screenshot `<figure>` inside one grid; give each `<img>` its real `width`/`height` attributes and this CSS:
 
 ```css
