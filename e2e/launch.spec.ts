@@ -45,3 +45,14 @@ test('reopening bidding stays hidden with its switch off (#212)', async ({ page 
   await expect(page.getByRole('button', { name: cs.taskPrice.change })).toBeVisible()
   await expect(page.getByRole('button', { name: cs.rebid.reopen })).toHaveCount(0)
 })
+
+test('a parent’s Úkoly row has no task link with the switch off (#212)', async ({ page }) => {
+  await passwordLogin(page, 'tata')
+  await expect(page).toHaveURL(/\/$/)
+  await bottomBar(page).getByRole('link', { name: cs.nav.tasks }).click()
+  const parentRow = page
+    .getByRole('listitem')
+    .filter({ hasText: 'Umýt okna v obýváku i v ložnici' })
+  await expect(parentRow).toBeVisible()
+  await expect(parentRow.getByRole('link')).toHaveCount(0)
+})

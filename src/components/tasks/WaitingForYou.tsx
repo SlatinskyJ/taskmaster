@@ -116,7 +116,7 @@ export function WaitingForYou({
             void action.run(
               key,
               () => callBid(approve),
-              (r) => toastFor(approve, r.status, me),
+              (r) => toastFor(approve, r.status, me, false),
             )
           }}
         >

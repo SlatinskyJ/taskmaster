@@ -249,8 +249,16 @@ describe('TakerBoard Volné row in reopened bidding (#212)', () => {
     const open = view({ status: 'open', reservedBy: null })
     const on = renderToStaticMarkup(<TakerBoard items={[open]} me={3} rebid />)
     expect(on).toMatch(/<a[^>]*href="\/ukol\/1"[^>]*>Vyluxovat/)
+    // The link is a full tap target, not one line of text.
+    expect(on).toMatch(/<a[^>]*class="[^"]*min-h-tap[^"]*"[^>]*>Vyluxovat/)
     const off = renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
     expect(off).not.toContain('href="/ukol/1"')
+  })
+  it('a free chore copy stays a plain name with the switch on', () => {
+    const chore = view({ status: 'open', reservedBy: null, origin: 'on_demand', templateId: 1 })
+    expect(renderToStaticMarkup(<TakerBoard items={[chore]} me={3} rebid />)).not.toContain(
+      'href="/ukol/1"',
+    )
   })
   it('a round shows Vyjednává se on the row', () => {
     const open = view({

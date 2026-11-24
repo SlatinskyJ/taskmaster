@@ -26,7 +26,7 @@ export function ReopenBidding({ task, me, on }: { task: TaskView; me: Me; on: bo
           void run(
             button.key,
             () => callBid(button),
-            (r) => toastFor(button, r.status, me),
+            (r) => toastFor(button, r.status, me, false),
           )
         }}
       >

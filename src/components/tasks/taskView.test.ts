@@ -257,8 +257,8 @@ describe('taskView', () => {
     expect(refuseButton(t, ADMIN, true)).toBeNull()
   })
   it('refusal toasts', () => {
-    expect(toastFor(call('withdrawBid'), 'proposed', STARSI)).toBe('Nabídka stažena')
-    expect(toastFor(call('turnDownBids'), 'proposed', TATA)).toBe('Nabídky odmítnuty')
+    expect(toastFor(call('withdrawBid'), 'proposed', STARSI, false)).toBe('Nabídka stažena')
+    expect(toastFor(call('turnDownBids'), 'proposed', TATA, false)).toBe('Nabídky odmítnuty')
   })
   it('nothing to do once agreed, or for the admin', () => {
     for (const [t, me] of [
@@ -295,13 +295,13 @@ describe('taskView', () => {
   })
   it('toasts: mine, agreed, approved, sent', () => {
     expect([
-      toastFor(call('acceptOffer'), 'reserved', STARSI),
-      toastFor(call('acceptLowestTaskBid'), 'reserved', TATA),
-      toastFor(call('approveOffer'), 'open', STARSI),
-      toastFor(call('approveOffer'), 'proposed', TATA),
-      toastFor(call('placeBid'), 'proposed', STARSI),
-      toastFor(call('counterOffer'), 'proposed', TATA),
-      toastFor(call('counterOffer'), 'open', TATA),
+      toastFor(call('acceptOffer'), 'reserved', STARSI, false),
+      toastFor(call('acceptLowestTaskBid'), 'reserved', TATA, false),
+      toastFor(call('approveOffer'), 'open', STARSI, false),
+      toastFor(call('approveOffer'), 'proposed', TATA, false),
+      toastFor(call('placeBid'), 'proposed', STARSI, false),
+      toastFor(call('counterOffer'), 'proposed', TATA, false),
+      toastFor(call('counterOffer'), 'open', TATA, false),
     ]).toEqual([
       'Domluveno, úkol je tvůj',
       'Domluveno',
@@ -532,6 +532,10 @@ describe('a reopened round (#212)', () => {
     })
     expect(refuseButton(round(18, null), TATA, false)).toBeNull()
   })
+  it('a brother or admin gets no Ukončit in a round nobody bid in', () => {
+    expect(refuseButton(round(18, null), STARSI, true)).toBeNull()
+    expect(refuseButton(round(18, null), ADMIN, true)).toBeNull()
+  })
   it('reopen: a free agreed one-time task, any brother or parent, switch on', () => {
     const free = view({ status: 'open', offeredByName: null, approvedBy: [], approverIds: [] })
     for (const me of [TATA, STARSI]) {
@@ -580,7 +584,7 @@ describe('a reopened round (#212)', () => {
       cs.bids.toast.turnedDown,
     )
     expect(toastFor(turnDown([]), 'open', TATA, true)).toBe(cs.rebid.toast.stopped)
-    expect(toastFor(call('reopenBidding'), 'open', STARSI)).toBe(cs.rebid.toast.reopened)
+    expect(toastFor(call('reopenBidding'), 'open', STARSI, false)).toBe(cs.rebid.toast.reopened)
     expect(toastFor(call('placeBid'), 'open', STARSI, true)).toBe(cs.bids.toast.sent)
     expect(toastFor(call('withdrawBid'), 'open', STARSI, true)).toBe(cs.bids.toast.withdrawn)
     expect(toastFor(counter([]), 'open', TATA, true)).toBe(cs.bids.toast.sent)
@@ -588,7 +592,7 @@ describe('a reopened round (#212)', () => {
     expect(toastFor(call('acceptOffer'), 'reserved', STARSI, true)).toBe(cs.bids.toast.agreedMine)
     expect(toastFor(call('approveOffer'), 'open', STARSI, true)).toBe(cs.bids.toast.agreed)
     // Not in a round: as before.
-    expect(toastFor(call('placeBid'), 'proposed', STARSI)).toBe(cs.bids.toast.sent)
-    expect(toastFor(call('approveOffer'), 'proposed', STARSI)).toBe(cs.tasks.approved)
+    expect(toastFor(call('placeBid'), 'proposed', STARSI, false)).toBe(cs.bids.toast.sent)
+    expect(toastFor(call('approveOffer'), 'proposed', STARSI, false)).toBe(cs.tasks.approved)
   })
 })

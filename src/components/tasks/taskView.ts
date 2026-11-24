@@ -292,7 +292,12 @@ export function threadTime(iso: string): string {
  * The toast after a bidding action succeeded. `round`: the task was in a reopened round when
  * tapped (#212); it stays open whether agreed or not, so the call decides, not the status.
  */
-export function toastFor(call: BidCall, status: TaskView['status'], me: Me, round = false): string {
+export function toastFor(
+  call: BidCall,
+  status: TaskView['status'],
+  me: Me,
+  round: boolean,
+): string {
   if (call.action === 'reopenBidding') return cs.rebid.toast.reopened
   if (call.action === 'turnDownBids') {
     return call.data.bids.length === 0 ? cs.rebid.toast.stopped : cs.bids.toast.turnedDown

@@ -9,7 +9,7 @@ export function TaskLink({ id, title }: { id: number; title: string }) {
     <Link
       to="/ukol/$taskId"
       params={{ taskId: String(id) }}
-      className="underline decoration-1 underline-offset-4"
+      className="inline-flex min-h-tap items-center underline decoration-1 underline-offset-4"
     >
       {title}
     </Link>

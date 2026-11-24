@@ -116,6 +116,22 @@ describe('Úkoly grouped by state (#41)', () => {
     expect(html).not.toContain('<a>Hotový</a>')
   })
 
+  it('a free chore copy stays unlinked; a round with bids gets Odpovědět, not Hotovo bez bodů', () => {
+    const chore = task(7, 'Vynést koš', { status: 'open', origin: 'on_demand', templateId: 1 })
+    expect(render([chore])).not.toContain('<a>Vynést koš</a>')
+    const bid = { takerId: 4, name: 'Mladší', score: 15 }
+    const round = task(8, 'Vynést věci na půdu', {
+      status: 'open',
+      bids: [bid],
+      rebidding: { offer: 12, offeredBy: null },
+    })
+    const html = render([round])
+    expect(html).toContain(`<a>${cs.bids.answer}</a>`)
+    expect(html).not.toContain(cs.work.doneSelf)
+    // No bids yet: the parent can still close it, and reaches the round through the name.
+    expect(render([{ ...round, bids: [] }])).toContain(cs.work.doneSelf)
+  })
+
   it('shows the empty line when there are no tasks', () => {
     expect(render([])).toContain(cs.tasks.empty)
   })
