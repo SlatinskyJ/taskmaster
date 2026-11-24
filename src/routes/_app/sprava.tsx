@@ -3,6 +3,10 @@ import { ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { DefaultWeekCard } from '~/components/admin/DefaultWeekCard'
+import { DismissDialog } from '~/components/admin/DismissDialog'
+import { dismissInput, DisputesCard, loadAdminDisputes } from '~/components/admin/DisputesCard'
+import { sendDismiss } from '~/components/disputes/disputeCalls'
+import { adminDisputeLines } from '~/components/disputes/disputeProps'
 import type { PersonFormValues } from '~/components/admin/PersonForm'
 import { PersonDrawer } from '~/components/admin/PersonDrawer'
 import { ResetPasswordDialog } from '~/components/admin/ResetPasswordDialog'
@@ -16,6 +20,8 @@ import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { userErrorMessage } from '~/lib/userErrors'
 import type { PeriodDefaults } from '~/domain'
+import type { AdminDisputeEntry } from '~/server/disputes/functions'
+import { dismissDisputeFn, getAdminDisputesFn } from '~/server/disputes/functions'
 import { listPasskeyCountsFn } from '~/server/passkeys/functions'
 import { getPeriodDefaultsFn, savePeriodDefaultsFn } from '~/server/periods/functions'
 import type { PersonSummary } from '~/server/users/functions'
@@ -24,18 +30,20 @@ import { createUserFn, listUsersFn, resetPasswordFn, updateUserFn } from '~/serv
 // Správa, the admin's only screen, no bottom bar (UI doc §6, §7.5). Others go to their landing.
 // People (#134): add, rename, change role, reset password. No deactivation (Jakub 2026-11-17).
 // The list is never empty: the admin is always in it. Výchozí týden (#47, spec §5.8): the
-// admin edits the default week directly. Disputes come with the rest of #47.
+// admin edits the default week directly. Sporné (#47, spec §5.11): the open disputes, first,
+// each kept with a note; hidden while the `disputes` switch is off.
 export const Route = createFileRoute('/_app/sprava')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/sprava')
   },
   loader: async () => {
-    const [people, passkeys, defaults] = await Promise.all([
+    const [people, passkeys, defaults, disputes] = await Promise.all([
       listUsersFn(),
       listPasskeyCountsFn(),
       getPeriodDefaultsFn(),
+      loadAdminDisputes(() => getAdminDisputesFn()),
     ])
-    return { people, passkeys, defaults }
+    return { people, passkeys, defaults, disputes }
   },
   component: Sprava,
 })
@@ -44,12 +52,14 @@ type Sheet = { mode: 'add' } | { mode: 'edit'; person: PersonSummary } | null
 
 function Sprava() {
   const { user } = Route.useRouteContext()
-  const { people, passkeys, defaults } = Route.useLoaderData()
+  const { people, passkeys, defaults, disputes } = Route.useLoaderData()
   const router = useRouter()
   const [sheet, setSheet] = useState<Sheet>(null)
   // Kept apart from `sheet` so the drawer can close while its last content fades out.
   const [sheetOpen, setSheetOpen] = useState(false)
   const [resetOpen, setResetOpen] = useState(false)
+  const [keeping, setKeeping] = useState<AdminDisputeEntry | null>(null)
+  const [keepOpen, setKeepOpen] = useState(false)
   const editing = sheet?.mode === 'edit' ? sheet.person : undefined
 
   function open(next: Exclude<Sheet, null>) {
@@ -99,8 +109,38 @@ function Sprava() {
     return null
   }
 
+  const showDisputes = !('error' in disputes && disputes.error === 'feature_off')
+
   return (
     <Screen title={cs.admin.title} user={user}>
+      {showDisputes && (
+        <DisputesCard
+          data={'error' in disputes ? { error: 'load' } : disputes}
+          onKeep={(entry) => {
+            setKeeping(entry)
+            setKeepOpen(true)
+          }}
+          onRetry={() => {
+            void router.invalidate()
+          }}
+        />
+      )}
+      <DismissDialog
+        lines={keeping ? adminDisputeLines(keeping) : null}
+        open={keepOpen}
+        onOpenChange={setKeepOpen}
+        onConfirm={(note) =>
+          keeping
+            ? sendDismiss(dismissDisputeFn, dismissInput(keeping, note))
+            : Promise.resolve({ ok: true as const })
+        }
+        onDone={async (outcome) => {
+          setKeepOpen(false)
+          if (outcome.ok) toast.success(cs.admin.disputes.done)
+          else toast.error(outcome.message)
+          await router.invalidate()
+        }}
+      />
       <DefaultWeekCard defaults={defaults} onSave={saveDefaults} />
       <SectionLabel className="mt-3.5">{cs.admin.people}</SectionLabel>
       <Card>

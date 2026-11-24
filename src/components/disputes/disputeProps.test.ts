@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { item, week } from '~/components/week/fixtures'
 import type { TaskView } from '~/server/tasks/functions'
 import type { TemplateView } from '~/server/templates/functions'
-import { recordDispute, taskDisputes, templateDispute, weekItemDispute } from './disputeProps'
+import { weekLabel } from '~/components/period/periodView'
+import {
+  adminDisputeLines,
+  recordDispute,
+  taskDisputes,
+  templateDispute,
+  weekItemDispute,
+} from './disputeProps'
 
 // What each Rozporovat names (#46): the exact item the server gets, and the drawer's text.
 
@@ -106,5 +113,60 @@ describe('templateDispute', () => {
   })
   it('a proposed one has none', () => {
     expect(templateDispute({ ...t, status: 'proposed' })).toBeNull()
+  })
+})
+
+describe('adminDisputeLines (#47)', () => {
+  const base = {
+    id: 1,
+    title: 'Vyluxovat celý obývák a chodbu',
+    week: null,
+    takerName: null,
+    openedByName: 'Starší',
+    reason: 'Bylo toho víc.',
+    openedAt: '2026-11-22T23:30:00.000Z',
+  }
+
+  it('a task score: what, title and points; opened by and the Prague date', () => {
+    expect(
+      adminDisputeLines({ ...base, item: { kind: 'task_score', id: 3 }, value: { score: 30 } }),
+    ).toEqual({
+      what: 'Body za úkol',
+      value: 'Vyluxovat celý obývák a chodbu · 30 bodů',
+      opened: 'Starší · 23. 11.',
+      reason: 'Bylo toho víc.',
+      name: 'Vyluxovat celý obývák a chodbu',
+    })
+  })
+
+  it('a completion names its boy', () => {
+    const l = adminDisputeLines({
+      ...base,
+      item: { kind: 'completion', id: 3 },
+      takerName: 'Starší',
+      value: { score: 8 },
+    })
+    expect(l.what).toBe('Potvrzené splnění · Starší')
+  })
+
+  it('a settlement: week, level and deduction', () => {
+    const week = { startsAt: '2026-11-15T23:00:00.000Z', endsAt: '2026-11-22T22:59:00.000Z' }
+    const l = adminDisputeLines({
+      ...base,
+      title: '',
+      week,
+      item: { kind: 'settlement', id: 4 },
+      takerName: 'Mladší',
+      value: { level: 'lower', deducted: 50 },
+    })
+    expect(l.what).toBe('Vyúčtování týdne · Mladší')
+    expect(l.value).toBe(`${weekLabel(week.startsAt, week.endsAt)} · Spodní hranice · odečteno 50`)
+    expect(l.name).toBe(weekLabel(week.startsAt, week.endsAt))
+  })
+
+  it('no value: only the title', () => {
+    expect(
+      adminDisputeLines({ ...base, item: { kind: 'task_score', id: 3 }, value: null }).value,
+    ).toBe('Vyluxovat celý obývák a chodbu')
   })
 })
