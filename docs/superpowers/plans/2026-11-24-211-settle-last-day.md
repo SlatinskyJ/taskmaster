@@ -18,11 +18,8 @@
 
 - The running week can be settled only on its last day: the Prague calendar day of its cutoff (normally Sunday). Before that Schůzka shows when the week ends instead of the Vyúčtovat step.
 - A week that already ended at its cutoff can still be settled any time after (unchanged).
+- Cutoff at 00:00 (Jakub, 2026-11-24 15:20 Prague, decision card): the last day is the day the week's last minute falls on, so Monday 00:00 → Sunday.
 - Jakub: "flip its prod switch once merged (before Sun 29 Nov)". The new migration therefore writes the switch **on**: merging is the flip. Prod auto-deploys on green `main`, so it is live before Sunday. The switch stays as a lever to turn the rule off by hand (README command) without a deploy.
-
-## Open with Jakub
-
-- Cutoff at 00:00 (e.g. Monday 00:00): is the last day Sunday (the day of the week's last minute) or Monday (the cutoff's date, when the week is already over)? Asked 2026-11-24 in the project thread, recommended Sunday. The plan builds Sunday; if he picks Monday, Task 1 wording and the `isLastDay` 00:00 test change (Monday reading = the rule never lets a 00:00 week settle early). Answer goes into the brief.
 
 ## Global Constraints
 
