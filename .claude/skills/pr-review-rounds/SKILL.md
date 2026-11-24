@@ -57,6 +57,7 @@ Sections 2, 3, 4 and 7 are the same in both phases. A PR with no issue (ad-hoc) 
     - one for every screen and every state this PR adds or changes: each kind of row, each set of buttons on a row, each form and dialog, each empty and error state;
     - logged in as the role that sees it, on the demo data (`TASKMASTER_ENV=preview`);
     - a long Czech task name (about 30 letters, like "Vyluxovat celý obývák a chodbu") in every row that shows one;
+    - every form, sheet or dialog with a text field once more with the phone keyboard open (`e2e/keyboard.ts`: `useKeyboard`, then `openKeyboard` on each field), named `<screen>-<role>-keyboard-<field>.png`;
     - named `<screen>-<role>-<state>.png`, in one folder outside the repo.
 
     Look at each one before round 1. Whatever a person needs to read or tap is whole. Retake the ones a fix changes before the next round. An ad-hoc PR with screens has no plan, so also go through the UX pre-flight list above.
