@@ -81,7 +81,12 @@ describe('demo seed (#62)', () => {
     const db = createTestDb()
     db.run(sql`UPDATE feature_flags SET enabled = 0 WHERE key = 'week'`)
     seedDemo(db, { NODE_ENV: 'production' }, T0)
-    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, week: false, disputes: false })
+    expect(getFlags(db)).toEqual({
+      ...ALL_FEATURES,
+      week: false,
+      disputes: false,
+      approveAnywhere: false,
+    })
   })
 
   it('the audit log is in time order (#45)', () => {
@@ -134,7 +139,7 @@ describe('demo seed (#62)', () => {
     for (const name of ['Home', 'nope', 'toString', 'constructor']) {
       const db = createTestDb()
       expect(() => seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: name }, T0)).toThrow(
-        `unknown TASKMASTER_SEED "${name}" (known: family, home, launch, tasks, week, recurring, scheduler, proposals, disputes, corrections, demo)`,
+        `unknown TASKMASTER_SEED "${name}" (known: family, home, launch, approve, tasks, week, recurring, scheduler, proposals, disputes, corrections, demo)`,
       )
       expect(db.select().from(users).all()).toHaveLength(0)
       expect(db.select().from(auditLog).all()).toHaveLength(0)
@@ -167,6 +172,7 @@ describe('demo seed (#62)', () => {
       family: NO_FEATURES,
       home: NO_FEATURES,
       launch: NO_FEATURES,
+      approve: { ...NO_FEATURES, approveAnywhere: true },
       tasks: NO_FEATURES,
       week: { ...NO_FEATURES, week: true, meeting: true },
       recurring: { ...NO_FEATURES, recurring: true, log: true },
@@ -209,6 +215,6 @@ describe('demo seed (#62)', () => {
     expect(() => seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: 'launch' }, T0)).toThrow('boom')
     expect(db.select().from(users).all()).toHaveLength(0)
     expect(db.select().from(tasks).all()).toHaveLength(0)
-    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, disputes: false })
+    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, disputes: false, approveAnywhere: false })
   })
 })

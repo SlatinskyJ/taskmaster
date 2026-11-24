@@ -190,6 +190,13 @@
       "when": 1795519833506,
       "tag": "0026_corrections",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1795530153940,
+      "tag": "0027_approve_anywhere_switch",
+      "breakpoints": true
     }
   ]
 }

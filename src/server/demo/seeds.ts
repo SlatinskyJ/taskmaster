@@ -36,6 +36,8 @@ export const SEEDS = {
   home: { pieces: [negotiation, points], features: [] },
   /** The launch look (#163): must stay with every switch off, whatever other suites turn on. */
   launch: { pieces: [negotiation, points], features: [] },
+  /** Done work to approve on Úkoly and the task page (#206). */
+  approve: { pieces: [negotiation, points], features: ['approveAnywhere'] },
   /** The task page (#36). */
   tasks: { pieces: [priceChange], features: [] },
   /** Týden and the weekly meeting (#44, #45). */

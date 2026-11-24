@@ -32,6 +32,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'home', spec: 'home.spec.ts', seed: 'home' },
   { name: 'launch', spec: 'launch.spec.ts', seed: 'launch' },
   { name: 'tasks', spec: 'task-page.spec.ts', seed: 'tasks' },
+  // Its own server: it approves and rejects for good (#206).
+  { name: 'approve', spec: 'approve.spec.ts', seed: 'approve' },
   { name: 'week', spec: 'week.spec.ts', seed: 'week' },
   // Its own server: settling changes the week for good.
   { name: 'meeting', spec: 'meeting.spec.ts', seed: 'week' },
@@ -53,6 +55,8 @@ export const SUITES: readonly Suite[] = [
   // The fix sheet with the keyboard open (#48): it needs the disputes switch and open disputes.
   // Read-only: sheets are opened, never sent.
   { name: 'keyboard-fix', spec: 'keyboard-fix.spec.ts', seed: 'corrections' },
+  // The reject reason (#206) with the keyboard open. Read-only: forms are opened, never sent.
+  { name: 'keyboard-approve', spec: 'keyboard-approve.spec.ts', seed: 'approve' },
 ]
 
 /** Passkeys on (localhost) for the `on` suite only, at its own port. */
