@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { TaskView } from '~/server/tasks/functions'
 import { cs } from '~/lib/strings'
 import {
+  canApprove,
   bidButtons,
   canProposeChange,
   canWorkOn,
@@ -233,6 +234,14 @@ describe('taskView', () => {
       'Nabídka odeslána',
       'Domluveno',
     ])
+  })
+  it('Schválit and Zamítnout only for a parent, only on done work not yet confirmed (#206)', () => {
+    const done = view({ status: 'done_unconfirmed' })
+    expect(canApprove(done, TATA)).toBe(true)
+    expect(canApprove(done, STARSI)).toBe(false)
+    expect(canApprove(done, ADMIN)).toBe(false)
+    for (const status of ['proposed', 'open', 'reserved', 'confirmed', 'cancelled'] as const)
+      expect(canApprove({ ...done, status }, TATA)).toBe(false)
   })
   it('Hotovo and Uvolnit only for the brother who reserved it', () => {
     const mine = view({ status: 'reserved', reservedBy: { id: 3, name: 'Starší' } })
