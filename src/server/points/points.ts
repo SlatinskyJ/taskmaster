@@ -12,7 +12,7 @@ import { takerPointsNow } from '~/server/settlement/ledger'
 //
 // `confirmed` and `pending` come from `takerPointsNow`, the one points read (Týden uses it too):
 // confirmed is the running total (spec §5.9), confirmed completions minus what each settlement
-// deducted; #48 (corrections, adjustments) adds `adjustment` entries there. `pending` is the sum
+// deducted, plus point adjustments (#48). `pending` is the sum
 // of the taker's done, unconfirmed tasks. A task a giver did himself has no earner and counts for
 // nobody. This adds every active taker (a zero row when he has neither) and the levels: the
 // running period's; when none runs (`currentLevels`), the agreed change for the next period, else

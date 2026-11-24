@@ -106,7 +106,9 @@ export function listDisputes(db: Db | Tx, viewer: Viewer): DisputeListEntry[] {
   const entry = (r: DisputeRow): DisputeListEntry | null => {
     const d = describe(db, names, r)
     if (!visibleTo(viewer, r.openedBy, d.takerId)) return null
-    return { ...d.entry, mark: toMark(r) }
+    // An adjustment's reason is its title: only its own boy and the givers read it (§5.7).
+    const hidden = r.itemKind === 'adjustment' && viewer.role === 'taker' && d.takerId !== viewer.id
+    return { ...d.entry, ...(hidden ? { title: '' } : {}), mark: toMark(r) }
   }
   // The viewer filter runs before the cap, so other boys' disputes never take a taker's places.
   // Open ones newest opened first; then the most recently closed ones.

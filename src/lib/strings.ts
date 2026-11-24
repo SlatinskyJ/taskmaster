@@ -461,6 +461,8 @@ export const cs = {
     sent: 'Odesláno správci.',
     kept: (note: string) => `Správce nechal beze změny: ${note}`,
     fixed: (note: string) => `Správce opravil: ${note}`,
+    /** An adjustment's points with their sign: `+5 bodů`, `−3 body`. */
+    adjustmentValue: (n: number) => (n > 0 ? `+${formatPoints(n)}` : `−${formatPoints(-n)}`),
     openedBy: (name: string, reason: string) => `${name}: ${reason}`,
     what: {
       task_score: 'Body za úkol',

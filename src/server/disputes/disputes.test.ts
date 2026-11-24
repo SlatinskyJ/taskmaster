@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import type { DisputeKind } from '~/domain'
-import { auditLog, disputes, settlements, tasks } from '~/server/db/schema'
+import { auditLog, disputes, pointAdjustments, settlements, tasks } from '~/server/db/schema'
 import { doneTask, MEETING, SAT, week } from '~/server/settlement/testing'
 import { agreedTemplate } from '~/server/templates/testing'
 import { rejectTask } from '~/server/tasks'
@@ -667,5 +667,30 @@ describe('listOpenForAdmin (#47)', () => {
     expect(listOpenForAdmin(f.db).map((e) => e.id)).toEqual([id])
     expect(listDisputes(f.db, { id: f.mladsi, role: 'taker' })).toEqual([])
     expect(listDisputes(f.db, { id: f.admin, role: 'admin' })).toEqual([])
+  })
+})
+
+describe('an adjustment dispute in Rozporováno (#48)', () => {
+  it("a taker who disputes another boy's adjustment does not see its reason", () => {
+    const f = setup()
+    const adjustmentId = f.db
+      .insert(pointAdjustments)
+      .values({
+        takerId: f.mladsi,
+        points: -3,
+        reason: 'Rozbitý hrnek.',
+        madeBy: f.admin,
+        madeAt: AT.toISOString(),
+      })
+      .returning()
+      .get().id
+    must(openDisputeIn(f.db, f.starsi, { kind: 'adjustment', id: adjustmentId }, 'Hm.', AT))
+    const titles = (viewer: number, role: 'giver' | 'taker') =>
+      listDisputes(f.db, { id: viewer, role })
+        .filter((e) => e.item.kind === 'adjustment')
+        .map((e) => e.title)
+    expect(titles(f.starsi, 'taker')).toEqual([''])
+    expect(titles(f.mladsi, 'taker')).toEqual(['Rozbitý hrnek.'])
+    expect(titles(f.tata, 'giver')).toEqual(['Rozbitý hrnek.'])
   })
 })

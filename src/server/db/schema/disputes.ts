@@ -7,7 +7,7 @@ import { users } from './users'
 // disputed record (src/server/disputes/README.md has the keys). Rows are never deleted and
 // `status` moves from open to one closed state once (triggers in migration 0023). The partial
 // unique index backs up "[call] at most one open dispute per item". Times are UTC ISO 8601 with
-// milliseconds. `adjustment` is listed for #48 (no adjustments table yet).
+// milliseconds. `adjustment` names a `point_adjustments` row (#48).
 export const DISPUTE_KINDS = [
   'task_score',
   'template_score',

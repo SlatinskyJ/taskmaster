@@ -1,10 +1,11 @@
 import { eq } from 'drizzle-orm'
 import type { DisputeKind, DisputeTarget, Level } from '~/domain'
-import { periodEnd } from '~/domain'
+import { effectiveSettlement, periodEnd } from '~/domain'
 import { toIsoUtc } from '~/domain/dates'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
-import { periods, settlements, tasks, templates } from '~/server/db/schema'
+import { latestCorrection, toCorrection } from '~/server/corrections/read'
+import { periods, pointAdjustments, settlements, tasks, templates } from '~/server/db/schema'
 import { toPeriod } from '~/server/periods'
 import { rejectionById } from '~/server/tasks/rejections'
 
@@ -16,14 +17,18 @@ export interface DisputeItem {
   id: number
 }
 
-/** The item's numbers when disputed (`dispute.opened` keeps them). */
-export type DisputeValue = { score: number } | { level: Level; deducted: number }
+/**
+ * The item's numbers when disputed (`dispute.opened` keeps them): a score, a settlement as it
+ * stands now (its latest correction, #48), or an adjustment's points.
+ */
+export type DisputeValue =
+  { score: number } | { level: Level; deducted: number } | { points: number }
 
 /** What the Rozporováno list needs: a title, whose item it is, and a settlement's week. */
 export interface ItemAbout {
-  /** The task or template title; '' for a settlement. */
+  /** The task or template title, an adjustment's reason; '' for a settlement. */
   title: string
-  /** The taker whose completion, rejection or settlement it is; null for a score. */
+  /** The taker whose completion, rejection, settlement or adjustment it is; null for a score. */
   takerId: number | null
   /** A settlement's week (UTC ISO); null otherwise. */
   week: { startsAt: string; endsAt: string } | null
@@ -87,9 +92,11 @@ export function loadTarget(db: Db | Tx, item: DisputeItem): LoadedTarget | null 
       if (!s) return null
       const p = db.select().from(periods).where(eq(periods.id, s.periodId)).get()
       const period = p ? toPeriod(p) : null
+      const latest = latestCorrection(db, s.id)
+      const now = effectiveSettlement(s, latest ? toCorrection(s, latest) : null)
       return {
         target: { kind: 'settlement', id: s.id, periodId: s.periodId, takerId: s.takerId },
-        value: { level: s.level, deducted: s.deducted },
+        value: { level: now.level, deducted: now.deducted },
         about: {
           title: '',
           takerId: s.takerId,
@@ -99,8 +106,14 @@ export function loadTarget(db: Db | Tx, item: DisputeItem): LoadedTarget | null 
         },
       }
     }
-    case 'adjustment':
-      // No adjustments table before #48.
-      return null
+    case 'adjustment': {
+      const a = db.select().from(pointAdjustments).where(eq(pointAdjustments.id, item.id)).get()
+      if (!a) return null
+      return {
+        target: { kind: 'adjustment', id: a.id },
+        value: { points: a.points },
+        about: { title: a.reason, takerId: a.takerId, week: null },
+      }
+    }
   }
 }

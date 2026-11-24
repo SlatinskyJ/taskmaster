@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
-import { disputes, featureFlags } from '~/server/db/schema'
+import { disputes, featureFlags, pointAdjustments } from '~/server/db/schema'
 import { doneTask, MEETING, SAT, week } from '~/server/settlement/testing'
 import { must } from '~/server/tasks/testing'
 import { openDisputeIn } from './disputes'
@@ -44,7 +44,6 @@ describe('parseOpenDispute', () => {
   it.each([
     ['an extra key', { kind: 'completion', id: 1, reason: 'x', by: 2 }],
     ['a missing key', { kind: 'completion', id: 1 }],
-    ['kind adjustment (#48)', { kind: 'adjustment', id: 1, reason: 'x' }],
     ['an unknown kind', { kind: 'task', id: 1, reason: 'x' }],
     ['id 0', { kind: 'completion', id: 0, reason: 'x' }],
     ['id 1.5', { kind: 'completion', id: 1.5, reason: 'x' }],
@@ -270,5 +269,53 @@ describe('admin handlers (#47)', () => {
         value: { score: 22 },
       },
     ])
+  })
+})
+
+describe('disputes about an adjustment (#48)', () => {
+  function withAdjustment() {
+    const f = withSwitch(true)
+    const adjustmentId = f.db
+      .insert(pointAdjustments)
+      .values({
+        takerId: f.starsi,
+        points: 5,
+        reason: 'Pomoc s nákupem.',
+        madeBy: f.admin,
+        madeAt: SAT.toISOString(),
+      })
+      .returning()
+      .get().id
+    return { ...f, adjustmentId }
+  }
+
+  it('opens through the real parser and handler', () => {
+    const f = withAdjustment()
+    const input = parseOpenDispute({ kind: 'adjustment', id: f.adjustmentId, reason: 'Málo.' })
+    expect(openDisputeHandler(f.db, f.starsi, input, MEETING)).toEqual({ ok: true })
+  })
+
+  it('is kept with its seen points; a stale value is refused', () => {
+    const f = withAdjustment()
+    const { id } = must(
+      openDisputeIn(f.db, f.starsi, { kind: 'adjustment', id: f.adjustmentId }, 'Málo.', MEETING),
+    )
+    const stale = parseDismissDispute({ id, value: { points: 4 }, note: 'Sedí.' })
+    expect(dismissDisputeHandler(f.db, f.admin, stale, MEETING)).toEqual({
+      ok: false,
+      error: 'value_changed',
+    })
+    const kept = parseDismissDispute({ id, value: { points: 5 }, note: 'Sedí.' })
+    expect(dismissDisputeHandler(f.db, f.admin, kept, MEETING)).toEqual({ ok: true })
+  })
+
+  it('a points value takes exactly { points }, a whole number', () => {
+    expect(parseDismissDispute({ id: 1, value: { points: -3 }, note: 'x' }).value).toEqual({
+      points: -3,
+    })
+    expect(() => parseDismissDispute({ id: 1, value: { points: 1.5 }, note: 'x' })).toThrow()
+    expect(() =>
+      parseDismissDispute({ id: 1, value: { points: 2, score: 2 }, note: 'x' }),
+    ).toThrow()
   })
 })

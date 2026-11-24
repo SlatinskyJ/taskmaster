@@ -164,6 +164,29 @@ describe('adminDisputeLines (#47)', () => {
     expect(l.name).toBe(weekLabel(week.startsAt, week.endsAt))
   })
 
+  it('an adjustment (#48): its reason names it, its points carry a sign', () => {
+    const plus = adminDisputeLines({
+      ...base,
+      title: 'Pomoc s nákupem.',
+      item: { kind: 'adjustment', id: 6 },
+      takerName: 'Starší',
+      value: { points: 5 },
+    })
+    expect(plus).toMatchObject({
+      what: 'Úprava bodů · Starší',
+      value: 'Pomoc s nákupem. · +5 bodů',
+      name: 'Pomoc s nákupem.',
+    })
+    const minus = adminDisputeLines({
+      ...base,
+      title: 'Rozbitý hrnek.',
+      item: { kind: 'adjustment', id: 7 },
+      takerName: 'Starší',
+      value: { points: -3 },
+    })
+    expect(minus.value).toBe('Rozbitý hrnek. · −3 body')
+  })
+
   it('no value: only the title', () => {
     expect(
       adminDisputeLines({ ...base, item: { kind: 'task_score', id: 3 }, value: null }).value,

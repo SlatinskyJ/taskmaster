@@ -4,16 +4,17 @@ import type { LedgerEntry } from '~/domain'
 import { toIsoUtc } from '~/domain/dates'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
-import { settlements, tasks } from '~/server/db/schema'
+import { pointAdjustments, settlements, tasks } from '~/server/db/schema'
 
 // The records a running total is built from (spec §5.9, §5.10): confirmed completions credited
-// to their earner, and every settlement's deduction. Adjustments join when corrections
-// (#48) store them. A completion belongs to the period of its `completed_at`, not its
-// approval time (spec §5.5), so `until` filters on `completed_at` and is exclusive.
+// to their earner, every settlement's deduction, and every point adjustment (#48: manual, or a
+// settlement correction's difference). A completion belongs to the period of its `completed_at`,
+// not its approval time (spec §5.5), and an adjustment to the period of its `made_at`, so
+// `until` filters on those and is exclusive.
 
 /**
- * Ledger entries for every taker. With `until`: only completions done before it; settlements
- * are always all of them (the meeting settles the oldest week first, so none is later).
+ * Ledger entries for every taker. With `until`: only completions done and adjustments made
+ * before it; settlements are always all of them (the meeting settles the oldest week first, so none is later).
  */
 export function ledgerEntries(db: Db | Tx, until?: Date): LedgerEntry[] {
   const done = db
@@ -37,6 +38,13 @@ export function ledgerEntries(db: Db | Tx, until?: Date): LedgerEntry[] {
     .from(settlements)
     .all()) {
     entries.push({ kind: 'settlement', takerId: s.takerId, deducted: s.deducted })
+  }
+  for (const a of db
+    .select({ takerId: pointAdjustments.takerId, points: pointAdjustments.points })
+    .from(pointAdjustments)
+    .where(until ? lt(pointAdjustments.madeAt, toIsoUtc(until)) : undefined)
+    .all()) {
+    entries.push({ kind: 'adjustment', takerId: a.takerId, points: a.points })
   }
   return entries
 }

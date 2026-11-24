@@ -1,5 +1,5 @@
 import { fromPragueWallTime, toIsoUtc } from '~/domain/dates'
-import { tasks } from '~/server/db/schema'
+import { pointAdjustments, tasks } from '~/server/db/schema'
 import type { TaskRow } from '~/server/db/schema'
 import { getPeriodDefaults, listPeriods, rollPeriods } from '~/server/periods'
 import { family } from '~/server/tasks/testing'
@@ -78,6 +78,15 @@ export function reservedTask(f: Family, by: number, score: number): number {
       reservedBy: by,
       reservedVia: 'tap',
     })
+    .returning()
+    .get().id
+}
+
+/** A manual point adjustment row written directly (by the admin, at `at`). */
+export function adjustment(f: Family, takerId: number, points: number, at: Date): number {
+  return f.db
+    .insert(pointAdjustments)
+    .values({ takerId, points, reason: 'Pomoc s nákupem.', madeBy: f.admin, madeAt: toIsoUtc(at) })
     .returning()
     .get().id
 }

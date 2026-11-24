@@ -4,7 +4,7 @@ import type { Level, Levels, Role } from '~/domain'
 import { toIsoUtc } from '~/domain/dates'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
-import { settlements, tasks } from '~/server/db/schema'
+import { pointAdjustments, settlements, tasks } from '~/server/db/schema'
 import { currentPeriod, listPeriods } from '~/server/periods'
 import { rejectionsSince } from '~/server/tasks/rejections'
 import { listPeople } from '~/server/users/people'
@@ -17,8 +17,8 @@ import { takersOf } from './meeting'
 // giver sees every active taker (§5.7). The filter is here, on the server, and default-deny:
 // everyone only for a giver. Read-only. Confirmed and rejected items and the settled records
 // carry their dispute mark (#46), read only for what this viewer is shown.
-// `unsettled` is the ledger total minus this week's bar. When #47/#36 add adjustments to the
-// ledger, they must land in `confirmed` here, or they would read as "waiting for the meeting".
+// `unsettled` is the ledger total minus this week's bar. Point adjustments (#48) made since the
+// week started land in `confirmed` here, so they never read as "waiting for the meeting".
 
 export interface WeekItem {
   taskId: number
@@ -145,7 +145,10 @@ export function getWeek(db: Db | Tx, viewer: Viewer, now: Date): Week {
   }
 }
 
-/** Confirmed and waiting scores per taker, of tasks completed at or after `start`. */
+/**
+ * Confirmed and waiting scores per taker, of tasks completed at or after `start`; adjustments
+ * made at or after `start` count as confirmed.
+ */
 function pointsSince(
   db: Db | Tx,
   ids: number[],
@@ -169,6 +172,17 @@ function pointsSince(
     if (t.status === 'confirmed') p.confirmed += t.score
     else p.pending += t.score
     out.set(t.earnerId, p)
+  }
+  for (const a of db
+    .select({ takerId: pointAdjustments.takerId, points: pointAdjustments.points })
+    .from(pointAdjustments)
+    .where(
+      and(inArray(pointAdjustments.takerId, ids), gte(pointAdjustments.madeAt, toIsoUtc(start))),
+    )
+    .all()) {
+    const p = out.get(a.takerId) ?? { confirmed: 0, pending: 0 }
+    p.confirmed += a.points
+    out.set(a.takerId, p)
   }
   return out
 }

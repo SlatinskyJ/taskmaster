@@ -15,7 +15,7 @@ import type { DisputeItem, DisputeValue } from './targets'
 // Opening (#46) and dismissing (#47) a dispute (spec §5.11), and the marks screens show on
 // items. The rules are the domain's `openDispute` and `dismissDispute`; this module loads the
 // record, runs the rule and writes the row with its audit entry in one transaction. Correcting
-// comes with #48.
+// (#48) is in `~/server/corrections`.
 
 /**
  * What the dispute store refuses with: a domain refusal, an unknown item or dispute, or
@@ -130,8 +130,14 @@ export function refOf(t: DisputeTarget): DisputeRef {
 }
 
 /** A value with only its own fields, so two reads compare equal whatever else they carry. */
-const plain = (v: DisputeValue | null) =>
-  v === null ? null : 'score' in v ? { score: v.score } : { level: v.level, deducted: v.deducted }
+export const plain = (v: DisputeValue | null) =>
+  v === null
+    ? null
+    : 'score' in v
+      ? { score: v.score }
+      : 'points' in v
+        ? { points: v.points }
+        : { level: v.level, deducted: v.deducted }
 
 /** Whether the item's value moved since the admin saw it (dismiss #47, correct #48). */
 export function valueMoved(seen: DisputeValue | null, now: DisputeValue | null): boolean {

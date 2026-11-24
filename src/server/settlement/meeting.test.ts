@@ -6,9 +6,9 @@ import { auditLog, periods, settlements, users } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { listPeriods, rollPeriods, savePeriodDefaults } from '~/server/periods'
 import { failAuditOn, family, json, must } from '~/server/tasks/testing'
-import { getMeeting, settlePeriod } from './meeting'
+import { getMeeting, settlePeriod, weekWaiting } from './meeting'
 import type { ShownTotal } from './meeting'
-import { CUTOFF, doneTask, MEETING, plus, prague, SAT, week } from './testing'
+import { adjustment, CUTOFF, doneTask, MEETING, plus, prague, SAT, week } from './testing'
 
 const D = DEFAULT_PERIOD_DEFAULTS
 const MONDAY = prague(2026, 11, 30, 10)
@@ -357,5 +357,30 @@ describe('settlePeriod', () => {
           .map((p) => p.endedAt),
       ).toEqual([null])
     }
+  })
+})
+
+describe('adjustments at the meeting (#48)', () => {
+  it("an ended week's total holds an adjustment made inside it once; a later one waits", () => {
+    const f = week()
+    doneTask(f, { score: 40, completedAt: plus(SAT, 3_600_000), earner: f.starsi })
+    adjustment(f, f.starsi, 15, plus(SAT, 7_200_000))
+    adjustment(f, f.starsi, 2, plus(CUTOFF, 60_000))
+    rollPeriods(f.db, MONDAY, D)
+    const m = getMeeting(f.db, MONDAY)
+    if (!m.period) throw new Error('nothing to settle')
+    expect(m.takers.find((t) => t.id === f.starsi)).toMatchObject({ total: 55, level: 'lower' })
+  })
+})
+
+describe('weekWaiting (#48)', () => {
+  it('nothing to settle: no week waits', () => {
+    expect(weekWaiting(family().db, MEETING)).toBe(false)
+  })
+
+  it('an ended, unsettled week waits; the running week settleable early does not', () => {
+    const f = week()
+    expect(weekWaiting(f.db, MEETING)).toBe(false)
+    expect(weekWaiting(f.db, MONDAY)).toBe(true)
   })
 })

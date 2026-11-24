@@ -9,7 +9,17 @@ import { approveTask, completeTask, rejectTask } from '~/server/tasks/lifecycle'
 import { rejectionsSince } from '~/server/tasks/rejections'
 import { family, must } from '~/server/tasks/testing'
 import { getMeeting, settlePeriod } from './meeting'
-import { CUTOFF, doneTask, MEETING, plus, prague, reservedTask, SAT, week } from './testing'
+import {
+  adjustment,
+  CUTOFF,
+  doneTask,
+  MEETING,
+  plus,
+  prague,
+  reservedTask,
+  SAT,
+  week,
+} from './testing'
 import { getWeek } from './week'
 
 const D = DEFAULT_PERIOD_DEFAULTS
@@ -369,5 +379,33 @@ describe('getWeek dispute marks (#46)', () => {
     must(openDisputeIn(f.db, f.starsi, { kind: 'settlement', id: first?.id ?? 0 }, 'x', MONDAY))
     expect(records().map((r) => r.dispute)).toEqual([{ status: 'open' }, null])
     expect(second?.takerId).toBe(f.mladsi)
+  })
+})
+
+describe('getWeek adjustments (#48)', () => {
+  it('an adjustment made this week is in confirmed, not waiting for the meeting', () => {
+    const f = week()
+    doneTask(f, { score: 10, completedAt: plus(SAT, H), earner: f.starsi })
+    adjustment(f, f.starsi, 5, plus(SAT, 2 * H))
+    const [t] = getWeek(f.db, starsi(f), MEETING).takers
+    expect([t?.confirmed, t?.unsettled]).toEqual([15, 0])
+  })
+
+  it('an adjustment of a settled week is in the carry-over only, not counted again', () => {
+    const f = week()
+    doneTask(f, { score: 60, completedAt: plus(SAT, H), earner: f.starsi })
+    adjustment(f, f.starsi, 5, plus(SAT, 2 * H))
+    rollPeriods(f.db, MONDAY, D)
+    settle(f.db, f.tata, MONDAY) // P1: 65 → lower 50, carry 15
+    const [t] = getWeek(f.db, starsi(f), MONDAY).takers
+    expect([t?.carriedIn, t?.confirmed, t?.unsettled]).toEqual([15, 15, 0])
+  })
+
+  it('an adjustment exactly at the week start counts this week; a millisecond before does not', () => {
+    const f = week()
+    adjustment(f, f.starsi, 4, SAT)
+    adjustment(f, f.starsi, 3, plus(SAT, -1))
+    const [t] = getWeek(f.db, starsi(f), MEETING).takers
+    expect([t?.confirmed, t?.unsettled]).toEqual([4, 3])
   })
 })
