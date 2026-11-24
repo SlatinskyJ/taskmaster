@@ -323,7 +323,7 @@ describe('data migrations', () => {
     sqlite.close()
   })
 
-  it("0030 starts each template's bid floor at its newest thread row", () => {
+  it("0030 and 0031 start each template's bid floor below its bids in flight", () => {
     const A = '2026-11-24T10:00:00.000Z'
     const dir = tempDir()
     const before = join(dir, 'm')
@@ -341,14 +341,23 @@ describe('data migrations', () => {
                (2, 'starsi', 'Starší', 'taker', '${A}', '${A}');
       insert into templates (id, title, status, score, approval_required, created_by, created_at, updated_at)
         values (5, 'Umýt koupelnu', 'active', 8, 1, 1, '${A}', '${A}'),
-               (6, 'Vynést koš', 'active', 3, 1, 1, '${A}', '${A}');
+               (6, 'Vynést koš', 'active', 3, 1, 1, '${A}', '${A}'),
+               (7, 'Zalít kytky', 'proposed', 4, 1, 1, '${A}', '${A}'),
+               (8, 'Vyndat myčku', 'active', 3, 1, 1, '${A}', '${A}');
       insert into template_thread (id, template_id, user_id, side, score, created_at, closed_at, closed_as)
         values (40, 5, 2, 'taker', 10, '${A}', '${A}', 'closed'),
-               (41, 5, 2, 'taker', 11, '${A}', null, null);`)
+               (41, 5, 2, 'taker', 11, '${A}', null, null),
+               (42, 7, 2, 'taker', 6, '${A}', '${A}', 'closed'),
+               (43, 8, 2, 'taker', 5, '${A}', '${A}', 'accepted');`)
     applyMigrations(sqlite, 'drizzle')
     expect(sqlite.prepare('select id, bids_from from templates order by id').all()).toEqual([
-      { id: 5, bids_from: 41 },
+      // An open bid stays above the floor; a closed one before it does not.
+      { id: 5, bids_from: 40 },
       { id: 6, bids_from: 0 },
+      // A proposed chore keeps 0: its newest giver row is its floor.
+      { id: 7, bids_from: 0 },
+      // Nothing open: the newest row.
+      { id: 8, bids_from: 43 },
     ])
     expect(sqlite.prepare('pragma foreign_key_check').all()).toEqual([])
     sqlite.close()

@@ -218,6 +218,13 @@
       "when": 1795550604085,
       "tag": "0030_template_bids_from",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1795553508046,
+      "tag": "0031_template_bids_from_open_bids",
+      "breakpoints": true
     }
   ]
 }

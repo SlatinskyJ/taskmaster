@@ -320,6 +320,14 @@ describe('template change: same number, Nechci, turn-down (#232)', () => {
     expect(value(withdrawTemplateChangeBid(t, family, OLDER))).toMatchObject({ change: null })
   })
 
+  it('Nechci of the last bid keeps a standing offer in flight', () => {
+    const offer = { score: 14, proposedBy: DAD }
+    const t = agreed({ offer, bids: [{ by: OLDER, score: 12 }] })
+    expect(value(withdrawTemplateChangeBid(t, family, OLDER))).toMatchObject({
+      change: { offer, bids: [] },
+    })
+  })
+
   const two = [
     { by: OLDER, score: 12 },
     { by: YOUNGER, score: 13 },

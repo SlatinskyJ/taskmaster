@@ -38,7 +38,7 @@ test('Starší says Nechci and may not send 10 again; Táta turns the bids down,
   await expect(page.getByText(cs.rebid.turnDownHint(8))).toBeVisible()
   await page.getByRole('button', { name: cs.bids.turnDown, exact: true }).click()
   await expect(page.getByText(cs.bids.toast.turnedDown, { exact: true })).toBeVisible()
-  await expect(page.getByText(cs.templatePrice.now(8))).toBeVisible()
+  await expect(page.getByText(cs.templatePrice.now(8), { exact: true })).toBeVisible()
   await expect(threadRow(page, /chce 11\b/)).toContainText(cs.bids.closed)
   for (const name of [/^Přijmout/, new RegExp(`^${cs.bids.turnDown}$`)]) {
     await expect(page.getByRole('button', { name })).toHaveCount(0)
