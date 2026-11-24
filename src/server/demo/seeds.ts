@@ -4,6 +4,7 @@ import {
   bootTick,
   cancelled,
   choreBidding,
+  choreChange,
   corrections,
   disputes,
   instances,
@@ -50,6 +51,8 @@ export const SEEDS = {
   recurring: { pieces: [points, templates, instances], features: ['recurring', 'log'] },
   /** Bidding on a proposed chore (#209): two proposed chores, one with two bids. */
   chores: { pieces: [choreBidding], features: ['recurring', 'choreBidding'] },
+  /** Saying no on an agreed chore's price change (#232): "Umýt koupelnu" with two bids. */
+  chorechange: { pieces: [choreChange], features: ['recurring', 'bidRefusals'] },
   /** The scheduler (#39): everyday templates through the past week, then the boot tick. */
   scheduler: { pieces: [pastWeekScheduled, bootTick], features: ['recurring'] },
   /** Příští týden and Výchozí týden (#43): an open proposal of each kind. */
@@ -72,6 +75,7 @@ export const SEEDS = {
       points,
       templates,
       choreBidding,
+      choreChange,
       thisWeek,
       disputes,
       corrections,

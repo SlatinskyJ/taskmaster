@@ -136,4 +136,16 @@ describe('e2e seeds (#183)', () => {
       ['Mladší', 7],
     ])
   })
+
+  it('chorechange: Umýt koupelnu agreed at 8, Starší bids 10 and Mladší 11, no offer', () => {
+    const db = seeded('chorechange')
+    const tata = db.select().from(users).where(eq(users.username, 'tata')).get()?.id ?? 0
+    const views = listTemplates(db, tata, { choreBidding: false, bidRefusals: true })
+    expect(views.map((t) => [t.title, t.status, t.score])).toEqual([['Umýt koupelnu', 'active', 8]])
+    expect(views[0]?.change?.offer).toBeNull()
+    expect(views[0]?.change?.bids.map((b) => [b.name, b.score])).toEqual([
+      ['Starší', 10],
+      ['Mladší', 11],
+    ])
+  })
 })
