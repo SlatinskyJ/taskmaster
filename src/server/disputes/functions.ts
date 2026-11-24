@@ -1,23 +1,27 @@
 import { createServerFn } from '@tanstack/react-start'
 import type { Role } from '~/domain'
-import { DISPUTE_REASON_MAX } from '~/lib/disputeLimits'
+import { DISPUTE_NOTE_MAX, DISPUTE_REASON_MAX } from '~/lib/disputeLimits'
 import { requireRole } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
 import type { Db } from '~/server/db'
 import { getFlags } from '~/server/features'
 import { int, record } from '~/server/periods/validators'
-import { disputeMarks, markKey, openDisputeIn } from './disputes'
-import type { DisputeMark, OpenDisputeError } from './disputes'
-import { listDisputes, seesItemDisputes } from './list'
+import { dismissDisputeIn, disputeMarks, markKey, openDisputeIn } from './disputes'
+import type { DisputeMark, DisputeServerError, OpenDisputeError } from './disputes'
+import { listDisputes, listOpenForAdmin, seesItemDisputes } from './list'
+import type { AdminDisputeEntry } from './list'
+import type { DisputeValue } from './targets'
 
-export type { DisputeItem } from './targets'
+export type { DisputeItem, DisputeValue } from './targets'
 export type { DisputeMark } from './disputes'
-export type { DisputeListEntry } from './list'
+export type { AdminDisputeEntry, DisputeListEntry } from './list'
+export type { DisputeServerError } from './disputes'
 import type { DisputeListEntry } from './list'
 
-// Server functions for disputes (#46, spec §5.11), behind the launch switch `disputes`: with it
-// off every one answers `feature_off` and writes nothing. Takers and givers only; the admin is
-// no party (the domain refuses it again).
+// Server functions for disputes (spec §5.11), behind the launch switch `disputes`: with it off
+// every one answers `feature_off` and writes nothing. Opening and marks (#46): takers and givers
+// only; the admin is no party (the domain refuses it again). The admin's list and dismiss (#47):
+// admin only (the domain checks the admin again).
 
 /** What a taker or giver can dispute from a screen (`adjustment` comes with #48). */
 export const OPENABLE_KINDS = [
@@ -119,3 +123,59 @@ export const getDisputeListFn = createServerFn({ method: 'GET' })
   .handler(({ context }) =>
     disputeListHandler(getDb(), { id: context.user.id, role: context.user.role }),
   )
+
+const LEVELS = ['none', 'lower', 'upper'] as const
+
+function valueOf(data: unknown): DisputeValue | null {
+  if (data === null) return null
+  if (typeof data === 'object' && 'score' in data) {
+    return { score: int(record(data, ['score']).score, Number.MAX_SAFE_INTEGER) }
+  }
+  const d = record(data, ['level', 'deducted'])
+  const deducted = int(d.deducted, Number.MAX_SAFE_INTEGER)
+  if (deducted < 0) throw new Error('Invalid input')
+  return { level: kindOf(d.level, LEVELS), deducted }
+}
+
+export interface DismissDisputeInput {
+  id: number
+  /** The item's value the admin's list showed. */
+  value: DisputeValue | null
+  note: string
+}
+
+/** Exactly `{ id, value, note }`; the note at most DISPUTE_NOTE_MAX after trimming. */
+export function parseDismissDispute(data: unknown): DismissDisputeInput {
+  const d = record(data, ['id', 'value', 'note'])
+  if (typeof d.note !== 'string' || d.note.trim().length > DISPUTE_NOTE_MAX) {
+    throw new Error('Invalid input')
+  }
+  return { id: positiveId(d.id), value: valueOf(d.value), note: d.note }
+}
+
+export type DismissDisputeResult =
+  { ok: true } | { ok: false; error: DisputeServerError | 'feature_off' }
+
+export function dismissDisputeHandler(
+  db: Db,
+  adminId: number,
+  input: DismissDisputeInput,
+  now: Date,
+): DismissDisputeResult {
+  if (!isOn(db)) return OFF
+  const r = dismissDisputeIn(db, adminId, input.id, input.value, input.note, now)
+  return r.ok ? { ok: true } : { ok: false, error: r.error }
+}
+
+export function adminDisputesHandler(db: Db): AdminDisputeEntry[] | { error: 'feature_off' } {
+  return isOn(db) ? listOpenForAdmin(db) : { error: 'feature_off' }
+}
+
+export const dismissDisputeFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('admin')])
+  .validator(parseDismissDispute)
+  .handler(({ data, context }) => dismissDisputeHandler(getDb(), context.user.id, data, new Date()))
+
+export const getAdminDisputesFn = createServerFn({ method: 'GET' })
+  .middleware([requireRole('admin')])
+  .handler(() => adminDisputesHandler(getDb()))

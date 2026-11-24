@@ -5,9 +5,12 @@ import { doneTask, MEETING, SAT, week } from '~/server/settlement/testing'
 import { must } from '~/server/tasks/testing'
 import { openDisputeIn } from './disputes'
 import {
+  adminDisputesHandler,
   disputeListHandler,
+  dismissDisputeHandler,
   itemMarkHandler,
   openDisputeHandler,
+  parseDismissDispute,
   parseItemMarkRef,
   parseOpenDispute,
 } from './functions'
@@ -172,5 +175,97 @@ describe('disputeListHandler', () => {
     must(openDisputeIn(f.db, f.starsi, { kind: 'completion', id: f.confirmed }, 'x', MEETING))
     const list = disputeListHandler(f.db, { id: f.starsi, role: 'taker' })
     expect(Array.isArray(list) && list.map((e) => e.reason)).toEqual(['x'])
+  })
+})
+
+describe('parseDismissDispute (#47)', () => {
+  it('takes exactly id, value and note; the note stays as typed', () => {
+    expect(parseDismissDispute({ id: 2, value: { score: 3 }, note: ' ok ' })).toEqual({
+      id: 2,
+      value: { score: 3 },
+      note: ' ok ',
+    })
+    expect(
+      parseDismissDispute({ id: 2, value: { level: 'lower', deducted: 50 }, note: 'ok' }).value,
+    ).toEqual({ level: 'lower', deducted: 50 })
+    expect(parseDismissDispute({ id: 2, value: null, note: 'ok' }).value).toBeNull()
+  })
+
+  it('a note of 200 characters after trimming passes; 201 is refused', () => {
+    expect(parseDismissDispute({ id: 1, value: null, note: ` ${'a'.repeat(200)} ` }).id).toBe(1)
+    expect(() => parseDismissDispute({ id: 1, value: null, note: 'a'.repeat(201) })).toThrow(
+      /Invalid input/,
+    )
+  })
+
+  it.each([
+    ['an extra key', { id: 1, value: null, note: 'x', by: 2 }],
+    ['a missing value', { id: 1, note: 'x' }],
+    ['id 0', { id: 0, value: null, note: 'x' }],
+    ['id as text', { id: '1', value: null, note: 'x' }],
+    ['a note that is not text', { id: 1, value: null, note: 5 }],
+    ['a score as text', { id: 1, value: { score: '3' }, note: 'x' }],
+    ['an unknown level', { id: 1, value: { level: 'top', deducted: 1 }, note: 'x' }],
+    ['a negative deduction', { id: 1, value: { level: 'lower', deducted: -1 }, note: 'x' }],
+    ['a value with an extra key', { id: 1, value: { score: 3, level: 'lower' }, note: 'x' }],
+  ])('refuses %s', (_, data) => {
+    expect(() => parseDismissDispute(data)).toThrow(/Invalid input/)
+  })
+})
+
+describe('admin handlers (#47)', () => {
+  function withOpen(enabled: boolean) {
+    const f = withSwitch(true)
+    const id = must(
+      openDisputeIn(f.db, f.starsi, { kind: 'completion', id: f.confirmed }, 'Víc.', MEETING),
+    ).id
+    f.db.update(featureFlags).set({ enabled }).where(eq(featureFlags.key, 'disputes')).run()
+    return { ...f, id }
+  }
+  const input = (id: number, score = 22) => ({ id, value: { score }, note: 'Sedí.' })
+
+  it('with the switch off both answer feature_off and change nothing', () => {
+    const f = withOpen(false)
+    expect(adminDisputesHandler(f.db)).toEqual({ error: 'feature_off' })
+    expect(dismissDisputeHandler(f.db, f.admin, input(f.id), MEETING)).toEqual({
+      ok: false,
+      error: 'feature_off',
+    })
+    expect(f.db.select().from(disputes).get()?.status).toBe('open')
+  })
+
+  it('dismisses for the admin; a giver gets not_admin', () => {
+    const f = withOpen(true)
+    expect(dismissDisputeHandler(f.db, f.tata, input(f.id), MEETING)).toEqual({
+      ok: false,
+      error: 'not_admin',
+    })
+    expect(dismissDisputeHandler(f.db, f.admin, input(f.id), MEETING)).toEqual({ ok: true })
+  })
+
+  it('passes the value the admin saw: a stale one gets value_changed', () => {
+    const f = withOpen(true)
+    expect(dismissDisputeHandler(f.db, f.admin, input(f.id, 21), MEETING)).toEqual({
+      ok: false,
+      error: 'value_changed',
+    })
+  })
+
+  it('the list entry has exactly these keys', () => {
+    const f = withOpen(true)
+    const list = adminDisputesHandler(f.db)
+    expect(list).toEqual([
+      {
+        id: f.id,
+        item: { kind: 'completion', id: f.confirmed },
+        title: expect.any(String) as string,
+        week: null,
+        takerName: 'Starší',
+        openedByName: 'Starší',
+        reason: 'Víc.',
+        openedAt: MEETING.toISOString(),
+        value: { score: 22 },
+      },
+    ])
   })
 })
