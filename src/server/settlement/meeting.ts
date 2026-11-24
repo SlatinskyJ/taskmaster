@@ -91,6 +91,15 @@ function settledIds(db: Db | Tx): Set<PeriodId> {
   )
 }
 
+/**
+ * Whether an ended week still waits for its meeting (#48, ruling 8): the week the meeting would
+ * settle next has ended. The running week, settleable early, does not count.
+ */
+export function weekWaiting(db: Db | Tx, now: Date): boolean {
+  const target = periodToSettle(listPeriods(db), settledIds(db), now)
+  return target !== undefined && !isRunning(target, now)
+}
+
 /** Active takers, by id, with their display names. Schůzka and Týden list the same people. */
 export function takersOf(db: Db | Tx, people: readonly Person[]) {
   return db

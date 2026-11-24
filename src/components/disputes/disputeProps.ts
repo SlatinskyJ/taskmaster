@@ -107,7 +107,9 @@ export function adminDisputeLines(e: AdminDisputeEntry): AdminDisputeLines {
       ? null
       : 'score' in v
         ? formatPoints(v.score)
-        : line(levelLabel(v.level), `${cs.week.deducted} ${String(v.deducted)}`)
+        : 'points' in v
+          ? cs.disputes.adjustmentValue(v.points)
+          : line(levelLabel(v.level), `${cs.week.deducted} ${String(v.deducted)}`)
   return {
     what: line(cs.disputes.what[e.item.kind], e.takerName),
     value: line(name, amount),

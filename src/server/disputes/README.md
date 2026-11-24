@@ -5,4 +5,4 @@
 - `list.ts`: `listDisputes`, the Rozporováno list on Týden → Historie; `listOpenForAdmin`, the admin's Sporné on Správa (every open dispute, oldest first, with the item's value now).
 - `functions.ts`: server functions, behind the launch switch `disputes`. Opening and marks: givers and takers; the admin list and dismiss: admin only.
 
-Keys (`item_kind` → `item_id`): `task_score` → `tasks.id` (locked once `agreed_at` is set), `template_score` → `templates.id` (active), `completion` → `tasks.id` (confirmed), `rejection` → the `task.rejected` entry's `audit_log.id`, `settlement` → `settlements.id`, `adjustment` → #48.
+Keys (`item_kind` → `item_id`): `task_score` → `tasks.id` (locked once `agreed_at` is set), `template_score` → `templates.id` (active), `completion` → `tasks.id` (confirmed), `rejection` → the `task.rejected` entry's `audit_log.id`, `settlement` → `settlements.id` (its value is the latest correction's, else the record's), `adjustment` → `point_adjustments.id`. Correcting a dispute: `~/server/corrections`.
