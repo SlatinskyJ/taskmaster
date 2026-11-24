@@ -98,9 +98,12 @@ export function ChangePasswordForm({ username, onSubmit, onDone }: Props) {
           hidden
         />
         {(['current', 'next', 'again'] as const).map((field) => (
-          <label key={field} className="grid gap-1.5">
-            <span className={sectionLabelClass}>{LABELS[field]}</span>
+          <div key={field} className="grid gap-1.5">
+            <label htmlFor={`password-${field}`} className={sectionLabelClass}>
+              {LABELS[field]}
+            </label>
             <Input
+              id={`password-${field}`}
               ref={refs[field]}
               name={field}
               type="password"
@@ -122,7 +125,7 @@ export function ChangePasswordForm({ username, onSubmit, onDone }: Props) {
                 {cs.profile.passwordHint(MIN_USER_PASSWORD)}
               </span>
             )}
-          </label>
+          </div>
         ))}
         <label className="flex min-h-tap items-center gap-2.5 text-row font-extrabold">
           <input
