@@ -131,5 +131,13 @@ describe('handlers', () => {
         MONDAY,
       ),
     ).toEqual({ ok: false, error: 'not_admin' })
+    expect(
+      correctSettlementHandler(
+        f.db,
+        f.admin,
+        { settlementId: f.settlementId, level: 'none', reason: 'x', from: null },
+        MONDAY,
+      ),
+    ).toEqual({ ok: false, error: 'no_change' })
   })
 })

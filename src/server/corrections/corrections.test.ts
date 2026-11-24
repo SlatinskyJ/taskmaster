@@ -67,6 +67,12 @@ const adjustments = (f: F) => f.db.select().from(pointAdjustments).all()
 const corrections = (f: F) => f.db.select().from(settlementCorrections).all()
 const audits = (f: F, action: AuditAction) =>
   f.db.select().from(auditLog).where(eq(auditLog.action, action)).all()
+/** Who, on what: the admin as a user, on the entity type. */
+const byAdminOn = (f: F, entityType: string) => ({
+  actorKind: 'user',
+  actorUserId: f.admin,
+  entityType,
+})
 
 /** Starší earns 60 in P1 (levels 50/100): settled early on Sunday → lower, 50 off, 10 carry. */
 function settledLower(levels?: Levels) {
@@ -99,7 +105,7 @@ describe('adjustPointsIn', () => {
       }),
     ])
     const [a] = audits(f, 'points.adjusted')
-    expect(a?.entityType).toBe('adjustment')
+    expect(a).toMatchObject(byAdminOn(f, 'adjustment'))
     expect(a?.entityId).toBe(String(r.adjustmentId))
     expect(json(a?.after)).toEqual({
       takerId: f.starsi,
@@ -158,6 +164,7 @@ describe('correctSettlementIn', () => {
     // The settlement row itself is unchanged.
     expect(settlementOf(f, f.starsi)).toEqual(f.s)
     const [c] = audits(f, 'settlement.corrected')
+    expect(c).toMatchObject(byAdminOn(f, 'settlement'))
     expect(c?.entityId).toBe(String(f.s.id))
     expect(json(c?.before)).toEqual({ level: 'lower', deducted: 50 })
     expect(json(c?.after)).toEqual({
@@ -192,6 +199,12 @@ describe('correctSettlementIn', () => {
     must(correct(f, f.s.id, 'lower', plus(MONDAY, 3))) // upper → lower: +50 → 110
     expect(total(f, f.starsi)).toBe(110)
     expect(latestCorrection(f.db, f.s.id)?.level).toBe('lower')
+    // Each correction's `before` is the one before it.
+    expect(audits(f, 'settlement.corrected').map((a) => json(a.before))).toEqual([
+      { level: 'lower', deducted: 50 },
+      { level: 'none', deducted: 0 },
+      { level: 'upper', deducted: 100 },
+    ])
     expect(loadTarget(f.db, { kind: 'settlement', id: f.s.id })?.value).toEqual({
       level: 'lower',
       deducted: 50,
@@ -315,6 +328,8 @@ describe('fixing a dispute', () => {
     expect(corrections(f)[0]?.disputeId).toBe(f.disputeId)
     expect(adjustments(f).find((a) => a.id === r.adjustmentId)?.disputeId).toBe(f.disputeId)
     const [d] = audits(f, 'dispute.corrected')
+    expect(d).toMatchObject(byAdminOn(f, 'dispute'))
+    expect(d?.entityId).toBe(String(f.disputeId))
     expect(json(d?.before)).toEqual({ status: 'open' })
     expect(json(d?.after)).toEqual({
       status: 'corrected',
@@ -364,6 +379,21 @@ describe('fixing a dispute', () => {
       adjustPointsIn(f.db, f.admin, { takerId: f.starsi, points: 5, reason: 'x' }, stale, MONDAY),
     ).toEqual({ ok: false, error: 'value_changed' })
     expect(corrections(f)).toEqual([])
+  })
+
+  it('an unknown dispute is not_found and writes nothing', () => {
+    const f = disputed()
+    const before = adjustments(f).length
+    expect(
+      adjustPointsIn(
+        f.db,
+        f.admin,
+        { takerId: f.starsi, points: 5, reason: 'x' },
+        { disputeId: 999, seen },
+        MONDAY,
+      ),
+    ).toEqual({ ok: false, error: 'not_found' })
+    expect(adjustments(f)).toHaveLength(before)
   })
 
   it('a closed dispute is not_open and writes nothing', () => {

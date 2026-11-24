@@ -8,7 +8,7 @@ import type { SettlementCorrectionRow, SettlementRow } from '~/server/db/schema'
 // The read of correction rows (#48). A leaf: only the schema and the domain, so the dispute
 // targets can read a settlement's effective value without importing the write path.
 
-/** The newest correction of a settlement (by `made_at`, then id), or null. */
+/** The newest correction of a settlement (the last one written, by id), or null. */
 export function latestCorrection(
   db: Db | Tx,
   settlementId: number,
@@ -18,7 +18,7 @@ export function latestCorrection(
       .select()
       .from(settlementCorrections)
       .where(eq(settlementCorrections.settlementId, settlementId))
-      .orderBy(desc(settlementCorrections.madeAt), desc(settlementCorrections.id))
+      .orderBy(desc(settlementCorrections.id))
       .get() ?? null
   )
 }
