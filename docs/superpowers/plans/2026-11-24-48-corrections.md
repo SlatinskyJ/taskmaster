@@ -12,14 +12,14 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-16-taskmaster-design.md` §5.9 (corrections [call], manual adjustments), §5.10 (audit), §5.11 (correct a dispute); UI doc §7.5 AFix (PR B).
 
-**Size:** about 380 changed lines outside tests and migrations (schema 60, store 170, functions 90, ledger/week/targets 60).
+**Size:** about 380 changed lines outside tests and migrations (schema 60, store 160, functions 90, ledger/week/targets 60).
 
 ## Global constraints
 
 - Admin only (`requireRole('admin')`, and the domain checks the admin again). Behind the launch switch `disputes` (one switch for #46–#48): off → `feature_off`, nothing written.
 - Settlements stay final: the original row is never touched (triggers from 0015 stay). A correction is a new row linked to it.
 - A correction never rewrites later settlements; the point difference is an adjustment to the **current** running total ([call] §5.9). Carry-over stays as stored.
-- The running total never goes below zero (`would_go_negative`), now **or after the waiting weeks are settled** (Task 3, `floorTotal`).
+- The running total never goes below zero (`would_go_negative`), and a removal is refused while an ended week waits for its meeting (ruling 8, `week_waiting`).
 - A reason is required (trimmed, 1–1000 characters, the same limit as dispute text, Jakub 2026-11-24).
 - Every state change writes its audit entry in the same transaction (`writeAudit`). Code, DB and logs in English.
 - Never edit a committed migration; new migration via `pnpm db:generate --name corrections`.
@@ -33,7 +33,7 @@
 5. **Adjustment size:** a whole number, not 0, at most 9999 either way (a parser guard against typos; the spec sets no limit).
 6. **Disputing an adjustment** becomes possible on the server (`loadTarget` reads the new table, value `{ points }`); the button to open one comes with PR B's family view.
 7. **No demo piece in this PR:** nothing on screen uses it yet; PR B adds it with the screens.
-8. **Removals are checked against the lowest total the ledger will reach** (Rules judge, round 1): the smaller of today's total and the total after every ended, unsettled week is settled the way the meeting would settle it. Otherwise a removal between a week's cutoff and its meeting (left out of that week by ruling 2) lets the meeting deduct points that are gone, the total goes negative and no later meeting can run.
+8. **No removal while a week waits for its meeting** (Rules judge, rounds 1–2): a negative adjustment, or a correction whose difference is negative, is refused with `week_waiting` while any ended week is unsettled. Why: a removal after a cutoff is not in that week's total (ruling 2), and the meeting may still approve that week's pending items, so the meeting could deduct points that are already gone; the total would go negative and no later meeting could run. With no week waiting, a removal counts in the running week, the week's end total includes it, and today's total check is enough (later points only add). Additions and corrections that add points are never blocked. Cost: the admin removes points after Sunday's meeting instead of before it.
 9. **Both new tables keep a nullable `dispute_id`** (which dispute the row resolved), so PR B's family view links a corrected dispute to its fix without reading the audit log.
 10. **A disputed adjustment's title is its reason** (UX judge): rows on Sporné and Rozporováno tell adjustments apart; its value reads `+5 bodů` / `−3 body`.
 11. **PR B note:** the correction reason is also the dispute note the family reads; the AFix form says so in a hint.
@@ -79,7 +79,7 @@
 
 ### Task 3: Store: adjust and correct
 
-**Files:** Create `src/server/corrections/read.ts` (`latestCorrection`, imports only the schema and the domain), `src/server/corrections/corrections.ts`, `src/server/corrections/README.md` (imports go corrections → disputes, settlement; never back; `targets.ts` imports only `corrections/read.ts`), `src/server/settlement/floor.ts` (`floorTotal`); Modify `src/server/disputes/targets.ts` (settlement value = effective, `adjustment` kind), `src/server/disputes/disputes.ts` (export a `closeAsCorrected(tx, …)` helper or the row→`Dispute` mapping it needs), `src/server/disputes/README.md`; test `src/server/corrections/corrections.test.ts`, `src/server/disputes/disputes.test.ts`.
+**Files:** Create `src/server/corrections/read.ts` (`latestCorrection`, imports only the schema and the domain), `src/server/corrections/corrections.ts`, `src/server/corrections/README.md` (imports go corrections → disputes, settlement; never back; `targets.ts` imports only `corrections/read.ts`); Modify `src/server/disputes/targets.ts` (settlement value = effective, `adjustment` kind), `src/server/disputes/disputes.ts` (export a `closeAsCorrected(tx, …)` helper or the row→`Dispute` mapping it needs), `src/server/disputes/README.md`; test `src/server/corrections/corrections.test.ts`, `src/server/disputes/disputes.test.ts`.
 
 **Interfaces — Produces:**
 ```ts
@@ -88,19 +88,18 @@ export interface FromDispute { disputeId: number; seen: DisputeValue | null }
 export function adjustPointsIn(db, adminId, input: { takerId: number; points: number; reason: string }, from: FromDispute | null, now): Result<{ adjustmentId: number }, FixError>
 export function correctSettlementIn(db, adminId, input: { settlementId: number; level: Level; reason: string }, from: FromDispute | null, now): Result<{ correctionId: number; adjustmentId: number | null }, FixError>
 export function latestCorrection(db, settlementId): SettlementCorrectionRow | null   // corrections/read.ts, newest by made_at then id
-export function floorTotal(db, takerId, now): number   // settlement/floor.ts
 ```
-`floorTotal`: today's running total minus what the meeting would deduct for every ended, unsettled week, oldest first (the same `periodToSettle` order and `settle` rule the meeting uses, each week's total = ledger up to its end minus the deductions simulated before it). The domain's `currentTotal` argument is `floorTotal` (it is ≤ today's total, so it covers both).
+`FixError` also has `week_waiting` (ruling 8): checked before the domain rule, for `points < 0` or a correction difference `< 0`, with "a week waits" = the meeting's own `periodToSettle(listPeriods, settledIds, now)` is not null (the same read `getMeeting` uses, no second copy of the settle loop). The domain's `currentTotal` is today's `takerPointsNow(tx)` confirmed.
 A correction's deduction for the chosen level comes from **the settled period's** levels (ruling 1), never the running one.
 The adjustment `about.title` is its reason (ruling 10).
-`DisputeValue` gains `{ points: number }`; `loadTarget('adjustment')` returns `{ target: { kind: 'adjustment', id }, value: { points }, about: { title: '', takerId, week: null } }`; settlement `value` = `effectiveSettlement(original, latest)`.
+`DisputeValue` gains `{ points: number }`; `loadTarget('adjustment')` returns `{ target: { kind: 'adjustment', id }, value: { points }, about: { title: <its reason>, takerId, week: null } }`; settlement `value` = `effectiveSettlement(original, latest)`.
 
 One transaction each: read people + current total (`takerPointsNow(tx)`), run the domain rule, then if `from`: load the dispute + its target (`not_found`), `correctDispute` (a settlement correction must match the disputed settlement: `wrong_correction`), `valueMoved(seen, now)` → `value_changed`; insert rows; if `from`, `update disputes … where id and status='open'` (0 rows → `not_open`, the transaction is rolled back by throwing a private error and mapping it, or by checking before inserting and relying on the update count — pick the one that leaves no rows, test proves it). Audit, in order: `settlement.corrected` (entity settlement, after `{ correctionId, level, deducted, reason }`, before `{ level, deducted }` effective), `points.adjusted` (entity adjustment, after `{ takerId, points, reason, correctionId }`), `dispute.corrected` (entity dispute, before `{ status: 'open' }`, after `{ status: 'corrected', note, value, correction: { kind, id } }`).
 
 - [ ] Step 1: tests:
   - adjust: +5 writes a row and `points.adjusted`; `points` exactly −total passes (total 0), −total−1 → `would_go_negative`; a giver or taker as actor → `not_admin`; a giver as `takerId` → `not_a_taker`; blank reason → `reason_required`.
   - correct: lower→upper writes a correction and an adjustment of `lower − upper`; upper→none returns the deduction; same level → `no_change`; corrected **three times** (none→lower→upper→lower): each adjustment is measured from the one before (`latestCorrection` returns the newest, not the oldest), the total equals the last level's effect; the settled period's levels differ from the running period's (30/60 vs 50/100): the deduction uses 30/60; a period with equal levels (50/50): lower→upper writes a correction and no adjustment row; a difference that would go below zero → `would_go_negative`; the settlement row is unchanged.
-  - floor: week ended at 100 (levels 50/100), meeting not yet held, a −50 adjustment → `would_go_negative` (floor 0); −0 is not possible, so the boundary: floor 10, −10 passes, −11 refused; after the meeting runs, the total is ≥ 0 and `getMeeting` opens the next week; two waiting weeks simulate in order; a correction that removes points in the same gap is refused the same way.
+  - week waiting: week ended, meeting not held: −5 adjustment → `week_waiting`, +5 passes, a correction that removes points → `week_waiting`, one that adds passes; after the meeting a −5 passes; with no ended week, a removal down to exactly 0 passes and 1 more is `would_go_negative`; then the meeting of that week settles with total ≥ 0 and the next meeting still opens.
   - audit and links: `points.adjusted`, `settlement.corrected`, `dispute.corrected` each written once with the before/after above; the correction's adjustment row has `correctionId` = the correction's id; both rows carry `disputeId` when made from a dispute, null otherwise.
   - from a dispute: closes it `corrected` with the reason as note; a settlement correction on a dispute about another settlement → `wrong_correction`; seen value stale → `value_changed`, both for a correction and for an adjustment from a dispute; dispute already closed → `not_open` and **no** correction/adjustment rows; an adjustment from a `completion` dispute works.
   - rollback: `writeAudit` throws on `points.adjusted` / `dispute.corrected` → no rows in any of the three tables changed.
@@ -109,7 +108,7 @@ One transaction each: read people + current total (`takerPointsNow(tx)`), run th
 
 ### Task 4: Server functions
 
-**Files:** Create `src/server/corrections/functions.ts`; Modify `src/lib/disputeLimits.ts` (add `FIX_REASON_MAX = 1000`, `ADJUST_POINTS_MAX = 9999`), `src/server/disputes/functions.ts` (`parseDismissDispute` accepts `{ points }` values; `OPENABLE_KINDS` gains `adjustment`), `src/components/disputes/disputeProps.ts` (`adminDisputeLines` shows a `{ points }` value), `src/lib/strings.ts` (`cs.disputes.adjustmentValue(points)`: `+5 bodů`, `−3 body`, built on `formatPoints` with a sign), `tests/server-fn-guards.test.ts`; test `src/server/corrections/functions.test.ts`.
+**Files:** Create `src/server/corrections/functions.ts`; Modify `src/lib/disputeLimits.ts` (add `FIX_REASON_MAX = 1000`, `ADJUST_POINTS_MAX = 9999`), `src/server/disputes/functions.ts` (`parseDismissDispute` accepts `{ points }` values; `OPENABLE_KINDS` gains `adjustment`), `src/components/disputes/disputeProps.ts` (`adminDisputeLines` shows a `{ points }` value), `src/lib/strings.ts` (`cs.disputes.adjustmentValue(points)`: `+5 bodů`, `−3 body` (both cases tested), built on `formatPoints` with a sign), `tests/server-fn-guards.test.ts`; test `src/server/corrections/functions.test.ts`.
 
 **Interfaces — Produces:** `adjustPointsFn` (POST, admin) input exactly `{ takerId, points, reason, from }`; `correctSettlementFn` (POST, admin) input exactly `{ settlementId, level, reason, from }`; `from` is `null` or exactly `{ disputeId, seen }`. Both answer `{ ok: true } | { ok: false; error: FixError | 'feature_off' }` (no ids, no rows). Handlers `adjustPointsHandler(db, adminId, input, now)`, `correctSettlementHandler(...)` exported for tests. `EXPECTED_ROLES`: both `'admin'`.
 
