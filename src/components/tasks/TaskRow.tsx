@@ -28,7 +28,8 @@ export function TaskRow({
 }: {
   name: ReactNode
   state: ItemStateKey
-  points: number
+  /** A number, or text such as an adjustment's signed `+5 b.` (#48). */
+  points: number | string
   /** Short secondary line after the chip, e.g. a deadline. */
   meta?: ReactNode
   /** A full line under the meta line that wraps instead of being cut (a template's schedule). */

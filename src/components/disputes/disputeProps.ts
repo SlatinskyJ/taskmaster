@@ -2,7 +2,12 @@ import { dayMonth, levelLabel, weekLabel } from '~/components/period/periodView'
 import { historyLine } from '~/components/week/weekView'
 import { cs, formatPoints } from '~/lib/strings'
 import type { AdminDisputeEntry, OpenableKind } from '~/server/disputes/functions'
-import type { HistoryRecord, HistoryWeek, WeekItem } from '~/server/settlement/functions'
+import type {
+  HistoryRecord,
+  HistoryWeek,
+  WeekAdjustment,
+  WeekItem,
+} from '~/server/settlement/functions'
 import type { TaskView } from '~/server/tasks/functions'
 import type { TemplateView } from '~/server/templates/functions'
 
@@ -38,8 +43,28 @@ export function recordDispute(week: HistoryWeek, r: HistoryRecord, named: boolea
   return {
     item: { kind: 'settlement', id: r.id },
     what: cs.disputes.what.settlement,
-    value: line(named ? r.name : null, label, historyLine(r)),
+    value: line(named ? r.name : null, label, recordValue(r)),
     name: label,
+  }
+}
+
+/** A record's value as it stands: corrected (#48), else the settled numbers. */
+function recordValue(r: HistoryRecord): string {
+  const c = r.correction
+  return c ? line(levelLabel(c.level), `${cs.week.deducted} ${String(c.deducted)}`) : historyLine(r)
+}
+
+/** A manual point adjustment on Týden (#48); null for one from a correction (via its week). */
+export function adjustmentDispute(
+  a: WeekAdjustment,
+  takerName: string | null,
+): DisputeProps | null {
+  if (!a.dispute) return null
+  return {
+    item: a.dispute.item,
+    what: cs.disputes.what.adjustment,
+    value: line(takerName, a.reason, cs.disputes.adjustmentValue(a.points)),
+    name: cs.week.adjustment,
   }
 }
 

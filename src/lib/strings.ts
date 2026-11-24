@@ -450,6 +450,7 @@ export const cs = {
     correctionRow: 'Oprava týdne',
     fromWeek: (week: string) => `Z opravy týdne ${week}`,
     waiting: 'Čeká na schůzku',
+    counted: 'Započteno',
     adjustmentPoints: (n: number) => signedPoints(n),
     /** Under a corrected settled week on Historie. */
     correctedLine: (now: string, was: string, diff: number, date: string, reason: string) =>

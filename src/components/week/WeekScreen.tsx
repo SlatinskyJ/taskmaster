@@ -2,7 +2,11 @@ import { Link } from '@tanstack/react-router'
 import { ChevronRight } from 'lucide-react'
 import { DisputeControl } from '~/components/disputes/DisputeControl'
 import { DisputeList } from '~/components/disputes/DisputeList'
-import { recordDispute, weekItemDispute } from '~/components/disputes/disputeProps'
+import {
+  adjustmentDispute,
+  recordDispute,
+  weekItemDispute,
+} from '~/components/disputes/disputeProps'
 import { EmptyState } from '~/components/EmptyState'
 import { levelBadgeClass, levelLabel, weekLabel } from '~/components/period/periodView'
 import { PointsBar } from '~/components/points/PointsBar'
@@ -13,8 +17,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { cs, formatPoints } from '~/lib/strings'
 import { cn } from '~/lib/utils'
 import type { DisputeListEntry } from '~/server/disputes/functions'
-import type { HistoryWeek, Week, WeekItem, WeekTaker } from '~/server/settlement/functions'
-import { historyLine, itemChip, itemMeta } from './weekView'
+import type {
+  HistoryWeek,
+  Week,
+  WeekAdjustment,
+  WeekItem,
+  WeekTaker,
+} from '~/server/settlement/functions'
+import { adjustmentRow, correctionLine, historyLine, itemChip, itemMeta } from './weekView'
 
 // Týden (#45, UI doc §7.1 TWeek): Tento týden / Historie. The server already filtered the data
 // to what this viewer may see (a taker: only himself); this file only renders it.
@@ -160,13 +170,22 @@ function TakerWeek({
           </p>
         )}
       </div>
-      {week.period && (
+      {(week.period !== null || taker.adjustments.length > 0) && (
         <section className="grid gap-2">
           <SectionLabel>{cs.week.happened}</SectionLabel>
-          {taker.items.length === 0 ? (
+          {taker.items.length === 0 && taker.adjustments.length === 0 ? (
             <EmptyState>{cs.week.noItems}</EmptyState>
           ) : (
             <ul className="grid gap-2">
+              {taker.adjustments.map((a) => (
+                <li key={`adjustment-${String(a.id)}`}>
+                  <AdjustmentRow
+                    adjustment={a}
+                    takerName={named ? taker.name : null}
+                    disputes={disputes}
+                  />
+                </li>
+              ))}
               {taker.items.map((item) => {
                 const d = disputes ? weekItemDispute(item, named ? taker.name : null) : null
                 return (
@@ -187,6 +206,31 @@ function TakerWeek({
         </section>
       )}
     </li>
+  )
+}
+
+/** A point adjustment (#48): named, the reason under it, signed points, Rozporovat if manual. */
+function AdjustmentRow({
+  adjustment,
+  takerName,
+  disputes,
+}: {
+  adjustment: WeekAdjustment
+  takerName: string | null
+  disputes: boolean
+}) {
+  const row = adjustmentRow(adjustment)
+  const d = disputes ? adjustmentDispute(adjustment, takerName) : null
+  return (
+    <TaskRow
+      name={row.name}
+      state={row.state}
+      stateLabel={row.stateLabel}
+      points={row.points}
+      meta={row.meta}
+      detail={adjustment.reason}
+      footer={d && <DisputeControl {...d} mark={adjustment.dispute?.mark ?? null} />}
+    />
   )
 }
 
@@ -227,14 +271,32 @@ function HistoryCard({
               <span
                 className={cn(
                   'rounded-full px-2.5 py-0.5 text-chip font-bold',
-                  levelBadgeClass(r.level),
+                  levelBadgeClass(r.correction?.level ?? r.level),
                 )}
               >
-                {levelLabel(r.level)}
+                {levelLabel(r.correction?.level ?? r.level)}
               </span>
             </div>
             <p className="num text-meta">{historyLine(r)}</p>
+            {r.correction && (
+              <p className="text-meta font-bold break-words text-state-disputed-text">
+                {correctionLine(r)}
+              </p>
+            )}
             {disputes && <DisputeControl {...recordDispute(week, r, named)} mark={r.dispute} />}
+            {r.adjustments.length > 0 && (
+              <ul className="mt-1 grid gap-2">
+                {r.adjustments.map((a) => (
+                  <li key={a.id}>
+                    <AdjustmentRow
+                      adjustment={a}
+                      takerName={named ? r.name : null}
+                      disputes={disputes}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
           </li>
         ))}
       </ul>

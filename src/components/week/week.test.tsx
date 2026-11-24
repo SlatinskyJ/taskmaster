@@ -107,6 +107,93 @@ describe('Historie', () => {
   })
 })
 
+describe('adjustments and corrections (#48)', () => {
+  const longReason = 'Pomohl s velkým nákupem a odnesl všechny tašky až do třetího patra. '.repeat(
+    14,
+  )
+  const manual = {
+    id: 31,
+    points: 5,
+    reason: longReason,
+    at: '2026-11-25T10:00:00.000Z',
+    fromWeek: null,
+    waiting: false,
+    dispute: { item: { kind: 'adjustment' as const, id: 31 }, mark: null },
+  }
+  const fromWeek = { startsAt: '2026-11-14T19:00:00.000Z', endsAt: '2026-11-21T19:00:00.000Z' }
+  const corrected = {
+    ...manual,
+    id: 32,
+    points: -50,
+    reason: 'Chyběl úkol.',
+    fromWeek,
+    dispute: null,
+  }
+  const waiting = { ...manual, id: 33, points: -3, reason: 'Hrnek.', waiting: true }
+  const withAdjustments = (list: (typeof manual | typeof corrected)[]) => {
+    const w = takerWeek()
+    const [t] = w.takers
+    if (!t) throw new Error('fixture')
+    return { ...w, takers: [{ ...t, adjustments: list }] }
+  }
+  const body = (w: ReturnType<typeof takerWeek>, tab: WeekTab = 'this', disputes = true) =>
+    renderToStaticMarkup(<WeekBody week={w} tab={tab} viewerRole="taker" disputes={disputes} />)
+
+  it('a manual adjustment: its name, the whole reason, signed points, Rozporovat', () => {
+    const out = body(withAdjustments([manual]))
+    expect(out).toContain(cs.week.adjustment)
+    expect(out).toContain(longReason.trim())
+    expect(out).toContain('+5 b.')
+    expect(out).toContain(
+      `aria-label="${cs.disputes.actionFor(cs.disputes.what.adjustment, cs.week.adjustment)}"`,
+    )
+  })
+
+  it('one from a correction: Oprava týdne with its week, no Rozporovat', () => {
+    const out = body(withAdjustments([corrected]))
+    expect(out).toContain(cs.week.correctionRow)
+    expect(out).toContain(cs.week.fromWeek('14. 11. – 21. 11.'))
+    expect(out).toContain('−50 b.')
+    expect(out).not.toContain(
+      cs.disputes.actionFor(cs.disputes.what.adjustment, cs.week.correctionRow),
+    )
+  })
+
+  it('one from an ended, unsettled week says it waits for the meeting', () => {
+    expect(body(withAdjustments([waiting]))).toContain(cs.week.waiting)
+  })
+
+  it('switch off: rows, but no Rozporovat', () => {
+    const out = body(withAdjustments([manual]), 'this', false)
+    expect(out).toContain(cs.week.adjustment)
+    expect(out).not.toContain(cs.disputes.action)
+  })
+
+  it('Historie: a corrected record shows its corrected level, the settled numbers and the line', () => {
+    const w = takerWeek()
+    const h = w.history[0]
+    const r = h?.records[0]
+    if (!h || !r) throw new Error('fixture')
+    const c = {
+      ...r,
+      correction: {
+        level: 'none' as const,
+        deducted: 0,
+        reason: 'Chyběl úkol.',
+        at: '2026-11-24T10:00:00.000Z',
+      },
+      adjustments: [corrected],
+    }
+    const out = body({ ...w, history: [{ ...h, records: [c] }] }, 'history')
+    expect(out).toContain(`>${cs.meeting.level.none}<`)
+    expect(out).toContain('Celkem 108 · odečteno 100 · převod 8')
+    expect(out).toContain(
+      cs.week.correctedLine('Bez kapesného', 'Horní hranice', 100, '24. 11.', 'Chyběl úkol.'),
+    )
+    expect(out).toContain(cs.week.correctionRow)
+  })
+})
+
 describe('WeekScreen', () => {
   it('two tabs, this week open', () => {
     const out = renderToStaticMarkup(<WeekScreen week={week()} viewerRole="giver" />)
