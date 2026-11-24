@@ -137,8 +137,10 @@ function agreed(
   by: AgreedBy,
   userId: number,
   now: Date,
+  replaced: TemplateThreadRow | null = null,
 ): TemplateRow {
-  const active = agreeIn(tx, row, score, acceptedIds, by, { kind: 'user', userId }, now)
+  const actor = { kind: 'user', userId } as const
+  const active = agreeIn(tx, row, score, acceptedIds, by, actor, now, replaced)
   // Unreachable: the row was read proposed in this same synchronous transaction.
   if (!active) throw new Error(`template ${String(row.id)} left proposed mid-transaction`)
   return active
@@ -241,8 +243,9 @@ export const counterOnTemplateIn: Action = (tx, giverId, templateId, score, now,
       if (result.value.status === 'agreed') {
         // At exactly an open bid: the counter row and the bids at it are accepted.
         const bids = liveBidsAt(tx, templateId, ctx.people, score)
-        const { entry } = addEntry(tx, { templateId, userId: giverId, side: 'giver', score }, now)
-        return ok(agreed(ctx, score, [...bids, entry.id], 'counter', giverId, now))
+        const counter = { templateId, userId: giverId, side: 'giver', score } as const
+        const { entry, replaced } = addEntry(tx, counter, now)
+        return ok(agreed(ctx, score, [...bids, entry.id], 'counter', giverId, now, replaced))
       }
       const { saved, entry, replacedOffer } = newOffer(tx, ctx.row, giverId, score, now)
       writeAudit(tx, {
@@ -267,30 +270,28 @@ function counterActive(
   now: Date,
 ): Result<TemplateRow, TemplateError> {
   const { tx } = ctx
-  {
-    const result = counterTemplateScore(ctx.agreement, ctx.people, giverId, score)
-    if (!result.ok) return result
-    const actor = { kind: 'user', userId: giverId } as const
-    const bids = liveBidsAt(tx, templateId, ctx.people, score)
-    const { entry, replaced } = addEntry(
-      tx,
-      { templateId, userId: giverId, side: 'giver', score },
-      now,
-    )
-    if (result.value.status === 'agreed' && result.value.change === null) {
-      return ok(changeScore(ctx, score, [...bids, entry.id], 'counter', actor, now, replaced))
-    }
-    writeAudit(tx, {
-      actor,
-      action: 'template.score_countered',
-      entityType: 'template',
-      entityId: templateId,
-      before: replaced ? { entryId: replaced.id, score: replaced.score } : undefined,
-      after: { entryId: entry.id, score },
-      at: now,
-    })
-    return ok(ctx.row)
+  const result = counterTemplateScore(ctx.agreement, ctx.people, giverId, score)
+  if (!result.ok) return result
+  const actor = { kind: 'user', userId: giverId } as const
+  const bids = liveBidsAt(tx, templateId, ctx.people, score)
+  const { entry, replaced } = addEntry(
+    tx,
+    { templateId, userId: giverId, side: 'giver', score },
+    now,
+  )
+  if (result.value.status === 'agreed' && result.value.change === null) {
+    return ok(changeScore(ctx, score, [...bids, entry.id], 'counter', actor, now, replaced))
   }
+  writeAudit(tx, {
+    actor,
+    action: 'template.score_countered',
+    entityType: 'template',
+    entityId: templateId,
+    before: replaced ? { entryId: replaced.id, score: replaced.score } : undefined,
+    after: { entryId: entry.id, score },
+    at: now,
+  })
+  return ok(ctx.row)
 }
 
 /** A giver accepts the lowest bid (`score` = the lowest he saw); every bid at it is accepted. */
@@ -343,21 +344,19 @@ function acceptOfferActive(
   now: Date,
 ): Result<TemplateRow, TemplateError> {
   const { tx } = ctx
-  {
-    const result = acceptTemplateOffer(ctx.agreement, ctx.people, takerId, score)
-    if (!result.ok) return result
-    const offer = openRows(tx, templateId).filter((r) => r.side === 'giver')
-    return ok(
-      changeScore(
-        ctx,
-        score,
-        offer.map((r) => r.id),
-        'offer',
-        { kind: 'user', userId: takerId },
-        now,
-      ),
-    )
-  }
+  const result = acceptTemplateOffer(ctx.agreement, ctx.people, takerId, score)
+  if (!result.ok) return result
+  const offer = openRows(tx, templateId).filter((r) => r.side === 'giver')
+  return ok(
+    changeScore(
+      ctx,
+      score,
+      offer.map((r) => r.id),
+      'offer',
+      { kind: 'user', userId: takerId },
+      now,
+    ),
+  )
 }
 
 // ── A proposed template only (#209): a taker's Nechci, a giver's turn-down ────────────────────

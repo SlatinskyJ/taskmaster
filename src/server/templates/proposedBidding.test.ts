@@ -120,6 +120,19 @@ describe('bidding on a proposed chore: switch on (#209)', () => {
     })
   })
 
+  it('Nechci finds his own bid when it is not the oldest open row', () => {
+    const s = setup()
+    must(counterOnTemplate(s.db, s.tata, s.id, 11, T1, on))
+    must(bidOnTemplate(s.db, s.mladsi, s.id, 14, T1, on))
+    must(bidOnTemplate(s.db, s.starsi, s.id, 12, T1, on))
+    must(withdrawTemplateBid(s.db, s.starsi, s.id, T2, on))
+    expect(threadRows(s.db, s.id)).toEqual([
+      ['giver', s.tata, 11, null],
+      ['taker', s.mladsi, 14, null],
+      ['taker', s.starsi, 12, 'closed'],
+    ])
+  })
+
   it('a turn-down closes the bids, re-offers 10 in round 2 with his approval; the number is free again', () => {
     const s = setup()
     must(bidOnTemplate(s.db, s.starsi, s.id, 12, T1, on))
@@ -286,6 +299,32 @@ describe('bidding on a proposed chore: switch on (#209)', () => {
       ['taker', s.mladsi, 12, 'accepted'],
     ])
     expect(row(s)).toMatchObject({ status: 'active', score: 12 })
+  })
+
+  it('a counter at a bid that replaces an earlier counter logs the replaced row', () => {
+    const s = setup()
+    must(counterOnTemplate(s.db, s.tata, s.id, 11, T1, on))
+    must(bidOnTemplate(s.db, s.starsi, s.id, 12, T1, on))
+    must(counterOnTemplate(s.db, s.mama, s.id, 12, T2, on))
+    const [first, bid, counter] = threadIds(s.db, s.id)
+    expect(threadRows(s.db, s.id)).toEqual([
+      ['giver', s.tata, 11, 'replaced'],
+      ['taker', s.starsi, 12, 'accepted'],
+      ['giver', s.mama, 12, 'accepted'],
+    ])
+    expect(audits(s).at(-1)).toEqual({
+      action: 'template.agreed',
+      actor: s.mama,
+      kind: 'user',
+      before: { status: 'proposed', score: 11, replacedOffer: { entryId: first, score: 11 } },
+      after: {
+        status: 'active',
+        score: 12,
+        by: 'counter',
+        entryIds: [bid, counter],
+        closedIds: [],
+      },
+    })
   })
 
   it('a counter at an open bid agrees at it, counter and bid rows accepted', () => {

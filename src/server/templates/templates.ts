@@ -137,7 +137,7 @@ export type AgreedBy = 'approval' | 'bid' | 'offer' | 'counter'
 /**
  * A proposed template is agreed at `score`: it turns active, every open thread row closes
  * (`accepted` for `acceptedIds`, #209), and `template.agreed` names them. Only touches it while
- * still proposed; returns undefined otherwise.
+ * still proposed; returns undefined otherwise. `replaced`: the offer row a counter just replaced.
  */
 export function agreeIn(
   tx: Tx,
@@ -147,6 +147,7 @@ export function agreeIn(
   by: AgreedBy,
   actor: Parameters<typeof writeAudit>[1]['actor'],
   now: Date,
+  replaced: { id: number; score: number } | null = null,
 ): TemplateRow | undefined {
   const at = toIsoUtc(now)
   const active = tx
@@ -163,7 +164,12 @@ export function agreeIn(
     action: 'template.agreed',
     entityType: 'template',
     entityId: row.id,
-    before: { status: 'proposed', score: row.score },
+    before: {
+      status: 'proposed',
+      score: row.score,
+      // A counter that agreed replaced the open offer row before the thread closed (§5.10).
+      ...(replaced && { replacedOffer: { entryId: replaced.id, score: replaced.score } }),
+    },
     after: { status: 'active', score, by, entryIds: accepted, closedIds: closed },
     at: now,
   })

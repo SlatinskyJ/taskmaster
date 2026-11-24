@@ -96,6 +96,9 @@ describe('parseTemplateTurnDown (#209)', () => {
       bids: [{ takerId: 1, score: 5 }],
     })
     expect(parseTemplateTurnDown({ templateId: 3, bids: bids(20) }).bids).toHaveLength(20)
+    expect(parseTemplateTurnDown({ templateId: 3, bids: [{ takerId: 1, score: 1 }] }).bids).toEqual(
+      [{ takerId: 1, score: 1 }],
+    )
   })
 
   it.each([

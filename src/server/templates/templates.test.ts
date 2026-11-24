@@ -337,21 +337,37 @@ describe('reads', () => {
 
   it("a proposed template's view has its bidding (#209); an agreed one has bidding null", () => {
     const { db, tata, mama, starsi, mladsi } = family()
+    const bratranec = db
+      .insert(users)
+      .values({
+        username: 'bratranec',
+        displayName: 'Bratranec',
+        role: 'taker',
+        createdAt: T0.toISOString(),
+        updatedAt: T0.toISOString(),
+      })
+      .returning()
+      .get().id
     const { id } = must(createTemplate(db, tata, BINS, T0))
     const on = { choreBidding: true }
     must(bidOnTemplate(db, starsi, id, 7, T1, on))
     must(bidOnTemplate(db, mladsi, id, 6, T1, on))
     must(counterOnTemplate(db, mama, id, 5, T1, on))
     must(bidOnTemplate(db, mladsi, id, 8, T2, on))
+    must(bidOnTemplate(db, bratranec, id, 6, T2, on))
     const view = () => listTemplates(db, tata).find((t) => t.id === id)
     expect(view()?.bidding).toEqual({
       offer: { score: 5, byName: 'Máma' },
       bids: [
+        { takerId: bratranec, name: 'Bratranec', score: 6 },
         { takerId: starsi, name: 'Starší', score: 7 },
         { takerId: mladsi, name: 'Mladší', score: 8 },
       ],
-      lowest: 7,
-      lastBids: [{ takerId: mladsi, score: 8 }],
+      lowest: 6,
+      lastBids: [
+        { takerId: mladsi, score: 8 },
+        { takerId: bratranec, score: 6 },
+      ],
     })
     must(approveTemplateScore(db, starsi, id, 5, T2))
     expect(view()).toMatchObject({ status: 'active', bidding: null, change: null })
