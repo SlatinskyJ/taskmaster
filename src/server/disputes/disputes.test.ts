@@ -8,7 +8,7 @@ import { rejectTask } from '~/server/tasks'
 import { rejectionsSince } from '~/server/tasks/rejections'
 import { createTemplate } from '~/server/templates/templates'
 import { failAuditOn, json, must, rawTask, T0 } from '~/server/tasks/testing'
-import { disputeMarks, insertOpen, listDisputes, markKey, openDisputeIn } from '.'
+import { disputeMarks, dismissDisputeIn, insertOpen, listDisputes, markKey, openDisputeIn } from '.'
 
 // Opening a dispute (spec §5.11, #46): the store side of the domain rule. Keys: README.md.
 const AT = MEETING
@@ -467,3 +467,151 @@ describe('review round 1 (#46)', () => {
     expect(list.find((e) => e.id === s)?.title).toBe('Vyndat myčku')
   })
 })
+
+describe('dismissDisputeIn (#47)', () => {
+  const dismissed = (f: ReturnType<typeof setup>) =>
+    f.db.select().from(auditLog).where(eq(auditLog.action, 'dispute.dismissed')).all()
+
+  function withOpen() {
+    const f = setup()
+    const { id } = must(
+      openDisputeIn(f.db, f.starsi, { kind: 'completion', id: f.confirmed }, 'Bylo toho víc.', AT),
+    )
+    return { ...f, disputeId: id }
+  }
+
+  it('the admin dismisses with a note: row closed, note trimmed, item unchanged', () => {
+    const f = withOpen()
+    const before = f.db.select().from(tasks).where(eq(tasks.id, f.confirmed)).get()
+    expect(dismissDisputeIn(f.db, f.admin, f.disputeId, { score: 22 }, '  Sedí to.  ', AT)).toEqual(
+      { ok: true, value: { id: f.disputeId } },
+    )
+    const row = must1(rows(f))
+    expect(row).toMatchObject({
+      status: 'dismissed',
+      resolvedBy: f.admin,
+      resolvedAt: AT.toISOString(),
+      note: 'Sedí to.',
+    })
+    expect(f.db.select().from(tasks).where(eq(tasks.id, f.confirmed)).get()).toEqual(before)
+    const item = { kind: 'completion' as const, id: f.confirmed }
+    expect(disputeMarks(f.db, [item]).get(markKey(item))).toEqual({
+      status: 'dismissed',
+      note: 'Sedí to.',
+    })
+  })
+
+  it('writes dispute.dismissed with before open and after status, note and the kept value', () => {
+    const f = withOpen()
+    must(dismissDisputeIn(f.db, f.admin, f.disputeId, { score: 22 }, 'Sedí to.', AT))
+    const [entry, ...more] = dismissed(f)
+    expect(more).toEqual([])
+    expect(entry).toMatchObject({
+      action: 'dispute.dismissed',
+      entityType: 'dispute',
+      entityId: String(f.disputeId),
+      actorUserId: f.admin,
+    })
+    expect(json(entry?.before)).toEqual({ status: 'open' })
+    expect(json(entry?.after)).toEqual({
+      status: 'dismissed',
+      note: 'Sedí to.',
+      value: { score: 22 },
+    })
+  })
+
+  it('rolls back the dismissal when the audit write fails', () => {
+    const f = withOpen()
+    failAuditOn(f.db, 'dispute.dismissed')
+    expect(() =>
+      dismissDisputeIn(f.db, f.admin, f.disputeId, { score: 22 }, 'Sedí to.', AT),
+    ).toThrow(/audit down/)
+    expect(must1(rows(f)).status).toBe('open')
+  })
+
+  it('refuses a giver and a taker: not_admin, row still open, no dispute.dismissed entry', () => {
+    const f = withOpen()
+    for (const who of [f.tata, f.starsi]) {
+      expect(dismissDisputeIn(f.db, who, f.disputeId, { score: 22 }, 'Sedí.', AT)).toEqual({
+        ok: false,
+        error: 'not_admin',
+      })
+    }
+    expect(must1(rows(f)).status).toBe('open')
+    expect(dismissed(f)).toEqual([])
+  })
+
+  it('refuses a note of only spaces: note_required, no dispute.dismissed entry', () => {
+    const f = withOpen()
+    expect(dismissDisputeIn(f.db, f.admin, f.disputeId, { score: 22 }, '   ', AT)).toEqual({
+      ok: false,
+      error: 'note_required',
+    })
+    expect(must1(rows(f)).status).toBe('open')
+    expect(dismissed(f)).toEqual([])
+  })
+
+  it('refuses null as seen on a scored item: value_changed', () => {
+    const f = withOpen()
+    expect(dismissDisputeIn(f.db, f.admin, f.disputeId, null, 'Sedí.', AT)).toEqual({
+      ok: false,
+      error: 'value_changed',
+    })
+    expect(must1(rows(f)).status).toBe('open')
+  })
+
+  it('refuses when the value changed since the admin saw it: value_changed', () => {
+    const f = withOpen()
+    f.db.update(tasks).set({ score: 40 }).where(eq(tasks.id, f.confirmed)).run()
+    expect(dismissDisputeIn(f.db, f.admin, f.disputeId, { score: 22 }, 'Sedí.', AT)).toEqual({
+      ok: false,
+      error: 'value_changed',
+    })
+    expect(must1(rows(f)).status).toBe('open')
+    expect(dismissed(f)).toEqual([])
+    must(dismissDisputeIn(f.db, f.admin, f.disputeId, { score: 40 }, 'Sedí.', AT))
+    expect(must1(rows(f)).status).toBe('dismissed')
+  })
+
+  it('a settlement keeps its level and deduction as the seen value', () => {
+    const f = setup()
+    const sid = settlement(f, f.mladsi)
+    const { id } = must(openDisputeIn(f.db, f.mladsi, { kind: 'settlement', id: sid }, 'Málo.', AT))
+    expect(
+      dismissDisputeIn(f.db, f.admin, id, { level: 'upper', deducted: 50 }, 'Sedí.', AT),
+    ).toEqual({ ok: false, error: 'value_changed' })
+    must(dismissDisputeIn(f.db, f.admin, id, { level: 'lower', deducted: 50 }, 'Sedí.', AT))
+  })
+
+  it('refuses a second dismissal: not_open, one audit entry', () => {
+    const f = withOpen()
+    must(dismissDisputeIn(f.db, f.admin, f.disputeId, { score: 22 }, 'Sedí.', AT))
+    expect(dismissDisputeIn(f.db, f.admin, f.disputeId, { score: 22 }, 'Znovu.', AT)).toEqual({
+      ok: false,
+      error: 'not_open',
+    })
+    expect(dismissed(f)).toHaveLength(1)
+  })
+
+  it('refuses an unknown dispute id: not_found', () => {
+    const f = withOpen()
+    expect(dismissDisputeIn(f.db, f.admin, 999, { score: 22 }, 'Sedí.', AT)).toEqual({
+      ok: false,
+      error: 'not_found',
+    })
+  })
+
+  it('a new dispute can be opened on the item after a dismissal', () => {
+    const f = withOpen()
+    must(dismissDisputeIn(f.db, f.admin, f.disputeId, { score: 22 }, 'Sedí.', AT))
+    must(openDisputeIn(f.db, f.tata, { kind: 'completion', id: f.confirmed }, 'Znovu.', AT))
+    expect(rows(f).map((r) => r.status)).toEqual(['dismissed', 'open'])
+  })
+})
+
+function must1<T>(xs: readonly T[]): T {
+  const [x, ...rest] = xs
+  if (x === undefined || rest.length > 0)
+    throw new Error(`expected one row, got ${String(xs.length)}`)
+  return x
+}
