@@ -1,7 +1,13 @@
-import { test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { cs } from '../src/lib/strings'
 import { passwordLogin } from './helpers'
-import { expectAboveKeyboard, openKeyboard, PHONE_BROWSER, useKeyboard } from './keyboard'
+import {
+  expectAboveKeyboard,
+  openKeyboard,
+  panKeyboard,
+  PHONE_BROWSER,
+  useKeyboard,
+} from './keyboard'
 
 // Forms with the phone keyboard open (e2e/keyboard.ts). The rule (Jakub, 2026-11-24): the field
 // a person types into is visible while they type. The send button may sit under the keyboard
@@ -35,4 +41,57 @@ test('Správa, Nový člověk: the sheet moves up, each field stays visible', as
     await openKeyboard(page, field)
     await expectAboveKeyboard(page, field)
   }
+})
+
+async function openResetDialog(page: Page) {
+  await passwordLogin(page, 'admin')
+  await page.waitForURL((url) => !url.pathname.startsWith('/login'))
+  await page.goto('/sprava')
+  await page.getByRole('button', { name: cs.admin.editPerson('Táta') }).click()
+  await page.getByRole('button', { name: cs.admin.reset }).click()
+  const dialog = page.getByRole('dialog', { name: cs.admin.resetTitle })
+  // The dialog focuses its field on open (#215): no tap, the keyboard is already up.
+  await expect(page.locator('#__keyboard')).toBeAttached()
+  return { dialog, field: dialog.getByRole('textbox') }
+}
+
+test('Správa, Nové heslo: the dialog’s field is visible when it opens', async ({ page }) => {
+  const { field } = await openResetDialog(page)
+  await expectAboveKeyboard(page, field)
+})
+
+test('Správa, Nové heslo: the dialog follows the visible part when iOS slides it down', async ({
+  page,
+}) => {
+  const { dialog, field } = await openResetDialog(page)
+  await panKeyboard(page, 250)
+  await expectAboveKeyboard(page, dialog)
+  await expectAboveKeyboard(page, field)
+})
+
+async function openCancelDialog(page: Page) {
+  await passwordLogin(page, 'tata')
+  await page.waitForURL((url) => !url.pathname.startsWith('/login'))
+  // The `tasks` seed's only task, so the first id; the heading proves it.
+  await page.goto('/ukol/1')
+  await expect(page.getByRole('heading', { name: 'Shrabat listí na zahradě' })).toBeVisible()
+  await page.getByRole('button', { name: new RegExp(cs.cancelTask.hint) }).click()
+  const dialog = page.getByRole('dialog', { name: cs.cancelTask.title })
+  return { dialog, field: dialog.getByLabel(cs.cancelTask.reason) }
+}
+
+test('Úkol, Zrušit úkol?: the reason field is visible when typing', async ({ page }) => {
+  const { field } = await openCancelDialog(page)
+  await openKeyboard(page, field)
+  await expectAboveKeyboard(page, field)
+})
+
+test('Úkol, Zrušit úkol? with a taller keyboard: the dialog shrinks and scrolls inside', async ({
+  page,
+}) => {
+  await useKeyboard(page, 450) // after beforeEach's: this one wins
+  const { dialog, field } = await openCancelDialog(page)
+  await openKeyboard(page, field)
+  await expectAboveKeyboard(page, dialog)
+  await expectAboveKeyboard(page, field)
 })

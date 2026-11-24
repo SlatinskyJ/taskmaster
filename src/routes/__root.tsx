@@ -1,5 +1,6 @@
 import { HeadContent, Scripts, createRootRoute, useRouter } from '@tanstack/react-router'
 import { useEffect, type ReactNode } from 'react'
+import { trackVisualViewport } from '~/lib/visualViewport'
 import { Toaster } from '~/components/ui/sonner'
 import { themeBootScript } from '~/lib/theme'
 import { pwaLinks, pwaMeta, themeColorMeta } from '~/pwa/head'
@@ -24,6 +25,7 @@ function RootDocument({ children }: { children: ReactNode }) {
   useEffect(() => {
     registerServiceWorker(router)
   }, [router])
+  useEffect(() => trackVisualViewport(window), [])
   return (
     // data-theme is set before hydration by the boot script, so React must not fight it.
     <html lang="cs" suppressHydrationWarning>
