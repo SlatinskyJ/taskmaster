@@ -15,6 +15,8 @@ const EXPECTED_ROLES: Record<string, string> = {
   getDisputeListFn: 'giver,taker',
   getAdminDisputesFn: 'admin',
   dismissDisputeFn: 'admin',
+  adjustPointsFn: 'admin',
+  correctSettlementFn: 'admin',
   listUsersFn: 'admin',
   getPeriodDefaultsFn: 'admin',
   savePeriodDefaultsFn: 'admin',

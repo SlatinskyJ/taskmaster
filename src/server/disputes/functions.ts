@@ -24,13 +24,14 @@ import type { DisputeListEntry } from './list'
 // only; the admin is no party (the domain refuses it again). The admin's list and dismiss (#47):
 // admin only (the domain checks the admin again).
 
-/** What a taker or giver can dispute from a screen (`adjustment` comes with #48). */
+/** What a taker or giver can dispute from a screen. */
 export const OPENABLE_KINDS = [
   'task_score',
   'template_score',
   'completion',
   'rejection',
   'settlement',
+  'adjustment',
 ] as const
 export type OpenableKind = (typeof OPENABLE_KINDS)[number]
 
@@ -41,14 +42,14 @@ export type PageMarkKind = (typeof PAGE_MARK_KINDS)[number]
 const OFF = { ok: false, error: 'feature_off' } as const
 const isOn = (db: Db) => getFlags(db).disputes
 
-function kindOf<K extends string>(value: unknown, kinds: readonly K[]): K {
+export function kindOf<K extends string>(value: unknown, kinds: readonly K[]): K {
   if (typeof value !== 'string' || !(kinds as readonly string[]).includes(value)) {
     throw new Error('Invalid input')
   }
   return value as K
 }
 
-function positiveId(value: unknown): number {
+export function positiveId(value: unknown): number {
   const id = int(value, Number.MAX_SAFE_INTEGER)
   if (id < 1) throw new Error('Invalid input')
   return id
@@ -125,10 +126,14 @@ export const getDisputeListFn = createServerFn({ method: 'GET' })
     disputeListHandler(getDb(), { id: context.user.id, role: context.user.role }),
   )
 
-function valueOf(data: unknown): DisputeValue | null {
+/** An item's value as the admin saw it: null, `{ score }`, `{ points }` or a settlement's. */
+export function parseSeenValue(data: unknown): DisputeValue | null {
   if (data === null) return null
   if (typeof data === 'object' && 'score' in data) {
     return { score: int(record(data, ['score']).score, Number.MAX_SAFE_INTEGER) }
+  }
+  if (typeof data === 'object' && 'points' in data) {
+    return { points: int(record(data, ['points']).points, Number.MAX_SAFE_INTEGER) }
   }
   const d = record(data, ['level', 'deducted'])
   const deducted = int(d.deducted, Number.MAX_SAFE_INTEGER)
@@ -149,7 +154,7 @@ export function parseDismissDispute(data: unknown): DismissDisputeInput {
   if (typeof d.note !== 'string' || d.note.trim().length > DISPUTE_NOTE_MAX) {
     throw new Error('Invalid input')
   }
-  return { id: positiveId(d.id), value: valueOf(d.value), note: d.note }
+  return { id: positiveId(d.id), value: parseSeenValue(d.value), note: d.note }
 }
 
 export type DismissDisputeResult =
