@@ -17,7 +17,7 @@ import { agreedTemplate, templateAudits, threadIds, threadRows } from './testing
 
 // Bidding on a proposed chore's first score (#209, spec §5.1): the one-time rules, no reservation.
 
-const on = { choreBidding: true }
+const on = { choreBidding: true, bidRefusals: false }
 
 /** "Vynést koš", proposed by Táta at 10 (his approval in offer round 1). */
 function setup() {
@@ -157,8 +157,8 @@ describe('bidding on a proposed chore: switch on (#209)', () => {
       action: 'template.bids_turned_down',
       actor: s.tata,
       kind: 'user',
-      before: { score: 10, offerRound: 1, entryIds: [b1, b2] },
-      after: { score: 10, offerRound: 2, entryId: offer },
+      before: { score: 10, offerRound: 1, entryIds: [b1, b2], bidsFrom: 0 },
+      after: { score: 10, offerRound: 2, entryId: offer, bidsFrom: offer },
     })
     must(bidOnTemplate(s.db, s.starsi, s.id, 12, T3, on))
   })
@@ -183,8 +183,9 @@ describe('bidding on a proposed chore: switch on (#209)', () => {
         offerRound: 2,
         entryIds: [bid],
         replacedOffer: { entryId: counter, score: 11 },
+        bidsFrom: 0,
       },
-      after: { score: 11, offerRound: 3, entryId: offer },
+      after: { score: 11, offerRound: 3, entryId: offer, bidsFrom: offer },
     })
   })
 
@@ -234,8 +235,15 @@ describe('bidding on a proposed chore: switch on (#209)', () => {
       action: 'template.agreed',
       actor: s.mladsi,
       kind: 'user',
-      before: { status: 'proposed', score: 12 },
-      after: { status: 'active', score: 12, by: 'approval', entryIds: [second], closedIds: [bid] },
+      before: { status: 'proposed', score: 12, bidsFrom: 0 },
+      after: {
+        status: 'active',
+        score: 12,
+        by: 'approval',
+        entryIds: [second],
+        closedIds: [bid],
+        bidsFrom: second,
+      },
     })
   })
 
@@ -283,10 +291,22 @@ describe('bidding on a proposed chore: switch on (#209)', () => {
       action: 'template.agreed',
       actor: s.tata,
       kind: 'user',
-      before: { status: 'proposed', score: 10 },
-      after: { status: 'active', score: 12, by: 'bid', entryIds: [low], closedIds: [high] },
+      before: { status: 'proposed', score: 10, bidsFrom: 0 },
+      after: {
+        status: 'active',
+        score: 12,
+        by: 'bid',
+        entryIds: [low],
+        closedIds: [high],
+        bidsFrom: low,
+      },
     })
-    expect(agreementOf(s.db, row(s))).toEqual({ status: 'agreed', score: 12, change: null })
+    expect(agreementOf(s.db, row(s))).toEqual({
+      status: 'agreed',
+      score: 12,
+      change: null,
+      lastBids: [],
+    })
   })
 
   it('a tie at the lowest agrees too, both bids accepted', () => {
@@ -316,13 +336,19 @@ describe('bidding on a proposed chore: switch on (#209)', () => {
       action: 'template.agreed',
       actor: s.mama,
       kind: 'user',
-      before: { status: 'proposed', score: 11, replacedOffer: { entryId: first, score: 11 } },
+      before: {
+        status: 'proposed',
+        score: 11,
+        replacedOffer: { entryId: first, score: 11 },
+        bidsFrom: 0,
+      },
       after: {
         status: 'active',
         score: 12,
         by: 'counter',
         entryIds: [bid, counter],
         closedIds: [],
+        bidsFrom: counter,
       },
     })
   })
@@ -385,7 +411,13 @@ describe('bidding on a proposed chore: switch on (#209)', () => {
     must(approveTemplateScore(s.db, s.mladsi, s.id, 10, T2))
     expect(row(s)).toMatchObject({ status: 'active', score: 10 })
     expect(threadRows(s.db, s.id)).toEqual([['taker', s.starsi, 12, 'closed']])
-    expect(agreementOf(s.db, row(s))).toEqual({ status: 'agreed', score: 10, change: null })
+    // Bids reset on agreement (#232): his closed first-price 12 no longer counts.
+    expect(agreementOf(s.db, row(s))).toEqual({
+      status: 'agreed',
+      score: 10,
+      change: null,
+      lastBids: [],
+    })
   })
 
   it('people change activating a proposed template closes its bids', () => {
@@ -401,10 +433,22 @@ describe('bidding on a proposed chore: switch on (#209)', () => {
       action: 'template.agreed',
       actor: null,
       kind: 'system',
-      before: { status: 'proposed', score: 10 },
-      after: { status: 'active', score: 10, by: 'approval', entryIds: [], closedIds: [bid] },
+      before: { status: 'proposed', score: 10, bidsFrom: 0 },
+      after: {
+        status: 'active',
+        score: 10,
+        by: 'approval',
+        entryIds: [],
+        closedIds: [bid],
+        bidsFrom: bid,
+      },
     })
-    expect(agreementOf(s.db, row(s))).toEqual({ status: 'agreed', score: 10, change: null })
+    expect(agreementOf(s.db, row(s))).toEqual({
+      status: 'agreed',
+      score: 10,
+      change: null,
+      lastBids: [],
+    })
   })
 
   it('wrong actor: a giver bids, a taker counters or turns down; nothing is written', () => {

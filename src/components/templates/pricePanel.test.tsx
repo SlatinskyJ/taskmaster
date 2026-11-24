@@ -28,6 +28,7 @@ const base: TemplateView = {
   schedule: null,
   deadline: null,
   bidding: null,
+  lastBids: [],
   change: null,
 }
 const demo: TemplateView = {

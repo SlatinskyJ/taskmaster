@@ -47,17 +47,17 @@
 **Interfaces:**
 - Produces: `withdrawTemplateChangeBid(t: TemplateAgreement, people, takerId): Result<TemplateAgreement, AgreementError>`; `turnDownTemplateChangeBids(t, people, giverId, seen: readonly OpenBid[]): Result<TemplateAgreement, AgreementError>`; `bidTemplateScore` also refuses `score === lastBids[takerId]`.
 
-- [ ] **Step 1: failing tests** in `scoreChange.test.ts`, `describe('template change: same number, Nechci, turn-down (#232)')`:
+- [x] **Step 1: failing tests** in `scoreChange.test.ts`, `describe('template change: same number, Nechci, turn-down (#232)')`:
   - `bid refuses his last bid since the floor, open or withdrawn`: agreed 10, `lastBids: [{by: STARSI, score: 12}]`, no open bid → `bidTemplateScore(…, STARSI, 12)` = `same_score`; `MLADSI, 12` ok; `STARSI, 13` ok.
   - `Nechci closes only his bid`: change `{offer: {14, TATA}, bids: [STARSI 12, MLADSI 13]}` → result change bids `[MLADSI 13]`, offer kept; no open bid → `no_bid`; a giver → `not_a_taker`; not agreed → `not_agreed`.
   - `Nechci of the last row ends the change`: change `{offer: null, bids: [STARSI 12]}` → `change: null`.
   - `turn-down keeps the parent offer, closes every bid`: offer 14 + bids → `{change: {offer: {14, giverId}, bids: []}}` (offer now by the turning-down giver).
   - `turn-down with no offer ends the change`: → `change: null`, score unchanged.
   - `turn-down refuses a stale list, a taker, no bids`: seen differs (a bid missing, one added, or the same brother at another score) → `offer_changed`; taker → `not_a_giver`; no live bids → `no_bids`; no change → `no_bids`.
-- [ ] **Step 2:** `pnpm vitest run src/domain/scoreChange.test.ts` → FAIL (functions missing).
-- [ ] **Step 3:** implement. Reuse `bidOf`, `liveTemplateBook`, and `sameTakers`-style key compare from `bidding.ts` (export it there as `sameBids(live, seen)` if not exported). Agreements return `lastBids: []`.
-- [ ] **Step 4:** `pnpm vitest run src/domain` and `pnpm typecheck` → PASS.
-- [ ] **Step 5: Commit** `feat(domain): same number, Nechci and turn-down on a chore price change (#232)`.
+- [x] **Step 2:** `pnpm vitest run src/domain/scoreChange.test.ts` → FAIL (functions missing).
+- [x] **Step 3:** implement. Reuse `bidOf`, `liveTemplateBook`, and `sameTakers`-style key compare from `bidding.ts` (export it there as `sameBids(live, seen)` if not exported). Agreements return `lastBids: []`.
+- [x] **Step 4:** `pnpm vitest run src/domain` and `pnpm typecheck` → PASS.
+- [x] **Step 5: Commit** `feat(domain): same number, Nechci and turn-down on a chore price change (#232)`.
 
 ### Task 2: Server — floor, the two actions on an agreed chore, reads
 
@@ -70,7 +70,7 @@
 - Consumes: Task 1.
 - Produces: `withdrawTemplateBidIn(tx, takerId, templateId, now, opts)` and `turnDownTemplateBidsIn(tx, giverId, templateId, seen, now, opts)` work on an active template when `opts.bidRefusals`; audit actions `template.bid_withdrawn` (`before: {entryId, score}`) and `template.bids_turned_down` (`before: {score, entryIds, replacedOffer?}`, `after: {entryId}` only when re-offered). `TemplateView.lastBids: {takerId, score}[]`.
 
-- [ ] **Step 1: failing tests** (`createTestDb`, demo family, an active template at 10):
+- [x] **Step 1: failing tests** (`createTestDb`, demo family, an active template at 10):
   - `Nechci closes his bid, writes template.bid_withdrawn, others stay`.
   - `Nechci then the same number: same_score; after a counter: ok`.
   - `turn-down with an offer: bids closed, offer re-issued as a new giver row, same number ok after`.
@@ -84,10 +84,10 @@
   - `switch off: both answer not_proposed on an active chore` (`bidRefusals: false`).
   - `wrong actor`: giver withdraws → `not_a_taker`; taker turns down → `not_a_giver`.
   - functions.test: the two server functions pass `bidRefusals` from the flags; return shape `{ok, id, score, status}` pinned.
-- [ ] **Step 2:** run → FAIL.
-- [ ] **Step 3:** implement. `markBidsFrom` runs in `agreeIn`, `changeScore` and both turn-downs (proposed and active) after their rows are written, and returns the old and new value; each of those audit entries (`template.agreed`, `template.score_changed`, `template.bids_turned_down`) records them as `before.bidsFrom` / `after.bidsFrom`, as #212's `task.bidding_reopened` records `biddingFrom`. The audit tests of Step 1 pin `after.bidsFrom` on an agreement and on both turn-downs. `lastBids(db, id, row.bidsFrom)` (its giver-row floor stays). Turn-down with an offer re-uses `addEntry` for the giver row; no `offerRound` change on an active template. `pnpm db:check` passes.
-- [ ] **Step 4:** `pnpm vitest run src/server/templates` + typecheck → PASS.
-- [ ] **Step 5: Commit** `feat(templates): Nechci and turn-down on a chore price change (#232)`.
+- [x] **Step 2:** run → FAIL.
+- [x] **Step 3:** implement. `markBidsFrom` runs in `agreeIn`, `changeScore` and both turn-downs (proposed and active) after their rows are written, and returns the old and new value; each of those audit entries (`template.agreed`, `template.score_changed`, `template.bids_turned_down`) records them as `before.bidsFrom` / `after.bidsFrom`, as #212's `task.bidding_reopened` records `biddingFrom`. The audit tests of Step 1 pin `after.bidsFrom` on an agreement and on both turn-downs. `lastBids(db, id, row.bidsFrom)` (its giver-row floor stays). Turn-down with an offer re-uses `addEntry` for the giver row; no `offerRound` change on an active template. `pnpm db:check` passes.
+- [x] **Step 4:** `pnpm vitest run src/server/templates` + typecheck → PASS.
+- [x] **Step 5: Commit** `feat(templates): Nechci and turn-down on a chore price change (#232)`.
 
 ### Task 3: Screens — the no buttons and the same-number block on `/sablona`
 

@@ -11,7 +11,7 @@ import {
   withdrawTemplateBidHandler,
 } from './functions'
 import { parseApproval, parseNewTemplate, parseTemplateId, parseTemplateTurnDown } from './parse'
-import { createTemplate } from './templates'
+import { approveTemplateScore, createTemplate } from './templates'
 import { threadRows } from './testing'
 
 const VALID = {
@@ -204,5 +204,44 @@ describe('template score handlers on a proposed chore (#209, switch choreBidding
       score: 12,
       status: 'active',
     })
+  })
+})
+
+describe('Nechci and turn-down handlers on a price change (#232, switch bidRefusals)', () => {
+  const withSwitch = (enabled: boolean) => {
+    const f = family()
+    f.db.update(featureFlags).set({ enabled }).where(eq(featureFlags.key, 'bidRefusals')).run()
+    const input = { title: 'Umýt koupelnu', score: 8, approvalRequired: true }
+    const id = must(
+      createTemplate(f.db, f.tata, { ...input, schedule: null, deadline: null }, T0),
+    ).id
+    must(approveTemplateScore(f.db, f.starsi, id, 8, T0))
+    expect(bidTemplateScoreHandler(f.db, f.starsi, { templateId: id, score: 10 }, T1).ok).toBe(true)
+    expect(bidTemplateScoreHandler(f.db, f.mladsi, { templateId: id, score: 11 }, T1).ok).toBe(true)
+    return { f, id }
+  }
+
+  it('off: both answer not_proposed and write nothing', () => {
+    const { f, id } = withSwitch(false)
+    const off = { ok: false, error: 'not_proposed' }
+    expect(withdrawTemplateBidHandler(f.db, f.starsi, { templateId: id }, T2)).toEqual(off)
+    const bids = [{ takerId: f.mladsi, score: 11 }]
+    expect(turnDownTemplateBidsHandler(f.db, f.tata, { templateId: id, bids }, T2)).toEqual(off)
+    expect(threadRows(f.db, id)).toEqual([
+      ['taker', f.starsi, 10, null],
+      ['taker', f.mladsi, 11, null],
+    ])
+  })
+
+  it('on: Nechci and a turn-down answer exactly ok, id, the old score 8 and active', () => {
+    const { f, id } = withSwitch(true)
+    const kept = { ok: true, id, score: 8, status: 'active' }
+    expect(withdrawTemplateBidHandler(f.db, f.starsi, { templateId: id }, T2)).toEqual(kept)
+    const bids = [{ takerId: f.mladsi, score: 11 }]
+    expect(turnDownTemplateBidsHandler(f.db, f.tata, { templateId: id, bids }, T2)).toEqual(kept)
+    expect(threadRows(f.db, id)).toEqual([
+      ['taker', f.starsi, 10, 'closed'],
+      ['taker', f.mladsi, 11, 'closed'],
+    ])
   })
 })

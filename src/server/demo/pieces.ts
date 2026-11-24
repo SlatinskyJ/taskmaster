@@ -186,7 +186,7 @@ export const templates: Piece = ({ tx, id, now }) => {
  * no bids, "Zalít kytky" at 4 with Starší's bid 6 and Mladší's bid 7.
  */
 export const choreBidding: Piece = ({ tx, id, now }) => {
-  const on = { choreBidding: true }
+  const on = { choreBidding: true, bidRefusals: false }
   const make = (title: string, score: number) =>
     step(
       `template "${title}"`,

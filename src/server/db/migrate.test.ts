@@ -322,4 +322,35 @@ describe('data migrations', () => {
     expect(sqlite.prepare('pragma foreign_key_check').all()).toEqual([])
     sqlite.close()
   })
+
+  it("0030 starts each template's bid floor at its newest thread row", () => {
+    const A = '2026-11-24T10:00:00.000Z'
+    const dir = tempDir()
+    const before = join(dir, 'm')
+    cpSync('drizzle', before, { recursive: true })
+    // Keep migrations 0000–0029 only: the state of a database before the bid floor (#232).
+    const path = join(before, 'meta', '_journal.json')
+    const journal = JSON.parse(readFileSync(path, 'utf8')) as { entries: { idx: number }[] }
+    journal.entries = journal.entries.filter((e) => e.idx <= 29)
+    writeFileSync(path, JSON.stringify(journal))
+    const sqlite = new Database(join(dir, 'db.sqlite'))
+    applyMigrations(sqlite, before)
+    sqlite.exec(`
+      insert into users (id, username, display_name, role, created_at, updated_at)
+        values (1, 'tata', 'Táta', 'giver', '${A}', '${A}'),
+               (2, 'starsi', 'Starší', 'taker', '${A}', '${A}');
+      insert into templates (id, title, status, score, approval_required, created_by, created_at, updated_at)
+        values (5, 'Umýt koupelnu', 'active', 8, 1, 1, '${A}', '${A}'),
+               (6, 'Vynést koš', 'active', 3, 1, 1, '${A}', '${A}');
+      insert into template_thread (id, template_id, user_id, side, score, created_at, closed_at, closed_as)
+        values (40, 5, 2, 'taker', 10, '${A}', '${A}', 'closed'),
+               (41, 5, 2, 'taker', 11, '${A}', null, null);`)
+    applyMigrations(sqlite, 'drizzle')
+    expect(sqlite.prepare('select id, bids_from from templates order by id').all()).toEqual([
+      { id: 5, bids_from: 41 },
+      { id: 6, bids_from: 0 },
+    ])
+    expect(sqlite.prepare('pragma foreign_key_check').all()).toEqual([])
+    sqlite.close()
+  })
 })

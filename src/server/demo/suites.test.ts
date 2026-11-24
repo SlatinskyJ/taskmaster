@@ -125,7 +125,7 @@ describe('e2e seeds (#183)', () => {
     expect(listTasks(db)).toHaveLength(0)
     const tata = db.select().from(users).where(eq(users.username, 'tata')).get()?.id ?? 0
     // Newest first, as Úkoly lists them.
-    const views = listTemplates(db, tata, { choreBidding: true })
+    const views = listTemplates(db, tata, { choreBidding: true, bidRefusals: false })
     expect(views.map((t) => [t.title, t.status, t.score])).toEqual([
       ['Zalít kytky', 'proposed', 4],
       ['Vynést kompost', 'proposed', 10],

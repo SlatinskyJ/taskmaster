@@ -69,6 +69,7 @@ const template = (over: Partial<TemplateView>): TemplateView => ({
   schedule: null,
   deadline: null,
   bidding: null,
+  lastBids: [],
   change: null,
   ...over,
 })
