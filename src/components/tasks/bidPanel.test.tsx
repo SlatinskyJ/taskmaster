@@ -159,6 +159,10 @@ describe('BidPanel refusals (#208)', () => {
     ]
     expect(opts.errorMessage?.('offer_changed')).toBe(cs.bids.turnDownChanged)
     expect(opts.errorMessage?.('no_bids')).toBe(cs.tasks.errors.noBids)
+    // Only the turn-down says so: a stale accept keeps the plain message.
+    action.pressed.get('Přijmout 22 (Mladší)')?.onClick?.()
+    const accept = action.run.mock.calls[1] as [string, unknown, unknown, object]
+    expect(accept[3]).not.toHaveProperty('errorMessage')
     await Promise.resolve()
   })
 })

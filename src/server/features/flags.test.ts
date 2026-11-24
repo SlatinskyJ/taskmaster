@@ -36,6 +36,12 @@ describe('getFlags', () => {
     })
   })
 
+  it('an empty table reads every switch as off', () => {
+    const db = createTestDb()
+    db.delete(featureFlags).run()
+    expect(Object.values(getFlags(db)).every((on) => !on)).toBe(true)
+  })
+
   it('reads a switch with no row as off', () => {
     const db = createTestDb()
     db.update(featureFlags).set({ enabled: true }).run()
