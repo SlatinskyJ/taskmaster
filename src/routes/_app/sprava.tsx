@@ -5,6 +5,9 @@ import { toast } from 'sonner'
 import { DefaultWeekCard } from '~/components/admin/DefaultWeekCard'
 import { DismissDialog } from '~/components/admin/DismissDialog'
 import { dismissInput, DisputesCard, loadAdminDisputes } from '~/components/admin/DisputesCard'
+import { afterFix, draftKey, FixCard, fixStartOf, loadFixable } from '~/components/admin/FixCard'
+import { FixDrawer } from '~/components/admin/FixDrawer'
+import type { FixStart } from '~/components/admin/fixDraft'
 import { sendDismiss } from '~/components/disputes/disputeCalls'
 import { adminDisputeLines } from '~/components/disputes/disputeProps'
 import type { PersonFormValues } from '~/components/admin/PersonForm'
@@ -20,6 +23,8 @@ import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { userErrorMessage } from '~/lib/userErrors'
 import type { PeriodDefaults } from '~/domain'
+import type { AdminOutcome } from '~/components/disputes/disputeCalls'
+import { getFixableFn } from '~/server/corrections/functions'
 import type { AdminDisputeEntry } from '~/server/disputes/functions'
 import { dismissDisputeFn, getAdminDisputesFn } from '~/server/disputes/functions'
 import { listPasskeyCountsFn } from '~/server/passkeys/functions'
@@ -31,19 +36,22 @@ import { createUserFn, listUsersFn, resetPasswordFn, updateUserFn } from '~/serv
 // People (#134): add, rename, change role, reset password. No deactivation (Jakub 2026-11-17).
 // The list is never empty: the admin is always in it. Výchozí týden (#47, spec §5.8): the
 // admin edits the default week directly. Sporné (#47, spec §5.11): the open disputes, first,
-// each kept with a note; hidden while the `disputes` switch is off.
+// each kept with a note or fixed (Opravit, #48); Opravy bodů (#48, spec §5.9): the admin adds
+// or takes points, or corrects a settled week, directly. Both hidden while the `disputes`
+// switch is off.
 export const Route = createFileRoute('/_app/sprava')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/sprava')
   },
   loader: async () => {
-    const [people, passkeys, defaults, disputes] = await Promise.all([
+    const [people, passkeys, defaults, disputes, fixable] = await Promise.all([
       listUsersFn(),
       listPasskeyCountsFn(),
       getPeriodDefaultsFn(),
       loadAdminDisputes(() => getAdminDisputesFn()),
+      loadFixable(() => getFixableFn()),
     ])
-    return { people, passkeys, defaults, disputes }
+    return { people, passkeys, defaults, disputes, fixable }
   },
   component: Sprava,
 })
@@ -52,7 +60,7 @@ type Sheet = { mode: 'add' } | { mode: 'edit'; person: PersonSummary } | null
 
 function Sprava() {
   const { user } = Route.useRouteContext()
-  const { people, passkeys, defaults, disputes } = Route.useLoaderData()
+  const { people, passkeys, defaults, disputes, fixable } = Route.useLoaderData()
   const router = useRouter()
   const [sheet, setSheet] = useState<Sheet>(null)
   // Kept apart from `sheet` so the drawer can close while its last content fades out.
@@ -60,6 +68,12 @@ function Sprava() {
   const [resetOpen, setResetOpen] = useState(false)
   const [keeping, setKeeping] = useState<AdminDisputeEntry | null>(null)
   const [keepOpen, setKeepOpen] = useState(false)
+  const [fixing, setFixing] = useState<FixStart | null>(null)
+  const [fixOpen, setFixOpen] = useState(false)
+  // Each opening starts a fresh sheet (its reason comes from `drafts`).
+  const [fixOpenings, setFixOpenings] = useState(0)
+  // The typed reasons, per sheet: a reload after a stale row keeps them.
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
   const editing = sheet?.mode === 'edit' ? sheet.person : undefined
 
   function open(next: Exclude<Sheet, null>) {
@@ -110,6 +124,22 @@ function Sprava() {
   }
 
   const showDisputes = !('error' in disputes && disputes.error === 'feature_off')
+  const showFix = !('error' in fixable && fixable.error === 'feature_off')
+  const fixTakers = Array.isArray(fixable) ? fixable : []
+
+  function openFix(start: FixStart) {
+    setFixing(start)
+    setFixOpenings((n) => n + 1)
+    setFixOpen(true)
+  }
+
+  async function fixDone(start: FixStart, outcome: AdminOutcome) {
+    setFixOpen(false)
+    setDrafts((d) => afterFix(d, draftKey(start), outcome))
+    if (outcome.ok) toast.success(cs.admin.fix.done)
+    else toast.error(outcome.message)
+    await router.invalidate()
+  }
 
   return (
     <Screen title={cs.admin.title} user={user}>
@@ -119,6 +149,9 @@ function Sprava() {
           onKeep={(entry) => {
             setKeeping(entry)
             setKeepOpen(true)
+          }}
+          onFix={(entry) => {
+            openFix(fixStartOf(entry))
           }}
           onRetry={() => {
             void router.invalidate()
@@ -141,6 +174,34 @@ function Sprava() {
           await router.invalidate()
         }}
       />
+      {showFix && (
+        <FixCard
+          failed={!Array.isArray(fixable)}
+          onAdjust={() => {
+            openFix({ mode: 'points', takerId: null, dispute: null })
+          }}
+          onCorrect={() => {
+            openFix({ mode: 'week', takerId: null, settlementId: null, dispute: null })
+          }}
+          onRetry={() => {
+            void router.invalidate()
+          }}
+        />
+      )}
+      {fixing && (
+        <FixDrawer
+          key={fixOpenings}
+          open={fixOpen}
+          onOpenChange={setFixOpen}
+          start={fixing}
+          fixable={fixTakers}
+          reason={drafts[draftKey(fixing)] ?? ''}
+          onReason={(reason) => {
+            setDrafts((d) => ({ ...d, [draftKey(fixing)]: reason }))
+          }}
+          onDone={(outcome) => void fixDone(fixing, outcome)}
+        />
+      )}
       <DefaultWeekCard defaults={defaults} onSave={saveDefaults} />
       <SectionLabel className="mt-3.5">{cs.admin.people}</SectionLabel>
       <Card>

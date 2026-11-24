@@ -40,7 +40,12 @@ const noop = () => undefined
 describe('DisputesCard', () => {
   it('a row: the disputed stripe, the lines, the reason in its own block and Ponechat', () => {
     const html = renderToStaticMarkup(
-      <DisputesCard data={[entry, { ...entry, id: 6 }]} onKeep={noop} onRetry={noop} />,
+      <DisputesCard
+        data={[entry, { ...entry, id: 6 }]}
+        onKeep={noop}
+        onFix={noop}
+        onRetry={noop}
+      />,
     )
     expect(html).toContain(t.title(2))
     expect(html).toContain('border-l-state-disputed')
@@ -55,15 +60,27 @@ describe('DisputesCard', () => {
     expect(html).not.toContain('truncate')
   })
 
+  it('a row has Opravit beside Ponechat, named for its item (#48)', () => {
+    const html = renderToStaticMarkup(
+      <DisputesCard data={[entry]} onKeep={noop} onFix={noop} onRetry={noop} />,
+    )
+    expect(html).toContain(
+      `aria-label="${t.fixFor('Body za úkol', 'Vyluxovat celý obývák a chodbu')}"`,
+    )
+    expect(html.indexOf(`>${t.keep}<`)).toBeLessThan(html.indexOf(`>${t.fix}<`))
+  })
+
   it('empty: one friendly line', () => {
-    const html = renderToStaticMarkup(<DisputesCard data={[]} onKeep={noop} onRetry={noop} />)
+    const html = renderToStaticMarkup(
+      <DisputesCard data={[]} onKeep={noop} onFix={noop} onRetry={noop} />,
+    )
     expect(html).toContain(t.title(0))
     expect(html).toContain(t.empty)
   })
 
   it('a failed load: the message and a retry', () => {
     const html = renderToStaticMarkup(
-      <DisputesCard data={{ error: 'load' }} onKeep={noop} onRetry={noop} />,
+      <DisputesCard data={{ error: 'load' }} onKeep={noop} onFix={noop} onRetry={noop} />,
     )
     expect(html).toContain('role="alert"')
     expect(html).toContain(t.loadError)
