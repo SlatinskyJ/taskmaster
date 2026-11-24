@@ -239,6 +239,13 @@ describe('a proposed chore with first-price bidding (#209)', () => {
       disabled: false,
       hint: 'Nabídka půjde rodičům.',
     })
+    // Only his own last bid is blocked: Mladší may match Starší's 12.
+    expect(priceSend(one, MLADSI, 12)).toMatchObject({
+      disabled: false,
+      hint: 'Nabídka půjde rodičům.',
+    })
+    const sinceStarsi = bidding([starsi12], [{ takerId: STARSI.id, score: 12 }])
+    expect(priceSend(sinceStarsi, MLADSI, 12)?.disabled).toBe(false)
     expect(stepperStart(one, STARSI)).toBe(12)
     expect(stepperStart(one, MLADSI)).toBe(10)
   })
@@ -278,6 +285,8 @@ describe('a proposed chore with first-price bidding (#209)', () => {
     })
     expect(priceSend(two, TATA, 11)).toMatchObject({ label: 'Nabídnout', disabled: false })
     expect(priceSend(two, TATA, 10)?.disabled).toBe(true)
+    const tie = bidding([starsi12, { takerId: MLADSI.id, name: 'Mladší', score: 12 }])
+    expect(priceSend(tie, TATA, 12)?.label).toBe('Přijmout 12 (Starší, Mladší)')
   })
 
   it('a parent with no bids has no yes and no turn-down, the proposer no Souhlasím', () => {
@@ -323,12 +332,17 @@ describe('a proposed chore with first-price bidding (#209)', () => {
     expect(priceToast(at('counter', 11), res(11, 'proposed'), true)).toBe('Nabídka odeslána')
     expect(priceToast(at('approve', 10), res(10, 'proposed'), true)).toBe('Nabídka odeslána')
     expect(priceToast(at('acceptBid', 12), res(12, 'active'), true)).toBe('Domluveno')
+    // Stale: the chore went active before the call landed, so it ran as a score change.
+    expect(priceToast(at('counter', 11), res(10, 'active'), true)).toBe('Nabídka odeslána')
+    const bid = { action: 'bid' as const, data: { templateId: 7, score: 12 } }
+    expect(priceToast(bid, res(12, 'active'), true)).toBe('Nabídka odeslána')
     expect(
       priceToast({ action: 'withdraw', data: { templateId: 7 } }, res(10, 'proposed'), true),
     ).toBe('Nabídka stažena')
     const down = { action: 'turnDown' as const, data: { templateId: 7, bids: [] } }
     expect(priceToast(down, res(10, 'proposed'), true)).toBe('Nabídky odmítnuty')
     expect(priceError(down)('offer_changed')).toBe('Mezitím přišla nová nabídka. Podívej se na ni.')
+    expect(priceError(down)('not_found')).not.toBe('Mezitím přišla nová nabídka. Podívej se na ni.')
     expect(priceError(at('counter', 11))('offer_changed')).not.toBe(
       'Mezitím přišla nová nabídka. Podívej se na ni.',
     )

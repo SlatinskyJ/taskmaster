@@ -217,7 +217,13 @@ export function priceToast(
 ) {
   if (call.action === 'withdraw') return cs.bids.toast.withdrawn
   if (call.action === 'turnDown') return cs.bids.toast.turnedDown
-  if (wasProposed) return result.status === 'active' ? cs.bids.toast.agreed : cs.bids.toast.sent
+  // A first price agrees only when the chore came back active at the number sent. A bid never
+  // agrees, and a call that landed after the chore went active runs as a score change (§5.1).
+  if (wasProposed) {
+    const agreed =
+      call.action !== 'bid' && result.status === 'active' && result.score === call.data.score
+    return agreed ? cs.bids.toast.agreed : cs.bids.toast.sent
+  }
   return result.score === call.data.score ? cs.bids.toast.agreed : cs.bids.toast.sent
 }
 
