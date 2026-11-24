@@ -60,8 +60,12 @@ describe('e2e seeds (#183)', () => {
     })
   }
 
-  it('approve (#206): only the approveAnywhere switch on', () => {
-    expect(getFlags(seeded('approve'))).toEqual({ ...NO_FEATURES, approveAnywhere: true })
+  it('approve (#206): only the approveAnywhere switch on; e2e/approve.spec.ts opens tasks 6 and 3', () => {
+    const db = seeded('approve')
+    expect(getFlags(db)).toEqual({ ...NO_FEATURES, approveAnywhere: true })
+    const byId = new Map(listTasks(db).map((t) => [t.id, t.title]))
+    expect(byId.get(6)).toBe('Vytřít podlahu v kuchyni')
+    expect(byId.get(3)).toBe('Vyluxovat celý obývák a chodbu')
   })
 
   it('tasks: only "Shrabat listí na zahradě", open at 10, Táta’s 12 waiting for both', () => {
