@@ -52,8 +52,8 @@ const firstPrice = (
 /** The stepper's − button. */
 const stepper = `aria-label="${cs.tasks.less}"`
 
-const html = (t: TemplateView, me: Me) =>
-  renderToStaticMarkup(<TemplatePricePanel template={t} me={me} />)
+const html = (t: TemplateView, me: Me, refusals = false) =>
+  renderToStaticMarkup(<TemplatePricePanel template={t} me={me} refusals={refusals} />)
 
 describe('TemplatePricePanel', () => {
   it('a parent accepts the lowest bid or makes a new offer', () => {
@@ -115,5 +115,12 @@ describe('TemplatePricePanel', () => {
 
   it('a proposed template renders nothing', () => {
     expect(html({ ...base, status: 'proposed' }, TATA)).toBe('')
+  })
+
+  it('a price change shows Nechci and Odmítnout nabídky only with refusals (#232)', () => {
+    expect(html(demo, MLADSI, true)).toContain(cs.bids.withdraw)
+    expect(html(demo, TATA, true)).toContain(cs.bids.turnDown)
+    expect(html(demo, MLADSI)).not.toContain(cs.bids.withdraw)
+    expect(html(demo, TATA)).not.toContain(cs.bids.turnDown)
   })
 })

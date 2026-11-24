@@ -95,15 +95,15 @@
 - Modify: `src/components/templates/priceView.ts` (`priceRefusal(t, me, refusals = false)`: the proposed branch is unchanged (follows `t.bidding`, i.e. `choreBidding`); only the new `t.change` branch needs `refusals`; `lastBid` reads `t.bidding?.lastBids ?? t.lastBids`; the active taker send is disabled at his last bid with `sameAgainHint`), `src/components/templates/TemplatePricePanel.tsx` (prop `refusals`), `src/routes/_app/sablona/$templateId.tsx` (passes `features.bidRefusals`)
 - Test: `src/components/templates/priceView.test.ts`, `src/components/templates/pricePanel.test.ts`
 
-- [ ] **Step 1: failing tests**:
+- [x] **Step 1: failing tests**:
   - `a brother with a bid in a change gets Nechci; refusals off: none`.
   - `a proposed chore keeps Nechci and Odmítnout nabídky with refusals off` (pins the #209 behaviour).
   - `a parent with bids gets Odmítnout nabídky sending exactly the bids shown, hint `cs.rebid.turnDownHint(10)`; no bids → none.
   - `a brother's stepper is greyed at his last bid with sameAgainHint, open at the other brother's`.
   - `toasts: withdraw → Nabídka stažena, turnDown → Nabídky odmítnuty, a stale turn-down → turnDownChanged`.
   - panel: renders the ghost refusal button only with `refusals`.
-- [ ] **Step 2:** run → FAIL. **Step 3:** implement. **Step 4:** `pnpm vitest run src/components` → PASS.
-- [ ] **Step 5: Commit** `feat(templates): Nechci and Odmítnout nabídky on a chore price change (#232)`.
+- [x] **Step 2:** run → FAIL. **Step 3:** implement. **Step 4:** `pnpm vitest run src/components` → PASS.
+- [x] **Step 5: Commit** `feat(templates): Nechci and Odmítnout nabídky on a chore price change (#232)`.
 
 ### Task 4: Demo, e2e, screenshots
 

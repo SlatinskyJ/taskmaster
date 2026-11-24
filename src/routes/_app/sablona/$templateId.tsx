@@ -77,6 +77,7 @@ function TemplatePage() {
         key={`${String(t.score)}-${String(thread.length)}`}
         template={t}
         me={me}
+        refusals={features.bidRefusals}
       />
     </Screen>
   )
