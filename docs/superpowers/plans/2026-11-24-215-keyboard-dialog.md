@@ -64,7 +64,7 @@ Size: about 40 changed lines outside tests.
 - [ ] **Step 1: Write the failing e2e cases** in `e2e/keyboard.spec.ts` (each opens the dialog and lets Radix focus the field; no manual `focus()`):
   - `Správa, Nové heslo: the dialog's field is visible when it opens` — admin → Správa → `Upravit Táta` → `cs.admin.reset`; wait for `#__keyboard`; `expectAboveKeyboard(page, dialog textbox)`.
   - `Úkol, Zrušit úkol?: the reason field is visible when typing` — tata → first task he gave → `cs.cancelTask.hint` button; focus the reason textarea with `openKeyboard`; `expectAboveKeyboard`.
-  - `Správa, Nové heslo: the dialog follows the visible part when iOS slides it down` — open Nové heslo as above, `panKeyboard(page, 120)`, then `expectAboveKeyboard(page, field)` (now inside `[120, 120 + 333]`).
+  - `Správa, Nové heslo: the dialog follows the visible part when iOS slides it down` — open Nové heslo as above, `panKeyboard(page, 250)`, then `expectAboveKeyboard(page, dialog)` and `expectAboveKeyboard(page, field)` (both inside `[250, 250 + 333]`; a dialog left at the layout centre starts above 250 and fails).
   - `Úkol, Zrušit úkol? with a taller keyboard: the dialog shrinks and scrolls inside` — `useKeyboard(page, 450)` (this test's own keyboard), open Zrušit úkol?, focus the reason with `openKeyboard`; `expectAboveKeyboard(page, dialog)` (the whole dialog box fits the 218 px left) and `expectAboveKeyboard(page, field)`.
   - Existing login and Nový člověk cases still pass on the `tasks` seed.
 - [ ] **Step 1b: Unit test** `src/components/ui/dialog.test.ts`: `dialogPlacement` contains `var(--vv-top,0px)`, `var(--vv-height,100dvh)` (the fallbacks that keep today's centring with no keyboard), `max-h-` and `overflow-y-auto`.
