@@ -293,6 +293,9 @@ export const cs = {
     acceptBid: (score: number, names: string) => `Přijmout ${String(score)} (${names})`,
     /** Under every accept: only instances made later take the new score (§5.1). */
     acceptHint: 'Nové úkoly budou za tolik bodů.',
+    /** A proposed chore's first price (#209): its page header, and under every yes. */
+    proposedNow: (score: number) => `Návrh: ${String(score)} b.`,
+    firstAgreeHint: (score: number) => `Úkol začne platit za ${String(score)} b.`,
   },
   /** Reserve, release, done, approve, reject (spec §5.4–§5.5). */
   work: {
