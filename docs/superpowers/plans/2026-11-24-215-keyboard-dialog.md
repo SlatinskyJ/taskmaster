@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Issue:** #215 Keep the focused field visible with the phone keyboard open. Stacked on PR #214 (needs `e2e/keyboard.ts`).
+**Issue:** #215 Keep the focused field visible with the phone keyboard open. Builds on PR #214 (merged; `e2e/keyboard.ts`).
 
 **Goal:** A centred `Dialog` with a text field (Nové heslo, Zrušit úkol?) stays inside the part of the screen the phone keyboard leaves, so the field being typed into is visible, also when the dialog focuses it on open.
 
