@@ -127,12 +127,12 @@ Copy (strings.ts, `cs.bids`):
 - `turnDown: 'Odmítnout nabídky'`, `turnDownHint: (score) => \`Všechny nabídky se uzavřou. Úkol zůstane navržený za ${score} b.\``
 - `sameAgainHint: 'Stejné číslo můžeš poslat znovu, až rodiče změní nabídku.'`
 - `turnDownChanged: 'Mezitím přišla nová nabídka. Podívej se na ni.'` (toast for `offer_changed` from `turnDownBids` only)
-- `toast.withdrawn: 'Nabídka zrušena'`, `toast.turnedDown: 'Nabídky odmítnuty'`
+- `toast.withdrawn: 'Nabídka stažena'`, `toast.turnedDown: 'Nabídky odmítnuty'`
 - history (`cs.history`, used by `historyText.ts`), gender-neutral: `task.bid_withdrawn` → `'nabídka stažena'`, `task.bids_turned_down` → `'nabídky odmítnuty'`.
 
 Placement: the refuse button is the last row of the yes buttons (variant `ghost`), hint under it, before the stepper.
 
-- [ ] **Step 1: Failing tests:** `refuseButton` — taker with bid / without / switch off; giver with bids sends exactly `task.bids` as `{takerId, score}`; giver no bids → null. giver with bids and switch off → null. `sendButton` taker: `lastBids [me 5]`, value 5 → disabled with `sameAgainHint`; `lastBids []`, open bid 5, value 5 → enabled; `lastBids [other brother 25]`, value 25 → enabled. `BidPanel` render: Nechci shows with bid when `refusals`, hidden when not.
+- [ ] **Step 1: Failing tests:** `refuseButton` — taker with bid / without / switch off; giver with bids sends exactly `task.bids` as `{takerId, score}`; giver no bids → null. giver with bids and switch off → null. `sendButton` taker: `lastBids [me 5]`, value 5 → disabled with `sameAgainHint`; `lastBids []`, open bid 5, value 5 → enabled; `lastBids [other brother 25]`, value 25 → enabled. `BidPanel` render: Nechci shows with bid when `refusals`, hidden when not. `BidPanel` with a turn-down call answering `{ ok: false, error: 'offer_changed' }` → toast `cs.bids.turnDownChanged`.
 - [ ] **Step 2:** run → FAIL.
 - [ ] **Step 3:** implement.
 - [ ] **Step 4:** `pnpm test src/components` → PASS; `pnpm lint`, `pnpm typecheck`.
@@ -144,7 +144,7 @@ Placement: the refuse button is the last row of the yes buttons (variant `ghost`
 - Modify: `src/server/demo/seeds.ts` (`bidRefusals` on in `demo` and `tasks`), `e2e/task-page.spec.ts`
 
 - [ ] **Step 1:** e2e cases (tasks suite, "Umýt auto": Táta 18, Starší 25, Mladší 22):
-  - Mladší taps Nechci → toast "Nabídka zrušena", "Tvoje nabídka" line gone, his 22 in Vyjednávání marked "uzavřeno", Starší's 25 still open.
+  - Mladší taps Nechci → toast "Nabídka stažena", "Tvoje nabídka" line gone, his 22 in Vyjednávání marked "uzavřeno", Starší's 25 still open.
   - Táta taps Odmítnout nabídky → toast "Nabídky odmítnuty", chip "Navrženo", bids marked "uzavřeno", score 18.
   - Order the cases so each starts from the state the previous left, or use a second seeded task (add one to the tasks piece if needed: "Vynést koš", Táta 6, Starší 8).
 - [ ] **Step 2:** `pnpm build && pnpm exec playwright test e2e/task-page.spec.ts` → PASS.
