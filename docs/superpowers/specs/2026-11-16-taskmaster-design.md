@@ -92,7 +92,7 @@ Role rules:
 - **Bidding on a proposed template (Jakub, 2026-11-24):** while a template is proposed, takers may bid on its first score the same way as on a one-time task (5.2 path 2, including the same-number rule, a taker's no and a giver's turn-down), with **no reservation**. When the giver side accepts the lowest bid (a tie at the lowest is fine), counters at exactly an open bid, or a taker who bid says yes to the current offer, the template becomes active at that score. Instances never get bidding; once a template is active its score changes as below.
 - After agreement, **any party** may propose a new score. It needs score agreement again; the old score stays in force until the change is agreed.
 - Only givers create templates. One score change may be in flight per template at a time; changes to different templates can run in parallel (Jakub, 2026-11-17).
-- A template score change runs **the same way as bidding on a one-time task** (5.2 path 2), with these differences (Jakub, 2026-11-17):
+- A template score change runs **the same way as bidding on a one-time task** (5.2 path 2), including the same-number rule, a taker's no and a giver's turn-down (Jakub, 2026-11-24), with these differences (Jakub, 2026-11-17):
   - Each party has at most one open bid in the change; bidding again replaces it. Every bid is kept in the history.
   - When the giver side accepts, it accepts the lowest open bid. The template gets that score; nobody is reserved anything.
 - A score change applies only to instances created after the change is agreed. Existing instances keep their score, consistent with "score fixed at creation" (Jakub, 2026-11-17).
