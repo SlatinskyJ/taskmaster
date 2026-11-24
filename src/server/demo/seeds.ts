@@ -38,6 +38,8 @@ export const SEEDS = {
   launch: { pieces: [negotiation, points], features: [] },
   /** The task page (#36). */
   tasks: { pieces: [priceChange], features: [] },
+  /** Saying no in bidding (#208): "Umýt auto" with two bids, the refusals switch on. */
+  bids: { pieces: [negotiation], features: ['bidRefusals'] },
   /** Týden and the weekly meeting (#44, #45). */
   week: { pieces: [pastWeek, thisWeek], features: ['week', 'meeting'] },
   /** Recurring chores made by a person (#38): + Teď and Zapsat. */
