@@ -354,7 +354,8 @@ function endRound(tx: Tx, task: TaskRow, giverId: number, now: Date): TaskRow {
   const { row } = saveItem(tx, task, toItem(task), { endBidding: true }, now)
   writeAudit(tx, {
     actor: { kind: 'user', userId: giverId },
-    action: 'task.bids_turned_down',
+    // Nothing to turn down: he stopped the round (its history line says so, not "odmítnuty").
+    action: bids.length > 0 ? 'task.bids_turned_down' : 'task.bidding_closed',
     entityType: 'task',
     entityId: task.id,
     before: {

@@ -193,3 +193,9 @@ export function discardStaleChange(
   })
   return change.id
 }
+
+/** An open one-time task: where reopening bidding replaces "Jiná cena" (#212). */
+export function isOpenOneTime(db: Db | Tx, taskId: number): boolean {
+  const task = db.select().from(tasks).where(eq(tasks.id, taskId)).get()
+  return task?.status === 'open' && task.origin === 'one_time'
+}

@@ -36,6 +36,8 @@ export function taskErrorMessage(error: string): string {
       return cs.tasks.errors.noBids
     case 'no_bid':
       return cs.tasks.errors.noBid
+    case 'bidding_open':
+      return cs.tasks.errors.biddingOpen
     case 'reason_too_long':
       return cs.tasks.errors.reasonTooLong(REASON_MAX)
     case 'past_grace':

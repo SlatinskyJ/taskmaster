@@ -346,6 +346,8 @@ describe('a giver turns a round down (#212)', () => {
     const id = round(f)
     must(turnDownBids(f.db, f.tata, id, [], T2))
     expect(row(f.db, id)).toMatchObject({ status: 'open', score: 18, biddingFrom: null })
+    // Nothing was turned down: logged as the round's end.
+    expect(lastAudit(f.db)).toMatchObject({ action: 'task.bidding_closed', actorUserId: f.tata })
     expect(json(lastAudit(f.db)?.before)).toEqual({ score: 18, entryIds: [], offerEntryId: null })
   })
 
@@ -374,6 +376,6 @@ describe('a giver turns a round down (#212)', () => {
     const id = round(f)
     must(turnDownBids(f.db, f.tata, id, [], T2))
     const actions = taskHistory(f.db, id, String).map((e) => e.action)
-    expect(actions.slice(-2)).toEqual(['task.bidding_reopened', 'task.bids_turned_down'])
+    expect(actions.slice(-2)).toEqual(['task.bidding_reopened', 'task.bidding_closed'])
   })
 })
