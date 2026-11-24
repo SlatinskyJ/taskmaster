@@ -12,6 +12,7 @@ import {
   turnDownBids,
   withdrawBid,
 } from './bidding'
+import { taskHistory } from './history'
 import { saveItem, toItem } from './item'
 import { completeTask, releaseTask, reserveTask } from './lifecycle'
 import {
@@ -882,6 +883,24 @@ describe('withdrawBid (Nechci, Jakub 2026-11-24)', () => {
     expect(thread(f.db, id)).toEqual([
       ['giver', f.tata, 18, null],
       ['taker', f.starsi, 25, null],
+    ])
+  })
+})
+
+describe('Nechci and turn-down in the task history', () => {
+  it('both show on the task page history, by who did them', () => {
+    const f = family()
+    const id = car(f)
+    must(placeBid(f.db, f.starsi, id, 25, T1))
+    must(placeBid(f.db, f.mladsi, id, 22, T1))
+    must(withdrawBid(f.db, f.mladsi, id, T2))
+    must(turnDownBids(f.db, f.tata, id, [{ takerId: f.starsi, score: 25 }], T3))
+    const tail = taskHistory(f.db, id, String)
+      .slice(-2)
+      .map((e) => [e.action, e.by?.id, e.score])
+    expect(tail).toEqual([
+      ['task.bid_withdrawn', f.mladsi, null],
+      ['task.bids_turned_down', f.tata, 18],
     ])
   })
 })

@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import {
   acceptLowestBid,
   acceptOneTimeOffer,
@@ -20,8 +20,7 @@ import type { TaskRow, ThreadRow } from '~/server/db/schema'
 import { listPeople } from '~/server/users/people'
 import type { AgreedOneTime, TaskError } from './tasks'
 import { agree, agreementOf } from './tasks'
-import { addEntry, openBids, openOffer } from './thread'
-import { taskThread } from '~/server/db/schema'
+import { addEntry, closeRows, openBids, openOffer } from './thread'
 
 // Bidding on a one-time task (spec §5.2 path 2; Jakub 2026-11-17 and 2026-11-18). The rules live
 // in src/domain/bidding.ts; each action here loads the task, asks the domain, and writes the
@@ -238,14 +237,6 @@ export function turnDownBids(
     })
     return ok(saved)
   })
-}
-
-function closeRows(tx: Tx, ids: readonly number[], now: Date) {
-  if (ids.length === 0) return
-  tx.update(taskThread)
-    .set({ closedAt: toIsoUtc(now), closedAs: 'closed' })
-    .where(inArray(taskThread.id, [...ids]))
-    .run()
 }
 
 /** A taker with an open bid accepts the current offer: agreed and reserved to him in one step. */

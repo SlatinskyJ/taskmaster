@@ -117,6 +117,7 @@ describe('parseTurnDown (#208)', () => {
     })
     const fifty = Array.from({ length: 50 }, (_, i) => bid(i + 1, 5))
     expect(parseTurnDown({ taskId: 1, bids: fifty }).bids).toHaveLength(50)
+    expect(parseTurnDown({ taskId: 1, bids: [bid(3, 25)] }).bids).toEqual([bid(3, 25)])
   })
   it.each([
     ['no bids', { taskId: 1, bids: [] }],

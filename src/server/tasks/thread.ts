@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, isNull } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNull } from 'drizzle-orm'
 import { toIsoUtc } from '~/domain/dates'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
@@ -124,4 +124,13 @@ export function threadOf(db: Db | Tx, taskId: number): ThreadRow[] {
     .where(eq(taskThread.taskId, taskId))
     .orderBy(asc(taskThread.id))
     .all()
+}
+
+/** Closes the given rows as `closed`: a taker's Nechci, a giver's turn-down (#208). */
+export function closeRows(tx: Tx, ids: readonly number[], now: Date) {
+  if (ids.length === 0) return
+  tx.update(taskThread)
+    .set({ closedAt: toIsoUtc(now), closedAs: 'closed' })
+    .where(inArray(taskThread.id, [...ids]))
+    .run()
 }
