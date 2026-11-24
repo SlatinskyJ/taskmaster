@@ -3,6 +3,7 @@ import { and, asc, eq, sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import {
   auditLog,
+  disputes,
   featureFlags,
   settlements,
   tasks,
@@ -451,4 +452,51 @@ describe('the demo seed: proposals (#43)', () => {
     expect(v.defaults?.status).toBe('pending')
     expect(v.defaults?.waitingFor.map(name)).toEqual(['starsi', 'mladsi'])
   })
+})
+
+describe('the demo seed: disputes (#46)', () => {
+  it.each(['demo', 'disputes'])(
+    '%s: Starší disputes "Vysát auto"; Mladší\'s settlement dispute is dismissed',
+    (seed) => {
+      const db = createTestDb()
+      seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: seed }, T0)
+      const name = (uid: number | null) =>
+        uid === null ? null : db.select().from(users).where(eq(users.id, uid)).get()?.username
+      const rows = db.select().from(disputes).orderBy(asc(disputes.id)).all()
+      expect(
+        rows.map((d) => [d.itemKind, name(d.openedBy), d.status, name(d.resolvedBy), d.note]),
+      ).toEqual([
+        ['completion', 'starsi', 'open', null, null],
+        ['settlement', 'mladsi', 'dismissed', 'admin', 'Body sedí, zkontroloval jsem to s tátou.'],
+      ])
+      const car = db
+        .select()
+        .from(tasks)
+        .where(eq(tasks.id, rows[0]?.itemId ?? 0))
+        .get()
+      expect(car?.title).toBe('Vysát auto')
+      const record = db
+        .select()
+        .from(settlements)
+        .where(eq(settlements.id, rows[1]?.itemId ?? 0))
+        .get()
+      expect(name(record?.takerId ?? null)).toBe('mladsi')
+      const log = db
+        .select()
+        .from(auditLog)
+        .where(eq(auditLog.entityType, 'dispute'))
+        .orderBy(asc(auditLog.id))
+        .all()
+      expect(log.map((e) => [e.action, e.entityId])).toEqual([
+        ['dispute.opened', String(rows[0]?.id)],
+        ['dispute.opened', String(rows[1]?.id)],
+        ['dispute.dismissed', String(rows[1]?.id)],
+      ])
+      expect(JSON.parse(log[2]?.after ?? 'null')).toEqual({
+        status: 'dismissed',
+        note: 'Body sedí, zkontroloval jsem to s tátou.',
+      })
+      expect(getFlags(db).disputes).toBe(true)
+    },
+  )
 })

@@ -8,12 +8,15 @@ import { settlements, tasks } from '~/server/db/schema'
 import { currentPeriod, listPeriods } from '~/server/periods'
 import { rejectionsSince } from '~/server/tasks/rejections'
 import { listPeople } from '~/server/users/people'
+import { disputeMarks, markKey } from '~/server/disputes'
+import type { DisputeItem, DisputeMark } from '~/server/disputes'
 import { takerPointsNow } from './ledger'
 import { takersOf } from './meeting'
 
 // Týden (#45, spec §5.7–§5.9): this week and the settled weeks. A taker sees only himself; a
 // giver sees every active taker (§5.7). The filter is here, on the server, and default-deny:
-// everyone only for a giver. Read-only.
+// everyone only for a giver. Read-only. Confirmed and rejected items and the settled records
+// carry their dispute mark (#46), read only for what this viewer is shown.
 // `unsettled` is the ledger total minus this week's bar. When #47/#36 add adjustments to the
 // ledger, they must land in `confirmed` here, or they would read as "waiting for the meeting".
 
@@ -28,6 +31,11 @@ export interface WeekItem {
   reason: string | null
   /** Rejections only: a rejected self-log, which did not go back to the taker. */
   closed?: boolean
+  /**
+   * Confirmed and rejected items (#46): what a dispute on it names and its mark (open, or the
+   * latest outcome; null without one). Waiting items have none: not locked yet.
+   */
+  dispute?: { item: { kind: 'completion' | 'rejection'; id: number }; mark: DisputeMark | null }
 }
 
 export interface WeekTaker {
@@ -51,12 +59,16 @@ export interface WeekTaker {
 }
 
 export interface HistoryRecord {
+  /** The settlement record's id (a dispute names it, #46). */
+  id: number
   takerId: number
   name: string
   totalBefore: number
   level: Level
   deducted: number
   carryOver: number
+  /** The record's dispute mark, null without one (#46). */
+  dispute: DisputeMark | null
 }
 
 export interface HistoryWeek {
@@ -101,6 +113,13 @@ export function getWeek(db: Db | Tx, viewer: Viewer, now: Date): Week {
   const carried = new Map<number, number>()
   for (const r of rows) carried.set(r.takerId, r.carryOver)
   const items = period ? weekItems(db, ids, period.startsAt) : new Map<number, WeekItem[]>()
+  // Marks only for what this viewer is shown, so a taker never reads another boy's notes.
+  const shown: DisputeItem[] = rows.map((r) => ({ kind: 'settlement', id: r.id }))
+  for (const list of items.values()) for (const i of list) if (i.dispute) shown.push(i.dispute.item)
+  const marks = disputeMarks(db, shown)
+  for (const list of items.values()) {
+    for (const i of list) if (i.dispute) i.dispute.mark = marks.get(markKey(i.dispute.item)) ?? null
+  }
   const thisWeek = period ? pointsSince(db, ids, period.startsAt) : null
   return {
     period: period
@@ -122,7 +141,7 @@ export function getWeek(db: Db | Tx, viewer: Viewer, now: Date): Week {
       const unsettled = all.confirmed - confirmed + (all.pending - now.pending)
       return { ...base, confirmed, pending: now.pending, unsettled }
     }),
-    history: history(db, rows, names),
+    history: history(db, rows, names, marks),
   }
 }
 
@@ -167,13 +186,15 @@ function weekItems(db: Db | Tx, ids: number[], start: Date): Map<number, WeekIte
     .all()) {
     if (t.earnerId === null || t.completedAt === null) continue
     if (t.status !== 'done_unconfirmed' && t.completedAt < since) continue
+    const confirmed = t.status === 'confirmed'
     out.get(t.earnerId)?.push({
       taskId: t.id,
       title: t.title,
       score: t.score,
-      status: t.status === 'confirmed' ? 'confirmed' : 'done_unconfirmed',
+      status: confirmed ? 'confirmed' : 'done_unconfirmed',
       at: t.completedAt,
       reason: null,
+      ...(confirmed ? { dispute: { item: { kind: 'completion', id: t.id }, mark: null } } : {}),
     })
   }
   for (const r of rejectionsSince(db, start)) {
@@ -185,6 +206,7 @@ function weekItems(db: Db | Tx, ids: number[], start: Date): Map<number, WeekIte
       at: r.at,
       reason: r.reason,
       closed: r.closed,
+      dispute: { item: { kind: 'rejection', id: r.entryId }, mark: null },
     })
   }
   for (const list of out.values())
@@ -196,6 +218,7 @@ function history(
   db: Db | Tx,
   rows: (typeof settlements.$inferSelect)[],
   names: Map<number, string>,
+  marks: Map<string, DisputeMark>,
 ): HistoryWeek[] {
   const weeks: HistoryWeek[] = []
   for (const p of [...listPeriods(db)].reverse()) {
@@ -203,12 +226,14 @@ function history(
       .filter((r) => r.periodId === p.id)
       .sort((a, b) => a.takerId - b.takerId)
       .map((r) => ({
+        id: r.id,
         takerId: r.takerId,
         name: names.get(r.takerId) ?? '',
         totalBefore: r.totalBefore,
         level: r.level,
         deducted: r.deducted,
         carryOver: r.carryOver,
+        dispute: marks.get(markKey({ kind: 'settlement', id: r.id })) ?? null,
       }))
     if (records.length === 0) continue
     weeks.push({

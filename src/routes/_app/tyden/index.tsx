@@ -3,6 +3,7 @@ import { Screen } from '~/components/shell/Screen'
 import { WeekScreen } from '~/components/week/WeekScreen'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
+import { getDisputeListFn } from '~/server/disputes/functions'
 import { getProposalsFn } from '~/server/periods/functions'
 import { getWeekFn } from '~/server/settlement/functions'
 
@@ -16,19 +17,23 @@ export const Route = createFileRoute('/_app/tyden/')({
     week: await getWeekFn(),
     // Příští týden card (#43): only with the launch switch on, so off means no call.
     proposals: context.features.periodProposals ? await getProposalsFn() : null,
+    // Rozporováno (#46): only with the disputes switch on.
+    disputeList: context.features.disputes ? await getDisputeListFn() : null,
   }),
   component: WeekPage,
 })
 
 function WeekPage() {
-  const { user } = Route.useRouteContext()
-  const { week, proposals } = Route.useLoaderData()
+  const { user, features } = Route.useRouteContext()
+  const { week, proposals, disputeList } = Route.useLoaderData()
   const giver = user.role === 'giver'
   return (
     <Screen title={giver ? cs.nav.week : cs.week.myTitle} user={user}>
       <WeekScreen
         week={week}
         viewerRole={giver ? 'giver' : 'taker'}
+        disputes={features.disputes}
+        disputeList={disputeList && !('error' in disputeList) ? disputeList : []}
         nextWeek={
           proposals && !('error' in proposals)
             ? {

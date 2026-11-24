@@ -43,6 +43,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'scheduler', spec: 'scheduler.spec.ts', seed: 'scheduler' },
   // Its own server: the proposals change for good.
   { name: 'proposals', spec: 'proposals.spec.ts', seed: 'proposals' },
+  // Its own server: it opens a dispute for good.
+  { name: 'disputes', spec: 'disputes.spec.ts', seed: 'disputes' },
 ]
 
 /** Passkeys on (localhost) for the `on` suite only, at its own port. */

@@ -1,11 +1,19 @@
+import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import type { DisputeListEntry } from '~/server/disputes/functions'
 import { cs } from '~/lib/strings'
 import { takerWeek, week } from './fixtures'
 import { rejectionLine, WeekBody, WeekScreen } from './WeekScreen'
 import type { WeekTab } from './WeekScreen'
 
 // Týden (#45): every state of both tabs, rendered statically.
+
+vi.mock('@tanstack/react-router', () => ({
+  useRouter: () => ({ invalidate: vi.fn() }),
+  Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
+}))
+vi.mock('~/server/disputes/functions', () => ({ openDisputeFn: vi.fn() }))
 
 const html = (w = week(), tab: WeekTab = 'this', role: 'taker' | 'giver' = 'giver') =>
   renderToStaticMarkup(<WeekBody week={w} tab={tab} viewerRole={role} />)
@@ -124,5 +132,85 @@ describe('rejectionLine', () => {
   it('a rejected self-log did not go back: only the reason, or that it earned nothing', () => {
     expect(rejectionLine({ ...base, closed: true }, null)).toBe('nádobí zůstalo v dřezu')
     expect(rejectionLine({ ...base, closed: true, reason: null }, 'Mladší')).toBe('Bez bodů.')
+  })
+})
+
+describe('Rozporovat on Týden (#46)', () => {
+  const on = (w = week(), tab: WeekTab = 'this', list: DisputeListEntry[] = []) =>
+    renderToStaticMarkup(
+      <WeekBody week={w} tab={tab} viewerRole="giver" disputes disputeList={list} />,
+    )
+  const rows = (out: string) => out.split('data-slot="task-row"').slice(1)
+
+  it('confirmed and rejected items have it inside their card; a waiting one not', () => {
+    const [waiting, confirmed, rejected] = rows(on())
+    expect(waiting).not.toContain('data-slot="dispute"')
+    expect(confirmed).toContain('data-slot="dispute"')
+    expect(rejected).toContain('data-slot="dispute"')
+    expect(confirmed).toContain(
+      'aria-label="Rozporovat: Potvrzené splnění – Vyluxovat celý obývák a chodbu"',
+    )
+    expect(rejected).toContain('aria-label="Rozporovat: Zamítnuté splnění – Vynést sklo"')
+  })
+
+  it('an open dispute: Sporné on the row, its own chip and points unchanged', () => {
+    const w = week()
+    const t = w.takers[0]
+    const i = t?.items[1]
+    if (!t || !i?.dispute) throw new Error('fixture')
+    i.dispute.mark = { status: 'open' }
+    const [, confirmed] = rows(on(w))
+    expect(confirmed).toContain(cs.disputes.waiting)
+    expect(confirmed).toContain(cs.state.confirmed)
+    expect(confirmed).toMatch(/>8</)
+    expect(confirmed).not.toContain(`>${cs.disputes.action}<`)
+  })
+
+  it('each history record has one, named by its week', () => {
+    const out = on(week(), 'history')
+    const records = out.split('data-record=').slice(1)
+    expect(records).toHaveLength(2)
+    for (const r of records) expect(r).toContain('data-slot="dispute"')
+    expect(out).toContain('aria-label="Rozporovat: Vyúčtování týdne – 14. 11. – 21. 11."')
+  })
+
+  it('a closed dispute on a record shows its outcome and Rozporovat again', () => {
+    const w = week()
+    const r = w.history[0]?.records[1]
+    if (!r) throw new Error('fixture')
+    r.dispute = { status: 'dismissed', note: 'Body sedí.' }
+    const out = on(w, 'history')
+    expect(out).toContain('Správce nechal beze změny: Body sedí.')
+    expect(out.split(`>${cs.disputes.action}<`)).toHaveLength(3)
+  })
+
+  it('Historie: Rozporováno above the weeks', () => {
+    const entry: DisputeListEntry = {
+      id: 1,
+      item: { kind: 'settlement', id: 22 },
+      title: '',
+      week: { startsAt: '2026-11-14T19:00:00.000Z', endsAt: '2026-11-21T19:00:00.000Z' },
+      takerName: 'Mladší',
+      openedByName: 'Mladší',
+      reason: 'Měl jsem víc.',
+      openedAt: '2026-11-22T10:00:00.000Z',
+      mark: { status: 'open' },
+    }
+    const out = on(week(), 'history', [entry])
+    expect(out).toContain(cs.disputes.list)
+    expect(out.indexOf(cs.disputes.list)).toBeLessThan(out.indexOf('data-period='))
+  })
+
+  it('switch off: nothing new anywhere', () => {
+    const w = week()
+    const i = w.takers[0]?.items[1]
+    if (!i?.dispute) throw new Error('fixture')
+    i.dispute.mark = { status: 'open' }
+    for (const tab of ['this', 'history'] as const) {
+      const out = html(w, tab)
+      expect(out).not.toContain(cs.disputes.action)
+      expect(out).not.toContain('data-slot="dispute"')
+      expect(out).not.toContain(cs.disputes.list)
+    }
   })
 })

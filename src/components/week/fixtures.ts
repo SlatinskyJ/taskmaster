@@ -9,6 +9,7 @@ export const item = (over: Partial<WeekItem> = {}): WeekItem => ({
   status: 'confirmed',
   at: '2026-11-24T17:00:00.000Z',
   reason: null,
+  dispute: { item: { kind: 'completion', id: over.taskId ?? 10 }, mark: null },
   ...over,
 })
 
@@ -29,7 +30,13 @@ export function week(over: Partial<Week> = {}): Week {
         carriedIn: 8,
         unsettled: 0,
         items: [
-          item({ taskId: 11, title: 'Zalít kytky', score: 2, status: 'done_unconfirmed' }),
+          item({
+            taskId: 11,
+            title: 'Zalít kytky',
+            score: 2,
+            status: 'done_unconfirmed',
+            dispute: undefined,
+          }),
           item(),
           item({
             taskId: 12,
@@ -37,6 +44,7 @@ export function week(over: Partial<Week> = {}): Week {
             score: 4,
             status: 'rejected',
             reason: 'nádobí zůstalo v dřezu',
+            dispute: { item: { kind: 'rejection', id: 90 }, mark: null },
           }),
         ],
       },
@@ -50,20 +58,24 @@ export function week(over: Partial<Week> = {}): Week {
         levels: { lower: 50, upper: 100 },
         records: [
           {
+            id: 21,
             takerId: 3,
             name: 'Starší',
             totalBefore: 108,
             level: 'upper',
             deducted: 100,
             carryOver: 8,
+            dispute: null,
           },
           {
+            id: 22,
             takerId: 4,
             name: 'Mladší',
             totalBefore: 50,
             level: 'lower',
             deducted: 50,
             carryOver: 0,
+            dispute: null,
           },
         ],
       },

@@ -52,4 +52,10 @@
   .bar-grow {
     transition: none;
   }
+  /* vaul's drawer slide has no opt-out of its own (#46). */
+  [data-vaul-drawer],
+  [data-vaul-overlay] {
+    animation: none !important;
+    transition: none !important;
+  }
 }

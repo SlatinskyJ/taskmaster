@@ -23,6 +23,7 @@ export function TaskRow({
   detail,
   stateLabel,
   action,
+  footer,
   className,
 }: {
   name: ReactNode
@@ -35,18 +36,13 @@ export function TaskRow({
   /** Chip text in place of the state's own label. */
   stateLabel?: string
   action?: ReactNode
+  /** A full-width line inside the card, under the row (e.g. Rozporovat, #46). */
+  footer?: ReactNode
   className?: string
 }) {
-  return (
-    <div
-      data-slot="task-row"
-      data-state={state}
-      className={cn(
-        'relative flex min-h-tap items-center gap-3 rounded-card border-l-4 bg-surface py-2.5 pr-2.5 pl-3 shadow-sticker',
-        STATE_STRIPE[state],
-        className,
-      )}
-    >
+  const card = 'relative rounded-card border-l-4 bg-surface py-2.5 pr-2.5 pl-3 shadow-sticker'
+  const line = (
+    <>
       <div className="grid min-w-0 flex-1 gap-1">
         {/* Two lines before truncating, so a name still reads next to the action at 360 px. */}
         <div className="line-clamp-2 text-row font-bold break-words">{name}</div>
@@ -73,6 +69,27 @@ export function TaskRow({
         {points}
       </span>
       {action}
+    </>
+  )
+  if (!footer) {
+    return (
+      <div
+        data-slot="task-row"
+        data-state={state}
+        className={cn(card, 'flex min-h-tap items-center gap-3', STATE_STRIPE[state], className)}
+      >
+        {line}
+      </div>
+    )
+  }
+  return (
+    <div
+      data-slot="task-row"
+      data-state={state}
+      className={cn(card, 'grid gap-1.5', STATE_STRIPE[state], className)}
+    >
+      <div className="flex min-h-tap items-center gap-3">{line}</div>
+      {footer}
     </div>
   )
 }

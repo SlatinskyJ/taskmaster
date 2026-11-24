@@ -35,6 +35,7 @@ describe('navItems (UI doc §6)', () => {
       week: key === 'week',
       meeting: key === 'meeting',
       periodProposals: false,
+      disputes: false,
     })
     expect(navItems('taker', only('log')).map((i) => i.key)).toEqual(['home', 'log'])
     expect(navItems('taker', only('week')).map((i) => i.key)).toEqual(['home', 'week'])

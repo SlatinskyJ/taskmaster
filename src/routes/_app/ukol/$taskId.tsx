@@ -1,4 +1,6 @@
 import { createFileRoute, notFound } from '@tanstack/react-router'
+import { DisputeControl } from '~/components/disputes/DisputeControl'
+import { taskDisputes } from '~/components/disputes/disputeProps'
 import { Screen } from '~/components/shell/Screen'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { BidPanel } from '~/components/tasks/BidPanel'
@@ -13,6 +15,8 @@ import { Card } from '~/components/ui/card'
 import { parseIdParam } from '~/lib/idParam'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
+import { getItemMarkFn } from '~/server/disputes/functions'
+import type { DisputeMark } from '~/server/disputes/functions'
 import { getTaskDetailFn } from '~/server/tasks/functions'
 
 // One task's page (#34): TTask for a brother, GBid / GTask for a parent (UI doc §7). The state,
@@ -23,7 +27,7 @@ export const Route = createFileRoute('/_app/ukol/$taskId')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/ukol/$taskId')
   },
-  loader: async ({ params }) => {
+  loader: async ({ params, context }) => {
     const taskId = parseIdParam(params.taskId)
     // TanStack Router's notFound() is thrown by design; it is not an Error.
     // eslint-disable-next-line @typescript-eslint/only-throw-error
@@ -31,14 +35,27 @@ export const Route = createFileRoute('/_app/ukol/$taskId')({
     const detail = await getTaskDetailFn({ data: { taskId } })
     // eslint-disable-next-line @typescript-eslint/only-throw-error
     if (!detail) throw notFound()
-    return detail
+    // Rozporovat (#46): the marks of the score and the completion, only with the switch on.
+    const items = context.features.disputes ? taskDisputes(detail.task, false) : []
+    // Keyed by kind (one score and one completion per task), so a mark can't land on the
+    // other line.
+    const marks = await Promise.all(
+      items.map(async (d) => {
+        const m = await getItemMarkFn({ data: d.item })
+        return [d.item.kind, m && 'error' in m ? null : m] as const
+      }),
+    )
+    return {
+      ...detail,
+      disputeMarks: Object.fromEntries(marks) as Partial<Record<string, DisputeMark | null>>,
+    }
   },
   component: TaskPage,
 })
 
 function TaskPage() {
-  const { user } = Route.useRouteContext()
-  const { task, thread, history } = Route.useLoaderData()
+  const { user, features } = Route.useRouteContext()
+  const { task, thread, history, disputeMarks } = Route.useLoaderData()
   const me = { id: user.id, role: user.role }
   const meta = detailMeta(task, me)
   const due = instanceMeta(task, new Date())
@@ -64,6 +81,15 @@ function TaskPage() {
             )}
           </p>
         )}
+        {features.disputes &&
+          taskDisputes(task, user.role === 'giver').map((d) => (
+            <DisputeControl
+              key={d.item.kind}
+              {...d}
+              mark={disputeMarks[d.item.kind] ?? null}
+              lead
+            />
+          ))}
       </Card>
       <TaskWorkPanel task={task} me={me} />
       {/* An instance's score is fixed when it is made (spec §4, #38): no price change. */}

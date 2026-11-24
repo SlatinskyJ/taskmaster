@@ -1,5 +1,8 @@
 import { Link } from '@tanstack/react-router'
 import { ChevronRight } from 'lucide-react'
+import { DisputeControl } from '~/components/disputes/DisputeControl'
+import { DisputeList } from '~/components/disputes/DisputeList'
+import { recordDispute, weekItemDispute } from '~/components/disputes/disputeProps'
 import { EmptyState } from '~/components/EmptyState'
 import { levelBadgeClass, levelLabel, weekLabel } from '~/components/period/periodView'
 import { PointsBar } from '~/components/points/PointsBar'
@@ -9,6 +12,7 @@ import { TaskRow } from '~/components/tasks/TaskRow'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { cs, formatPoints } from '~/lib/strings'
 import { cn } from '~/lib/utils'
+import type { DisputeListEntry } from '~/server/disputes/functions'
 import type { HistoryWeek, Week, WeekItem, WeekTaker } from '~/server/settlement/functions'
 import { historyLine, itemChip, itemMeta } from './weekView'
 
@@ -36,12 +40,18 @@ export function WeekScreen({
   week,
   viewerRole,
   nextWeek,
+  disputes = false,
+  disputeList = [],
 }: {
   week: Week
   viewerRole: 'taker' | 'giver'
   /** Set with the `periodProposals` switch on: the Příští týden card shows. */
   nextWeek?: { pending: boolean }
+  /** The `disputes` switch (#46): Rozporovat on locked items, Rozporováno on Historie. */
+  disputes?: boolean
+  disputeList?: readonly DisputeListEntry[]
 }) {
+  const shared = { viewerRole, disputes, disputeList }
   return (
     <Tabs defaultValue="this">
       <TabsList>
@@ -50,10 +60,10 @@ export function WeekScreen({
       </TabsList>
       <TabsContent value="this">
         {nextWeek && <NextWeekCard pending={nextWeek.pending} />}
-        <WeekBody week={week} tab="this" viewerRole={viewerRole} />
+        <WeekBody week={week} tab="this" {...shared} />
       </TabsContent>
       <TabsContent value="history">
-        <WeekBody week={week} tab="history" viewerRole={viewerRole} />
+        <WeekBody week={week} tab="history" {...shared} />
       </TabsContent>
     </Tabs>
   )
@@ -64,21 +74,30 @@ export function WeekBody({
   week,
   tab,
   viewerRole,
+  disputes = false,
+  disputeList = [],
 }: {
   week: Week
   tab: WeekTab
   viewerRole: 'taker' | 'giver'
+  disputes?: boolean
+  disputeList?: readonly DisputeListEntry[]
 }) {
   const named = viewerRole === 'giver'
   if (tab === 'history') {
-    return week.history.length === 0 ? (
-      <EmptyState>{cs.week.noHistory}</EmptyState>
-    ) : (
-      <ul className="grid gap-3">
-        {week.history.map((h) => (
-          <HistoryCard key={h.periodId} week={h} named={named} />
-        ))}
-      </ul>
+    return (
+      <>
+        {disputes && <DisputeList entries={disputeList} />}
+        {week.history.length === 0 ? (
+          <EmptyState>{cs.week.noHistory}</EmptyState>
+        ) : (
+          <ul className="grid gap-3">
+            {week.history.map((h) => (
+              <HistoryCard key={h.periodId} week={h} named={named} disputes={disputes} />
+            ))}
+          </ul>
+        )}
+      </>
     )
   }
   return (
@@ -92,14 +111,24 @@ export function WeekBody({
       )}
       <ul className="grid gap-3">
         {week.takers.map((t) => (
-          <TakerWeek key={t.id} taker={t} week={week} named={named} />
+          <TakerWeek key={t.id} taker={t} week={week} named={named} disputes={disputes} />
         ))}
       </ul>
     </div>
   )
 }
 
-function TakerWeek({ taker, week, named }: { taker: WeekTaker; week: Week; named: boolean }) {
+function TakerWeek({
+  taker,
+  week,
+  named,
+  disputes,
+}: {
+  taker: WeekTaker
+  week: Week
+  named: boolean
+  disputes: boolean
+}) {
   const levels = week.period?.levels
   return (
     <li data-taker={taker.id} className="grid gap-3">
@@ -138,18 +167,21 @@ function TakerWeek({ taker, week, named }: { taker: WeekTaker; week: Week; named
             <EmptyState>{cs.week.noItems}</EmptyState>
           ) : (
             <ul className="grid gap-2">
-              {taker.items.map((item) => (
-                <li key={`${item.status}-${String(item.taskId)}-${item.at}`}>
-                  {/* #46: Rozporovat on a confirmed or a rejected item goes here. */}
-                  <TaskRow
-                    name={item.title}
-                    state={itemChip(item)}
-                    points={item.score}
-                    meta={itemMeta(item)}
-                    detail={rejectionLine(item, named ? taker.name : null)}
-                  />
-                </li>
-              ))}
+              {taker.items.map((item) => {
+                const d = disputes ? weekItemDispute(item, named ? taker.name : null) : null
+                return (
+                  <li key={`${item.status}-${String(item.taskId)}-${item.at}`}>
+                    <TaskRow
+                      name={item.title}
+                      state={itemChip(item)}
+                      points={item.score}
+                      meta={itemMeta(item)}
+                      detail={rejectionLine(item, named ? taker.name : null)}
+                      footer={d && <DisputeControl {...d} mark={item.dispute?.mark ?? null} />}
+                    />
+                  </li>
+                )
+              })}
             </ul>
           )}
         </section>
@@ -169,7 +201,15 @@ export function rejectionLine(item: WeekItem, takerName: string | null): string 
   return item.reason ? `${item.reason} ${back}` : back
 }
 
-function HistoryCard({ week, named }: { week: HistoryWeek; named: boolean }) {
+function HistoryCard({
+  week,
+  named,
+  disputes,
+}: {
+  week: HistoryWeek
+  named: boolean
+  disputes: boolean
+}) {
   return (
     <li
       data-period={week.periodId}
@@ -194,7 +234,7 @@ function HistoryCard({ week, named }: { week: HistoryWeek; named: boolean }) {
               </span>
             </div>
             <p className="num text-meta">{historyLine(r)}</p>
-            {/* #46: Rozporovat on a settlement record goes here. */}
+            {disputes && <DisputeControl {...recordDispute(week, r, named)} mark={r.dispute} />}
           </li>
         ))}
       </ul>

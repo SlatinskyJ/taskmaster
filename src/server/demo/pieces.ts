@@ -1,7 +1,15 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
+import { writeAudit } from '~/server/audit'
 import type { Tx } from '~/server/audit'
 import { nextPeriod } from '~/domain'
-import { templates as templateTable } from '~/server/db/schema'
+import {
+  disputes as disputeTable,
+  settlements,
+  tasks as taskTable,
+  templates as templateTable,
+} from '~/server/db/schema'
+import { openDisputeIn } from '~/server/disputes'
+import { toIsoUtc } from '~/domain/dates'
 import {
   createOnDemandInstance,
   createScheduledInstances,
@@ -256,6 +264,66 @@ export const thisWeek: Piece = (ctx) => {
       step(`approve "${chore.title}"`, approveTask(ctx.tx, ctx.id('tata'), task, ctx.now))
     }
   }
+}
+
+const DISMISS_NOTE = 'Body sedí, zkontroloval jsem to s tátou.'
+
+/**
+ * Disputes (#46), after `thisWeek` and a past week: Starší disputes his confirmed "Vysát auto"
+ * (open, so Týden shows Sporné); Mladší disputes his past-week settlement and the admin keeps it
+ * as it was, with a note. The dismissal is written directly here (row + `dispute.dismissed`
+ * audit entry) until the admin's own dismiss (#47) exists; that PR swaps in its call.
+ */
+export const disputes: Piece = ({ tx, id, now }) => {
+  const car = tx
+    .select({ id: taskTable.id })
+    .from(taskTable)
+    .where(and(eq(taskTable.title, 'Vysát auto'), eq(taskTable.status, 'confirmed')))
+    .get()
+  if (!car) throw new Error('Demo seed: no confirmed "Vysát auto"')
+  step(
+    'dispute "Vysát auto"',
+    openDisputeIn(
+      tx,
+      id('starsi'),
+      { kind: 'completion', id: car.id },
+      'Vysával jsem i kufr, to je víc práce.',
+      now,
+    ),
+  )
+  const record = tx
+    .select({ id: settlements.id })
+    .from(settlements)
+    .where(eq(settlements.takerId, id('mladsi')))
+    .get()
+  if (!record) throw new Error('Demo seed: no settlement for Mladší')
+  const opened = step(
+    'dispute the settlement',
+    openDisputeIn(
+      tx,
+      id('mladsi'),
+      { kind: 'settlement', id: record.id },
+      'Kočku jsem krmil i v neděli, to tam chybí.',
+      now,
+    ),
+  )
+  tx.update(disputeTable)
+    .set({
+      status: 'dismissed',
+      resolvedBy: id('admin'),
+      resolvedAt: toIsoUtc(now),
+      note: DISMISS_NOTE,
+    })
+    .where(eq(disputeTable.id, opened.id))
+    .run()
+  writeAudit(tx, {
+    actor: { kind: 'user', userId: id('admin') },
+    action: 'dispute.dismissed',
+    entityType: 'dispute',
+    entityId: opened.id,
+    after: { status: 'dismissed', note: DISMISS_NOTE },
+    at: now,
+  })
 }
 
 /**

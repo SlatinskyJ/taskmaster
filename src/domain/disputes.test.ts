@@ -53,7 +53,7 @@ describe('locked items (spec §5.11)', () => {
     ['agreed template score', { kind: 'template_score', id: 2, agreement: 'agreed' }, true],
     ['template not yet agreed', { kind: 'template_score', id: 2, agreement: 'proposed' }, false],
     ['confirmed completion', { kind: 'completion', id: 3, outcome: 'confirmed' }, true],
-    ['rejected completion', { kind: 'completion', id: 3, outcome: 'rejected' }, true],
+    ['rejected completion', { kind: 'rejection', id: 3 }, true],
     ['pending completion', { kind: 'completion', id: 3, outcome: 'pending' }, false],
     ['settlement record', { kind: 'settlement', id: 4, periodId: 46, takerId: OLDER }, true],
     ['manual adjustment', { kind: 'adjustment', id: 5 }, true],
@@ -134,7 +134,7 @@ describe('resolving a dispute (admin only)', () => {
   })
 
   it('correct any item by an adjustment', () => {
-    const d = value(open({ kind: 'completion', id: 3, outcome: 'rejected' }))
+    const d = value(open({ kind: 'rejection', id: 3 }))
     expect(value(correctDispute(d, family, JAKUB, ADJ, '+10 za koš'))).toMatchObject({
       status: 'corrected',
       correction: ADJ,
@@ -175,5 +175,26 @@ describe('resolving a dispute (admin only)', () => {
     expect(error(correctDispute(d, family, JAKUB, ADJ, 'again'))).toBe('not_open')
     expect(isDisputed(SETTLEMENT_REF, [d])).toBe(false)
     expect(open(SETTLEMENT, YOUNGER, [d]).ok).toBe(true)
+  })
+})
+
+describe('rejections (#46)', () => {
+  it('a taker disputes a rejection entry, reason trimmed', () => {
+    expect(openDispute(family, OLDER, { kind: 'rejection', id: 7 }, ' proč ', [])).toEqual({
+      ok: true,
+      value: {
+        item: { kind: 'rejection', id: 7 },
+        openedBy: OLDER,
+        reason: 'proč',
+        status: 'open',
+      },
+    })
+  })
+
+  it('an open dispute on a completion does not block the rejection with the same id', () => {
+    const onCompletion = value(open({ kind: 'completion', id: 7, outcome: 'confirmed' }))
+    expect(value(open({ kind: 'rejection', id: 7 }, OLDER, [onCompletion]))).toMatchObject({
+      item: { kind: 'rejection', id: 7 },
+    })
   })
 })
