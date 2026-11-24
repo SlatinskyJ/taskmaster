@@ -18,12 +18,14 @@ const page = vi.hoisted(() => {
     task: TaskView | null
     history: HistoryEntry[]
     disputes: boolean
+    reopen: boolean
     marks: Record<string, unknown>
   } = {
     user: null,
     task: null,
     history: [],
     disputes: false,
+    reopen: false,
     marks: {},
   }
   return state
@@ -31,7 +33,10 @@ const page = vi.hoisted(() => {
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (opts: Record<string, unknown>) => ({
     ...opts,
-    useRouteContext: () => ({ user: page.user, features: { disputes: page.disputes } }),
+    useRouteContext: () => ({
+      user: page.user,
+      features: { disputes: page.disputes, reopenBidding: page.reopen, bidRefusals: true },
+    }),
     useLoaderData: () => ({
       task: page.task,
       thread: [],
@@ -261,5 +266,57 @@ describe('task page: Rozporovat (#46)', () => {
   it('proposed, or the switch off: none', () => {
     expect(on({ ...reserved, status: 'proposed' })).not.toContain('data-slot="dispute"')
     expect(render(TATA, confirmed)).not.toContain('data-slot="dispute"')
+  })
+})
+
+describe('task page: reopened bidding (#212)', () => {
+  const TATA = { id: 2, role: 'giver', displayName: 'Táta' } as const
+  const STARSI = { id: 3, role: 'taker', displayName: 'Starší' } as const
+  const free: TaskView = {
+    ...reserved,
+    status: 'open',
+    score: 18,
+    reservedBy: null,
+    approvedBy: [],
+    approverIds: [],
+  }
+  const round = (offeredBy: { id: number; name: string } | null, offer = 18): TaskView => ({
+    ...free,
+    rebidding: { offer, offeredBy },
+  })
+
+  it('switch on: a free task offers Vyjednat novou cenu with its hint, not Změnit cenu', () => {
+    page.reopen = true
+    const html = render(STARSI, free)
+    expect(html).toContain(cs.rebid.reopen)
+    expect(html).toContain(cs.rebid.reopenHint(18))
+    expect(html).not.toContain(cs.taskPrice.change)
+    page.reopen = false
+  })
+  it('switch off: no reopen button, Změnit cenu as before', () => {
+    const html = render(STARSI, free)
+    expect(html).not.toContain(cs.rebid.reopen)
+    expect(html).toContain(cs.taskPrice.change)
+  })
+  it('a fresh round: the agreed score still applies, no entries yet, no Souhlasím', () => {
+    page.reopen = true
+    const html = render(STARSI, round(null))
+    expect(html).toContain(cs.taskPrice.oldStays(18))
+    expect(html).toContain(cs.rebid.noEntries)
+    expect(html).not.toContain(cs.rebid.reopen)
+    expect(html).not.toContain(`>${cs.tasks.approve}<`)
+    expect(html).toContain(cs.state.negotiating)
+    page.reopen = false
+  })
+  it('a counter: the header names it, Souhlasím says the new price', () => {
+    const html = render(STARSI, round({ id: 2, name: 'Táta' }, 16))
+    expect(html).toContain('Táta nabízí 16 b')
+    expect(html).toContain(`>${cs.tasks.approve}<`)
+    expect(html).toContain(cs.rebid.approveHint(16))
+  })
+  it('a parent in a round with no bids gets Ukončit vyjednávání', () => {
+    const html = render(TATA, round(null))
+    expect(html).toContain(cs.rebid.stop)
+    expect(html).toContain(cs.rebid.stopHint(18))
   })
 })
