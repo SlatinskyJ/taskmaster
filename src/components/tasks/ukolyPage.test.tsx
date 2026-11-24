@@ -60,6 +60,7 @@ const task = (id: number, title: string, over: Partial<TaskView>): TaskView => (
   createdAt: '2026-11-17T10:00:00.000Z',
   waitingFor: [],
   scoreChange: null,
+  rebidding: null,
   ...over,
 })
 

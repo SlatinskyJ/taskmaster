@@ -47,6 +47,7 @@ const view = (over: Partial<TaskView>): TaskView => ({
   createdAt: '2026-11-17T10:00:00.000Z',
   waitingFor: [],
   scoreChange: null,
+  rebidding: null,
   ...over,
 })
 const b = (takerId: number, name: string, score: number) => ({ takerId, name, score })

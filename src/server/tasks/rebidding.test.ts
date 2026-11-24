@@ -13,7 +13,7 @@ import {
 import { taskHistory } from './history'
 import { cancelTask, completeTask, reserveTask } from './lifecycle'
 import { proposeTaskScoreChange } from './scoreChange'
-import { approveTaskOffer } from './tasks'
+import { approveTaskOffer, getTaskDetail, listBidsToAnswer } from './tasks'
 import type { Family } from './testing'
 import {
   audits,
@@ -398,5 +398,96 @@ describe('a giver turns a round down (#212)', () => {
     must(turnDownBids(f.db, f.tata, id, [], T2))
     const actions = taskHistory(f.db, id, String).map((e) => e.action)
     expect(actions.slice(-2)).toEqual(['task.bidding_reopened', 'task.bidding_closed'])
+  })
+})
+
+describe('the round on screen (#212 PR 2)', () => {
+  const detail = (f: Family, id: number) => {
+    const d = getTaskDetail(f.db, id)
+    if (!d) throw new Error('no task')
+    return d
+  }
+
+  it('a round shows in the view: offer by nobody, no bids', () => {
+    const f = family()
+    const { task } = detail(f, round(f))
+    expect(task.rebidding).toEqual({ offer: 18, offeredBy: null })
+    expect(task.bids).toEqual([])
+    expect(task.score).toBe(18)
+  })
+
+  it('a counter and bids show in the view', () => {
+    const f = family()
+    const id = round(f)
+    must(placeBid(f.db, f.mladsi, id, 15, T2))
+    must(counterOffer(f.db, f.tata, id, 16, [], T2))
+    must(placeBid(f.db, f.starsi, id, 14, T3))
+    const { task } = detail(f, id)
+    expect(task.rebidding).toEqual({ offer: 16, offeredBy: { id: f.tata, name: 'Táta' } })
+    expect(task.bids).toEqual([
+      { takerId: f.starsi, name: 'Starší', score: 14 },
+      { takerId: f.mladsi, name: 'Mladší', score: 15 },
+    ])
+    expect(task.lowest?.score).toBe(14)
+    // Táta's counter resets the same-number rule: only bids after it count.
+    expect(task.lastBids).toEqual([{ takerId: f.starsi, score: 14 }])
+    expect(task.approvedBy).toEqual([])
+    expect(task.waitingFor).toEqual([])
+  })
+
+  it('no round: rebidding is null on an open and on a proposed task', () => {
+    const f = family()
+    expect(detail(f, openCar(f)).task.rebidding).toBeNull()
+    expect(detail(f, car(f)).task.rebidding).toBeNull()
+  })
+
+  it('the thread shows only this round', () => {
+    const f = family()
+    const id = round(f)
+    must(placeBid(f.db, f.mladsi, id, 15, T2))
+    const rows = detail(f, id).thread
+    expect(rows.map((r) => r.score)).toEqual([15])
+    expect(rows.some((r) => r.id === 1)).toBe(false)
+  })
+
+  it('after the round ends the thread still shows only that round', () => {
+    const f = family()
+    const id = round(f)
+    must(placeBid(f.db, f.starsi, id, 15, T2))
+    must(acceptLowestTaskBid(f.db, f.tata, id, 15, [f.starsi], T3))
+    expect(detail(f, id).thread.map((r) => [r.score, r.state])).toEqual([[15, 'accepted']])
+
+    const g = family()
+    const other = round(g)
+    must(placeBid(g.db, g.mladsi, other, 15, T2))
+    must(turnDownBids(g.db, g.tata, other, [{ takerId: g.mladsi, score: 15 }], T3))
+    expect(detail(g, other).thread.map((r) => [r.score, r.state])).toEqual([[15, 'closed']])
+  })
+
+  it('reopened twice: only the second round shows after it ends', () => {
+    const f = family()
+    const id = round(f)
+    must(placeBid(f.db, f.mladsi, id, 15, T2))
+    must(turnDownBids(f.db, f.tata, id, [{ takerId: f.mladsi, score: 15 }], T2))
+    must(reopenBidding(f.db, f.starsi, id, T3))
+    must(placeBid(f.db, f.starsi, id, 14, T3))
+    must(acceptLowestTaskBid(f.db, f.tata, id, 14, [f.starsi], T3))
+    expect(detail(f, id).thread.map((r) => r.score)).toEqual([14])
+  })
+
+  it('a task never reopened shows its whole thread', () => {
+    const f = family()
+    const id = openCar(f)
+    expect(detail(f, id).thread.map((r) => r.id)).toEqual([1])
+  })
+
+  it('listBidsToAnswer lists a round with a bid, not one without', () => {
+    const f = family()
+    const quiet = round(f)
+    const busy = round(f)
+    must(placeBid(f.db, f.mladsi, busy, 15, T2))
+    const ids = listBidsToAnswer(f.db).map((t) => t.id)
+    expect(ids).toContain(busy)
+    expect(ids).not.toContain(quiet)
   })
 })

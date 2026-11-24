@@ -187,6 +187,7 @@ describe('WaitingForYou with templates (#37)', () => {
     createdAt: '2026-11-17T10:00:00.000Z',
     waitingFor: [],
     scoreChange: null,
+    rebidding: null,
   }
   const template = {
     id: 1,
@@ -258,6 +259,7 @@ describe('ToApprove', () => {
     createdAt: '2026-11-17T10:00:00.000Z',
     waitingFor: [],
     scoreChange: null,
+    rebidding: null,
   }
 
   it('shows ✕ Zamítnout and ✓ Schválit as 44 px icon buttons, each with its own label, colour and icon', () => {
@@ -349,6 +351,7 @@ describe('template price change: ways in', () => {
       graceEndsAt: null,
       createdAt: '2026-11-17T10:00:00.000Z',
       waitingFor: [],
+      rebidding: null,
       scoreChange: {
         id: 3,
         score: 12,
@@ -436,6 +439,7 @@ describe('TakerBoard Moje row (#148)', () => {
     lastBids: [],
     waitingFor: [],
     scoreChange: null,
+    rebidding: null,
   }
   const doneButton = (html: string) =>
     buttons(html).find((b) => b.includes(`>${cs.work.done}<`)) ?? ''

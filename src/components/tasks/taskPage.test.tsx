@@ -81,6 +81,7 @@ const reserved: TaskView = {
   createdAt: '2026-11-17T10:00:00.000Z',
   waitingFor: [],
   scoreChange: null,
+  rebidding: null,
 }
 
 function render(user: PageUser, task: TaskView = reserved) {

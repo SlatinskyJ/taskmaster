@@ -177,6 +177,7 @@ describe('Domů', () => {
       graceEndsAt: null,
       createdAt: '2026-11-17T10:00:00.000Z',
       waitingFor: [],
+      rebidding: null,
       scoreChange: {
         id: 3,
         score: 12,
