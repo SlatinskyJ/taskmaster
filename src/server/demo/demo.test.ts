@@ -244,7 +244,7 @@ describe('the demo seed (previews)', () => {
     expect(getFlags(db)).toEqual({ ...ALL_FEATURES, week: false })
   })
 
-  it('adds five templates (#37, #38, #39): one waiting for agreement, four agreed', () => {
+  it('adds seven templates (#37, #38, #39, #209): three waiting for agreement, four agreed', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     expect(
@@ -294,6 +294,9 @@ describe('the demo seed (previews)', () => {
         time: null,
         due: '07:00',
       },
+      // #209's proposed chores, open for bids.
+      { title: 'Vynést kompost', status: 'proposed', score: 10, days: 0, time: null, due: null },
+      { title: 'Zalít kytky', status: 'proposed', score: 4, days: 0, time: null, due: null },
     ])
     const actions = db
       .select({ action: auditLog.action })
@@ -315,6 +318,8 @@ describe('the demo seed (previews)', () => {
       'template.created',
       'template.score_approved',
       'template.agreed',
+      'template.created',
+      ...['template.created', 'template.bid_placed', 'template.bid_placed'],
     ])
   })
 
@@ -330,6 +335,9 @@ describe('the demo seed (previews)', () => {
     expect(rows).toEqual([
       ['mladsi', 'taker', 5, null],
       ['tata', 'giver', 4, null],
+      // #209: the bids on "Zalít kytky".
+      ['starsi', 'taker', 6, null],
+      ['mladsi', 'taker', 7, null],
     ])
     expect(
       db
@@ -337,7 +345,7 @@ describe('the demo seed (previews)', () => {
         .from(templates)
         .all()
         .map((t) => t.score),
-    ).toEqual([1, 1, 4, 3, 2])
+    ).toEqual([1, 1, 4, 3, 2, 10, 4])
   })
 
   it('all or nothing: a failing template leaves no people either', () => {
