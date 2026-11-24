@@ -109,8 +109,6 @@ function roundOf(tx: Db | Tx, task: TaskRow, since: number): OneTimeAgreement {
   }
 }
 
-export type { AgreedOneTime }
-
 /**
  * Ends a negotiation: the task is agreed at `agreed.score`, open or reserved to the bidder with
  * the giver who agreed. The thread closes (`accepted` = the rows agreed at). An agreed score that

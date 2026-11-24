@@ -10,7 +10,7 @@ import {
   turnDownOneTimeBids,
   withdrawOneTimeBid,
 } from '~/domain'
-import type { Person } from '~/domain'
+import type { AgreedOneTime, Person } from '~/domain'
 import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
 import { toIsoUtc } from '~/domain/dates'
@@ -20,7 +20,7 @@ import type { Db } from '~/server/db'
 import { taskScoreApprovals, taskThread, tasks } from '~/server/db/schema'
 import type { TaskRow, ThreadRow } from '~/server/db/schema'
 import { listPeople } from '~/server/users/people'
-import type { AgreedOneTime, TaskError } from './tasks'
+import type { TaskError } from './tasks'
 import { openChangeOf } from './changeRows'
 import { saveItem, toItem } from './item'
 import { agree, agreementOf } from './tasks'

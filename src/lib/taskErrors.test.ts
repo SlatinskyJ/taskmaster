@@ -43,6 +43,7 @@ describe('scoreChangeErrorMessage', () => {
     ['score_frozen', cs.taskPrice.errors.scoreFrozen],
     ['not_agreed', cs.taskPrice.errors.notAgreed],
     ['not_changeable', cs.tasks.errors.gone],
+    ['bidding_instead', cs.taskPrice.errors.biddingInstead],
     ['wrong_state', cs.tasks.errors.gone],
     ['not_a_giver', cs.tasks.errors.notAllowed],
   ])('%s', (code, message) => {

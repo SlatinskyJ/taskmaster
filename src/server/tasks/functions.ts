@@ -23,7 +23,6 @@ import type { ScoreChangeError } from './scoreChange'
 import {
   approveTaskScoreChange,
   declineTaskScoreChange,
-  isOpenOneTime,
   proposeTaskScoreChange,
 } from './scoreChange'
 import {
@@ -354,10 +353,9 @@ function changed(result: Result<TaskRow, ScoreChangeError>): ScoreChangeActionRe
   return result.ok ? { ok: true, id: result.value.id, status: result.value.status } : result
 }
 
-/** Open: any party; reserved: its taker or a giver. */
 /**
- * "Jiná cena". With `reopenBidding` on, reopening bidding replaces it on open one-time tasks
- * (spec §5.2 [call], #212); reserved tasks keep it.
+ * "Jiná cena". Open: any party; reserved: its taker or a giver. With `reopenBidding` on,
+ * reopening bidding replaces it on open one-time tasks (spec §5.2 [call], #212).
  */
 export function proposeTaskScoreChangeHandler(
   db: Db,
@@ -365,10 +363,9 @@ export function proposeTaskScoreChangeHandler(
   data: { taskId: number; score: number },
   now: Date,
 ): ScoreChangeActionResult {
-  if (reopenOn(db)) {
-    if (isOpenOneTime(db, data.taskId)) return { ok: false, error: 'not_changeable' }
-  }
-  return changed(proposeTaskScoreChange(db, userId, data.taskId, data.score, now))
+  return changed(
+    proposeTaskScoreChange(db, userId, data.taskId, data.score, now, { rebid: reopenOn(db) }),
+  )
 }
 
 export const proposeTaskScoreChangeFn = createServerFn({ method: 'POST' })

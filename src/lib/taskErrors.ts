@@ -72,6 +72,8 @@ export function scoreChangeErrorMessage(error: string): string {
       return cs.taskPrice.errors.notAgreed
     case 'not_changeable':
       return cs.tasks.errors.gone
+    case 'bidding_instead':
+      return cs.taskPrice.errors.biddingInstead
     default:
       return taskErrorMessage(error)
   }

@@ -149,6 +149,27 @@ describe('reopenBidding (#212)', () => {
     })
   })
 
+  it('with rebid on, Jiná cena on an open one-time task is refused in the transaction', () => {
+    const f = family()
+    const id = openCar(f)
+    expect(proposeTaskScoreChange(f.db, f.starsi, id, 20, T1, { rebid: true })).toEqual({
+      ok: false,
+      error: 'bidding_instead',
+    })
+    expect(audits(f.db, id)).not.toContain('task.score_change_proposed')
+    must(reserveTask(f.db, f.starsi, id, T1))
+    expect(proposeTaskScoreChange(f.db, f.starsi, id, 20, T2, { rebid: true }).ok).toBe(true)
+  })
+
+  it('a save that keeps the task open leaves the round running', () => {
+    const f = family()
+    const id = round(f)
+    const from = row(f.db, id)?.biddingFrom
+    must(placeBid(f.db, f.mladsi, id, 15, T2))
+    expect(row(f.db, id)?.biddingFrom).toBe(from)
+    expect(row(f.db, id)?.status).toBe('open')
+  })
+
   it('a failed audit write leaves no round', () => {
     const f = family()
     const id = openCar(f)

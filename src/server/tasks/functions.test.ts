@@ -207,7 +207,7 @@ describe('the reopenBidding switch (#212)', () => {
     const data = { taskId: id, score: 20 }
     expect(proposeTaskScoreChangeHandler(f.db, f.starsi, data, T1)).toEqual({
       ok: false,
-      error: 'not_changeable',
+      error: 'bidding_instead',
     })
     must(reserveTask(f.db, f.starsi, id, T1))
     expect(proposeTaskScoreChangeHandler(f.db, f.starsi, data, T2)).toEqual({

@@ -342,6 +342,8 @@ export const cs = {
     errors: {
       notInvolved: 'Tohle rozhodují jiní.',
       changePending: 'O nové ceně se už jedná. Obnov stránku.',
+      /** `reopenBidding` on: an open task's price changes through a new round (#212). */
+      biddingInstead: 'Cenu volného úkolu teď změníte novým vyjednáváním.',
       noChange: 'Návrh už neplatí. Obnov stránku.',
       scoreFrozen: 'Úkol je hotový, cenu už měnit nejde.',
       notAgreed: 'Úkol se zase vyjednává. Obnov stránku.',
