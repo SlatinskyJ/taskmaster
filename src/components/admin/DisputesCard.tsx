@@ -74,6 +74,7 @@ export function DisputesCard({
                 <div className="flex flex-wrap justify-end gap-2">
                   <Button
                     type="button"
+                    variant="ghost"
                     aria-label={t.keepFor(cs.disputes.what[e.item.kind], l.name)}
                     onClick={() => {
                       onKeep(e)

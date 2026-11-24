@@ -189,6 +189,9 @@ describe('parseDismissDispute (#47)', () => {
       parseDismissDispute({ id: 2, value: { level: 'lower', deducted: 50 }, note: 'ok' }).value,
     ).toEqual({ level: 'lower', deducted: 50 })
     expect(parseDismissDispute({ id: 2, value: null, note: 'ok' }).value).toBeNull()
+    expect(
+      parseDismissDispute({ id: 2, value: { level: 'none', deducted: 0 }, note: 'ok' }).value,
+    ).toEqual({ level: 'none', deducted: 0 })
   })
 
   it('a note of 200 characters after trimming passes; 201 is refused', () => {

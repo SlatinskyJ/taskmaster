@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useReducer } from 'react'
 import type { DismissOutcome } from '~/components/disputes/disputeCalls'
 import type { AdminDisputeLines } from '~/components/disputes/disputeProps'
 import { sectionLabelClass } from '~/components/shell/SectionLabel'
@@ -90,6 +90,42 @@ export function DismissForm({
   )
 }
 
+/** The dialog's state: the note, a request on its way, and an error shown in the dialog. */
+export interface DismissState {
+  note: string
+  busy: boolean
+  error: string | null
+}
+
+export type DismissAction =
+  | { type: 'note'; note: string }
+  | { type: 'send' }
+  | { type: 'answer'; outcome: DismissOutcome }
+  | { type: 'close' }
+
+export const DISMISS_START: DismissState = { note: '', busy: false, error: null }
+
+/** Kept, or refused because the row is stale: the dialog closes (the page toasts and reloads). */
+export const closesDialog = (o: DismissOutcome) => o.ok || o.reload
+
+/**
+ * What each step does to the dialog. A refusal that leaves the row valid (an empty note, a
+ * failed request) keeps the note and shows why; closing starts the next row empty.
+ */
+export function dismissReducer(state: DismissState, action: DismissAction): DismissState {
+  switch (action.type) {
+    case 'note':
+      return { ...state, note: action.note, error: null }
+    case 'send':
+      return { ...state, busy: true, error: null }
+    case 'answer':
+      if (closesDialog(action.outcome)) return DISMISS_START
+      return { ...state, busy: false, error: action.outcome.ok ? null : action.outcome.message }
+    case 'close':
+      return DISMISS_START
+  }
+}
+
 export function DismissDialog({
   lines,
   open,
@@ -104,35 +140,20 @@ export function DismissDialog({
   /** Kept, or refused because the row is stale: the page closes, toasts and reloads. */
   onDone: (outcome: DismissOutcome) => Promise<void>
 }) {
-  const [note, setNote] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [state, dispatch] = useReducer(dismissReducer, DISMISS_START)
 
   async function confirm() {
-    setBusy(true)
-    setError(null)
-    try {
-      const outcome = await onConfirm(note)
-      if (outcome.ok || outcome.reload) {
-        setNote('')
-        await onDone(outcome)
-      } else {
-        // The note stays, so the admin can fix it or try again.
-        setError(outcome.message)
-      }
-    } finally {
-      setBusy(false)
-    }
+    dispatch({ type: 'send' })
+    const outcome = await onConfirm(state.note)
+    dispatch({ type: 'answer', outcome })
+    if (closesDialog(outcome)) await onDone(outcome)
   }
 
   return (
     <Dialog
       open={open && lines !== null}
       onOpenChange={(next) => {
-        if (!next) {
-          setNote('')
-          setError(null)
-        }
+        if (!next) dispatch({ type: 'close' })
         onOpenChange(next)
       }}
     >
@@ -140,12 +161,11 @@ export function DismissDialog({
         {lines && (
           <DismissForm
             lines={lines}
-            note={note}
-            busy={busy}
-            error={error}
-            onNote={(next) => {
-              setNote(next)
-              setError(null)
+            note={state.note}
+            busy={state.busy}
+            error={state.error}
+            onNote={(note) => {
+              dispatch({ type: 'note', note })
             }}
             onConfirm={() => {
               void confirm()

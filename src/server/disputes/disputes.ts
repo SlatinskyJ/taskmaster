@@ -133,6 +133,11 @@ export function refOf(t: DisputeTarget): DisputeRef {
 const plain = (v: DisputeValue | null) =>
   v === null ? null : 'score' in v ? { score: v.score } : { level: v.level, deducted: v.deducted }
 
+/** Whether the item's value moved since the admin saw it (dismiss #47, correct #48). */
+export function valueMoved(seen: DisputeValue | null, now: DisputeValue | null): boolean {
+  return JSON.stringify(plain(seen)) !== JSON.stringify(plain(now))
+}
+
 /**
  * The admin keeps a disputed item as it is, with a note (stored trimmed). `seen` is the item's
  * value the admin's list showed: when it changed since (a score change agreed meanwhile), the
@@ -161,7 +166,7 @@ export function dismissDisputeIn(
     if (!kept.ok) return kept
     if (kept.value.status !== 'dismissed') throw new Error('dismissDispute: not dismissed')
     const value = plain(loaded.value)
-    if (JSON.stringify(plain(seen)) !== JSON.stringify(value)) return fail('value_changed')
+    if (valueMoved(seen, value)) return fail('value_changed')
     const text = kept.value.note
     const changed = tx
       .update(disputes)

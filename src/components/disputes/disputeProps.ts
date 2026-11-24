@@ -111,7 +111,7 @@ export function adminDisputeLines(e: AdminDisputeEntry): AdminDisputeLines {
   return {
     what: line(cs.disputes.what[e.item.kind], e.takerName),
     value: line(name, amount),
-    opened: line(e.openedByName, dayMonth(e.openedAt)),
+    opened: line(cs.admin.disputes.openedBy(e.openedByName), dayMonth(e.openedAt)),
     reason: e.reason,
     name,
   }

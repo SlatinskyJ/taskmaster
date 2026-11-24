@@ -534,6 +534,8 @@ export const cs = {
       /** Short: shares a row with #48's Opravit at 360 px. */
       keep: 'Ponechat',
       keepFor: (what: string, name: string) => `Ponechat: ${what} – ${name}`,
+      /** Who opened the dispute, ahead of the date (the row names whose item it is above). */
+      openedBy: (name: string) => `${name} rozporuje`,
       dialogTitle: 'Ponechat beze změny',
       dialogText: 'Rozpor se uzavře, body ani stav se nezmění. Vzít zpět to nejde.',
       noteLabel: 'Poznámka pro rodinu',

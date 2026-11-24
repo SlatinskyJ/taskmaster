@@ -133,7 +133,7 @@ describe('adminDisputeLines (#47)', () => {
     ).toEqual({
       what: 'Body za úkol',
       value: 'Vyluxovat celý obývák a chodbu · 30 bodů',
-      opened: 'Starší · 23. 11.',
+      opened: 'Starší rozporuje · 23. 11.',
       reason: 'Bylo toho víc.',
       name: 'Vyluxovat celý obývák a chodbu',
     })

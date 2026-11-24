@@ -3,6 +3,7 @@ import type { Role } from '~/domain'
 import { DISPUTE_NOTE_MAX, DISPUTE_REASON_MAX } from '~/lib/disputeLimits'
 import { requireRole } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
+import { SETTLEMENT_LEVELS } from '~/server/db/schema'
 import type { Db } from '~/server/db'
 import { getFlags } from '~/server/features'
 import { int, record } from '~/server/periods/validators'
@@ -124,8 +125,6 @@ export const getDisputeListFn = createServerFn({ method: 'GET' })
     disputeListHandler(getDb(), { id: context.user.id, role: context.user.role }),
   )
 
-const LEVELS = ['none', 'lower', 'upper'] as const
-
 function valueOf(data: unknown): DisputeValue | null {
   if (data === null) return null
   if (typeof data === 'object' && 'score' in data) {
@@ -134,7 +133,7 @@ function valueOf(data: unknown): DisputeValue | null {
   const d = record(data, ['level', 'deducted'])
   const deducted = int(d.deducted, Number.MAX_SAFE_INTEGER)
   if (deducted < 0) throw new Error('Invalid input')
-  return { level: kindOf(d.level, LEVELS), deducted }
+  return { level: kindOf(d.level, SETTLEMENT_LEVELS), deducted }
 }
 
 export interface DismissDisputeInput {

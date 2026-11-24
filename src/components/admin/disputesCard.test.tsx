@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { adminDisputeLines } from '~/components/disputes/disputeProps'
 import { cs } from '~/lib/strings'
 import type { AdminDisputeEntry } from '~/server/disputes/functions'
-import { DismissForm } from './DismissDialog'
+import { closesDialog, DISMISS_START, DismissForm, dismissReducer } from './DismissDialog'
 import { dismissInput, DisputesCard, loadAdminDisputes } from './DisputesCard'
 
 // Sporné on Správa (#47): the rows, the empty and error states, and the keep dialog's body.
@@ -45,7 +45,7 @@ describe('DisputesCard', () => {
     expect(html).toContain('border-l-state-disputed')
     expect(html).toContain('Body za úkol')
     expect(html).toContain('Vyluxovat celý obývák a chodbu · 30 bodů')
-    expect(html).toContain('Starší · 22. 11.')
+    expect(html).toContain('Starší rozporuje · 22. 11.')
     expect(html).toMatch(/<blockquote[^>]*>Vysával jsem/)
     expect(html).toContain(
       `aria-label="${t.keepFor('Body za úkol', 'Vyluxovat celý obývák a chodbu')}"`,
@@ -125,5 +125,38 @@ describe('DismissForm', () => {
     const html = form({ note: 'Sedí to.', error: t.errors.note_required })
     expect(html).toMatch(/role="alert"[^>]*>Napiš poznámku\./)
     expect(html).toContain('Sedí to.')
+  })
+})
+
+describe('dismissReducer', () => {
+  const typed = dismissReducer(DISMISS_START, { type: 'note', note: 'Sedí.' })
+  const sent = dismissReducer(typed, { type: 'send' })
+
+  it('sending is busy; an answer ends it', () => {
+    expect(sent).toEqual({ note: 'Sedí.', busy: true, error: null })
+  })
+
+  it('a refusal that leaves the row valid keeps the note and shows why', () => {
+    const r = dismissReducer(sent, {
+      type: 'answer',
+      outcome: { ok: false, message: t.errors.note_required, reload: false },
+    })
+    expect(r).toEqual({ note: 'Sedí.', busy: false, error: t.errors.note_required })
+    expect(dismissReducer(r, { type: 'note', note: 'Sedí to.' }).error).toBeNull()
+  })
+
+  it('kept or stale: the dialog closes and starts empty', () => {
+    for (const outcome of [
+      { ok: true as const },
+      { ok: false as const, message: t.errors.value_changed, reload: true },
+    ]) {
+      expect(closesDialog(outcome)).toBe(true)
+      expect(dismissReducer(sent, { type: 'answer', outcome })).toEqual(DISMISS_START)
+    }
+    expect(closesDialog({ ok: false, message: 'x', reload: false })).toBe(false)
+  })
+
+  it('closing forgets a typed note, so the next row starts empty', () => {
+    expect(dismissReducer(typed, { type: 'close' })).toEqual(DISMISS_START)
   })
 })
