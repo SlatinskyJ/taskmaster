@@ -17,7 +17,7 @@ import {
   thread,
 } from './testing'
 import type { Family } from './testing'
-import { threadOf } from './thread'
+import { lastBids, threadOf } from './thread'
 
 const bid = (f: Family, taskId: number, userId: number, side: 'giver' | 'taker', score: number) =>
   f.db.insert(taskThread).values({ taskId, userId, side, score, createdAt: T1.toISOString() }).run()
@@ -95,5 +95,42 @@ describe('the thread behind path 1', () => {
     f.db.update(taskThread).set({ score: 20 }).where(eq(taskThread.taskId, id)).run()
     expect(() => approveTaskOffer(f.db, f.starsi, id, 18, T1)).toThrow(/offer 20 ≠ score 18/)
     expect(offerInStep(f.db, id)).toBe(false)
+  })
+})
+
+describe('lastBids (same number, Jakub 2026-11-24)', () => {
+  const at = (f: Family, taskId: number) => lastBids(f.db, taskId).map((r) => [r.userId, r.score])
+  const close = (f: Family, userId: number) =>
+    f.db
+      .update(taskThread)
+      .set({ closedAt: T2.toISOString(), closedAs: 'closed' })
+      .where(and(eq(taskThread.userId, userId), eq(taskThread.side, 'taker')))
+      .run()
+
+  it("each brother's newest bid since the newest giver row, a closed one included", () => {
+    const f = family()
+    const id = rawTask(f)
+    bid(f, id, f.starsi, 'taker', 5)
+    close(f, f.starsi)
+    bid(f, id, f.starsi, 'taker', 6)
+    bid(f, id, f.mladsi, 'taker', 7)
+    close(f, f.mladsi)
+    expect(at(f, id)).toEqual([
+      [f.starsi, 6],
+      [f.mladsi, 7],
+    ])
+  })
+
+  it('resets after a giver row', () => {
+    const f = family()
+    const id = rawTask(f)
+    bid(f, id, f.starsi, 'taker', 5)
+    f.db
+      .update(taskThread)
+      .set({ closedAt: T2.toISOString(), closedAs: 'replaced' })
+      .where(eq(taskThread.side, 'giver'))
+      .run()
+    bid(f, id, f.tata, 'giver', 4)
+    expect(at(f, id)).toEqual([])
   })
 })

@@ -71,6 +71,7 @@ const view = (over: Partial<TaskView>): TaskView => ({
   approverIds: [2],
   bids: [],
   lowest: null,
+  lastBids: [],
   reservedBy: null,
   completedBy: null,
   completedAt: null,
@@ -90,6 +91,7 @@ const bids = view({
     { takerId: 3, name: 'Starší', score: 25 },
   ],
   lowest: { score: 22, bidders: [{ id: 4, name: 'Mladší' }] },
+  lastBids: [],
 })
 const buttons = (html: string) => html.match(/<button/g)?.length ?? 0
 

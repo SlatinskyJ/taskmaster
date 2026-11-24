@@ -48,6 +48,7 @@ const task = (id: number, title: string, over: Partial<TaskView>): TaskView => (
   approverIds: [],
   bids: [],
   lowest: null,
+  lastBids: [],
   reservedBy: null,
   completedBy: null,
   completedAt: null,

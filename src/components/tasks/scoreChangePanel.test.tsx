@@ -60,6 +60,7 @@ const pending: TaskView = {
   approverIds: [],
   bids: [],
   lowest: null,
+  lastBids: [],
   reservedBy: null,
   completedBy: null,
   completedAt: null,

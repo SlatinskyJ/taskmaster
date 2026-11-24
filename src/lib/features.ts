@@ -16,6 +16,8 @@ export const FEATURE_KEYS = [
   'periodProposals',
   /** Disputes and corrections (#46–#48), one switch for both (Jakub 2026-11-22). */
   'disputes',
+  /** Bidding: a brother's Nechci and a parent's turn-down (#208). */
+  'bidRefusals',
 ] as const
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number]
@@ -31,6 +33,7 @@ export const NO_FEATURES: Readonly<Features> = {
   meeting: false,
   periodProposals: false,
   disputes: false,
+  bidRefusals: false,
 }
 
 /** Every switch on: the full app as designed (UI doc §6). */
@@ -41,4 +44,5 @@ export const ALL_FEATURES: Readonly<Features> = {
   meeting: true,
   periodProposals: true,
   disputes: true,
+  bidRefusals: true,
 }

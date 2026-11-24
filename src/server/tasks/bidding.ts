@@ -1,10 +1,12 @@
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import {
   acceptLowestBid,
   acceptOneTimeOffer,
   counterOneTimeOffer,
   isActiveAs,
   placeOneTimeBid,
+  turnDownOneTimeBids,
+  withdrawOneTimeBid,
 } from '~/domain'
 import type { Person } from '~/domain'
 import { fail, ok } from '~/domain/result'
@@ -19,16 +21,19 @@ import { listPeople } from '~/server/users/people'
 import type { AgreedOneTime, TaskError } from './tasks'
 import { agree, agreementOf } from './tasks'
 import { addEntry, openBids, openOffer } from './thread'
+import { taskThread } from '~/server/db/schema'
 
 // Bidding on a one-time task (spec §5.2 path 2; Jakub 2026-11-17 and 2026-11-18). The rules live
 // in src/domain/bidding.ts; each action here loads the task, asks the domain, and writes the
 // thread rows, the task and the audit entries in one transaction.
 //
 // Who may call what (the domain checks it, live against current people):
-// - placeBid: an active taker; a different number than the offer and his own open bid.
+// - placeBid: an active taker; not the offer, nor his previous bid since the last offer change.
 // - counterOffer: any active giver [call]; at exactly takers' open bids it accepts them.
 // - acceptOffer: an active taker with an open bid; agreed and reserved to him.
 // - acceptLowestTaskBid: any active giver [call]; the lowest open bid and its bidders as he saw them.
+// - withdrawBid: an active taker with an open bid (Nechci); turnDownBids: any active giver, the
+//   bids as he saw them (Jakub 2026-11-24).
 
 interface Ctx {
   tx: Tx
@@ -129,16 +134,8 @@ export function counterOffer(
       const counter = { entryId: entry.id, replaced }
       return ok(acceptBids(tx, { task, people }, result.value, actor, now, counter))
     }
-    const old = openOffer(tx, taskId)
-    const offerRound = task.offerRound + 1
-    const saved = tx
-      .update(tasks)
-      .set({ score, offerRound, updatedAt: toIsoUtc(now) })
-      .where(eq(tasks.id, taskId))
-      .returning()
-      .get()
-    approve(tx, task, giverId, offerRound, score, now)
-    const { entry } = addEntry(tx, { taskId, userId: giverId, side: 'giver', score }, now)
+    const { saved, entry, old } = newOfferRound(tx, task, giverId, score, now)
+    const { offerRound } = saved
     writeAudit(tx, {
       actor,
       action: 'task.score_countered',
@@ -150,6 +147,105 @@ export function counterOffer(
     })
     return ok(saved)
   })
+}
+
+/**
+ * A new offer round by a giver: his offer row (the old one closes `replaced`), the task's score
+ * and round, and his approval. Shared by a counter and a turn-down, so the two writers of an offer
+ * round can't drift apart (the score is stored twice, see `agreementOf`).
+ */
+function newOfferRound(
+  tx: Tx,
+  task: TaskRow,
+  giverId: number,
+  score: number,
+  now: Date,
+): { saved: TaskRow; entry: ThreadRow; old: ThreadRow } {
+  const old = openOffer(tx, task.id)
+  const offerRound = task.offerRound + 1
+  const saved = tx
+    .update(tasks)
+    .set({ score, offerRound, updatedAt: toIsoUtc(now) })
+    .where(eq(tasks.id, task.id))
+    .returning()
+    .get()
+  approve(tx, task, giverId, offerRound, score, now)
+  const { entry } = addEntry(tx, { taskId: task.id, userId: giverId, side: 'giver', score }, now)
+  return { saved, entry, old }
+}
+
+/** A taker says no (Nechci, Jakub 2026-11-24): his open bid closes, other bids stay. */
+export function withdrawBid(
+  db: Db | Tx,
+  takerId: number,
+  taskId: number,
+  now: Date = new Date(),
+): Result<TaskRow, TaskError> {
+  return onTask(db, taskId, ({ tx, task, people }) => {
+    const result = withdrawOneTimeBid(agreementOf(tx, task), people, takerId)
+    if (!result.ok) return result
+    const bid = openBids(tx, taskId).find((b) => b.userId === takerId)
+    if (!bid) throw new Error('a withdrawn bid is open')
+    closeRows(tx, [bid.id], now)
+    writeAudit(tx, {
+      actor: { kind: 'user', userId: takerId },
+      action: 'task.bid_withdrawn',
+      entityType: 'task',
+      entityId: taskId,
+      before: { entryId: bid.id, score: bid.score },
+      at: now,
+    })
+    return ok(task)
+  })
+}
+
+/**
+ * A giver turns the bidding down (Jakub 2026-11-24): every open bid closes and he offers the
+ * current score again, a new round (previous bids no longer block a number). `seen` are the bids
+ * he saw; if they changed meanwhile, it is `offer_changed` and nothing closes.
+ */
+export function turnDownBids(
+  db: Db | Tx,
+  giverId: number,
+  taskId: number,
+  seen: readonly { takerId: number; score: number }[],
+  now: Date = new Date(),
+): Result<TaskRow, TaskError> {
+  return onTask(db, taskId, ({ tx, task, people }) => {
+    const book = seen.map((b) => ({ by: b.takerId, score: b.score }))
+    const result = turnDownOneTimeBids(agreementOf(tx, task), people, giverId, book)
+    if (!result.ok) return result
+    const bids = openBids(tx, taskId)
+    closeRows(
+      tx,
+      bids.map((b) => b.id),
+      now,
+    )
+    const { saved, entry, old } = newOfferRound(tx, task, giverId, task.score, now)
+    writeAudit(tx, {
+      actor: { kind: 'user', userId: giverId },
+      action: 'task.bids_turned_down',
+      entityType: 'task',
+      entityId: taskId,
+      before: {
+        score: task.score,
+        offerRound: task.offerRound,
+        entryIds: bids.map((b) => b.id),
+        offerEntryId: old.id,
+      },
+      after: { score: saved.score, offerRound: saved.offerRound, entryId: entry.id },
+      at: now,
+    })
+    return ok(saved)
+  })
+}
+
+function closeRows(tx: Tx, ids: readonly number[], now: Date) {
+  if (ids.length === 0) return
+  tx.update(taskThread)
+    .set({ closedAt: toIsoUtc(now), closedAs: 'closed' })
+    .where(inArray(taskThread.id, [...ids]))
+    .run()
 }
 
 /** A taker with an open bid accepts the current offer: agreed and reserved to him in one step. */

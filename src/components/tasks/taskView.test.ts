@@ -34,6 +34,7 @@ const view = (over: Partial<TaskView>): TaskView => ({
   approverIds: [2],
   bids: [],
   lowest: null,
+  lastBids: [],
   reservedBy: null,
   completedBy: null,
   completedAt: null,
@@ -106,6 +107,7 @@ describe('taskView', () => {
     const both = view({
       bids: [b(4, 'Mladší', 22), b(3, 'Starší', 25)],
       lowest: low(22, { id: 4, name: 'Mladší' }),
+      lastBids: [],
     })
     expect([myBid(both, STARSI), myBid(both, MLADSI)]).toEqual([25, 22])
     const other = view({ bids: [b(4, 'Mladší', 22)], lowest: low(22, { id: 4, name: 'Mladší' }) })
@@ -128,6 +130,7 @@ describe('taskView', () => {
     const one = view({
       bids: [b(4, 'Mladší', 22), b(3, 'Starší', 25)],
       lowest: low(22, { id: 4, name: 'Mladší' }),
+      lastBids: [],
     })
     expect(bidButtons(one, TATA)).toEqual([
       {
@@ -142,6 +145,7 @@ describe('taskView', () => {
     const tie = view({
       bids: [b(3, 'Starší', 22), b(4, 'Mladší', 22)],
       lowest: low(22, { id: 3, name: 'Starší' }, { id: 4, name: 'Mladší' }),
+      lastBids: [],
     })
     expect(bidButtons(tie, TATA)[0]).toMatchObject({
       label: 'Přijmout 22',

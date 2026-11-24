@@ -21,6 +21,8 @@ export const AUDIT_ACTIONS = [
   'task.score_countered',
   'task.bid_placed',
   'task.bid_accepted',
+  'task.bid_withdrawn',
+  'task.bids_turned_down',
   'task.score_approved',
   'task.score_change_proposed',
   'task.score_changed',
