@@ -7,10 +7,19 @@ interface ViewportWindow {
     VisualViewport,
     'offsetTop' | 'height' | 'addEventListener' | 'removeEventListener'
   > | null
-  document: { documentElement: { style: Pick<CSSStyleDeclaration, 'setProperty'> } }
+  document: {
+    documentElement: { style: Pick<CSSStyleDeclaration, 'setProperty'> }
+    activeElement: Element | null
+  }
 }
 
-/** Starts mirroring; returns the cleanup. Without a visual viewport it does nothing. */
+const TYPED = new Set(['INPUT', 'TEXTAREA'])
+
+/**
+ * Starts mirroring; returns the cleanup. Without a visual viewport it does nothing. When the
+ * visible part shrinks (the keyboard opens) the field being typed into is scrolled back into
+ * view: the browser scrolled it there on focus, before the keyboard took its space.
+ */
 export function trackVisualViewport(win: ViewportWindow): () => void {
   const vv = win.visualViewport
   if (!vv) return () => undefined
@@ -19,11 +28,16 @@ export function trackVisualViewport(win: ViewportWindow): () => void {
     style.setProperty('--vv-top', `${String(vv.offsetTop)}px`)
     style.setProperty('--vv-height', `${String(vv.height)}px`)
   }
+  const refocus = () => {
+    write()
+    const field = win.document.activeElement
+    if (field && TYPED.has(field.tagName)) field.scrollIntoView({ block: 'nearest' })
+  }
   write()
-  vv.addEventListener('resize', write)
+  vv.addEventListener('resize', refocus)
   vv.addEventListener('scroll', write)
   return () => {
-    vv.removeEventListener('resize', write)
+    vv.removeEventListener('resize', refocus)
     vv.removeEventListener('scroll', write)
   }
 }

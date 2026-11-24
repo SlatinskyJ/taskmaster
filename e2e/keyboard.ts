@@ -27,6 +27,7 @@ const script = (height: number) => `(() => {
   let open = false;
   for (const k of ['offsetLeft', 'offsetTop', 'pageLeft', 'pageTop']) vv[k] = 0;
   vv.scale = 1;
+  window.__visualViewport = vv;
   Object.defineProperty(vv, 'width', { get: () => window.innerWidth });
   Object.defineProperty(vv, 'height', { get: () => window.innerHeight - (open ? KB : 0) });
   Object.defineProperty(window, 'visualViewport', { value: vv, configurable: true });
@@ -78,15 +79,36 @@ export async function openKeyboard(page: Page, field: Locator) {
   await page.waitForTimeout(400) // the scroll and the sheet's move are animated
 }
 
+interface FakeViewport extends EventTarget {
+  offsetTop: number
+  pageTop: number
+}
+type KeyboardWindow = Window & { __keyboardHeight: number; __visualViewport: FakeViewport }
+
+/**
+ * Slides the visible part down the page by `top` px, as iOS does when it pans the visual
+ * viewport to reach a field (`visualViewport.offsetTop`), and tells listeners (`scroll`).
+ */
+export async function panKeyboard(page: Page, top: number) {
+  await page.evaluate((t) => {
+    const vv = (window as unknown as KeyboardWindow).__visualViewport
+    vv.offsetTop = t
+    vv.pageTop = t + window.scrollY
+    vv.dispatchEvent(new Event('scroll'))
+  }, top)
+}
+
 /** The element sits whole in the part of the screen the keyboard leaves visible. */
 export async function expectAboveKeyboard(page: Page, element: Locator) {
-  const visible = await page.evaluate(
-    () => window.innerHeight - (window as unknown as { __keyboardHeight: number }).__keyboardHeight,
-  )
+  const { top, visible } = await page.evaluate(() => {
+    const w = window as unknown as KeyboardWindow
+    const offset = w.__visualViewport.offsetTop
+    return { top: offset, visible: offset + w.innerHeight - w.__keyboardHeight }
+  })
   await expect
     .poll(async () => {
       const box = await element.boundingBox()
-      return box !== null && box.y >= 0 && box.y + box.height <= visible
+      return box !== null && box.y >= top && box.y + box.height <= visible
     })
     .toBe(true)
 }

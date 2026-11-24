@@ -6,11 +6,16 @@ import { trackVisualViewport } from './visualViewport'
 
 type Win = Parameters<typeof trackVisualViewport>[0]
 
-function fakeWindow(viewport: { offsetTop: number; height: number }) {
+function fakeWindow(viewport: { offsetTop: number; height: number }, tagName = 'BODY') {
   const setProperty = vi.fn()
+  const scrollIntoView = vi.fn()
   const vv = Object.assign(new EventTarget(), viewport)
-  const win = { visualViewport: vv, document: { documentElement: { style: { setProperty } } } }
-  return { win: win as unknown as Win, vv, setProperty }
+  const doc = {
+    documentElement: { style: { setProperty } },
+    activeElement: { tagName, scrollIntoView },
+  }
+  const win = { visualViewport: vv, document: doc }
+  return { win: win as unknown as Win, vv, setProperty, scrollIntoView }
 }
 
 describe('trackVisualViewport (#215)', () => {
@@ -43,11 +48,33 @@ describe('trackVisualViewport (#215)', () => {
     expect(setProperty).not.toHaveBeenCalled()
   })
 
+  it.each(['INPUT', 'TEXTAREA'])(
+    'the keyboard opening scrolls the focused %s back into view',
+    (tag) => {
+      const { win, vv, scrollIntoView } = fakeWindow({ offsetTop: 0, height: 852 }, tag)
+      trackVisualViewport(win)
+      expect(scrollIntoView).not.toHaveBeenCalled()
+      vv.dispatchEvent(new Event('resize'))
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
+    },
+  )
+
+  it('scrolling the visible part, or no field in focus, scrolls nothing', () => {
+    const typing = fakeWindow({ offsetTop: 0, height: 852 }, 'INPUT')
+    trackVisualViewport(typing.win)
+    typing.vv.dispatchEvent(new Event('scroll'))
+    expect(typing.scrollIntoView).not.toHaveBeenCalled()
+    const idle = fakeWindow({ offsetTop: 0, height: 852 }, 'BUTTON')
+    trackVisualViewport(idle.win)
+    idle.vv.dispatchEvent(new Event('resize'))
+    expect(idle.scrollIntoView).not.toHaveBeenCalled()
+  })
+
   it('no visualViewport: writes nothing', () => {
     const setProperty = vi.fn()
     const win = {
       visualViewport: null,
-      document: { documentElement: { style: { setProperty } } },
+      document: { documentElement: { style: { setProperty } }, activeElement: null },
     } as unknown as Win
     const stop = trackVisualViewport(win)
     expect(setProperty).not.toHaveBeenCalled()

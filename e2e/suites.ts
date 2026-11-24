@@ -45,8 +45,9 @@ export const SUITES: readonly Suite[] = [
   { name: 'proposals', spec: 'proposals.spec.ts', seed: 'proposals' },
   // Its own server: it opens a dispute for good.
   { name: 'disputes', spec: 'disputes.spec.ts', seed: 'disputes' },
-  // Forms with the simulated phone keyboard open (e2e/keyboard.ts). Read-only.
-  { name: 'keyboard', spec: 'keyboard.spec.ts', seed: 'family' },
+  // Forms with the simulated phone keyboard open (e2e/keyboard.ts). Read-only: dialogs are
+  // opened, never sent. `tasks` has a task Táta gave, for Zrušit úkol?.
+  { name: 'keyboard', spec: 'keyboard.spec.ts', seed: 'tasks' },
 ]
 
 /** Passkeys on (localhost) for the `on` suite only, at its own port. */
