@@ -119,6 +119,7 @@ function Tasks() {
             meta={meta}
             action={action}
             approve={features.approveAnywhere ? { busy, run } : undefined}
+            links={features.openRows}
           />
         )}
       </section>
@@ -134,6 +135,7 @@ function Tasks() {
                   <TemplateRow
                     template={t}
                     busy={busy !== null}
+                    links={features.openRows}
                     onNow={() => {
                       void run(
                         `now-${String(t.id)}`,

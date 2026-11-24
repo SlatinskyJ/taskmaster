@@ -13,6 +13,7 @@ import type { TemplateView } from '~/server/templates/functions'
 import { callBid } from './bidCalls'
 import type { Me } from './taskView'
 import { bidButtons, myBid, taskChipState, toastFor, waitingMeta } from './taskView'
+import { taskLink, templateLink } from './rowLink'
 import { TaskRow } from './TaskRow'
 import { useTaskAction } from './useTaskAction'
 
@@ -34,6 +35,7 @@ export function WaitingForYou({
   taskPriceChanges,
   proposals = [],
   me,
+  links = false,
 }: {
   items: readonly TaskView[]
   templates?: readonly TemplateView[]
@@ -44,6 +46,8 @@ export function WaitingForYou({
   /** Proposals for next week or the default week waiting for this person (#43). */
   proposals?: readonly ProposalKind[]
   me: Me
+  /** The `openRows` switch (#205): each row opens its page. */
+  links?: boolean
 }) {
   const router = useRouter()
   const [busyKey, setBusyKey] = useState<string | null>(null)
@@ -141,6 +145,7 @@ export function WaitingForYou({
               points={task.score}
               meta={waitingMeta(task, me)}
               action={taskActions(task)}
+              link={links ? taskLink(task.id) : undefined}
             />
           </li>
         ))}
@@ -153,6 +158,7 @@ export function WaitingForYou({
               meta={cs.templates.recurringMeta}
               detail={templateDetail(t)}
               action={approveButton(`template-${String(t.id)}`, () => approveTemplate(t))}
+              link={links ? templateLink(t.id) : undefined}
             />
           </li>
         ))}
@@ -172,6 +178,7 @@ export function WaitingForYou({
                   {cs.bids.answer}
                 </Link>
               }
+              link={links ? templateLink(t.id) : undefined}
             />
           </li>
         ))}
@@ -183,6 +190,7 @@ export function WaitingForYou({
               points={t.score}
               meta={cs.taskPrice.rowMeta(t.score, t.scoreChange?.score ?? t.score)}
               action={pageLink(t, cs.bids.answer)}
+              link={links ? taskLink(t.id) : undefined}
             />
           </li>
         ))}

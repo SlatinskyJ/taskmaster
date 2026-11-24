@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import { templateLink } from '~/components/tasks/rowLink'
 import { TaskRow } from '~/components/tasks/TaskRow'
 import { Button, buttonVariants } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
@@ -14,10 +15,13 @@ export function TemplateRow({
   template: t,
   onNow,
   busy = false,
+  links = false,
 }: {
   template: TemplateView
   onNow?: () => void
   busy?: boolean
+  /** The `openRows` switch (#205): each row opens its page. */
+  links?: boolean
 }) {
   const active = t.status === 'active'
   const chip = templateChip(t)
@@ -50,6 +54,7 @@ export function TemplateRow({
           </div>
         ) : undefined
       }
+      link={links ? templateLink(t.id) : undefined}
     />
   )
 }
