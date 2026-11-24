@@ -170,7 +170,7 @@ export function agreeIn(
 }
 
 /** The open offer row of a proposed template, as the ids an agreement at the offer accepts. */
-const offerRowIds = (tx: Tx, templateId: number) =>
+export const offerRowIds = (tx: Tx, templateId: number) =>
   openRows(tx, templateId)
     .filter((r) => r.side === 'giver')
     .map((r) => r.id)

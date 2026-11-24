@@ -116,6 +116,17 @@ export function closeThread(
   return result
 }
 
+/** Closes these open rows as `closed` (a Nechci, a turn-down; #209). */
+export function closeRows(tx: Tx, ids: readonly number[], now: Date): void {
+  const at = toIsoUtc(now)
+  for (const id of ids) {
+    tx.update(templateThread)
+      .set({ closedAt: at, closedAs: 'closed' })
+      .where(and(eq(templateThread.id, id), isNull(templateThread.closedAt)))
+      .run()
+  }
+}
+
 /** Every row of the template's thread, oldest first. */
 export function threadOf(db: Db | Tx, templateId: number): TemplateThreadRow[] {
   return db
