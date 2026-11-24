@@ -65,6 +65,8 @@ export const cs = {
   },
   /** One-time tasks (#33): GTasks, GCreate, TApprove (UI doc §7). */
   tasks: {
+    /** On a chore's copy: its recurring chore's page (#205). */
+    chorePageLink: 'Otevřít opakovaný úkol',
     /** Úkoly group of proposed tasks, negotiating ones included (#41). */
     groupProposed: 'Návrhy a vyjednávání',
     new: '+ Nový',
@@ -271,6 +273,8 @@ export const cs = {
     free: 'Volné',
     toApprove: 'Ke schválení',
     reserve: 'Rezervovat',
+    /** Over Rezervovat on a free task's page (#195, mockup TReserve). */
+    reserveHint: 'Uděláš to později? Zarezervuj si to. Pak to za body nemůže udělat nikdo jiný.',
     release: 'Uvolnit',
     done: 'Hotovo',
     /** A giver did it themselves: closed with no points (spec §5.5). Gender-neutral on purpose. */

@@ -3,6 +3,7 @@ import type { TaskView } from '~/server/tasks/functions'
 import { cs } from '~/lib/strings'
 import {
   canApprove,
+  canTakeFree,
   bidButtons,
   canProposeChange,
   canWorkOn,
@@ -242,6 +243,14 @@ describe('taskView', () => {
     expect(canApprove(done, ADMIN)).toBe(false)
     for (const status of ['proposed', 'open', 'reserved', 'confirmed', 'cancelled'] as const)
       expect(canApprove({ ...done, status }, TATA)).toBe(false)
+  })
+
+  it('canTakeFree (#195): a brother on an open task only', () => {
+    expect(canTakeFree({ status: 'open' }, STARSI)).toBe(true)
+    expect(canTakeFree({ status: 'open' }, TATA)).toBe(false)
+    expect(canTakeFree({ status: 'open' }, ADMIN)).toBe(false)
+    for (const status of ['proposed', 'reserved', 'done_unconfirmed', 'confirmed'] as const)
+      expect(canTakeFree({ status }, STARSI)).toBe(false)
   })
   it('Hotovo and Uvolnit only for the brother who reserved it', () => {
     const mine = view({ status: 'reserved', reservedBy: { id: 3, name: 'Starší' } })

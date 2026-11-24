@@ -44,6 +44,11 @@ export function canWorkOn(task: Pick<TaskView, 'status' | 'reservedBy'>, me: Me)
   return me.role === 'taker' && task.status === 'reserved' && task.reservedBy?.id === me.id
 }
 
+/** Rezervovat and Hotovo on a free task's page (spec §5.4, #195): a brother, on an open task. */
+export function canTakeFree(task: Pick<TaskView, 'status'>, me: Me): boolean {
+  return me.role === 'taker' && task.status === 'open'
+}
+
 /** ✓ Schválit / ✕ Zamítnout (spec §5.5, #206): a parent, on done work not yet confirmed. */
 export function canApprove(task: Pick<TaskView, 'status'>, me: Me): boolean {
   return me.role === 'giver' && task.status === 'done_unconfirmed'

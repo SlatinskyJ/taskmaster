@@ -1,14 +1,12 @@
-import { Bookmark } from 'lucide-react'
 import { EmptyState } from '~/components/EmptyState'
 import { SectionLabel } from '~/components/shell/SectionLabel'
-import { Button } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
-import { reserveTaskFn, type TaskView } from '~/server/tasks/functions'
+import type { TaskView } from '~/server/tasks/functions'
 import { taskLink } from './rowLink'
 import { canWorkOn, instanceMeta } from './taskView'
 import { TaskRow } from './TaskRow'
 import { useTaskAction } from './useTaskAction'
-import { DoneButton, WorkButtons } from './WorkButtons'
+import { DoneButton, ReserveButton, WorkButtons } from './WorkButtons'
 
 /**
  * A taker's work on Domů (UI doc §7.1): "Moje" (reserved by me, or done and waiting for
@@ -79,23 +77,7 @@ export function TakerBoard({
                   meta={instanceMeta(t, now)}
                   action={
                     <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={cs.work.reserve}
-                        title={cs.work.reserve}
-                        disabled={busy !== null}
-                        aria-busy={busy === `reserve-${String(t.id)}`}
-                        onClick={() => {
-                          void run(
-                            `reserve-${String(t.id)}`,
-                            () => reserveTaskFn({ data: { taskId: t.id } }),
-                            () => cs.work.toast.reserved,
-                          )
-                        }}
-                      >
-                        <Bookmark aria-hidden="true" />
-                      </Button>
+                      <ReserveButton task={t} busy={busy} run={run} />
                       <DoneButton task={t} busy={busy} run={run} />
                     </div>
                   }

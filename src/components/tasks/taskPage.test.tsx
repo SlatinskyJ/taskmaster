@@ -19,6 +19,7 @@ const page = vi.hoisted(() => {
     history: HistoryEntry[]
     disputes: boolean
     approveAnywhere: boolean
+    openRows: boolean
     marks: Record<string, unknown>
   } = {
     user: null,
@@ -26,6 +27,7 @@ const page = vi.hoisted(() => {
     history: [],
     disputes: false,
     approveAnywhere: false,
+    openRows: false,
     marks: {},
   }
   return state
@@ -35,7 +37,11 @@ vi.mock('@tanstack/react-router', () => ({
     ...opts,
     useRouteContext: () => ({
       user: page.user,
-      features: { disputes: page.disputes, approveAnywhere: page.approveAnywhere },
+      features: {
+        disputes: page.disputes,
+        approveAnywhere: page.approveAnywhere,
+        openRows: page.openRows,
+      },
     }),
     useLoaderData: () => ({
       task: page.task,
@@ -47,7 +53,21 @@ vi.mock('@tanstack/react-router', () => ({
   notFound: () => new Error('not found'),
   redirect: vi.fn(),
   useRouter: () => ({ invalidate: vi.fn() }),
-  Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
+  // With params (a chore's page, #205) the href is built, so a test can see where it goes.
+  Link: ({
+    to,
+    params,
+    children,
+  }: {
+    to?: string
+    params?: Record<string, string>
+    children: ReactNode
+  }) =>
+    params && to ? (
+      <a href={to.replace(/\$(\w+)/g, (_, k: string) => params[k] ?? '')}>{children}</a>
+    ) : (
+      <a>{children}</a>
+    ),
 }))
 vi.mock('./useTaskAction', () => ({ useTaskAction: () => ({ busy: null, run: vi.fn() }) }))
 vi.mock('./bidCalls', () => ({ callBid: vi.fn(), BID_CALLS: {} }))
@@ -290,5 +310,39 @@ describe('task page: Rozporovat (#46)', () => {
   it('proposed, or the switch off: none', () => {
     expect(on({ ...reserved, status: 'proposed' })).not.toContain('data-slot="dispute"')
     expect(render(TATA, confirmed)).not.toContain('data-slot="dispute"')
+  })
+})
+
+describe('task page: Rezervovat on a free task (#195), the chore link (#205)', () => {
+  const TATA = { id: 2, role: 'giver', displayName: 'Táta' } as const
+  const STARSI = { id: 3, role: 'taker', displayName: 'Starší' } as const
+  const MLADSI = { id: 4, role: 'taker', displayName: 'Mladší' } as const
+  const free: TaskView = { ...reserved, status: 'open', reservedBy: null }
+  const copy: TaskView = { ...free, origin: 'on_demand', templateId: 5 }
+
+  it('a brother on a free task: Rezervovat and Hotovo; a parent neither', () => {
+    for (const brother of [STARSI, MLADSI]) {
+      const html = render(brother, free)
+      expect(html).toContain(`>${cs.work.reserve}<`)
+      expect(html).toContain(`>${cs.work.done}<`)
+    }
+    const parent = render(TATA, free)
+    expect(parent).not.toContain(`>${cs.work.reserve}<`)
+    expect(parent).not.toContain(`>${cs.work.done}<`)
+  })
+
+  it('the other brother on a task his brother reserved: neither', () => {
+    const html = render(MLADSI, reserved)
+    expect(html).not.toContain(`>${cs.work.reserve}<`)
+    expect(html).not.toContain(`>${cs.work.done}<`)
+  })
+
+  it('switch on: a copy links to its chore; a one-time task does not; switch off: none', () => {
+    page.openRows = true
+    expect(render(STARSI, copy)).toContain(`<a href="/sablona/5">${cs.tasks.chorePageLink}</a>`)
+    expect(render(TATA, copy)).toContain(`<a href="/sablona/5">${cs.tasks.chorePageLink}</a>`)
+    expect(render(STARSI, free)).not.toContain(cs.tasks.chorePageLink)
+    page.openRows = false
+    expect(render(STARSI, copy)).not.toContain(cs.tasks.chorePageLink)
   })
 })

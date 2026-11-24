@@ -105,10 +105,37 @@ describe('TaskWorkPanel (task page)', () => {
     for (const [task, me] of [
       [view({}), MLADSI],
       [view({}), TATA],
-      [view({ status: 'open', reservedBy: null }), STARSI],
+      // A free task: Rezervovat is a brother's (#195), never a parent's.
+      [view({ status: 'open', reservedBy: null }), TATA],
+      [view({ status: 'proposed', reservedBy: null }), STARSI],
+      [view({ status: 'done_unconfirmed' }), STARSI],
     ] as const) {
       expect(renderToStaticMarkup(<TaskWorkPanel task={task} me={me} />)).toBe('')
     }
+  })
+
+  it('a brother on a free task: the hint, Rezervovat, then Hotovo, full width (#195)', () => {
+    const html = renderToStaticMarkup(
+      <TaskWorkPanel task={view({ status: 'open', reservedBy: null })} me={STARSI} />,
+    )
+    const at = (s: string) => html.indexOf(s)
+    expect(at(cs.work.reserveHint)).toBeGreaterThan(-1)
+    expect(at(cs.work.reserveHint)).toBeLessThan(at(`>${cs.work.reserve}<`))
+    expect(at(`>${cs.work.reserve}<`)).toBeLessThan(at(`>${cs.work.done}<`))
+    expect(html).not.toContain(cs.work.release)
+    expect(count(html, 'w-full')).toBe(2)
+  })
+
+  it('Rezervovat on the page reserves this task, toast reserved', () => {
+    renderToStaticMarkup(
+      <TaskWorkPanel task={view({ status: 'open', reservedBy: null })} me={STARSI} />,
+    )
+    action.pressed.get(cs.work.reserve)?.onClick?.({})
+    const [key, fn, success] = lastRun()
+    expect(key).toBe('reserve-1')
+    void fn()
+    expect(reserveTaskFn).toHaveBeenCalledWith({ data: { taskId: 1 } })
+    expect(success({ ok: true, status: 'reserved' })).toBe(cs.work.toast.reserved)
   })
 
   it('Hotovo sends this task to completeTaskFn with confetti, toast by status', () => {
