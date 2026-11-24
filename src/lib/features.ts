@@ -16,6 +16,9 @@ export const FEATURE_KEYS = [
   'periodProposals',
   /** Disputes and corrections (#46–#48), one switch for both (Jakub 2026-11-22). */
   'disputes',
+  /** Approve done work from the task page and Úkoly; Ke schválení first on a parent's Domů
+   * (#206). */
+  'approveAnywhere',
 ] as const
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number]
@@ -31,6 +34,7 @@ export const NO_FEATURES: Readonly<Features> = {
   meeting: false,
   periodProposals: false,
   disputes: false,
+  approveAnywhere: false,
 }
 
 /** Every switch on: the full app as designed (UI doc §6). */
@@ -41,4 +45,5 @@ export const ALL_FEATURES: Readonly<Features> = {
   meeting: true,
   periodProposals: true,
   disputes: true,
+  approveAnywhere: true,
 }
