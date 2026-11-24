@@ -89,6 +89,7 @@ Role rules:
 
 ### 5.1 Score agreement — recurring templates
 - A template's score needs **score agreement** (one giver + one taker, section 3). Until then, the template is *proposed* and creates no instances.
+- **Bidding on a proposed template (Jakub, 2026-11-24):** while a template is proposed, takers may bid on its first score the same way as on a one-time task (5.2 path 2, including the same-number rule, a taker's no and a giver's turn-down), with **no reservation**. When the giver side accepts the lowest bid (a tie at the lowest is fine), counters at exactly an open bid, or a taker who bid says yes to the current offer, the template becomes active at that score. Instances never get bidding; once a template is active its score changes as below.
 - After agreement, **any party** may propose a new score. It needs score agreement again; the old score stays in force until the change is agreed.
 - Only givers create templates. One score change may be in flight per template at a time; changes to different templates can run in parallel (Jakub, 2026-11-17).
 - A template score change runs **the same way as bidding on a one-time task** (5.2 path 2), with these differences (Jakub, 2026-11-17):
@@ -108,13 +109,22 @@ Details:
   - Every bid and counter is **kept in the history**. The giver side sees the task with all bids and their history; a taker sees the history when making a bid (task detail and feed).
   - When the giver side accepts, it accepts the **lowest** open bid (the best one for the givers). If one taker holds the lowest bid, the task becomes reserved to him at that score; if several takers tie at the lowest, the task becomes **open** at that score and they sort out who takes it.
   - On acceptance all other bids on that task close, and pending score approvals are discarded.
+- **Same number (Jakub, 2026-11-24):** a taker never bids the current offer (saying yes to it is the answer, below). He may send the same number as his previous bid only if the giver side changed the offer since that bid: 5 → 5 is refused, 5 → giver counters → 5 is fine. **[call]** "Previous bid" counts a bid he withdrew, and only bids since the giver side last changed the offer or turned the bidding down.
+- **A taker says no (Jakub, 2026-11-24):** a taker with an open bid may withdraw it ("Nechci"). Only his own bid closes; other takers' bids stay. He may bid or say yes again later. Logged.
+- **A giver turns the bidding down (Jakub, 2026-11-24):** any active giver may close **all** open bids at once. The task stays **proposed** at the current offer; takers may say yes to it or start bidding again. Logged. Nobody is forced to take a task: takers may leave it if it isn't worth it.
 - **[call]** On the giver side, any active giver may accept or counter a bid (so Mum or Dad can respond).
 - A taker who has an open bid and says yes to the giver's current offer **picks** (Jakub, 2026-11-18): **take it himself** at that score (agreement plus reservation in one step), or **agree and leave it open** for every taker (path 1). A taker without a bid has path 1 only.
 - On the giver side (Jakub, 2026-11-18): a giver may change the offer at any time while the task is proposed, whether or not anyone has bid. A giver's counter at exactly a taker's open bid **accepts that bid**: the task becomes reserved to that taker at that score, or open at that score if several takers bid it.
 - Changing the score of an agreed one-time task:
   - if reserved: needs that taker + a giver;
-  - if open (unreserved): any party may propose it; needs score agreement (a giver + a taker), and the old score stays until then;
+  - if open (unreserved): it goes back to bidding (below). **[call]** This replaces proposing a single new score ("Jiná cena") on open tasks;
   - once completed: the score is frozen (only the admin can correct, via adjustment).
+- **Reopening bidding on an open one-time task (Jakub, 2026-11-24):** an open (agreed, unreserved) one-time task may go back to bidding. Instances never do (5.1).
+  - **[call]** Any active giver or taker may reopen it.
+  - While the bidding runs, the task **stays open at its agreed score**: anyone may still reserve or complete it at that score. The new score counts only once agreed.
+  - It is a **new round**: it starts with the agreed score as the current offer and no bids. Bids of earlier rounds stay in the history and the log but are not shown on screen.
+  - It runs by the bidding rules above (path 2, same number, a taker's no, a giver's turn-down). When it ends in agreement, the usual outcome applies: one lowest bidder → reserved to him at that score; a tie → open at that score. A giver's turn-down ends the round; the task stays open at its agreed score.
+  - **[call]** If someone reserves or completes the task while the bidding runs, the bidding closes: all open bids close, logged.
 
 ### 5.3 Recurring instances
 A template defines:
