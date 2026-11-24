@@ -286,4 +286,40 @@ describe('data migrations', () => {
     expect(sqlite.prepare('pragma foreign_key_check').all()).toEqual([])
     sqlite.close()
   })
+
+  it('0029 keeps every template approval as offer round 1', () => {
+    const A = '2026-11-24T10:00:00.000Z'
+    const dir = tempDir()
+    const before = join(dir, 'm')
+    cpSync('drizzle', before, { recursive: true })
+    // Keep migrations 0000–0028 only: the state of a database before offer rounds on templates.
+    const path = join(before, 'meta', '_journal.json')
+    const journal = JSON.parse(readFileSync(path, 'utf8')) as { entries: { idx: number }[] }
+    journal.entries = journal.entries.filter((e) => e.idx <= 28)
+    writeFileSync(path, JSON.stringify(journal))
+    const sqlite = new Database(join(dir, 'db.sqlite'))
+    applyMigrations(sqlite, before)
+    sqlite.exec(`
+      insert into users (id, username, display_name, role, created_at, updated_at)
+        values (1, 'tata', 'Táta', 'giver', '${A}', '${A}'),
+               (2, 'mama', 'Máma', 'giver', '${A}', '${A}');
+      insert into templates (id, title, status, score, approval_required, created_by, created_at, updated_at)
+        values (5, 'Vynést koš', 'proposed', 10, 1, 1, '${A}', '${A}');
+      insert into template_score_approvals (template_id, user_id, score, approved_at)
+        values (5, 1, 10, '${A}'), (5, 2, 10, '${A}');`)
+    applyMigrations(sqlite, 'drizzle')
+    expect(
+      sqlite
+        .prepare(
+          'select template_id, user_id, score, offer_round from template_score_approvals order by user_id',
+        )
+        .all(),
+    ).toEqual([
+      { template_id: 5, user_id: 1, score: 10, offer_round: 1 },
+      { template_id: 5, user_id: 2, score: 10, offer_round: 1 },
+    ])
+    expect(sqlite.prepare('select offer_round from templates').all()).toEqual([{ offer_round: 1 }])
+    expect(sqlite.prepare('pragma foreign_key_check').all()).toEqual([])
+    sqlite.close()
+  })
 })

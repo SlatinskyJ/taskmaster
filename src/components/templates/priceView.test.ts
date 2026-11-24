@@ -157,7 +157,7 @@ describe('priceMeta', () => {
 })
 
 describe('priceToast', () => {
-  const ok = (score: number) => ({ ok: true as const, id: 7, score })
+  const ok = (score: number) => ({ ok: true as const, id: 7, score, status: 'active' as const })
   const call = (action: 'bid' | 'counter' | 'acceptBid' | 'acceptOffer', score: number) => ({
     action,
     data: { templateId: 7, score },
