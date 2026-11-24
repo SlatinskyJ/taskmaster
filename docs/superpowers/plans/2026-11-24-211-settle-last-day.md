@@ -6,7 +6,7 @@
 
 **Goal:** Schůzka can settle the running week only on its last day (Prague); before that it shows when the week ends. An ended week stays settleable any time.
 
-**Architecture:** The domain's `canSettle` / `periodToSettle` get a `lastDayOnly` flag. The server functions read a new launch switch `settleLastDay` and pass it down; `getMeeting` returns the running week's end when that rule is the only thing stopping the meeting. Schůzka step 3 shows the end instead of "Teď není co vyúčtovat".
+**Architecture:** The domain's `canSettle` / `periodToSettle` get a `lastDayOnly` flag. The server functions read a new launch switch `settleLastDay` and pass it down; `getMeeting` returns the running week's end when that rule is the only thing stopping the meeting. Schůzka step 3 shows the end instead (component test only: the server has no injectable clock, so no e2e; the brief says so) of "Teď není co vyúčtovat".
 
 **Tech Stack:** TS domain (`src/domain/`), Drizzle/SQLite, TanStack Start server fns, React, Vitest.
 
@@ -19,6 +19,10 @@
 - The running week can be settled only on its last day: the Prague calendar day of its cutoff (normally Sunday). Before that Schůzka shows when the week ends instead of the Vyúčtovat step.
 - A week that already ended at its cutoff can still be settled any time after (unchanged).
 - Jakub: "flip its prod switch once merged (before Sun 29 Nov)". The new migration therefore writes the switch **on**: merging is the flip. Prod auto-deploys on green `main`, so it is live before Sunday. The switch stays as a lever to turn the rule off by hand (README command) without a deploy.
+
+## Open with Jakub
+
+- Cutoff at 00:00 (e.g. Monday 00:00): is the last day Sunday (the day of the week's last minute) or Monday (the cutoff's date, when the week is already over)? Asked 2026-11-24 in the project thread, recommended Sunday. The plan builds Sunday; if he picks Monday, Task 1 wording and the `isLastDay` 00:00 test change (Monday reading = the rule never lets a 00:00 week settle early). Answer goes into the brief.
 
 ## Global Constraints
 
@@ -43,7 +47,7 @@
 **Files:** Modify `docs/superpowers/specs/2026-11-16-taskmaster-design.md` (§5.8 lines "Settling ends the period" and "Settlement of the running period is allowed…").
 
 - [ ] **Step 1:** In the "Settling ends the period" bullet, replace "the meeting normally runs before the cutoff" with "the meeting normally runs on the period's last day, before the cutoff".
-- [ ] **Step 2:** Replace the last §5.8 bullet with: "Settlement of the running period is allowed only on its **last day** (Jakub, 2026-11-24): the Prague calendar day of its cutoff (normally Sunday). It ends the period, see above. Before that day the meeting screen shows when the period ends. Settlement of a period that ended at its cutoff is allowed any time after."
+- [ ] **Step 2:** Replace the last §5.8 bullet with: "Settlement of the running period is allowed only on its **last day** (Jakub, 2026-11-24): the Prague calendar day its last minute falls on (normally Sunday; a cutoff at 00:00 makes it the day before). It ends the period, see above. Before that day the meeting screen shows when the period ends. Settlement of a period that ended at its cutoff is allowed any time after."
 - [ ] **Step 3:** Commit `Spec: settle the running week only on its last day (#211)`.
 
 ### Task 2: Domain rule
@@ -69,7 +73,7 @@
 
 ### Task 3: Launch switch `settleLastDay`
 
-**Files:** `src/lib/features.ts` (key last in `FEATURE_KEYS`, `NO_FEATURES`, `ALL_FEATURES`, doc line "#211"), new migration `drizzle/0027_settle_last_day_switch.sql` + journal, `src/server/features/README.md` (one line), `src/server/features/flags.test.ts`.
+**Files:** `src/lib/features.ts` (key last in `FEATURE_KEYS`, `NO_FEATURES`, `ALL_FEATURES`, doc line "#211"; the file's top comment and the README's first line say a switch can also hold a rule, not only hide an unfinished feature), new migration `drizzle/0027_settle_last_day_switch.sql` + journal, `src/server/features/README.md` (one line), `src/server/features/flags.test.ts`.
 
 - [ ] **Step 1: Failing test** in `flags.test.ts`: the migrated DB reads `settleLastDay: true` (update the "values the migrations leave" expectation and its title: "0027 settleLastDay on").
 - [ ] **Step 2:** Migration SQL, with a comment citing Jakub 2026-11-24 "flip once merged":
@@ -79,23 +83,26 @@
 
 ### Task 4: Server — meeting and settle use the rule
 
-**Files:** `src/server/settlement/meeting.ts`, `src/server/settlement/functions.ts`, `src/server/demo/pieces.ts`, `src/server/corrections/corrections.ts` (only if `weekWaiting` signature changes — it does not), tests `meeting.test.ts`, `functions.test.ts`.
+**Files:** `src/server/settlement/meeting.ts`, create `src/server/settlement/actions.ts` (+ `actions.test.ts`), `src/server/settlement/functions.ts`, `src/server/demo/pieces.ts`, `src/server/corrections/corrections.ts` (only if `weekWaiting` signature changes — it does not), tests `meeting.test.ts`, `functions.test.ts`.
 
 **Interfaces — Consumes:** `periodToSettle(…, lastDayOnly)`, `getFlags(db).settleLastDay`.
 **Produces:**
-- `getMeeting(db, now, lastDayOnly: boolean): Meeting` where the no-week variant becomes `{ period: null; settleFrom: string | null }`: `settleFrom` = ISO UTC of the running week's `cutoffAt` when a running, unsettled, started week exists and only the last-day rule keeps it from the meeting; else `null`. (Name: the UI shows the cutoff; the day of it is when settling opens.) Rule: `settleFrom` is set iff `lastDayOnly && periodToSettle(…, false)` returns the running week while `periodToSettle(…, true)` returns undefined.
+- `getMeeting(db, now, lastDayOnly: boolean): Meeting` where the no-week variant becomes `{ period: null; runningCutoffAt: string | null }`: `runningCutoffAt` = ISO UTC of the running week's `cutoffAt` when a running, unsettled, started week exists and only the last-day rule keeps it from the meeting; else `null`. (Name: the UI shows the cutoff; the day of it is when settling opens.) Rule: `runningCutoffAt` is set iff `lastDayOnly && periodToSettle(…, false)` returns the running week while `periodToSettle(…, true)` returns undefined.
 - `settlePeriod(db, giverId, periodId, shown, now, lastDayOnly: boolean)` — passes it to `periodToSettle`; mid-week with `true` → `nothing_to_settle`.
 - `weekWaiting` keeps `periodToSettle(…, false)` with a comment: the running week never counts, so the rule changes nothing there.
-- `getMeetingFn` / `settlePeriodFn`: `getFlags(db).settleLastDay` read once per call, passed down.
+- New `src/server/settlement/actions.ts` (pattern of `src/server/users/actions.ts`), the whole handler bodies, each reading the switch itself:
+  - `meetingNow(db: Db, now: Date): Meeting` = `getMeeting(db, now, getFlags(db).settleLastDay)`
+  - `settleNow(db: Db, giverId: number, data: { periodId: number; shown: ShownTotal[] }, now: Date): SettleResult` = `settled(settlePeriod(db, giverId, data.periodId, data.shown, now, getFlags(db).settleLastDay))` (`settled` moves here from `functions.ts`).
+  - `getMeetingFn` / `settlePeriodFn` become one-line calls with `getDb()`, `context.user.id`, `new Date()`.
 - Demo `pastWeekWith`: passes `false` to both, with a comment (it builds history mid-week; the seed's switches are set after the pieces).
 
 - [ ] **Step 1: Failing tests** in `meeting.test.ts` (`describe('last day only (#211)')`), on the existing `example()` week (cutoff Sun 22 Nov 23:59):
-  - `getMeeting(db, SAT, true)` → `{ period: null, settleFrom: toIsoUtc(CUTOFF) }`; `getMeeting(db, MEETING, true).period` not null (Sunday 20:00).
+  - `getMeeting(db, SAT, true)` → `{ period: null, runningCutoffAt: toIsoUtc(CUTOFF) }`; `getMeeting(db, MEETING, true).period` not null (Sunday 20:00).
   - `settlePeriod(…, SAT, true)` → `nothing_to_settle`, no settlement rows, no audit rows, week not ended.
   - Late meeting: on `MONDAY` with week 1 ended unsettled, `getMeeting(…, true).period.id` is week 1.
-  - No week at all / no takers → `settleFrom: null`.
-  - Existing tests: pass `false` (or `true` where they run on Sunday) — no behaviour change; `{ period: null }` expectations become `{ period: null, settleFrom: null }`.
-- [ ] **Step 2:** `functions.test.ts`: with the switch row on (migrated default) a giver's `getMeetingFn` on a mid-week clock returns `settleFrom` and `settlePeriodFn` is refused; with the row set off it settles. Pin the shape of the no-week variant (`period`, `settleFrom`, nothing else). If the fn tests cannot fake the clock, test the small `meetingRule(db)` helper (`getFlags(db).settleLastDay`) plus `getMeeting` instead, and say so in the brief.
+  - No week at all / no takers → `runningCutoffAt: null`.
+  - Existing tests: pass `false` (or `true` where they run on Sunday) — no behaviour change; `{ period: null }` expectations become `{ period: null, runningCutoffAt: null }`.
+- [ ] **Step 2:** `actions.test.ts` (migrated test DB, `example()` week): switch on (migration default) → `meetingNow(db, SAT)` = `{ period: null, runningCutoffAt: <cutoff ISO> }` (shape pinned: exactly these two keys) and `settleNow(db, tata, …, SAT)` → `{ ok: false, error: 'nothing_to_settle' }`, no settlement rows, week not ended; switch set off (`UPDATE feature_flags`) → `settleNow` at SAT settles. On Sunday `MEETING` with the switch on both work. The `settled`/`parseSettle` tests stay where they test.
 - [ ] **Step 3:** Run → FAIL. Implement. Run `pnpm vitest run src/server` → PASS, including `src/server/demo/demo.test.ts` (all weekdays).
 - [ ] **Step 4:** Commit.
 
@@ -105,11 +112,11 @@
 
 Copy (new keys in `cs.meeting`):
 - `notYet: 'Týden ještě běží'`
-- `weekEnds: 'Konec týdne'` → rendered `Konec týdne: neděle 29. 11. 23:59` via `untilLabel`-style day name in nominative (`cs.weekday`/existing `dayTime` helper in `periodView` — reuse whichever prints "neděle 29. 11. 23:59"; no new date maths).
+- `runsUntil: (end: string) => \`Týden běží do ${end}.\`` with `end = untilLabel(runningCutoffAt)` (genitive day name after "do": "neděle 29. 11. 23:59", "soboty 28. 11. 23:59"); no new date maths.
 - `settleOnLastDay: 'Vyúčtovat půjde až v poslední den týdne.'`
 
-- [ ] **Step 1: Failing test** in `meeting.test.tsx`: `render({ period: null, settleFrom: <Sun 29 Nov 23:59 ISO> })` contains `Týden ještě běží`, `Konec týdne`, `neděle 29. 11. 23:59`, `poslední den týdne`, and not `Teď není co vyúčtovat` and not `Potvrdit vyúčtování`. `render({ period: null, settleFrom: null })` keeps `Teď není co vyúčtovat`.
-- [ ] **Step 2:** Implement in `StepPlan`: when `nothing && settleFrom`, the same sticker card shows the three lines instead of `cs.meeting.nothing`. Static text, no tap targets, no animation, no request (UX pre-flight: nothing to add). Long text wraps (`break-words`), card at 360 px.
+- [ ] **Step 1: Failing test** in `meeting.test.tsx`: `render({ period: null, runningCutoffAt: <Sun 29 Nov 23:59 ISO> })` contains `Týden ještě běží`, `Týden běží do neděle 29. 11. 23:59.`; a Saturday cutoff (28 Nov 23:59) reads `Týden běží do soboty 28. 11. 23:59.`; both contain `poslední den týdne`, and not `Teď není co vyúčtovat` and not `Potvrdit vyúčtování`. `render({ period: null, runningCutoffAt: null })` keeps `Teď není co vyúčtovat`.
+- [ ] **Step 2:** Implement in `StepPlan`: when `nothing && runningCutoffAt`, the same sticker card shows the three lines instead of `cs.meeting.nothing`. Static text, no tap targets, no animation, no request (UX pre-flight: nothing to add). Long text wraps (`break-words`), card at 360 px.
 - [ ] **Step 3:** Tests PASS; `pnpm typecheck`, `pnpm lint`.
 - [ ] **Step 4:** Commit.
 
