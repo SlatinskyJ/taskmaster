@@ -179,7 +179,7 @@ describe('step 3: Plánovat', () => {
       result: { ...settledOk, next: null },
       names,
     })
-    const { html } = render({ period: null }, late)
+    const { html } = render({ period: null, runningCutoffAt: null }, late)
     expect(html).toContain('Tento týden běží dál')
     expect(html).not.toContain('Nový týden')
     expect(html).toContain('Začínají s')
@@ -187,7 +187,7 @@ describe('step 3: Plánovat', () => {
   })
 
   it('nothing to settle shows step 3 only', () => {
-    const { html } = render({ period: null })
+    const { html } = render({ period: null, runningCutoffAt: null })
     expect(html).toContain('Teď není co vyúčtovat')
     expect(html).not.toContain('data-step="done"')
     expect(html).not.toContain('Vyúčtováno')

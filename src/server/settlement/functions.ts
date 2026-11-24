@@ -1,11 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
-import type { Result } from '~/domain/result'
 import { requireRole } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
-import type { SettlementRow } from '~/server/db/schema'
-import type { Levels, Period } from '~/domain'
-import { toIsoUtc } from '~/domain/dates'
-import { getMeeting, settlePeriod } from './meeting'
+import { meetingNow, settleNow } from './actions'
 import type { Meeting, MeetingTaker, SettleError, ShownTotal } from './meeting'
 import { getWeek } from './week'
 import type {
@@ -47,61 +43,17 @@ export function parseSettle(data: unknown): { periodId: number; shown: ShownTota
   }
 }
 
-export type SettleResult =
-  | {
-      ok: true
-      records: {
-        takerId: number
-        totalBefore: number
-        level: SettlementRow['level']
-        deducted: number
-        carryOver: number
-      }[]
-      /** When the records were written (ISO UTC). */
-      settledAt: string
-      /** The week the confirm started, or null when the settled week had already ended. */
-      next: { id: number; startsAt: string; cutoffAt: string; levels: Levels } | null
-    }
-  | { ok: false; error: SettleError }
-
-/** What a confirm returns to the screen: the written records, their time and the next week. */
-export function settled(
-  result: Result<{ records: SettlementRow[]; next: Period | null }, SettleError>,
-): SettleResult {
-  if (!result.ok) return result
-  const [first] = result.value.records
-  // settlePeriod refuses `no_takers`, so a success always wrote at least one record.
-  if (!first) throw new Error('settled without records')
-  const { next } = result.value
-  return {
-    ok: true,
-    records: result.value.records.map((r) => ({
-      takerId: r.takerId,
-      totalBefore: r.totalBefore,
-      level: r.level,
-      deducted: r.deducted,
-      carryOver: r.carryOver,
-    })),
-    settledAt: first.settledAt,
-    next: next && {
-      id: next.id,
-      startsAt: toIsoUtc(next.startsAt),
-      cutoffAt: toIsoUtc(next.cutoffAt),
-      levels: next.levels,
-    },
-  }
-}
+export type { SettleResult } from './actions'
+export { settled } from './actions'
 
 export const getMeetingFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver')])
-  .handler((): Meeting => getMeeting(getDb(), new Date()))
+  .handler((): Meeting => meetingNow(getDb(), new Date()))
 
 export const settlePeriodFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver')])
   .validator(parseSettle)
-  .handler(({ data, context }) =>
-    settled(settlePeriod(getDb(), context.user.id, data.periodId, data.shown, new Date())),
-  )
+  .handler(({ data, context }) => settleNow(getDb(), context.user.id, data, new Date()))
 
 /** The week's viewer is always the signed-in user: id and role, nothing else. */
 export function viewerOf(user: CurrentUser): Viewer {
