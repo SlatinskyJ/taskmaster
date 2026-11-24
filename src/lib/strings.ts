@@ -243,7 +243,24 @@ export const cs = {
     answer: 'Odpovědět',
     otherPriceShort: 'Jiná cena',
     open: 'Otevřít',
-    toast: { sent: 'Nabídka odeslána', agreed: 'Domluveno', agreedMine: 'Domluveno, úkol je tvůj' },
+    /** Same number (Jakub 2026-11-24): under a disabled Nabídnout on his previous bid. */
+    sameAgainHint: 'Stejné číslo můžeš poslat znovu, až rodiče změní nabídku.',
+    /** A brother's no (#208): only his own bid closes. */
+    withdraw: 'Nechci',
+    withdrawHint: 'Tvoje nabídka se uzavře. Nabídnout můžeš znovu.',
+    /** A parent's no (#208): every bid closes, the offer stays. */
+    turnDown: 'Odmítnout nabídky',
+    turnDownHint: (score: number) =>
+      `Všechny nabídky se uzavřou. Úkol zůstane navržený za ${String(score)} b.`,
+    /** A turn-down on a stale screen: a bid came in meanwhile. */
+    turnDownChanged: 'Mezitím přišla nová nabídka. Podívej se na ni.',
+    toast: {
+      sent: 'Nabídka odeslána',
+      agreed: 'Domluveno',
+      agreedMine: 'Domluveno, úkol je tvůj',
+      withdrawn: 'Nabídka stažena',
+      turnedDown: 'Nabídky odmítnuty',
+    },
   },
   /**
    * Score change of an agreed recurring template (spec §5.1): its price page and ways in. The
@@ -348,6 +365,8 @@ export const cs = {
     countered: (n: number) => `nabídka ${String(n)} b`,
     bid: (n: number) => `chce ${String(n)} b`,
     bidAccepted: (n: number) => `přijato ${String(n)} b`,
+    bidWithdrawn: 'nabídka stažena',
+    bidsTurnedDown: 'nabídky odmítnuty',
     approved: (n: number) => `souhlas s ${String(n)} b`,
     agreed: (n: number) => `domluveno za ${String(n)} b`,
     agreedReserved: (n: number, name: string) => `domluveno za ${String(n)} b · rezervace: ${name}`,

@@ -2,12 +2,18 @@ import { useState } from 'react'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
+import { taskErrorMessage } from '~/lib/taskErrors'
 import type { TaskView } from '~/server/tasks/functions'
 import { callBid } from './bidCalls'
 import { ScoreStepper } from './ScoreStepper'
 import type { BidCall, Me } from './taskView'
-import { bidButtons, myBid, sendButton, toastFor } from './taskView'
+import { bidButtons, myBid, refuseButton, sendButton, toastFor } from './taskView'
 import { useTaskAction } from './useTaskAction'
+
+/** A turn-down refused as stale means a bid came in, not that the price moved. */
+function turnDownError(error: string): string {
+  return error === 'offer_changed' ? cs.bids.turnDownChanged : taskErrorMessage(error)
+}
 
 /**
  * What a person can do on a proposed task's page (spec §5.2): the yes buttons, each with its
@@ -15,11 +21,21 @@ import { useTaskAction } from './useTaskAction'
  * stepper. A brother bids; a parent makes a new offer, or on a brother's number accepts it.
  * Renders nothing once the task is agreed.
  */
-export function BidPanel({ task, me }: { task: TaskView; me: Me }) {
+export function BidPanel({
+  task,
+  me,
+  refusals = false,
+}: {
+  task: TaskView
+  me: Me
+  /** The `bidRefusals` switch (#208): Nechci and Odmítnout nabídky. */
+  refusals?: boolean
+}) {
   const { busy, run } = useTaskAction()
   const mine = myBid(task, me)
   const [value, setValue] = useState(mine ?? task.score)
-  const yes = bidButtons(task, me)
+  const refuse = refuseButton(task, me, refusals)
+  const yes = refuse ? [...bidButtons(task, me), refuse] : bidButtons(task, me)
   const send = sendButton(task, me, value)
   if (yes.length === 0 && !send) return null
 
@@ -28,6 +44,7 @@ export function BidPanel({ task, me }: { task: TaskView; me: Me }) {
       key,
       () => callBid(call),
       (r) => toastFor(call.action, r.status, me),
+      call.action === 'turnDownBids' ? { errorMessage: turnDownError } : {},
     )
   }
 

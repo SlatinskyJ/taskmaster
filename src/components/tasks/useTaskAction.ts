@@ -7,6 +7,7 @@ import { cs } from '~/lib/strings'
 import { taskErrorMessage } from '~/lib/taskErrors'
 import type {
   LifecycleActionResult,
+  RefusalResult,
   ScoreChangeActionResult,
   TaskActionResult,
 } from '~/server/tasks/functions'
@@ -28,6 +29,7 @@ export function useTaskAction() {
     R extends
       | LifecycleActionResult
       | TaskActionResult
+      | RefusalResult
       | TemplateActionResult
       | ScoreChangeActionResult
       | InstanceActionResult,
