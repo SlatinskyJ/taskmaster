@@ -178,3 +178,10 @@ Piece (through `adjustPointsIn` / `correctSettlementIn`, so audit entries exist;
 - [ ] **Step 3:** implement. **Step 4:** → PASS (also `pnpm lint`, `pnpm typecheck`, `pnpm format:check`). **Step 5:** commit "Add the corrections demo piece and e2e".
 
 Screenshots for the UX judge (360×800) and the brief (393×852@3x): Sporné with Opravit; Opravy bodů card and its load error; sheet points mode from a dispute (long reason) with preview; Kdo pills with long names; sheet week mode direct with the difference; empty week list; refusal message; Týden rows for a manual, a correction and a waiting adjustment; a giver's Týden with both boys' adjustments; Historie corrected record with adjustments under it; keyboard-open sheets.
+
+## Plan round 2 nits (taken, build them)
+
+- Task 1: `getFixable` and week.ts take the effective level/deducted through the domain's `effectiveSettlement` (as `disputes/targets.ts`), not inline.
+- Task 1 tests: Tento týden window at exactly his latest settled week's `endsAt` (in Tento týden, not in that record) and a boy with no settlement yet (all his adjustments); corrected-twice history checks `correction.at` is the second one's `made_at`.
+- Task 2: correction line separates amount and date: `Opraveno na ${new} (původně ${old}): ${signed} b. · ${date} · ${reason}`.
+- Task 3: points mode warns under the preview when Ubrat would go below zero („Tolik bodů nemá.“), send stays enabled (the server decides); tests: draft kept per dispute id across a reload, cleared after a successful send.
