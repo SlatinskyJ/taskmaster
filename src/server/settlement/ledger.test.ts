@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { runningTotal } from '~/domain'
 import { settlements } from '~/server/db/schema'
 import { ledgerEntries, takerPointsNow } from './ledger'
-import { doneTask, plus, reservedTask, SAT, week } from './testing'
+import { adjustment, doneTask, plus, reservedTask, SAT, week } from './testing'
 
 describe('ledgerEntries', () => {
   it('ledger: completions before the end and every deduction', () => {
@@ -110,5 +110,25 @@ describe('takerPointsNow', () => {
       status: 'done_unconfirmed',
     })
     expect(takerPointsNow(f.db).get(f.mladsi)).toEqual({ confirmed: 0, pending: 5 })
+  })
+})
+
+describe('adjustments in the ledger (#48)', () => {
+  it('takerPointsNow adds a +7 and a −3 adjustment to confirmed', () => {
+    const f = week()
+    doneTask(f, { score: 20, completedAt: plus(SAT, 1000), earner: f.starsi })
+    adjustment(f, f.starsi, 7, plus(SAT, 2000))
+    adjustment(f, f.starsi, -3, plus(SAT, 3000))
+    expect(takerPointsNow(f.db).get(f.starsi)).toEqual({ confirmed: 24, pending: 0 })
+    expect(ledgerEntries(f.db)).toContainEqual({ kind: 'adjustment', takerId: f.starsi, points: 7 })
+  })
+
+  it('until is exclusive on made_at', () => {
+    const f = week()
+    const until = plus(SAT, 60_000)
+    adjustment(f, f.starsi, 5, until)
+    adjustment(f, f.starsi, 2, plus(until, -1))
+    expect(runningTotal(ledgerEntries(f.db, until), f.starsi)).toBe(2)
+    expect(runningTotal(ledgerEntries(f.db), f.starsi)).toBe(7)
   })
 })
