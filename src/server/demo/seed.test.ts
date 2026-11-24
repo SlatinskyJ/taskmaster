@@ -174,7 +174,7 @@ describe('demo seed (#62)', () => {
       home: NO_FEATURES,
       launch: NO_FEATURES,
       approve: { ...NO_FEATURES, approveAnywhere: true },
-      rows: { ...NO_FEATURES, recurring: true, openRows: true },
+      rows: { ...NO_FEATURES, recurring: true, week: true, openRows: true },
       tasks: NO_FEATURES,
       week: { ...NO_FEATURES, week: true, meeting: true },
       recurring: { ...NO_FEATURES, recurring: true, log: true },

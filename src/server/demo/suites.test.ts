@@ -60,8 +60,25 @@ describe('e2e seeds (#183)', () => {
     })
   }
 
-  it('rows (#205): only the recurring and openRows switches on', () => {
-    expect(getFlags(seeded('rows'))).toEqual({ ...NO_FEATURES, recurring: true, openRows: true })
+  it('rows (#205): recurring, week and openRows on; e2e/rows.spec.ts opens these ids', () => {
+    const db = seeded('rows')
+    expect(getFlags(db)).toEqual({ ...NO_FEATURES, recurring: true, week: true, openRows: true })
+    const byId = new Map(listTasks(db).map((t) => [t.id, t]))
+    expect([byId.get(9)?.title, byId.get(9)?.status]).toEqual([
+      'Umýt okna v obýváku i v ložnici',
+      'open',
+    ])
+    expect([byId.get(3)?.title, byId.get(3)?.status]).toEqual([
+      'Vyluxovat celý obývák a chodbu',
+      'reserved',
+    ])
+    expect([byId.get(12)?.title, byId.get(12)?.templateId]).toEqual(['Nachystat tašku do školy', 3])
+    const tpl = db.select().from(templates).all()
+    expect(tpl.map((t) => [t.id, t.title, t.status])).toEqual([
+      [1, 'Vynést koše', 'proposed'],
+      [2, 'Vyndat myčku', 'active'],
+      [3, 'Nachystat tašku do školy', 'active'],
+    ])
   })
 
   it('approve (#206): only the approveAnywhere switch on; e2e/approve.spec.ts opens tasks 6 and 3', () => {
