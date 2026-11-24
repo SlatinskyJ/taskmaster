@@ -28,14 +28,15 @@
 1. **Round marker = `tasks.bidding_from`** (nullable integer, no FK). `null` = no round. Set only on an `open` one-time task. A column instead of a marker row because a reopen by a brother has no giver offer to write, and the thread's `side = 'giver'` row means "the giver side's offer". `ALTER TABLE ADD COLUMN`, no table rebuild, safe on the live DB.
 2. **The round's opening offer is the agreed score, offered by nobody** (`offer.by = null`). It is not a thing anyone can say yes to: taking the task at that score is just Rezervovat (which ends the round, decision 6). Only a parent's counter creates an offer a brother can accept or approve.
 3. **Same rules as a Návrh** (spec): a brother bids (not the current offer, not his previous bid in this round); Nechci; a parent counters (a counter at exactly brothers' bids accepts them); a parent accepts the lowest bid; a brother with a bid accepts a parent's counter → reserved to him; a brother without a bid says yes to a parent's counter → open at that score. "Previous bid" = his newest bid since the newer of the round start and the newest giver row.
-4. **A turn-down ends the round** (spec): every open row of the round closes `closed`, `bidding_from` back to null, the task stays open at its agreed score. In a round it is allowed with no bids (a parent's way to stop a round nobody bids in, or to withdraw his own counter); `seen` must still match the open bids (then `[]`).
+4. **A turn-down ends the round** (spec): every open row of the round closes `closed`, `bidding_from` back to null, the task stays open at its agreed score. It goes through `saveItem` with `endBidding` like every other round end (one writer of `bidding_from = null`). **Asked Jakub** whether it is allowed with no bids (the spec is silent; card in the project thread and on this PR, label `needs-jakub`). Built meanwhile with his recommended answer, yes: a parent's way to stop a round nobody bids in, or to take back his own counter; `seen` must still match the open bids (then `[]`). If he says no, the domain gets the `no_bids` check back for rounds (one line, one test flips).
 5. **Agreement in a round** goes through the existing `agree()`: a new lifecycle step `markRebidAgreed(item, bid | null)` (open → open, or open → reserved via bid), the task's score set to the agreed score, `offer_round` +1 when the score changed, `bidding_from` null, the round's rows close (`accepted` for the agreed ones). Audit `task.bid_accepted` / `task.score_approved` and `task.agreed` as today (`before.status = 'open'`).
-6. **Reserve / complete / cancel during a round ends it** ([call] in spec): `saveItem` closes the round's open rows and nulls `bidding_from` whenever an item leaves `open` while a round runs; `runStep` then writes `task.bidding_closed` (`after { entryIds }`) after the step's own entry, the same way it logs `task.score_change_discarded` (history reads cause, then effect).
-7. **"Jiná cena" vs a round.** Reopening is refused while a score change is open (`change_pending`); proposing a score change is refused while a round runs (new error `bidding_open`). Hiding "Jiná cena" on open tasks when the switch is on is PR 2.
+6. **Reserve / complete / cancel during a round ends it** ([call] in spec): `saveItem` closes the round's open rows and nulls `bidding_from` whenever an item leaves `open` while a round runs; `runStep` then writes `task.bidding_closed` (`after { entryIds }`) after the step's own entry, the same way it logs `task.score_change_discarded` (history reads cause, then effect). The ids also sit in the step's own `after.closed`; the separate entry is what the task page's history shows as its own line ("vyjednávání skončilo"), so a brother sees why his bid is gone.
+7. **Reopening replaces "Jiná cena" on open tasks** (spec [call]). With the switch on, `proposeTaskScoreChange` on an **open** one-time task is refused (`not_changeable`) on the server, in this PR; reserved tasks keep "Jiná cena". The flag is read in the server function handler (`proposeTaskScoreChangeHandler`), so `scoreChange.ts` stays flag-free. Besides: reopening is refused while a score change is still open from before the switch (`change_pending`), and proposing one while a round runs is refused (`bidding_open`, also with the switch off, a round can outlive a switch flip). Hiding the button is PR 2.
 8. **No approvals rows in a round.** `task_score_approvals` belong to the proposed state's path 1. In a round a counter is the parent's approval and one brother's yes completes it (§3: one giver + one taker), so nothing needs storing.
 9. **`offer_round` does not move on reopen or counter in a round**; only when the agreed score changes (decision 5). Approvals of the old proposed rounds are keyed by round and can't be reused anyway.
+10. **"Agreed" means `open | reserved` only.** `AgreedOneTime` becomes `Extract<OneTimeAgreement, { status: 'open' | 'reserved' }>` and a helper `isAgreedOneTime(a): a is AgreedOneTime` replaces every `status !== 'proposed'` / `=== 'proposed'` test on a domain result (`counterOffer`, `acceptOffer`, `acceptLowestTaskBid`, `approveTaskOffer`), so a plain counter in a round can never reach `agree()`. `agreementOf` returns `rebidding` only for a row with `status = 'open'` and `bidding_from` set; `reopenBidding` itself refuses any row that is not `open` before asking the domain (`not_changeable`), so reserved, done, confirmed and cancelled tasks can't be reopened.
 
-**Size:** about 380 changed lines without tests and the migration (domain ~120, server ~190, function + parse ~35, schema / switch / strings ~35). Under the 400 goal; screens are PR 2.
+**Size:** about 410 changed lines without tests and the migration (domain ~125, server ~210, functions ~45, schema / switch / strings ~30). Just over the 400 goal because the "agreed" helper (decision 10) and the server-side Jiná cena refusal (decision 7) belong with the rules they protect; screens are PR 2.
 
 ## Pre-flight
 
@@ -50,7 +51,9 @@
 3. Round ends by agreement: parent accepts the single lowest bid 12 → task `reserved` to that brother via bid, score 12, `bidding_from` null, rows `accepted`/`closed`; a tie → `open` at 12. Task 2.
 4. Parent counters 15, brother without a bid approves → `open` at 15; brother with a bid accepts → `reserved` to him at 15. Task 2.
 5. Parent turns down (with or without bids) → `open` at the old score, round over, every round row `closed`. Task 2.
-6. Reopen refused: proposed task, reserved task, instance, round already running, open score change, switch off. Task 1 + Task 2 + Task 3.
+6. Reopen refused: proposed, reserved, done, confirmed, cancelled task, instance, round already running, open score change, switch off. Task 1 + Task 2 + Task 3.
+7. A plain counter in a round (no bid at its number) leaves the task open at the old score, round running. Task 2.
+8. Switch on: "Jiná cena" on an open task refused; on a reserved task still accepted. Task 3.
 
 ---
 
@@ -63,6 +66,7 @@
 **Interfaces (produces):**
 - `OneTimeAgreement` gains `| { status: 'rebidding'; score: number; offer: { score: number; by: PersonId | null }; book: BidBook; lastBids: readonly OpenBid[] }` — `score` is the agreed score that stays in force; `offer` the round's current offer (`by: null` = the agreed score, nobody's offer).
 - `type Negotiating = Extract<OneTimeAgreement, { status: 'proposed' | 'rebidding' }>`; helper `offerScore(t: Negotiating): number`.
+- `type AgreedOneTime = Extract<OneTimeAgreement, { status: 'open' | 'reserved' }>` and `isAgreedOneTime(a: OneTimeAgreement): a is AgreedOneTime` (moved here from `src/server/tasks/tasks.ts`, decision 10).
 - `reopenOneTimeBidding(task, people, actorId): Result<OneTimeAgreement, AgreementError>` — `rebidding` → `bidding_open`; `proposed` → `not_agreed`; `reserved` → `not_changeable`; actor not an active giver or taker → `not_a_party`; else `{ status: 'rebidding', score, offer: { score, by: null }, book: EMPTY_BOOK, lastBids: [] }`.
 - `placeOneTimeBid` / `withdrawOneTimeBid`: same rules on `rebidding` (same number against `offer.score` and `lastBids`); anything else → `not_proposed`.
 - `counterOneTimeOffer` on `rebidding`: `same_score` when `score === offer.score`; at brothers' bids → `agreeAt` (reserved / open); else `{ ...task, offer: { score, by: giverId }, lastBids: [] }`.
@@ -96,10 +100,11 @@
 - Produces:
   - `agreementOf(tx, task)`: `open` with `biddingFrom !== null` → `rebidding` with `offer` = the open giver row (`{ score, by: userId }`) or `{ score: task.score, by: null }`, `book` = open taker rows, `lastBids = lastBids(tx, id, biddingFrom)`.
   - `lastBids(db, taskId, since)`: floor = max(`since`, newest giver row id).
-  - `reopenBidding(db, userId, taskId, now?): Result<TaskRow, TaskError>` — refuses `change_pending` when a score change is open; one-time only (`not_changeable` for instances); sets `bidding_from` = newest thread row id of the task (0 if none); audit `task.bidding_reopened` `after { score, biddingFrom }`.
+  - `reopenBidding(db, userId, taskId, now?): Result<TaskRow, TaskError>` — row `status !== 'open'` → `not_changeable` before the domain is asked (decision 10); refuses `change_pending` when a score change is open; one-time only (`not_changeable` for instances); sets `bidding_from` = newest thread row id of the task (0 if none); audit `task.bidding_reopened` `after { score, biddingFrom }`.
   - `counterOffer` in a round, not agreeing: `addEntry` a giver row (an older open counter closes `replaced`); the task row is not touched; audit `task.score_countered` `before { score: old offer, entryId: old row id or null }`, `after { score, entryId }`.
-  - `turnDownBids` in a round: closes every open round row `closed`, `bidding_from` null; audit `task.bids_turned_down` `before { score: offer, entryIds, offerEntryId: id or null }`, `after { status: 'open', score: task.score }`.
+  - `turnDownBids` in a round: closes every open round row `closed` and nulls `bidding_from` through `saveItem(…, toItem(task), { endBidding: true })`; audit `task.bids_turned_down` `before { score: offer, entryIds, offerEntryId: id or null }`, `after { status: 'open', score: task.score }`.
   - `agree()` on an open task (a round): `markRebidAgreed`, `saveItem` with `{ score, agreedAt, offerRound, }` and `endBidding: true`; audit as today.
+  - `counterOffer`, `acceptOffer`, `acceptLowestTaskBid`, `approveTaskOffer` branch on `isAgreedOneTime(result.value)` (decision 10).
   - `acceptOffer` / `approveTaskOffer` in a round: `score` must equal the round's offer (`offer_changed`); no approvals row; `approveTaskOffer` stops refusing `open` tasks only when a round runs.
   - `saveItem(tx, before, item, opts)`: when `before.biddingFrom !== null` and (`item.status !== 'open'` or `opts.endBidding`), it closes the open rows (`closeThread`, `accepted` = `opts.accepted`) and writes `bidding_from = null`.
   - `runStep`: if the step ended a round (`row.biddingFrom !== null && saved.biddingFrom === null`), writes `task.bidding_closed` `after { entryIds: closed }` after the step's entry.
@@ -109,11 +114,14 @@
   - Review Focus 1 + 2: reopen by Starší → `open`, 18, `biddingFrom` = last row id; Mladší bids 5 even though he bid 5 in the Návrh; `reserveTask` by Starší → reserved, round rows `closed`, `biddingFrom` null, audits end `task.reserved`, `task.bidding_closed`.
   - Review Focus 3: Starší 12 and Mladší 14, Táta accepts lowest → reserved to Starší via bid, score 12, `offerRound` +1, Starší's row `accepted`, Mladší's `closed`; tie at 12 → open 12.
   - Review Focus 4: counter 15 (task row still 18), Mladší approves 15 → open 15; Starší with a bid accepts 15 → reserved to Starší with Táta.
+  - Review Focus 7: counter 15 with no bid at 15 → task `open`, score 18, `biddingFrom` unchanged, one open giver row, audit `task.score_countered`, no `task.agreed`.
+  - Stale yes: counter 15, then counter 20; Mladší approves 15 → `offer_changed`; Starší (with a bid) accepts 15 → `offer_changed`; nothing written, round still running.
+  - Old score: counter 15, then counter 18 (the agreed score), Mladší approves 18 → open 18, `offerRound` unchanged (decision 9).
   - Review Focus 5: turn-down with no bids → open 18, `biddingFrom` null, counter row `closed`; stale `seen` → `offer_changed`, nothing closes.
-  - complete and cancel during a round end it the same way (one test each).
-  - refusals: reopen on proposed (`not_agreed`), reserved (`not_changeable`), running round (`bidding_open`), open score change (`change_pending`), by admin (`not_a_party`); score change during a round → `bidding_open`.
-  - rollbacks: `failAuditOn('task.bidding_reopened')` → `biddingFrom` still null; `failAuditOn('task.bidding_closed')` → reserve rolled back too.
-  - `thread.test.ts`: `lastBids` with `since` ignores rows at or below it.
+  - complete (by Starší) and cancel (by Táta) during a round with one open bid: each asserts the bid row `closed`, `biddingFrom` null, and the task's last two audit actions `task.completed` / `task.cancelled` then `task.bidding_closed` with `after.entryIds` = [that bid's id].
+  - refusals: reopen on proposed (`not_agreed`), reserved, done (`done_unconfirmed`), confirmed and cancelled (`not_changeable`, `biddingFrom` stays null), an instance (`not_changeable`; built with the instance helpers in `testing.ts`), running round (`bidding_open`), open score change (`change_pending`), by admin (`not_a_party`); score change during a round → `bidding_open`.
+  - rollbacks (one per new write path): `failAuditOn('task.bidding_reopened')` → `biddingFrom` still null; `'task.bidding_closed'` → reserve rolled back too; `'task.score_countered'` in a round → no new giver row; `'task.bids_turned_down'` in a round → bids open, `biddingFrom` set; `'task.agreed'` on a lowest-bid acceptance in a round → task open at 18, round running, rows open.
+  - `thread.test.ts`: `lastBids` with `since` ignores rows at or below it; and with a giver row newer than `since` the floor is that giver row (bid 12, counter, bid 12 again is allowed) — the max of the two, not `since` alone.
 - [ ] **Step 2:** run → FAIL.
 - [ ] **Step 3:** implement; generate the migration, append the INSERT, `pnpm db:check`.
 - [ ] **Step 4:** `pnpm test src/server` → PASS; `pnpm typecheck` clean.
@@ -122,14 +130,14 @@
 ### Task 3: Server function and history labels
 
 **Files:**
-- Modify: `src/server/tasks/functions.ts` (`reopenBiddingHandler`, `reopenBiddingFn`), `src/lib/taskErrors.ts` (`bidding_open` → `cs.tasks.errors.biddingOpen`), `src/lib/strings.ts` (`cs.tasks.errors.biddingOpen: 'Teď se o ceně vyjednává.'`, `cs.history.biddingReopened: 'nové vyjednávání o ceně'`, `cs.history.biddingClosed: 'vyjednávání skončilo'`), `src/components/tasks/historyText.ts` (two cases)
+- Modify: `src/server/tasks/functions.ts` (`reopenBiddingHandler`, `reopenBiddingFn`; `proposeTaskScoreChangeHandler` refuses an open task when `reopenBidding` is on, decision 7), `src/lib/taskErrors.ts` (`bidding_open` → `cs.tasks.errors.biddingOpen`), `src/lib/strings.ts` (`cs.tasks.errors.biddingOpen: 'Teď se o ceně vyjednává. Obnov stránku.'`, `cs.history.biddingReopened: 'nové vyjednávání o ceně'`, `cs.history.biddingClosed: 'vyjednávání skončilo'`), `src/components/tasks/historyText.ts` (two cases; a `task.bids_turned_down` entry without bids, `score` null in history, reads `biddingClosed` instead of "nabídky odmítnuty"; `taskHistory` passes `entryIds` length as needed)
 - Test: `src/server/tasks/functions.test.ts`, `tests/server-fn-guards.test.ts`, `src/lib/taskErrors.test.ts`, `src/components/tasks/historyText.test.ts`
 
 **Interfaces:**
 - `reopenBiddingHandler(db, userId, { taskId }, now): RefusalResult` — `feature_off` when `getFlags(db).reopenBidding` is false, else `answered(reopenBidding(…))`.
 - `reopenBiddingFn`: POST, `requireRole('giver', 'taker')`, `parseTaskId`.
 
-- [ ] **Step 1: Failing tests:** switch off → `feature_off`, nothing written; on → `{ ok: true, … }` and the task has `biddingFrom`; guard list entry `reopenBiddingFn: ['giver', 'taker']`; error and history text cases.
+- [ ] **Step 1: Failing tests:** switch off → `feature_off`, nothing written; on → `{ ok: true, … }` and the task has `biddingFrom`; Review Focus 8 (switch on: Jiná cena on open → `not_changeable`, on reserved → ok; switch off: open → ok); guard list entry `reopenBiddingFn: ['giver', 'taker']`; error and history text cases.
 - [ ] **Step 2:** run → FAIL.
 - [ ] **Step 3:** implement.
 - [ ] **Step 4:** `pnpm test`, `pnpm typecheck`, `pnpm lint` → clean.
