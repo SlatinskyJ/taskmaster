@@ -39,6 +39,15 @@ const demo: TemplateView = {
   },
 }
 
+const firstPrice = (
+  bids: { takerId: number; name: string; score: number }[],
+): NonNullable<TemplateView['bidding']> => ({
+  offer: { score: 10, byName: 'Táta' },
+  bids,
+  lowest: bids[0]?.score ?? null,
+  lastBids: bids.map((b) => ({ takerId: b.takerId, score: b.score })),
+})
+
 /** The stepper's − button. */
 const stepper = `aria-label="${cs.tasks.less}"`
 
@@ -72,6 +81,35 @@ describe('TemplatePricePanel', () => {
       expect(out).toContain('Nabídnout')
       expect(out).not.toContain('Přijmout')
     }
+  })
+
+  it('a brother on a proposed chore sees Souhlasím, Nechci and the stepper (#209)', () => {
+    const chore: TemplateView = {
+      ...base,
+      status: 'proposed',
+      score: 10,
+      bidding: firstPrice([{ takerId: STARSI.id, name: 'Starší', score: 12 }]),
+    }
+    const out = html(chore, STARSI)
+    expect(out).toContain('Souhlasím')
+    expect(out).toContain('Úkol začne platit za 10 b.')
+    expect(out).toContain('Nechci')
+    expect(out).toContain('Tvoje nabídka 12')
+    expect(out).toContain(stepper)
+    expect(html(chore, MLADSI)).not.toContain('Nechci')
+  })
+
+  it('a parent on a proposed chore sees Přijmout and Odmítnout nabídky (#209)', () => {
+    const chore: TemplateView = {
+      ...base,
+      status: 'proposed',
+      score: 10,
+      bidding: firstPrice([{ takerId: STARSI.id, name: 'Starší', score: 12 }]),
+    }
+    const out = html(chore, TATA)
+    expect(out).toContain('Přijmout 12 (Starší)')
+    expect(out).toContain('Odmítnout nabídky')
+    expect(out).toContain('Nová nabídka')
   })
 
   it('a proposed template renders nothing', () => {
