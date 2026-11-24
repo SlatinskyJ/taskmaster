@@ -82,6 +82,7 @@ No schema change and no migration: migration 0023 already has `status`, `resolve
   - `rolls back the dismissal when the audit write fails`. Use the same audit-failure helper as the `openDisputeIn` rollback test. Expect the row still open.
   - `refuses a giver and a taker: not_admin, row still open, no dispute.dismissed entry`.
   - `refuses a note of only spaces: note_required, no dispute.dismissed entry`.
+  - `refuses null as seen on a scored item: value_changed`. This pins that the check isn't written as `if (seen && …)`.
   - `refuses when the value changed since the admin saw it: value_changed`. Open a dispute on a task score of 30, change the score to 40 directly in the test DB, then dismiss with `seen = { score: 30 }`. Expect `value_changed`, the row still open and no audit entry. The same call with `{ score: 40 }` succeeds.
   - `refuses a second dismissal: not_open, one audit entry`.
   - `refuses an unknown dispute id: not_found`.
@@ -139,6 +140,8 @@ No schema change and no migration: migration 0023 already has `status`, `resolve
   - The parser accepts a note of 200 characters after trimming (padded with spaces) and throws on 201. It throws on an extra key, on an `id` of 0 or `'1'`, on a non-string note, on `value: { score: '3' }` and on `value: { level: 'top', deducted: 1 }`.
   - Both handlers answer `feature_off` with the switch off and change nothing.
   - `dismissDisputeHandler` with a giver id returns `{ ok: false, error: 'not_admin' }`.
+  - `dismissDisputeHandler` with a stale `value` returns `value_changed`. This pins that the handler passes `input.value` through.
+  - `DisputesCard` sends the row's `value` in the dismiss call: pin the argument the card passes to its `onKeep` callback.
   - The `adminDisputesHandler` entry shape is pinned with `toEqual` on the exact keys: no user rows, no password fields.
   - `tests/server-fn-guards.test.ts`: add `dismissDisputeFn: 'admin'` and `getAdminDisputesFn: 'admin'` to `EXPECTED_ROLES`. That file pins the exact roles, so wiring either function to any other role list fails it.
 - [ ] **Step 2: Run and watch them fail.**
@@ -183,7 +186,7 @@ Strings (`cs.admin.disputes`):
 - `done: 'Hotovo. Rodina uvidí poznámku.'`
 - `loadError: 'Sporné se nepodařilo načíst.'`
 - `retry: 'Zkusit znovu'`
-- errors: `not_open: 'Tenhle rozpor už je vyřízený.'`, `value_changed: 'Mezitím se to změnilo. Podívej se znovu.'` (the dialog closes and the list reloads), `note_required: 'Napiš poznámku.'`, `not_found: 'Tenhle rozpor už neexistuje.'`; `feature_off` and `generic` come from `cs.disputes.errors`.
+- errors: `not_open: 'Tenhle rozpor už je vyřízený.'`, `value_changed: 'Mezitím se to změnilo. Podívej se znovu.'` (handled outside the dialog, see Step 3), `note_required: 'Napiš poznámku.'`, `not_found: 'Tenhle rozpor už neexistuje.'`; `feature_off` and `generic` come from `cs.disputes.errors`.
 
 - [ ] **Step 1: Write the failing tests:**
   - `adminDisputeLines` gives the exact strings for:
@@ -202,7 +205,7 @@ Strings (`cs.admin.disputes`):
     - the textarea has `maxLength={200}` and the label `noteLabel`;
     - the busy state shows `saving`;
     - an error string renders in `role="alert"`.
-  - `sendDismiss`: a refused call (`not_open`) gives the Czech text, a thrown call gives `generic`, an ok call gives null. The dialog test with an `error` prop keeps the typed note in the textarea.
+  - `sendDismiss` returns `{ ok: true } | { ok: false; message: string; reload: boolean }`. `reload` is true for `value_changed`, `not_open` and `not_found`. Test each of those three, plus `note_required` (`reload: false`). A refused call gives the Czech text, a thrown call gives `generic`, an ok call gives null. The dialog test with an `error` prop keeps the typed note in the textarea.
   - `adminDisputeErrorMessage` maps each code above and `feature_off`, and anything else gives `generic`.
   - Správa page:
     - with entries, it renders `Sporné (n)` above `Výchozí týden`;
@@ -214,7 +217,8 @@ Strings (`cs.admin.disputes`):
   - The loader adds `getAdminDisputesFn()`, caught: a thrown fetch becomes `{ error: 'load' }`, so the card shows the retry, which calls `router.invalidate()`.
   - The Dialog is the confirm step for this irreversible action: its text says the dispute closes and the note is shown to the family.
   - On success: toast `done`, close, `router.invalidate()`.
-  - On error: the Czech message stays inside the dialog, and the note is kept.
+  - On `value_changed`, `not_open` or `not_found`: the dialog closes, the Czech message shows as an error toast, and `router.invalidate()` reloads the list. The row then shows the new value or is gone, so a retry never resends the stale value.
+  - On any other error (`note_required`, `feature_off`, generic): the Czech message stays inside the dialog and the note is kept.
   - Rows wrap (`break-words`, `min-w-0`) and nothing is truncated.
   - The Dialog's animation already has `motion-reduce:` from `ui/dialog.tsx`; check that, and add it if it is missing.
 - [ ] **Step 4: Run** `pnpm test src/components src/routes`, then `pnpm lint` and `pnpm typecheck`. Expected: PASS.
@@ -223,7 +227,8 @@ Strings (`cs.admin.disputes`):
   - a settlement row;
   - the empty state;
   - the error state with retry;
-  - the dialog with an error, and with the keyboard up (viewport 360×450).
+  - the dialog with an error, and with the keyboard up (viewport 360×450);
+  - the error toast after `value_changed`, with the reloaded row.
 - [ ] **Step 6: Commit.** Message: `Sporné on Správa: keep a dispute with a note (#47)`.
 
 ### Task 5: seed and e2e
