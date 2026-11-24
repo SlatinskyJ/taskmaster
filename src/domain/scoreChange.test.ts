@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AgreementError, ScoreProposal, TemplateAgreement } from './agreement'
+import type { AgreementError, ScoreProposal, TemplateAgreement, TemplateChange } from './agreement'
 import {
   approveTemplate,
   canCreateInstances,
@@ -33,6 +33,8 @@ import {
   isOneTimeChangeAgreed,
   proposeOneTimeScoreChange,
   resolveOneTimeChange,
+  turnDownTemplateChangeBids,
+  withdrawTemplateChangeBid,
 } from './scoreChange'
 
 const DAD = 1
@@ -278,6 +280,90 @@ describe('template score change runs like bidding (spec §5.1)', () => {
 })
 
 // ── One-time tasks (spec §5.2) ───────────────────────────────────────────────────────────
+
+describe('template change: same number, Nechci, turn-down (#232)', () => {
+  const agreed = (
+    change: TemplateChange | null,
+    lastBids: { by: number; score: number }[] = [],
+  ): TemplateAgreement => ({ status: 'agreed', score: 10, change, lastBids })
+
+  it('bid refuses his last bid since the floor, open or withdrawn', () => {
+    const t = agreed(null, [{ by: OLDER, score: 12 }])
+    expect(error(bidTemplateScore(t, family, OLDER, 12))).toBe('same_score')
+    expect(bids(tbid(t, YOUNGER, 12))).toEqual([{ by: YOUNGER, score: 12 }])
+    expect(bids(tbid(t, OLDER, 13))).toEqual([{ by: OLDER, score: 13 }])
+  })
+
+  it('Nechci closes only his bid; the offer stays', () => {
+    const t = agreed({
+      offer: { score: 14, proposedBy: DAD },
+      bids: [
+        { by: OLDER, score: 12 },
+        { by: YOUNGER, score: 13 },
+      ],
+    })
+    expect(value(withdrawTemplateChangeBid(t, family, OLDER))).toMatchObject({
+      status: 'agreed',
+      score: 10,
+      change: { offer: { score: 14, proposedBy: DAD }, bids: [{ by: YOUNGER, score: 13 }] },
+    })
+    const after = value(withdrawTemplateChangeBid(t, family, OLDER))
+    expect(error(withdrawTemplateChangeBid(after, family, OLDER))).toBe('no_bid')
+    expect(error(withdrawTemplateChangeBid(agreed(null), family, OLDER))).toBe('no_bid')
+    expect(error(withdrawTemplateChangeBid(t, family, DAD))).toBe('not_a_taker')
+    const proposed = value(proposeTemplate(family, DAD, 5))
+    expect(error(withdrawTemplateChangeBid(proposed, family, OLDER))).toBe('not_agreed')
+  })
+
+  it('Nechci of the last row ends the change', () => {
+    const t = agreed({ offer: null, bids: [{ by: OLDER, score: 12 }] })
+    expect(value(withdrawTemplateChangeBid(t, family, OLDER))).toMatchObject({ change: null })
+  })
+
+  const two = [
+    { by: OLDER, score: 12 },
+    { by: YOUNGER, score: 13 },
+  ]
+
+  it('turn-down keeps the parent offer, now by the giver who turned down; every bid closes', () => {
+    const t = agreed({ offer: { score: 14, proposedBy: DAD }, bids: two })
+    expect(value(turnDownTemplateChangeBids(t, withMum, MUM, two))).toMatchObject({
+      status: 'agreed',
+      score: 10,
+      change: { offer: { score: 14, proposedBy: MUM }, bids: [] },
+    })
+  })
+
+  it('turn-down with no offer ends the change; the score stays', () => {
+    const t = agreed({ offer: null, bids: two })
+    expect(value(turnDownTemplateChangeBids(t, family, DAD, two))).toMatchObject({
+      status: 'agreed',
+      score: 10,
+      change: null,
+    })
+  })
+
+  it('turn-down refuses a stale list, a taker, no bids', () => {
+    const t = agreed({ offer: null, bids: two })
+    const stale = [
+      [{ by: OLDER, score: 12 }],
+      [...two, { by: JAKUB, score: 9 }],
+      [
+        { by: OLDER, score: 11 },
+        { by: YOUNGER, score: 13 },
+      ],
+    ]
+    for (const seen of stale) {
+      expect(error(turnDownTemplateChangeBids(t, family, DAD, seen))).toBe('offer_changed')
+    }
+    expect(error(turnDownTemplateChangeBids(t, family, OLDER, two))).toBe('not_a_giver')
+    const offerOnly = agreed({ offer: { score: 14, proposedBy: DAD }, bids: [] })
+    expect(error(turnDownTemplateChangeBids(offerOnly, family, DAD, []))).toBe('no_bids')
+    expect(error(turnDownTemplateChangeBids(agreed(null), family, DAD, []))).toBe('no_bids')
+    const proposed = value(proposeTemplate(family, DAD, 5))
+    expect(error(turnDownTemplateChangeBids(proposed, family, DAD, []))).toBe('not_agreed')
+  })
+})
 
 const negotiating = (): Item => value(createOneTimeItem(person(DAD)))
 const open = (): Item => value(markAgreed(negotiating(), null))

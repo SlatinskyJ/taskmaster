@@ -8,6 +8,8 @@ import {
   proposeScore,
   pruneApprovals,
 } from './agreement'
+import { sameTakers } from './bidding'
+import type { OpenBid } from './bids'
 import { bidOf, lowestBid, placeBid } from './bids'
 import type { Item } from './lifecycle'
 import type { Person, PersonId } from './parties'
@@ -52,10 +54,14 @@ export function bidTemplateScore(
   if (!isTaker(people, takerId)) return fail('not_a_taker')
   if (!isValidScore(score)) return fail('invalid_score')
   const change = template.change ? liveTemplateBook(template.change, people) : NO_CHANGE
+  // Same number (#232, spec §5.2): never the score or the offer, nor his last bid since bids
+  // last reset or the offer last changed (open or withdrawn).
+  const last = template.lastBids?.find((b) => b.by === takerId)
   if (
     score === template.score ||
     score === change.offer?.score ||
-    score === bidOf(change, takerId)?.score
+    score === bidOf(change, takerId)?.score ||
+    score === last?.score
   ) {
     return fail('same_score')
   }
@@ -119,6 +125,46 @@ export function acceptTemplateOffer(
   if (!offer) return fail('no_offer')
   if (offer.score !== score) return fail('offer_changed')
   return ok({ status: 'agreed', score: offer.score, change: null })
+}
+
+/** A change with nothing left open is no change: the old score simply stays. */
+const orNull = (change: TemplateChange): TemplateChange | null =>
+  change.bids.length === 0 && !change.offer ? null : change
+
+/** A taker's Nechci on a score change (#232): only his own open bid closes. */
+export function withdrawTemplateChangeBid(
+  template: TemplateAgreement,
+  people: readonly Person[],
+  takerId: PersonId,
+): Result<TemplateAgreement, AgreementError> {
+  if (template.status !== 'agreed') return fail('not_agreed')
+  if (!isTaker(people, takerId)) return fail('not_a_taker')
+  const change = template.change
+  if (!change || !bidOf(change, takerId)) return fail('no_bid')
+  const bids = change.bids.filter((b) => b.by !== takerId)
+  return ok({ ...template, change: orNull({ ...change, bids }) })
+}
+
+/**
+ * A giver turns a score change's bidding down (#232): every open bid closes. With a giver offer
+ * the change stays in flight at it, now offered by this giver; with none it ends and the old
+ * score stays. `seen` are the live bids he saw; if they changed meanwhile, `offer_changed`.
+ */
+export function turnDownTemplateChangeBids(
+  template: TemplateAgreement,
+  people: readonly Person[],
+  giverId: PersonId,
+  seen: readonly OpenBid[],
+): Result<TemplateAgreement, AgreementError> {
+  if (template.status !== 'agreed') return fail('not_agreed')
+  if (!isGiver(people, giverId)) return fail('not_a_giver')
+  const live = template.change ? liveTemplateBook(template.change, people).bids : []
+  if (live.length === 0) return fail('no_bids')
+  const key = (b: OpenBid) => `${String(b.by)}:${String(b.score)}`
+  if (!sameTakers(live.map(key), seen.map(key))) return fail('offer_changed')
+  const offer = template.change?.offer
+  const change = offer ? { offer: { score: offer.score, proposedBy: giverId }, bids: [] } : null
+  return ok({ ...template, change })
 }
 
 // ── One-time tasks ───────────────────────────────────────────────────────────────────────
