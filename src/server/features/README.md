@@ -3,7 +3,8 @@
 Which unfinished features the family sees (`Features` in [`src/lib/features.ts`](../../lib/features.ts)).
 One row per switch in the `feature_flags` table. Migrations 0017 and 0019 seed them off for
 the launch; 0022 turns every one on (all five features built). 0024 adds `disputes`
-(disputes and corrections, #46–#48), off.
+(disputes and corrections, #46–#48), off. 0027 adds `passwordChange` (changing your own
+password on Profil, #210), off.
 
 - `flags.ts`: `getFlags(db)`. A switch with no row reads as off; an unknown row is ignored.
 - `functions.ts`: `getFeaturesFn`, signed-in users only. The app shell (`src/routes/_app.tsx`)

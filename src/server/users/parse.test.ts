@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseNewPerson, parsePersonEdit, parseReset } from './parse'
+import { parseChangePassword, parseNewPerson, parsePersonEdit, parseReset } from './parse'
 
 describe('people server function inputs', () => {
   it('parsePersonEdit drops anything but name and role', () => {
@@ -33,5 +33,27 @@ describe('people server function inputs', () => {
     expect(() => parseReset({ userId: '5', password: 'x' })).toThrow('Invalid input')
     expect(() => parsePersonEdit({ userId: 1.5 })).toThrow('Invalid input')
     expect(() => parsePersonEdit({ userId: 1, role: 3 })).toThrow('Invalid input')
+  })
+})
+
+describe('parseChangePassword (#210)', () => {
+  it('keeps the two strings and the box, drops anything else', () => {
+    expect(
+      parseChangePassword({ current: 'a', next: 'b', logOutOthers: false, userId: 9 }),
+    ).toStrictEqual({ current: 'a', next: 'b', logOutOthers: false })
+  })
+
+  it('refuses wrong types and a missing box', () => {
+    expect(() => parseChangePassword(null)).toThrow('Invalid input')
+    expect(() => parseChangePassword({ current: 1, next: 'b', logOutOthers: true })).toThrow(
+      'Invalid input',
+    )
+    expect(() => parseChangePassword({ current: 'a', next: null, logOutOthers: true })).toThrow(
+      'Invalid input',
+    )
+    expect(() => parseChangePassword({ current: 'a', next: 'b' })).toThrow('Invalid input')
+    expect(() => parseChangePassword({ current: 'a', next: 'b', logOutOthers: 'yes' })).toThrow(
+      'Invalid input',
+    )
   })
 })
