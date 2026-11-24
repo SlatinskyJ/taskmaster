@@ -15,7 +15,7 @@ Read `.claude/skills/pr-review-rounds/judge-contract.md` first. It defines your 
 - **Few words:** labels short and in Czech, consistent with the strings module. No English in the UI.
 - **States visible:** confirmed vs pending points look clearly different. Every list has loading, empty and error states.
 - **Theme:** Hřiště/Pastelky tokens from `@theme`, no raw hex. Light mode always; dark mode only when the theme or tokens changed.
-- **Keyboard open:** with the phone keyboard up (≈ 380 pt of the 852), the field being typed in and the button that sends it are both on screen, or one short scroll away on a page that scrolls. The bottom sheet moves above the keyboard by itself; a centred dialog stays put and its buttons end up under the keyboard unless the code handles it. Text fields set `enterKeyHint`; number fields `inputMode`; names and logins `autoCapitalize="none"` where case matters. `autoFocus` does not open the iOS keyboard; do not rely on it.
+- **Keyboard open:** with the phone keyboard up (about half the screen), the field being typed in is on screen, also when a sheet or dialog focuses it on open. The send button may sit under the keyboard if the page scrolls to it. The bottom sheet moves above the keyboard by itself; a centred dialog stays put, so a field in its lower half ends up under the keyboard. Text fields set `enterKeyHint`; number fields `inputMode`; names and logins `autoCapitalize="none"` where case matters. `autoFocus` does not open the iOS keyboard; do not rely on it.
 - **Accessibility:** contrast AA, visible focus, labels on inputs, `prefers-reduced-motion` respected for confetti and animations.
 - **Mockups:** each changed screen gives a person what its mockup gives (see Mockups).
 
@@ -31,7 +31,7 @@ You don't run the app. You look at the builder's screenshots: the folder your pr
 | --- | --- |
 | Something a person needs to read or tap is cut, hidden or covered | `should-fix` on the line that lays it out. Name the file. `Failure: <who>, <screen> at 360 px → <what they cannot read or do> (<file>)` |
 | A screen or state on your list has no 360 px screenshot, or there is no folder | `should-fix` on the line that renders it. `Failure: <screen, state> at 360 px → on no screenshot; nobody has seen whether <what has to fit there> fits`. `Fix: add a screenshot of <state>` |
-| A form, sheet or dialog with a text field has no keyboard-open screenshot (`-keyboard-`), or on it the field or its send button sits under the keyboard | `should-fix` on the line that lays out the form. `Failure: <who>, <screen> with the keyboard open → <what they cannot see or tap>` |
+| A form, sheet or dialog with a text field has no keyboard-open screenshot (`-keyboard-`), or on it the field being typed in sits under the keyboard, or the form has no case in `e2e/keyboard.spec.ts` | `should-fix` on the line that lays out the form. `Failure: <who>, <screen> with the keyboard open → <what they cannot see while typing>` |
 | A row that shows a task name is shot only with short ones | the same finding: a row is checked with a long Czech task name (about 30 letters), or not at all |
 | A value the code states exactly (`min-h-10` is 40 px; a contrast ratio from two tokens) | needs no screenshot; cite the line |
 

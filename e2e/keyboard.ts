@@ -13,8 +13,16 @@ export const KEYBOARD_HEIGHT = 380
 /** The iPhone 15 Pro screen as the installed app sees it (the brief's screenshot size). */
 export const PHONE = { width: 393, height: 852 } as const
 
+/**
+ * The same iPhone in a browser (Chrome on iOS, measured 2026-11-24): the address and tool bars
+ * leave 668 pt of page, and the keyboard with its autofill bubble covers all but the top 333.
+ * Smaller than the installed app, so the tests use it: what passes here passes there.
+ */
+export const PHONE_BROWSER = { width: 393, height: 668, keyboard: 335 } as const
+
 const script = (height: number) => `(() => {
   const KB = ${String(height)};
+  window.__keyboardHeight = KB;
   const vv = new EventTarget();
   let open = false;
   for (const k of ['offsetLeft', 'offsetTop', 'pageLeft', 'pageTop']) vv[k] = 0;
@@ -41,7 +49,10 @@ const script = (height: number) => `(() => {
   };
   document.addEventListener('focusin', (e) => {
     if (!isText(e.target)) return;
-    open = true; board(true); vv.dispatchEvent(new Event('resize'));
+    // iOS lets the page slide up under the keyboard even when it does not scroll; extra room
+    // at the bottom gives the same slide here. Fixed layers (bars, dialogs) stay put, as on iOS.
+    open = true; board(true); document.body.style.paddingBottom = KB + 'px';
+    vv.dispatchEvent(new Event('resize'));
     setTimeout(() => {
       const r = e.target.getBoundingClientRect();
       const limit = window.innerHeight - KB - 8;
@@ -50,7 +61,8 @@ const script = (height: number) => `(() => {
   });
   document.addEventListener('focusout', () => setTimeout(() => {
     if (isText(document.activeElement)) return;
-    open = false; board(false); vv.dispatchEvent(new Event('resize'));
+    open = false; board(false); document.body.style.paddingBottom = '';
+    vv.dispatchEvent(new Event('resize'));
   }, 0));
 })();`
 
@@ -67,8 +79,10 @@ export async function openKeyboard(page: Page, field: Locator) {
 }
 
 /** The element sits whole in the part of the screen the keyboard leaves visible. */
-export async function expectAboveKeyboard(page: Page, element: Locator, height = KEYBOARD_HEIGHT) {
-  const visible = await page.evaluate((kb) => window.innerHeight - kb, height)
+export async function expectAboveKeyboard(page: Page, element: Locator) {
+  const visible = await page.evaluate(
+    () => window.innerHeight - (window as unknown as { __keyboardHeight: number }).__keyboardHeight,
+  )
   await expect
     .poll(async () => {
       const box = await element.boundingBox()
