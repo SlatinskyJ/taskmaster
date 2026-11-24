@@ -176,6 +176,13 @@
       "when": 1795352917461,
       "tag": "0024_disputes_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1795518104384,
+      "tag": "0025_dispute_text_limits",
+      "breakpoints": true
     }
   ]
 }

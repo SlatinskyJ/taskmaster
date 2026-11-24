@@ -13,6 +13,8 @@ const EXPECTED_ROLES: Record<string, string> = {
   openDisputeFn: 'giver,taker',
   getItemMarkFn: 'giver,taker',
   getDisputeListFn: 'giver,taker',
+  getAdminDisputesFn: 'admin',
+  dismissDisputeFn: 'admin',
   listUsersFn: 'admin',
   getPeriodDefaultsFn: 'admin',
   savePeriodDefaultsFn: 'admin',

@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 import { cs } from '../src/lib/strings'
-import { passwordLogin } from './helpers'
+import { logout, passwordLogin } from './helpers'
 
-// Rozporovat (#46) on the `disputes` seed: Starší's "Vysát auto" is already disputed, Mladší's
-// past-week settlement was disputed and kept by the admin. Serial: the second test reads the
-// dispute the first one opens.
+// Rozporovat (#46) and the admin's Ponechat (#47) on the `disputes` seed: Starší's "Vysát auto"
+// is already disputed, Mladší's past-week settlement was disputed and kept by the admin. Serial:
+// the second test reads the dispute the first one opens; the last keeps "Vysát auto".
 test.describe.configure({ mode: 'serial' })
 
 const row = (page: Page, title: string) =>
@@ -52,4 +52,29 @@ test('Mladší reads the admin’s answer on his settled week and in Rozporován
   await expect(main.locator('[data-record]')).toContainText(kept)
   await expect(main.locator('[data-dispute]')).toContainText(kept)
   await expect(main.getByText(cs.disputes.list)).toBeVisible()
+})
+
+test('the admin keeps Starší’s "Vysát auto" dispute; Starší reads the note', async ({ page }) => {
+  const t = cs.admin.disputes
+  const note = 'Vysával jen kabinu, body sedí.'
+  await passwordLogin(page, 'admin')
+  await expect(page).toHaveURL(/\/sprava$/)
+  const car = page.locator('[data-admin-dispute]').filter({ hasText: 'Vysát auto' })
+  await expect(car).toContainText('Vysával jsem i kufr, to je víc práce.')
+  await car
+    .getByRole('button', { name: t.keepFor(cs.disputes.what.completion, 'Vysát auto') })
+    .click()
+  const dialog = page.getByRole('dialog')
+  const confirm = dialog.getByRole('button', { name: t.confirm })
+  await expect(confirm).toBeDisabled()
+  await dialog.getByLabel(t.noteLabel).fill(note)
+  await confirm.click()
+  await expect(page.getByText(t.done)).toBeVisible()
+  await expect(car).toHaveCount(0)
+
+  await logout(page)
+  await passwordLogin(page, 'starsi')
+  await expect(page).toHaveURL(/\/$/)
+  await page.goto('/tyden')
+  await expect(row(page, 'Vysát auto')).toContainText(cs.disputes.kept(note))
 })

@@ -19,3 +19,22 @@ export function disputeErrorMessage(error: string): string {
       return e.generic
   }
 }
+
+/**
+ * Czech message for a dismissal (or, with #48, a correction) the server refused
+ * (`DisputeServerError` codes, or `feature_off`). Anything else gets the generic text.
+ */
+export function adminDisputeErrorMessage(error: string): string {
+  const e = cs.admin.disputes.errors
+  switch (error) {
+    case 'not_open':
+    case 'value_changed':
+    case 'note_required':
+    case 'not_found':
+      return e[error]
+    case 'feature_off':
+      return cs.disputes.errors.feature_off
+    default:
+      return cs.disputes.errors.generic
+  }
+}
