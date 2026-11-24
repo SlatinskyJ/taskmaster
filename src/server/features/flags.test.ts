@@ -6,7 +6,7 @@ import { createTestDb } from '~/server/db/testing'
 import { getFlags, setSwitchesIn } from './flags'
 
 describe('getFlags', () => {
-  it('reads the values the migrations leave: on since the release (0022), disputes and approveAnywhere off (0024, 0027)', () => {
+  it('reads the values the migrations leave: on since the release (0022), disputes, approveAnywhere and openRows off (0024, 0027, 0028)', () => {
     expect(getFlags(createTestDb())).toEqual({
       recurring: true,
       log: true,
@@ -15,6 +15,7 @@ describe('getFlags', () => {
       periodProposals: true,
       disputes: false,
       approveAnywhere: false,
+      openRows: false,
     })
     expect(
       createTestDb()
@@ -33,6 +34,7 @@ describe('getFlags', () => {
       recurring: false,
       disputes: false,
       approveAnywhere: false,
+      openRows: false,
     })
   })
 
@@ -48,13 +50,19 @@ describe('getFlags', () => {
       periodProposals: true,
       disputes: true,
       approveAnywhere: true,
+      openRows: true,
     })
   })
 
   it('ignores a row for a switch the code does not know', () => {
     const db = createTestDb()
     db.insert(featureFlags).values({ key: 'teleport', enabled: false }).run()
-    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, disputes: false, approveAnywhere: false })
+    expect(getFlags(db)).toEqual({
+      ...ALL_FEATURES,
+      disputes: false,
+      approveAnywhere: false,
+      openRows: false,
+    })
   })
 
   it('refuses a hand edit that is not 0 or 1', () => {

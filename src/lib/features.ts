@@ -19,6 +19,8 @@ export const FEATURE_KEYS = [
   /** Approve done work from the task page and Úkoly; Ke schválení first on a parent's Domů
    * (#206). */
   'approveAnywhere',
+  /** Rows open their task or chore page (#205). */
+  'openRows',
 ] as const
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number]
@@ -35,6 +37,7 @@ export const NO_FEATURES: Readonly<Features> = {
   periodProposals: false,
   disputes: false,
   approveAnywhere: false,
+  openRows: false,
 }
 
 /** Every switch on: the full app as designed (UI doc §6). */
@@ -46,4 +49,5 @@ export const ALL_FEATURES: Readonly<Features> = {
   periodProposals: true,
   disputes: true,
   approveAnywhere: true,
+  openRows: true,
 }

@@ -60,6 +60,10 @@ describe('e2e seeds (#183)', () => {
     })
   }
 
+  it('rows (#205): only the recurring and openRows switches on', () => {
+    expect(getFlags(seeded('rows'))).toEqual({ ...NO_FEATURES, recurring: true, openRows: true })
+  })
+
   it('approve (#206): only the approveAnywhere switch on; e2e/approve.spec.ts opens tasks 6 and 3', () => {
     const db = seeded('approve')
     expect(getFlags(db)).toEqual({ ...NO_FEATURES, approveAnywhere: true })

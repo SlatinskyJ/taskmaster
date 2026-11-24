@@ -38,6 +38,8 @@ export const SEEDS = {
   launch: { pieces: [negotiation, points], features: [] },
   /** Done work to approve on Úkoly and the task page (#206). */
   approve: { pieces: [negotiation, points], features: ['approveAnywhere'] },
+  /** Rows that open their task or chore page (#205). */
+  rows: { pieces: [negotiation, points, templates], features: ['recurring', 'openRows'] },
   /** The task page (#36). */
   tasks: { pieces: [priceChange], features: [] },
   /** Týden and the weekly meeting (#44, #45). */
