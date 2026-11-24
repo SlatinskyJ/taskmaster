@@ -27,6 +27,7 @@ const base: TemplateView = {
   approvedBy: [],
   schedule: null,
   deadline: null,
+  bidding: null,
   change: null,
 }
 const demo: TemplateView = {

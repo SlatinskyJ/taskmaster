@@ -3,6 +3,7 @@ import {
   approveTemplate,
   findPerson,
   isValidScore,
+  liveBook,
   liveTemplateBook,
   missingRoles,
   proposeTemplate,
@@ -311,6 +312,8 @@ export interface TemplateView {
   deadline: { dayOffset: number; due: string; graceMinutes: number } | null
   /** Agreed with a score change in flight (spec §5.1), else null. */
   change: TemplateChangeView | null
+  /** Proposed only: the first-price bidding (#209), else null. */
+  bidding: TemplateBiddingView | null
 }
 
 /** A score change as screens show it: current takers' bids only (live), lowest first. */
@@ -319,6 +322,32 @@ export interface TemplateChangeView {
   bids: { takerId: number; name: string; score: number }[]
   /** The lowest live bid: what a giver's accept sends back. Null with no bids. */
   lowest: number | null
+}
+
+/**
+ * A proposed template's first-price bidding (#209): the current offer, live bids lowest first,
+ * and each taker's last bid since the offer last changed (the same number is refused again).
+ */
+export type TemplateBiddingView = TemplateChangeView & {
+  lastBids: { takerId: number; score: number }[]
+}
+
+function biddingView(
+  db: Db | Tx,
+  row: TemplateRow,
+  people: Person[],
+  name: (id: number) => string,
+): TemplateBiddingView | null {
+  const agreement = agreementOf(db, row)
+  if (agreement.status !== 'proposed') return null
+  const { proposal, lastBids: last } = agreement
+  const live = [...liveBook(agreement.book, people).bids].sort((a, b) => a.score - b.score)
+  return {
+    offer: { score: proposal.score, byName: name(proposal.proposedBy) },
+    bids: live.map((b) => ({ takerId: b.by, name: name(b.by), score: b.score })),
+    lowest: live[0]?.score ?? null,
+    lastBids: last.map((b) => ({ takerId: b.by, score: b.score })),
+  }
 }
 
 function changeView(
@@ -385,6 +414,7 @@ function views(db: Db | Tx, rows: TemplateRow[]): TemplateView[] {
         ? null
         : { dayOffset: t.dueDayOffset, due: t.dueTime, graceMinutes: t.graceMinutes },
     change: changeView(db, t, people, name),
+    bidding: biddingView(db, t, people, name),
   }))
 }
 

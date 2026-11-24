@@ -68,6 +68,7 @@ const template = (over: Partial<TemplateView>): TemplateView => ({
   approvedBy: [],
   schedule: null,
   deadline: null,
+  bidding: null,
   change: null,
   ...over,
 })

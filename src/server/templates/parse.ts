@@ -1,5 +1,6 @@
 import type { ClockTime, DeadlineRule, TemplateSchedule } from '~/domain'
 import type { Weekday } from '~/domain/dates'
+import { TASK_SCORE_MAX } from '~/lib/taskLimits'
 import type { NewTemplate } from './templates'
 
 // Input checks for the template server functions: types and shape only, so nothing malformed
@@ -53,9 +54,37 @@ export function parseNewTemplate(data: unknown): NewTemplate {
   }
 }
 
+/** A score a person sends: a whole number up to TASK_SCORE_MAX (the domain checks the floor). */
+function scoreOf(value: unknown): number {
+  const n = int(value)
+  if (n > TASK_SCORE_MAX) invalid()
+  return n
+}
+
 export function parseApproval(data: unknown): { templateId: number; score: number } {
   const { templateId, score } = record(data)
-  return { templateId: int(templateId), score: int(score) }
+  return { templateId: int(templateId), score: scoreOf(score) }
+}
+
+/** Most bids a turn-down may name: more than any family has takers. */
+const MAX_TURN_DOWN_BIDS = 20
+
+/** A giver's turn-down on a proposed template: the open bids he saw, 1 to 20, one per taker. */
+export function parseTemplateTurnDown(data: unknown): {
+  templateId: number
+  bids: { takerId: number; score: number }[]
+} {
+  const { templateId, bids } = record(data)
+  if (!Array.isArray(bids) || bids.length < 1 || bids.length > MAX_TURN_DOWN_BIDS) invalid()
+  const list = bids.map((b) => {
+    const { takerId, score } = record(b)
+    const n = scoreOf(score)
+    // A bid is never below 1, so a seen bid of 0 is malformed, not a moved book.
+    if (n < 1) invalid()
+    return { takerId: int(takerId), score: n }
+  })
+  if (new Set(list.map((b) => b.takerId)).size !== list.length) invalid()
+  return { templateId: int(templateId), bids: list }
 }
 
 export function parseTemplateId(data: unknown): { templateId: number } {

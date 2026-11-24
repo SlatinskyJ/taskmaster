@@ -315,12 +315,14 @@ describe('reads', () => {
         schedule: { days: [2], time: '18:00' },
         deadline: { dayOffset: 1, due: '07:00', graceMinutes: 120 },
         change: null,
+        bidding: { offer: { score: 4, byName: 'Táta' }, bids: [], lowest: null, lastBids: [] },
       },
     ])
     expect(Object.keys(list[0] ?? {}).sort()).toEqual(
       [
         'approvalRequired',
         'approvedBy',
+        'bidding',
         'change',
         'createdByName',
         'deadline',
@@ -331,6 +333,28 @@ describe('reads', () => {
         'title',
       ].sort(),
     )
+  })
+
+  it("a proposed template's view has its bidding (#209); an agreed one has bidding null", () => {
+    const { db, tata, mama, starsi, mladsi } = family()
+    const { id } = must(createTemplate(db, tata, BINS, T0))
+    const on = { choreBidding: true }
+    must(bidOnTemplate(db, starsi, id, 7, T1, on))
+    must(bidOnTemplate(db, mladsi, id, 6, T1, on))
+    must(counterOnTemplate(db, mama, id, 5, T1, on))
+    must(bidOnTemplate(db, mladsi, id, 8, T2, on))
+    const view = () => listTemplates(db, tata).find((t) => t.id === id)
+    expect(view()?.bidding).toEqual({
+      offer: { score: 5, byName: 'Máma' },
+      bids: [
+        { takerId: starsi, name: 'Starší', score: 7 },
+        { takerId: mladsi, name: 'Mladší', score: 8 },
+      ],
+      lowest: 7,
+      lastBids: [{ takerId: mladsi, score: 8 }],
+    })
+    must(approveTemplateScore(db, starsi, id, 5, T2))
+    expect(view()).toMatchObject({ status: 'active', bidding: null, change: null })
   })
 
   it('pending approvals: takers until they approve, givers only when no current giver has', () => {

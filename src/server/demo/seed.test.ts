@@ -87,6 +87,7 @@ describe('demo seed (#62)', () => {
       disputes: false,
       bidRefusals: false,
       reopenBidding: false,
+      choreBidding: false,
     })
   })
 
@@ -222,6 +223,7 @@ describe('demo seed (#62)', () => {
       disputes: false,
       bidRefusals: false,
       reopenBidding: false,
+      choreBidding: false,
     })
   })
 })

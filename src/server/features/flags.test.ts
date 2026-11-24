@@ -6,7 +6,7 @@ import { createTestDb } from '~/server/db/testing'
 import { getFlags, setSwitchesIn } from './flags'
 
 describe('getFlags', () => {
-  it('reads the values the migrations leave: on since the release (0022), disputes off (0024), bidRefusals off (0027)', () => {
+  it('reads the values the migrations leave: on since the release (0022), disputes off (0024), bidRefusals off (0027), choreBidding off (0029)', () => {
     expect(getFlags(createTestDb())).toEqual({
       recurring: true,
       log: true,
@@ -16,6 +16,7 @@ describe('getFlags', () => {
       disputes: false,
       bidRefusals: false,
       reopenBidding: false,
+      choreBidding: false,
     })
     expect(
       createTestDb()
@@ -35,6 +36,7 @@ describe('getFlags', () => {
       disputes: false,
       bidRefusals: false,
       reopenBidding: false,
+      choreBidding: false,
     })
   })
 
@@ -57,6 +59,7 @@ describe('getFlags', () => {
       disputes: true,
       bidRefusals: true,
       reopenBidding: true,
+      choreBidding: true,
     })
   })
 
@@ -68,6 +71,7 @@ describe('getFlags', () => {
       disputes: false,
       bidRefusals: false,
       reopenBidding: false,
+      choreBidding: false,
     })
   })
 
