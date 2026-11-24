@@ -10,7 +10,15 @@ export function Input({ className, type, ...props }: ComponentProps<'input'>) {
     <input
       type={type}
       data-slot="input"
-      className={cn(fieldClass, 'min-h-tap text-base', className)}
+      className={cn(
+        fieldClass,
+        'min-h-tap text-base',
+        // iOS gives time and date fields a native look with its own minimum width, wider than
+        // a half-width column (#216). Without it they take the width they are given.
+        (type === 'time' || type === 'date') &&
+          'appearance-none [&::-webkit-date-and-time-value]:text-left',
+        className,
+      )}
       {...props}
     />
   )
