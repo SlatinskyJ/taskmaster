@@ -43,7 +43,7 @@ export function BidPanel({
     void run(
       key,
       () => callBid(call),
-      (r) => toastFor(call.action, r.status, me),
+      (r) => toastFor(call, r.status, me, task.rebidding !== null),
       call.action === 'turnDownBids' ? { errorMessage: turnDownError } : {},
     )
   }

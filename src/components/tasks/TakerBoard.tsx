@@ -4,7 +4,7 @@ import { SectionLabel } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
 import { reserveTaskFn, type TaskView } from '~/server/tasks/functions'
-import { canWorkOn, instanceMeta } from './taskView'
+import { canWorkOn, instanceMeta, taskChipState } from './taskView'
 import { TaskRow } from './TaskRow'
 import { useTaskAction } from './useTaskAction'
 import { DoneButton, WorkButtons } from './WorkButtons'
@@ -58,7 +58,7 @@ export function TakerBoard({ items, me }: { items: readonly TaskView[]; me: numb
               <li key={t.id}>
                 <TaskRow
                   name={t.title}
-                  state="open"
+                  state={taskChipState(t)}
                   points={t.score}
                   meta={instanceMeta(t, now)}
                   action={
