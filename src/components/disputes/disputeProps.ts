@@ -1,7 +1,7 @@
-import { weekLabel } from '~/components/period/periodView'
+import { dayMonth, levelLabel, weekLabel } from '~/components/period/periodView'
 import { historyLine } from '~/components/week/weekView'
 import { cs, formatPoints } from '~/lib/strings'
-import type { OpenableKind } from '~/server/disputes/functions'
+import type { AdminDisputeEntry, OpenableKind } from '~/server/disputes/functions'
 import type { HistoryRecord, HistoryWeek, WeekItem } from '~/server/settlement/functions'
 import type { TaskView } from '~/server/tasks/functions'
 import type { TemplateView } from '~/server/templates/functions'
@@ -83,5 +83,36 @@ export function templateDispute(t: TemplateView): DisputeProps | null {
     what: cs.disputes.what.template_score,
     value: line(t.title, formatPoints(t.score)),
     name: t.title,
+  }
+}
+
+export interface AdminDisputeLines {
+  /** What is disputed, with whose it is. */
+  what: string
+  /** The item and its value now. */
+  value: string
+  /** Who opened it, and the Prague date. */
+  opened: string
+  reason: string
+  /** The item's name, for the Ponechat button's accessible name. */
+  name: string
+}
+
+/** A row of the admin's Sporné on Správa (#47). */
+export function adminDisputeLines(e: AdminDisputeEntry): AdminDisputeLines {
+  const name = e.week ? weekLabel(e.week.startsAt, e.week.endsAt) : e.title
+  const v = e.value
+  const amount =
+    v === null
+      ? null
+      : 'score' in v
+        ? formatPoints(v.score)
+        : line(levelLabel(v.level), `${cs.week.deducted} ${String(v.deducted)}`)
+  return {
+    what: line(cs.disputes.what[e.item.kind], e.takerName),
+    value: line(name, amount),
+    opened: line(cs.admin.disputes.openedBy(e.openedByName), dayMonth(e.openedAt)),
+    reason: e.reason,
+    name,
   }
 }

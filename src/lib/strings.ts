@@ -527,6 +527,31 @@ export const cs = {
       failed: 'Uložení se nepovedlo. Zkus to znovu.',
       invalidSettings: 'Takhle to nejde: horní hranice musí být aspoň spodní.',
     },
+    /** Sporné on Správa (#47, UI doc §7.5 ADisputes): open disputes, kept with a note. */
+    disputes: {
+      title: (n: number) => `Sporné (${String(n)})`,
+      empty: 'Žádný otevřený rozpor.',
+      /** Short: shares a row with #48's Opravit at 360 px. */
+      keep: 'Ponechat',
+      keepFor: (what: string, name: string) => `Ponechat: ${what} – ${name}`,
+      /** Who opened the dispute, ahead of the date (the row names whose item it is above). */
+      openedBy: (name: string) => `${name} rozporuje`,
+      dialogTitle: 'Ponechat beze změny',
+      dialogText: 'Rozpor se uzavře, body ani stav se nezmění. Vzít zpět to nejde.',
+      noteLabel: 'Poznámka pro rodinu',
+      noteHint: 'Uvidí ji rodiče i děti, kterých se to týká.',
+      confirm: 'Ponechat',
+      saving: 'Ukládám…',
+      done: 'Hotovo. Rodina uvidí poznámku.',
+      loadError: 'Sporné se nepodařilo načíst.',
+      retry: 'Zkusit znovu',
+      errors: {
+        not_open: 'Tenhle rozpor už je vyřízený.',
+        value_changed: 'Mezitím se to změnilo. Podívej se znovu.',
+        note_required: 'Napiš poznámku.',
+        not_found: 'Tenhle rozpor už neexistuje.',
+      },
+    },
     errors: {
       invalidUsername:
         'Jen malá písmena bez diakritiky, číslice a . _ -, 2 až 32 znaků, začíná písmenem.',

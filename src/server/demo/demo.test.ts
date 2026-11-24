@@ -495,7 +495,9 @@ describe('the demo seed: disputes (#46)', () => {
       expect(JSON.parse(log[2]?.after ?? 'null')).toEqual({
         status: 'dismissed',
         note: 'Body sedí, zkontroloval jsem to s tátou.',
+        value: { level: 'lower', deducted: 50 },
       })
+      expect(JSON.parse(log[2]?.before ?? 'null')).toEqual({ status: 'open' })
       expect(getFlags(db).disputes).toBe(true)
     },
   )
