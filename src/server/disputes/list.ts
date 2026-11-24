@@ -33,7 +33,11 @@ export interface DisputeListEntry {
 }
 
 /** A row of the admin's Sporné: what the item is and its value now (null: no longer loads). */
-export type AdminDisputeEntry = Omit<DisputeListEntry, 'mark'> & { value: DisputeValue | null }
+export type AdminDisputeEntry = Omit<DisputeListEntry, 'mark'> & {
+  value: DisputeValue | null
+  /** Whose item it is (#48: the fix sheet's boy); null for a score. Admin only. */
+  takerId: number | null
+}
 
 interface Viewer {
   id: number
@@ -144,6 +148,6 @@ export function listOpenForAdmin(db: Db | Tx): AdminDisputeEntry[] {
     .all()
     .map((r) => {
       const d = describe(db, names, r)
-      return { ...d.entry, value: d.value }
+      return { ...d.entry, value: d.value, takerId: d.takerId }
     })
 }

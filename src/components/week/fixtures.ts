@@ -47,8 +47,18 @@ export function week(over: Partial<Week> = {}): Week {
             dispute: { item: { kind: 'rejection', id: 90 }, mark: null },
           }),
         ],
+        adjustments: [],
       },
-      { id: 4, name: 'Mladší', confirmed: 47, pending: 0, carriedIn: 0, unsettled: 0, items: [] },
+      {
+        id: 4,
+        name: 'Mladší',
+        confirmed: 47,
+        pending: 0,
+        carriedIn: 0,
+        unsettled: 0,
+        items: [],
+        adjustments: [],
+      },
     ],
     history: [
       {
@@ -66,6 +76,8 @@ export function week(over: Partial<Week> = {}): Week {
             deducted: 100,
             carryOver: 8,
             dispute: null,
+            correction: null,
+            adjustments: [],
           },
           {
             id: 22,
@@ -76,6 +88,8 @@ export function week(over: Partial<Week> = {}): Week {
             deducted: 50,
             carryOver: 0,
             dispute: null,
+            correction: null,
+            adjustments: [],
           },
         ],
       },

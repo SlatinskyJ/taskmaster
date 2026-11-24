@@ -1,10 +1,12 @@
 import { and, asc, gte, inArray } from 'drizzle-orm'
-import { periodEnd } from '~/domain'
+import { effectiveSettlement, periodEnd } from '~/domain'
 import type { Level, Levels, Role } from '~/domain'
 import { toIsoUtc } from '~/domain/dates'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { pointAdjustments, settlements, tasks } from '~/server/db/schema'
+import type { SettlementCorrectionRow } from '~/server/db/schema'
+import { correctionPeriods, latestCorrections, toCorrection } from '~/server/corrections/read'
 import { currentPeriod, listPeriods } from '~/server/periods'
 import { rejectionsSince } from '~/server/tasks/rejections'
 import { listPeople } from '~/server/users/people'
@@ -56,6 +58,26 @@ export interface WeekTaker {
   unsettled: number
   /** Newest first. */
   items: WeekItem[]
+  /**
+   * His point adjustments (#48) since his latest settled week ended (none settled: all of them),
+   * oldest first; those from before this week started wait for the meeting.
+   */
+  adjustments: WeekAdjustment[]
+}
+
+/** A point adjustment as Týden lists it (#48). */
+export interface WeekAdjustment {
+  id: number
+  points: number
+  reason: string
+  /** UTC ISO: when the admin made it. */
+  at: string
+  /** For one from a settlement correction: the corrected week; null for a manual one. */
+  fromWeek: { startsAt: string; endsAt: string } | null
+  /** Made before this week started: in `unsettled`, waiting for the meeting. */
+  waiting: boolean
+  /** Manual ones only (a correction's is disputed via its settlement): item and mark. */
+  dispute: { item: { kind: 'adjustment'; id: number }; mark: DisputeMark | null } | null
 }
 
 export interface HistoryRecord {
@@ -69,6 +91,10 @@ export interface HistoryRecord {
   carryOver: number
   /** The record's dispute mark, null without one (#46). */
   dispute: DisputeMark | null
+  /** Its latest correction (#48): the effective level and deduction, why and when; else null. */
+  correction: { level: Level; deducted: number; reason: string; at: string } | null
+  /** His adjustments made in this week (#48), oldest first. */
+  adjustments: WeekAdjustment[]
 }
 
 export interface HistoryWeek {
@@ -113,13 +139,29 @@ export function getWeek(db: Db | Tx, viewer: Viewer, now: Date): Week {
   const carried = new Map<number, number>()
   for (const r of rows) carried.set(r.takerId, r.carryOver)
   const items = period ? weekItems(db, ids, period.startsAt) : new Map<number, WeekItem[]>()
+  const spans = periodSpans(db)
+  const adjusted = adjustmentsOf(db, ids, spans)
   // Marks only for what this viewer is shown, so a taker never reads another boy's notes.
   const shown: DisputeItem[] = rows.map((r) => ({ kind: 'settlement', id: r.id }))
   for (const list of items.values()) for (const i of list) if (i.dispute) shown.push(i.dispute.item)
+  for (const a of adjusted) if (a.dispute) shown.push(a.dispute.item)
   const marks = disputeMarks(db, shown)
   for (const list of items.values()) {
     for (const i of list) if (i.dispute) i.dispute.mark = marks.get(markKey(i.dispute.item)) ?? null
   }
+  for (const a of adjusted)
+    if (a.dispute) a.dispute.mark = marks.get(markKey(a.dispute.item)) ?? null
+  // His latest settled week's end: what came after it is this week or waits for the meeting.
+  const settledUntil = new Map<number, string>()
+  for (const r of rows) {
+    const end = spans.get(r.periodId)?.endsAt
+    if (end) settledUntil.set(r.takerId, end)
+  }
+  const weekStart = period ? toIsoUtc(period.startsAt) : null
+  const current = (takerId: number) =>
+    adjusted
+      .filter((a) => a.takerId === takerId && a.madeAt >= (settledUntil.get(takerId) ?? ''))
+      .map((a) => ({ ...a.row, waiting: weekStart === null || a.madeAt < weekStart }))
   const thisWeek = period ? pointsSince(db, ids, period.startsAt) : null
   return {
     period: period
@@ -133,7 +175,13 @@ export function getWeek(db: Db | Tx, viewer: Viewer, now: Date): Week {
     takers: takers.map((t) => {
       const all = points.get(t.id) ?? { confirmed: 0, pending: 0 }
       const carriedIn = carried.get(t.id) ?? 0
-      const base = { id: t.id, name: t.name, carriedIn, items: items.get(t.id) ?? [] }
+      const base = {
+        id: t.id,
+        name: t.name,
+        carriedIn,
+        items: items.get(t.id) ?? [],
+        adjustments: current(t.id),
+      }
       if (!thisWeek) return { ...base, ...all, unsettled: 0 }
       // Running total = carry-over + this week + the ended, unsettled weeks; the rest is those.
       const now = thisWeek.get(t.id) ?? { confirmed: 0, pending: 0 }
@@ -141,7 +189,7 @@ export function getWeek(db: Db | Tx, viewer: Viewer, now: Date): Week {
       const unsettled = all.confirmed - confirmed + (all.pending - now.pending)
       return { ...base, confirmed, pending: now.pending, unsettled }
     }),
-    history: history(db, rows, names, marks),
+    history: history(db, rows, names, marks, spans, adjusted),
   }
 }
 
@@ -233,9 +281,24 @@ function history(
   rows: (typeof settlements.$inferSelect)[],
   names: Map<number, string>,
   marks: Map<string, DisputeMark>,
+  spans: Map<number, Span>,
+  adjusted: Adjusted[],
 ): HistoryWeek[] {
   const weeks: HistoryWeek[] = []
+  const latest = latestCorrections(
+    db,
+    rows.map((r) => r.id),
+  )
   for (const p of [...listPeriods(db)].reverse()) {
+    const span = spans.get(p.id)
+    const within = (takerId: number) =>
+      span
+        ? adjusted
+            .filter(
+              (a) => a.takerId === takerId && a.madeAt >= span.startsAt && a.madeAt < span.endsAt,
+            )
+            .map((a) => ({ ...a.row, waiting: false }))
+        : []
     const records = rows
       .filter((r) => r.periodId === p.id)
       .sort((a, b) => a.takerId - b.takerId)
@@ -248,6 +311,8 @@ function history(
         deducted: r.deducted,
         carryOver: r.carryOver,
         dispute: marks.get(markKey({ kind: 'settlement', id: r.id })) ?? null,
+        correction: correctionOf(r, latest.get(r.id)),
+        adjustments: within(r.takerId),
       }))
     if (records.length === 0) continue
     weeks.push({
@@ -259,4 +324,67 @@ function history(
     })
   }
   return weeks
+}
+
+interface Span {
+  startsAt: string
+  endsAt: string
+}
+
+/** Every period's [start, end) in UTC ISO, by id. */
+function periodSpans(db: Db | Tx): Map<number, Span> {
+  return new Map(
+    listPeriods(db).map((p) => [
+      p.id,
+      { startsAt: toIsoUtc(p.startsAt), endsAt: toIsoUtc(periodEnd(p)) },
+    ]),
+  )
+}
+
+interface Adjusted {
+  takerId: number
+  madeAt: string
+  row: Omit<WeekAdjustment, 'waiting'>
+  dispute: WeekAdjustment['dispute']
+}
+
+/** The given takers' adjustments, oldest first, with a correction's week (#48). */
+function adjustmentsOf(db: Db | Tx, ids: number[], spans: Map<number, Span>): Adjusted[] {
+  if (ids.length === 0) return []
+  const all = db
+    .select()
+    .from(pointAdjustments)
+    .where(inArray(pointAdjustments.takerId, ids))
+    .orderBy(asc(pointAdjustments.madeAt), asc(pointAdjustments.id))
+    .all()
+  const corrected = correctionPeriods(
+    db,
+    all.flatMap((a) => (a.correctionId === null ? [] : [a.correctionId])),
+  )
+  return all.map((a) => {
+    const periodId = a.correctionId === null ? undefined : corrected.get(a.correctionId)
+    const dispute =
+      a.correctionId === null
+        ? { item: { kind: 'adjustment' as const, id: a.id }, mark: null }
+        : null
+    // One object: the mark set on `dispute` later shows in `row` too.
+    const row = {
+      id: a.id,
+      points: a.points,
+      reason: a.reason,
+      at: a.madeAt,
+      fromWeek: periodId === undefined ? null : (spans.get(periodId) ?? null),
+      dispute,
+    }
+    return { takerId: a.takerId, madeAt: a.madeAt, row, dispute }
+  })
+}
+
+function correctionOf(
+  r: typeof settlements.$inferSelect,
+  latest: SettlementCorrectionRow | undefined,
+): HistoryRecord['correction'] {
+  if (!latest) return null
+  const now = effectiveSettlement(r, toCorrection(r, latest))
+  return { ...now, reason: latest.reason, at: latest.madeAt }
 }

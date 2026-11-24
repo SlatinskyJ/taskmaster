@@ -29,6 +29,7 @@ const entry: AdminDisputeEntry = {
   title: 'Vyluxovat celý obývák a chodbu',
   week: null,
   takerName: null,
+  takerId: null,
   openedByName: 'Starší',
   reason,
   openedAt: '2026-11-22T10:00:00.000Z',

@@ -88,6 +88,7 @@ describe('Správa: Sporné (#47)', () => {
     title: 'Vysát auto',
     week: null,
     takerName: 'Starší',
+    takerId: 3,
     openedByName: 'Starší',
     reason: 'Vysával jsem i kufr.',
     openedAt: '2026-11-22T10:00:00.000Z',

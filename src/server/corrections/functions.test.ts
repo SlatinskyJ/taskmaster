@@ -12,6 +12,7 @@ import { must } from '~/server/tasks/testing'
 import {
   adjustPointsHandler,
   correctSettlementHandler,
+  fixableHandler,
   parseAdjustPoints,
   parseCorrectSettlement,
 } from './functions'
@@ -139,5 +140,37 @@ describe('handlers', () => {
         MONDAY,
       ),
     ).toEqual({ ok: false, error: 'no_change' })
+  })
+})
+
+describe('fixableHandler', () => {
+  it('switch off: feature_off and nothing read', () => {
+    const f = withSwitch(false)
+    expect(fixableHandler(f.db)).toEqual({ error: 'feature_off' })
+  })
+
+  it('switch on: the boys, their totals and weeks, and nothing else', () => {
+    const f = withSwitch(true)
+    expect(fixableHandler(f.db)).toStrictEqual([
+      {
+        id: f.starsi,
+        name: 'Starší',
+        total: 10,
+        weeks: [
+          {
+            settlementId: f.settlementId,
+            startsAt: SAT.toISOString(),
+            endsAt: MEETING.toISOString(),
+            levels: { lower: 50, upper: 100 },
+            totalBefore: 60,
+            carryOver: 10,
+            level: 'lower',
+            deducted: 50,
+            corrected: false,
+          },
+        ],
+      },
+      { id: f.mladsi, name: 'Mladší', total: 0, weeks: [expect.any(Object)] },
+    ])
   })
 })

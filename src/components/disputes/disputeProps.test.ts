@@ -125,6 +125,7 @@ describe('adminDisputeLines (#47)', () => {
     openedByName: 'Starší',
     reason: 'Bylo toho víc.',
     openedAt: '2026-11-22T23:30:00.000Z',
+    takerId: null,
   }
 
   it('a task score: what, title and points; opened by and the Prague date', () => {

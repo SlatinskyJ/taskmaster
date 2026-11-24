@@ -9,9 +9,12 @@ import { kindOf, parseSeenValue, positiveId } from '~/server/disputes/functions'
 import { getFlags } from '~/server/features'
 import { record } from '~/server/periods/validators'
 import { adjustPointsIn, correctSettlementIn } from './corrections'
+import { getFixable } from './fixable'
+import type { FixTaker } from './fixable'
 import type { FixError, FromDispute } from './corrections'
 
 export type { FixError } from './corrections'
+export type { FixTaker, FixWeek } from './fixable'
 
 // Server functions for settlement corrections and point adjustments (spec §5.9, #48): admin
 // only (the domain checks the admin again), behind the launch switch `disputes`. With it off
@@ -114,3 +117,13 @@ export const correctSettlementFn = createServerFn({ method: 'POST' })
   .handler(({ data, context }) =>
     correctSettlementHandler(getDb(), context.user.id, data, new Date()),
   )
+
+/** The fix sheet's boys, totals and weeks (`getFixable`); `feature_off` with the switch off. */
+export function fixableHandler(db: Db): FixTaker[] | { error: 'feature_off' } {
+  if (!getFlags(db).disputes) return { error: 'feature_off' }
+  return getFixable(db)
+}
+
+export const getFixableFn = createServerFn({ method: 'GET' })
+  .middleware([requireRole('admin')])
+  .handler(() => fixableHandler(getDb()))

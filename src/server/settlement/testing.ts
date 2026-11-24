@@ -83,10 +83,16 @@ export function reservedTask(f: Family, by: number, score: number): number {
 }
 
 /** A manual point adjustment row written directly (by the admin, at `at`). */
-export function adjustment(f: Family, takerId: number, points: number, at: Date): number {
+export function adjustment(
+  f: Family,
+  takerId: number,
+  points: number,
+  at: Date,
+  reason = 'Pomoc s nákupem.',
+): number {
   return f.db
     .insert(pointAdjustments)
-    .values({ takerId, points, reason: 'Pomoc s nákupem.', madeBy: f.admin, madeAt: toIsoUtc(at) })
+    .values({ takerId, points, reason, madeBy: f.admin, madeAt: toIsoUtc(at) })
     .returning()
     .get().id
 }
