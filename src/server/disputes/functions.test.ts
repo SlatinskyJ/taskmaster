@@ -34,11 +34,11 @@ describe('parseOpenDispute', () => {
     })
   })
 
-  it('a reason of 200 characters after trimming passes; 201 is refused', () => {
-    expect(parseOpenDispute({ kind: 'rejection', id: 1, reason: ` ${'a'.repeat(200)} ` }).id).toBe(
+  it('a reason of 1000 characters after trimming passes; 1001 is refused', () => {
+    expect(parseOpenDispute({ kind: 'rejection', id: 1, reason: ` ${'a'.repeat(1000)} ` }).id).toBe(
       1,
     )
-    expect(() => parseOpenDispute({ kind: 'rejection', id: 1, reason: 'a'.repeat(201) })).toThrow()
+    expect(() => parseOpenDispute({ kind: 'rejection', id: 1, reason: 'a'.repeat(1001) })).toThrow()
   })
 
   it.each([
@@ -194,9 +194,9 @@ describe('parseDismissDispute (#47)', () => {
     ).toEqual({ level: 'none', deducted: 0 })
   })
 
-  it('a note of 200 characters after trimming passes; 201 is refused', () => {
-    expect(parseDismissDispute({ id: 1, value: null, note: ` ${'a'.repeat(200)} ` }).id).toBe(1)
-    expect(() => parseDismissDispute({ id: 1, value: null, note: 'a'.repeat(201) })).toThrow(
+  it('a note of 1000 characters after trimming passes; 1001 is refused', () => {
+    expect(parseDismissDispute({ id: 1, value: null, note: ` ${'a'.repeat(1000)} ` }).id).toBe(1)
+    expect(() => parseDismissDispute({ id: 1, value: null, note: 'a'.repeat(1001) })).toThrow(
       /Invalid input/,
     )
   })

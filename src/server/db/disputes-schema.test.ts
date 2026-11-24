@@ -5,7 +5,7 @@ import { family } from '~/server/tasks/testing'
 import { disputes } from './schema'
 
 // The DB backs up the dispute rules (spec §5.11, #46): at most one open dispute per item, a
-// reason of 1–200 characters, an open row has no resolution and a closed one has all of it,
+// reason of 1–1000 characters, an open row has no resolution and a closed one has all of it,
 // rows are never deleted and a closed one is final.
 const AT = '2026-11-22T12:00:00.000Z'
 
@@ -52,7 +52,7 @@ describe('disputes table', () => {
     expect(db.select().from(disputes).all()).toHaveLength(2)
   })
 
-  it('reason: 1–200 characters after trimming', () => {
+  it('reason: 1–1000 characters after trimming', () => {
     const { db, open } = setup()
     expect(() =>
       db
@@ -69,11 +69,11 @@ describe('disputes table', () => {
     expect(() =>
       db
         .insert(disputes)
-        .values({ ...open, reason: 'a'.repeat(201) })
+        .values({ ...open, reason: 'a'.repeat(1001) })
         .run(),
     ).toThrow(/CHECK/)
     db.insert(disputes)
-      .values({ ...open, reason: 'a'.repeat(200) })
+      .values({ ...open, reason: 'a'.repeat(1000) })
       .run()
   })
 

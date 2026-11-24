@@ -82,7 +82,7 @@ describe('DisputeForm (TDispute)', () => {
     expect(html).toContain('Potvrzené splnění')
     expect(html).toContain('Starší · Vysát auto · 22 b.')
     expect(html).toContain(cs.disputes.reasonLabel)
-    expect(html).toMatch(/<textarea[^>]*maxlength="200"/i)
+    expect(html).toMatch(/<textarea[^>]*maxlength="1000"/i)
     expect(html).toContain(cs.disputes.note)
     expect(html).toContain(cs.disputes.send)
   })

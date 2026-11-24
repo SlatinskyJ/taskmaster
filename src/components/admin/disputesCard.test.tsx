@@ -108,7 +108,7 @@ describe('DismissForm', () => {
     expect(html).toContain(t.dialogText)
     expect(html).toContain(t.noteLabel)
     expect(html).toContain(t.noteHint)
-    expect(html).toMatch(/maxLength="200"/i)
+    expect(html).toMatch(/maxLength="1000"/i)
     expect(html).toContain(cs.admin.cancel)
   })
 
