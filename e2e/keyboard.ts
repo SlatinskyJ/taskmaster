@@ -21,15 +21,17 @@ export const PHONE = { width: 393, height: 852 } as const
 export const PHONE_BROWSER = { width: 393, height: 668, keyboard: 335 } as const
 
 const script = (height: number) => `(() => {
-  const KB = ${String(height)};
-  window.__keyboardHeight = KB;
+  // A second useKeyboard (a test with a taller keyboard) only changes the height.
+  window.__keyboardHeight = ${String(height)};
+  if (window.__visualViewport) return;
+  const kb = () => window.__keyboardHeight;
   const vv = new EventTarget();
   let open = false;
   for (const k of ['offsetLeft', 'offsetTop', 'pageLeft', 'pageTop']) vv[k] = 0;
   vv.scale = 1;
   window.__visualViewport = vv;
   Object.defineProperty(vv, 'width', { get: () => window.innerWidth });
-  Object.defineProperty(vv, 'height', { get: () => window.innerHeight - (open ? KB : 0) });
+  Object.defineProperty(vv, 'height', { get: () => window.innerHeight - (open ? kb() : 0) });
   Object.defineProperty(window, 'visualViewport', { value: vv, configurable: true });
   const NO_KEYS = ['checkbox', 'radio', 'button', 'submit', 'range', 'time', 'date'];
   const isText = (el) => !!el && (el.tagName === 'TEXTAREA' ||
@@ -40,7 +42,7 @@ const script = (height: number) => `(() => {
       b = document.createElement('div');
       b.id = '__keyboard';
       b.setAttribute('aria-hidden', 'true');
-      b.style.cssText = 'position:fixed;inset:auto 0 0 0;height:' + KB + 'px;z-index:2147483647;' +
+      b.style.cssText = 'position:fixed;inset:auto 0 0 0;height:' + kb() + 'px;z-index:2147483647;' +
         'background:repeating-linear-gradient(0deg,#9aa0a8 0 52px,#b9bec5 52px 56px);opacity:.96;' +
         'pointer-events:none;font:600 15px system-ui;color:#222;text-align:center;padding-top:12px';
       b.textContent = 'klávesnice';
@@ -52,11 +54,11 @@ const script = (height: number) => `(() => {
     if (!isText(e.target)) return;
     // iOS lets the page slide up under the keyboard even when it does not scroll; extra room
     // at the bottom gives the same slide here. Fixed layers (bars, dialogs) stay put, as on iOS.
-    open = true; board(true); document.body.style.paddingBottom = KB + 'px';
+    open = true; board(true); document.body.style.paddingBottom = kb() + 'px';
     vv.dispatchEvent(new Event('resize'));
     setTimeout(() => {
       const r = e.target.getBoundingClientRect();
-      const limit = window.innerHeight - KB - 8;
+      const limit = window.innerHeight - kb() - 8;
       if (r.bottom > limit) window.scrollBy(0, r.bottom - limit);
     }, 50);
   });

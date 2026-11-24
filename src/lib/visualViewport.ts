@@ -28,6 +28,8 @@ export function trackVisualViewport(win: ViewportWindow): () => void {
     style.setProperty('--vv-top', `${String(vv.offsetTop)}px`)
     style.setProperty('--vv-height', `${String(vv.height)}px`)
   }
+  // Runs for every page, vaul bottom sheets included: vaul moves the sheet itself, this only
+  // scrolls the field inside whatever box it ends up in, so the two work together.
   const refocus = () => {
     write()
     const field = win.document.activeElement
