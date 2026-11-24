@@ -99,7 +99,7 @@
   - Late meeting: on `MONDAY` with week 1 ended unsettled, `getMeeting(…, true).period.id` is week 1.
   - No week at all / no takers → `runningCutoffAt: null`.
   - Existing tests: pass `false` (or `true` where they run on Sunday) — no behaviour change; `{ period: null }` expectations become `{ period: null, runningCutoffAt: null }`.
-- [ ] **Step 2:** `actions.test.ts` (migrated test DB, `example()` week): switch on (migration default) → `meetingNow(db, SAT)` = `{ period: null, runningCutoffAt: <cutoff ISO> }` (shape pinned: exactly these two keys) and `settleNow(db, tata, …, SAT)` → `{ ok: false, error: 'nothing_to_settle' }`, no settlement rows, week not ended; switch set off (`UPDATE feature_flags`) → `settleNow` at SAT settles. On Sunday `MEETING` with the switch on both work. The `settled`/`parseSettle` tests stay where they test.
+- [ ] **Step 2:** `actions.test.ts` (migrated test DB, `example()` week): switch on (migration default) → `meetingNow(db, SAT)` = `{ period: null, runningCutoffAt: <cutoff ISO> }` (shape pinned: exactly these two keys) and `settleNow(db, tata, …, SAT)` → `{ ok: false, error: 'nothing_to_settle' }`, no settlement rows, week not ended; switch set off (`UPDATE feature_flags`) → `meetingNow(db, SAT).period` is the running week (not null, no `runningCutoffAt`) and `settleNow` at SAT settles. On Sunday `MEETING` with the switch on both work. The `settled`/`parseSettle` tests stay where they test.
 - [ ] **Step 3:** Run → FAIL. Implement. Run `pnpm vitest run src/server` → PASS, including `src/server/demo/demo.test.ts` (all weekdays).
 - [ ] **Step 4:** Commit.
 
