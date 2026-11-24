@@ -101,7 +101,7 @@ describe('setOwnPasswordHash (#210)', () => {
     expect(row?.actorUserId).toBe(me.id)
     expect(row?.entityId).toBe(String(me.id))
     const after = JSON.parse(row?.after ?? 'null') as Record<string, unknown>
-    expect(after).toMatchObject({ hashChanged: true, othersLoggedOut: true, sessionsEnded: 1 })
+    expect(after).toMatchObject({ hashChanged: true, logOutOthers: true, sessionsEnded: 1 })
     const text = `${row?.before ?? ''}${row?.after ?? ''}`
     expect(text).not.toContain('argon2')
     expect(Object.keys(after).some((k) => /password/i.test(k))).toBe(false)

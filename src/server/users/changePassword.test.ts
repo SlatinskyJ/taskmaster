@@ -118,6 +118,7 @@ describe('changeOwnPassword (#210)', () => {
     expect(sessionIds(db)).toHaveLength(3)
     const failed = actions(db, 'auth.password_change_failed')
     expect(failed).toHaveLength(1)
+    expect(failed[0]?.actorKind).toBe('user')
     expect(failed[0]?.actorUserId).toBe(me.id)
     expect(JSON.parse(failed[0]?.after ?? 'null')).toEqual({ ip: IP })
     const keys = limitKeys('starsi', IP)
@@ -187,6 +188,13 @@ describe('changeOwnPassword (#210)', () => {
         expect(actions(db, 'auth.password_change_failed')).toHaveLength(0)
       }
     }
+  })
+
+  it('a current password of exactly 256 characters is still checked', async () => {
+    const { db, input } = setup()
+    const r = await changeOwnPassword(db, input({ current: 'x'.repeat(256) }), T0)
+    expect(r).toEqual({ ok: false, error: 'wrong_password' })
+    expect(verifyPassword).toHaveBeenCalledTimes(1)
   })
 
   it('a current password over 256 characters is wrong and never verified', async () => {

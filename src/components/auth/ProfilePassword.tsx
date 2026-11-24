@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { SectionLabel } from '~/components/shell/SectionLabel'
@@ -21,9 +22,10 @@ export function ProfilePassword({ enabled, username }: { enabled: boolean; usern
           onClick={() => {
             setOpen(true)
           }}
-          className="flex min-h-tap w-full cursor-pointer items-center rounded-card p-card text-left text-row font-extrabold"
+          className="flex min-h-tap w-full cursor-pointer items-center justify-between gap-3 rounded-card p-card text-left text-row font-extrabold"
         >
           {cs.profile.passwordRow}
+          <ChevronRight aria-hidden="true" className="shrink-0 text-muted" />
         </button>
       </Card>
       <ChangePasswordDrawer

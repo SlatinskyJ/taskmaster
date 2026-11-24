@@ -22,9 +22,11 @@ const filled = (next: string, again = next) => ({
 const noop = () => Promise.resolve({ ok: true as const, othersLoggedOut: 0 })
 
 describe('checks before sending', () => {
-  it('a 7-character new password is refused, 8 goes', () => {
+  it('new password: 7 and 257 characters refused, 8 and 256 go', () => {
     expect(checkBeforeSending(filled('x'.repeat(7)))).toBe(cs.profile.passwordErrors.tooShort(8))
     expect(checkBeforeSending(filled('x'.repeat(8)))).toBeNull()
+    expect(checkBeforeSending(filled('x'.repeat(256)))).toBeNull()
+    expect(checkBeforeSending(filled('x'.repeat(257)))).toBe(cs.profile.passwordErrors.tooShort(8))
   })
 
   it('the two new passwords must match', () => {

@@ -5,8 +5,7 @@ import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
 import type { Actor, Tx } from '~/server/audit'
 import { writeAudit } from '~/server/audit'
-import { endUserSessions } from '~/server/auth'
-import { endOtherSessions } from '~/server/auth/sessions'
+import { endOtherSessions, endUserSessions } from '~/server/auth/sessions'
 import type { Db } from '~/server/db'
 import { sessions, USER_ROLES, users } from '~/server/db/schema'
 import type { UserRole, UserRow } from '~/server/db/schema'
@@ -188,11 +187,11 @@ export function setOwnPasswordHash(
     .returning()
     .get()
   const sessionsEnded = logOutOthers ? endOtherSessions(tx, userId, sessionId) : 0
-  // Keys with "password" are redacted by the audit module: hashChanged, othersLoggedOut.
+  // Keys with "password" are redacted by the audit module: hashChanged, logOutOthers (the box).
   const after = {
     ...auditView(updated),
     hashChanged: true,
-    othersLoggedOut: logOutOthers,
+    logOutOthers,
     sessionsEnded,
   }
   audit(tx, { kind: 'user', userId }, 'user.updated', row.id, auditView(row), after, now)

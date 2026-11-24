@@ -59,15 +59,43 @@ test('Starší changes the password; the other device is logged out, this one st
   await a.waitForURL((url) => !url.pathname.startsWith('/login'))
 })
 
-test('a wrong current password is refused with its Czech text', async ({ page }) => {
+test('refused, then a network error, then a change with the box unticked keeps the other device', async ({
+  browser,
+}) => {
+  const page = await (await browser.newContext()).newPage()
+  const other = await (await browser.newContext()).newPage()
   await passwordLogin(page, 'mladsi')
   await page.waitForURL((url) => !url.pathname.startsWith('/login'))
+  await passwordLogin(other, 'mladsi')
+  await other.waitForURL((url) => !url.pathname.startsWith('/login'))
+
   await page.goto('/profil')
   await page.getByRole('button', { name: cs.profile.passwordRow }).click()
   const sheet = page.getByRole('dialog', { name: cs.profile.passwordTitle })
-  await sheet.getByLabel(cs.profile.currentPassword, { exact: true }).fill('spatne-heslo')
+  const current = sheet.getByLabel(cs.profile.currentPassword, { exact: true })
+  const send = sheet.getByRole('button', { name: cs.profile.passwordSubmit })
+  await current.fill('spatne-heslo')
   await sheet.getByLabel(cs.profile.newPassword, { exact: true }).fill(NEW)
   await sheet.getByLabel(cs.profile.newPasswordAgain, { exact: true }).fill(NEW)
-  await sheet.getByRole('button', { name: cs.profile.passwordSubmit }).click()
+  await send.click()
   await expect(sheet.getByRole('alert')).toHaveText(cs.profile.passwordErrors.wrong)
+  // Not stuck busy: the button can be pressed again.
+  await expect(send).toBeEnabled()
+
+  // The server can't be reached: a Czech message, and the form can be sent again.
+  await current.fill(PASSWORD)
+  await page.route('**/_serverFn/**', (route) => route.abort())
+  await send.click()
+  await expect(sheet.getByRole('alert')).toHaveText(cs.login.failed)
+  await page.unroute('**/_serverFn/**')
+  await expect(send).toBeEnabled()
+
+  const box = sheet.getByRole('checkbox', { name: cs.profile.logOutOthers })
+  await box.uncheck()
+  await send.click()
+  await expect(page.getByText(cs.profile.passwordChanged, { exact: true })).toBeVisible()
+
+  await other.reload()
+  await expect(other.getByRole('link', { name: cs.profile.open })).toBeVisible()
+  await expect(other).not.toHaveURL(/\/login/)
 })
