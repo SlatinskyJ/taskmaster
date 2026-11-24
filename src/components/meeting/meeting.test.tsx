@@ -195,6 +195,27 @@ describe('step 3: Plánovat', () => {
     expect(html).not.toContain('Potvrdit vyúčtování')
   })
 
+  it('mid-week with the last-day rule: says the week runs, not "nothing to settle" (#211)', () => {
+    const { html } = render({
+      period: null,
+      runningCutoffAt: new Date(Date.UTC(2026, 10, 29, 22, 59)).toISOString(),
+    })
+    expect(html).toContain('Týden ještě běží')
+    expect(html).toContain('Týden běží do neděle 29. 11. 23:59.')
+    expect(html).toContain('Vyúčtovat půjde až v poslední den týdne.')
+    expect(html).not.toContain('Teď není co vyúčtovat')
+    expect(html).not.toContain('Potvrdit vyúčtování')
+    expect(html).not.toContain('data-step="done"')
+  })
+
+  it('a week ending on Saturday reads in Czech too (#211)', () => {
+    const { html } = render({
+      period: null,
+      runningCutoffAt: new Date(Date.UTC(2026, 10, 28, 22, 59)).toISOString(),
+    })
+    expect(html).toContain('Týden běží do soboty 28. 11. 23:59.')
+  })
+
   it('lists the plan tasks and links to new task and home', () => {
     const plan = [
       task({
