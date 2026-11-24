@@ -34,6 +34,7 @@ export type AgreementError =
   | 'not_involved'
   | 'score_frozen'
   | 'not_changeable'
+  | 'bidding_open'
 
 /** Points must be a positive whole number. */
 export function isValidScore(score: number): boolean {
@@ -195,6 +196,32 @@ export type OneTimeAgreement =
   | { status: 'open'; score: number }
   /** Agreed by bidding between `takerId` and `giverId`: reserved to that taker (spec §5.2 path 2). */
   | { status: 'reserved'; score: number; takerId: PersonId; giverId: PersonId }
+  /**
+   * An open task back in bidding (#212, Jakub 2026-11-24): `score` is still the agreed score and
+   * stays in force (anyone may reserve or do the task at it) until the round agrees. `offer` is
+   * the round's current offer: the agreed score by nobody (`by: null`) until a giver counters.
+   */
+  | {
+      status: 'rebidding'
+      score: number
+      offer: { score: number; by: PersonId | null }
+      book: BidBook
+      lastBids: readonly OpenBid[]
+    }
+
+/** A one-time task whose score is being negotiated: a Návrh, or an open task in a new round. */
+export type Negotiating = Extract<OneTimeAgreement, { status: 'proposed' | 'rebidding' }>
+
+/** A one-time task with an agreed score in force and nothing being negotiated. */
+export type AgreedOneTime = Extract<OneTimeAgreement, { status: 'open' | 'reserved' }>
+
+export function isAgreedOneTime(task: OneTimeAgreement): task is AgreedOneTime {
+  return task.status === 'open' || task.status === 'reserved'
+}
+
+export function isNegotiating(task: OneTimeAgreement): task is Negotiating {
+  return task.status === 'proposed' || task.status === 'rebidding'
+}
 
 /** A giver creates a one-time task with an initial offer. */
 export function createOneTimeTask(
@@ -227,6 +254,10 @@ export function resolveOneTime(
   task: OneTimeAgreement,
   people: readonly Person[],
 ): OneTimeAgreement {
+  if (task.status === 'rebidding') {
+    const book = liveBook(task.book, people)
+    return book === task.book ? task : { ...task, book }
+  }
   if (task.status !== 'proposed') return task
   const offer = pruneApprovals(task.offer, people)
   if (isAgreed(offer, people)) return { status: 'open', score: offer.score }
@@ -240,6 +271,12 @@ export function approveOneTimeOffer(
   people: readonly Person[],
   approverId: PersonId,
 ): Result<OneTimeAgreement, AgreementError> {
+  if (task.status === 'rebidding') {
+    // A giver's counter is his approval; one taker's yes completes it (spec §3).
+    if (!isActiveAs(people, approverId, 'taker')) return fail('not_a_taker')
+    if (task.offer.by === null) return fail('no_offer')
+    return ok({ status: 'open', score: task.offer.score })
+  }
   if (task.status !== 'proposed') return fail('not_proposed')
   const approved = approveScore(task.offer, people, approverId)
   if (!approved.ok) return approved
@@ -259,4 +296,27 @@ export function reopenOneTimeOffer(
 ): OneTimeAgreement {
   const offer: ScoreProposal = { score, proposedBy: giverId, approvedBy: [giverId] }
   return resolveOneTime({ status: 'proposed', offer, book: EMPTY_BOOK, lastBids: [] }, people)
+}
+
+/**
+ * An open one-time task goes back to bidding (#212, spec §5.2 "Reopening bidding"): any active
+ * giver or taker [call]. A new round: the agreed score stays in force, nobody's offer yet, no bids.
+ */
+export function reopenOneTimeBidding(
+  task: OneTimeAgreement,
+  people: readonly Person[],
+  actorId: PersonId,
+): Result<OneTimeAgreement, AgreementError> {
+  if (task.status === 'rebidding') return fail('bidding_open')
+  if (task.status === 'proposed') return fail('not_agreed')
+  if (task.status === 'reserved') return fail('not_changeable')
+  const actor = findPerson(people, actorId)
+  if (!actor || !isParty(actor)) return fail('not_a_party')
+  return ok({
+    status: 'rebidding',
+    score: task.score,
+    offer: { score: task.score, by: null },
+    book: EMPTY_BOOK,
+    lastBids: [],
+  })
 }

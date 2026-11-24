@@ -1,5 +1,5 @@
-import type { AgreementError, OneTimeAgreement } from './agreement'
-import { isValidScore, liveBook, proposeScore } from './agreement'
+import type { AgreementError, Negotiating, OneTimeAgreement } from './agreement'
+import { isNegotiating, isValidScore, liveBook, proposeScore } from './agreement'
 import type { OpenBid } from './bids'
 import { EMPTY_BOOK, bidOf, lowestBid, placeBid } from './bids'
 import type { Person, PersonId } from './parties'
@@ -26,6 +26,10 @@ import { fail, ok } from './result'
 //   (approving the offer) and bidding race; the first to finish wins, after that every action is
 //   refused with `not_proposed`.
 //
+// A reopened round on an open task (#212, status `rebidding`) runs by the same rules. Its opening
+// offer is the agreed score by nobody (`offer.by: null`): nobody can say yes to it, taking the task
+// at that score is reserving it. A giver's turn-down ends the round: open at the agreed score.
+//
 // The full history is not kept here: every bid, counter and acceptance is an append-only record
 // and audit entry written by the caller. Results are `OneTimeAgreement`; when it turns `open` or
 // `reserved`, the caller calls `markAgreed` on the lifecycle item (see README).
@@ -40,7 +44,7 @@ export function placeOneTimeBid(
   takerId: PersonId,
   score: number,
 ): Result<OneTimeAgreement, AgreementError> {
-  if (task.status !== 'proposed') return fail('not_proposed')
+  if (!isNegotiating(task)) return fail('not_proposed')
   if (!taker(people, takerId)) return fail('not_a_taker')
   if (!isValidScore(score)) return fail('invalid_score')
   // Same number (Jakub 2026-11-24): never the offer; his previous bid only after a counter.
@@ -60,7 +64,7 @@ export function withdrawOneTimeBid(
   people: readonly Person[],
   takerId: PersonId,
 ): Result<OneTimeAgreement, AgreementError> {
-  if (task.status !== 'proposed') return fail('not_proposed')
+  if (!isNegotiating(task)) return fail('not_proposed')
   if (!taker(people, takerId)) return fail('not_a_taker')
   if (!bidOf(task.book, takerId)) return fail('no_bid')
   return ok({ ...task, book: { bids: task.book.bids.filter((b) => b.by !== takerId) } })
@@ -77,12 +81,14 @@ export function turnDownOneTimeBids(
   giverId: PersonId,
   seen: readonly OpenBid[],
 ): Result<OneTimeAgreement, AgreementError> {
-  if (task.status !== 'proposed') return fail('not_proposed')
+  if (!isNegotiating(task)) return fail('not_proposed')
   if (!giver(people, giverId)) return fail('not_a_giver')
   const live = liveBook(task.book, people).bids
-  if (live.length === 0) return fail('no_bids')
+  // In a round it may come with no bids: a giver stops a round or takes back his counter.
+  if (live.length === 0 && task.status === 'proposed') return fail('no_bids')
   const key = (b: OpenBid) => `${String(b.by)}:${String(b.score)}`
   if (!sameTakers(live.map(key), seen.map(key))) return fail('offer_changed')
+  if (task.status === 'rebidding') return ok({ status: 'open', score: task.score })
   const offer = proposeScore(people, giverId, task.offer.score)
   if (!offer.ok) return offer
   return ok({ ...task, offer: offer.value, book: EMPTY_BOOK, lastBids: [] })
@@ -104,7 +110,7 @@ export function counterOneTimeOffer(
   score: number,
   bidders: readonly PersonId[],
 ): Result<OneTimeAgreement, AgreementError> {
-  if (task.status !== 'proposed') return fail('not_proposed')
+  if (!isNegotiating(task)) return fail('not_proposed')
   if (!giver(people, giverId)) return fail('not_a_giver')
   if (!isValidScore(score)) return fail('invalid_score')
   if (score === task.offer.score) return fail('same_score')
@@ -116,11 +122,14 @@ export function counterOneTimeOffer(
 }
 
 function withOffer(
-  task: Extract<OneTimeAgreement, { status: 'proposed' }>,
+  task: Negotiating,
   people: readonly Person[],
   giverId: PersonId,
   score: number,
 ): Result<OneTimeAgreement, AgreementError> {
+  if (task.status === 'rebidding') {
+    return ok({ ...task, offer: { score, by: giverId }, lastBids: [] })
+  }
   const offer = proposeScore(people, giverId, score)
   if (!offer.ok) return offer
   return ok({ ...task, offer: offer.value, lastBids: [] })
@@ -160,11 +169,12 @@ export function acceptOneTimeOffer(
   takerId: PersonId,
   score: number,
 ): Result<OneTimeAgreement, AgreementError> {
-  if (task.status !== 'proposed') return fail('not_proposed')
+  if (!isNegotiating(task)) return fail('not_proposed')
   if (!taker(people, takerId)) return fail('not_a_taker')
   if (!bidOf(task.book, takerId)) return fail('no_bid')
+  const giverId = task.status === 'proposed' ? task.offer.proposedBy : task.offer.by
+  if (giverId === null) return fail('no_offer')
   if (score !== task.offer.score) return fail('offer_changed')
-  const giverId = task.offer.proposedBy
   if (!giver(people, giverId)) return fail('not_a_giver')
   return ok({ status: 'reserved', score, takerId, giverId })
 }
@@ -181,7 +191,7 @@ export function acceptLowestBid(
   score: number,
   bidders: readonly PersonId[],
 ): Result<OneTimeAgreement, AgreementError> {
-  if (task.status !== 'proposed') return fail('not_proposed')
+  if (!isNegotiating(task)) return fail('not_proposed')
   if (!giver(people, giverId)) return fail('not_a_giver')
   const lowest = lowestBid(liveBook(task.book, people))
   if (!lowest) return fail('no_bids')

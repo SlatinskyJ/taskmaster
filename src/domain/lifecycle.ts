@@ -179,6 +179,19 @@ export function markAgreed(
   return ok({ ...base, status: 'reserved', reservation: { ...bid, via: 'bid' } })
 }
 
+/**
+ * A reopened round on an open one-time task agreed (#212): the task stays open (`null`), or a won
+ * bid reserves it to that taker. The agreement has already checked who agreed.
+ */
+export function markRebidAgreed(
+  item: Item,
+  bid: { takerId: PersonId; giverId: PersonId } | null,
+): Result<Item, LifecycleError> {
+  if (item.status !== 'open') return fail('wrong_state')
+  if (bid === null) return ok(item)
+  return ok({ ...withoutState(item), status: 'reserved', reservation: { ...bid, via: 'bid' } })
+}
+
 // ── Reservation (spec §5.4) ──────────────────────────────────────────────────────────────
 
 /** A taker reserves an open item ("I'll do this"). Optional. */
