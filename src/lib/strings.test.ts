@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cs, formatKeys, formatPoints, plural, pointWords } from './strings'
+import { cs, formatKeys, formatPoints, plural, pointWords, signedPoints } from './strings'
 
 describe('Czech strings', () => {
   it('has a label for every item state from UI design doc §2.2', () => {
@@ -60,5 +60,11 @@ describe("formatKeys (the admin's passkey count)", () => {
     [21, '21 klíčů'],
   ])('%i → %s', (n, shown) => {
     expect(formatKeys(n)).toBe(shown)
+  })
+})
+
+describe('signedPoints (#48)', () => {
+  it('a sign, the number and b.', () => {
+    expect([signedPoints(5), signedPoints(-3), signedPoints(0)]).toEqual(['+5 b.', '−3 b.', '0 b.'])
   })
 })

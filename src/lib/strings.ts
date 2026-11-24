@@ -445,6 +445,15 @@ export const cs = {
     returnedTo: (name: string) => `Vráceno: ${name}.`,
     /** Under a rejected self-logged chore with no reason: it ends there (#38). */
     rejectedClosed: 'Bez bodů.',
+    /** Point adjustments on Týden (#48): the row names, then the reason under it. */
+    adjustment: 'Úprava od správce',
+    correctionRow: 'Oprava týdne',
+    fromWeek: (week: string) => `Z opravy týdne ${week}`,
+    waiting: 'Čeká na schůzku',
+    adjustmentPoints: (n: number) => signedPoints(n),
+    /** Under a corrected settled week on Historie. */
+    correctedLine: (now: string, was: string, diff: number, date: string, reason: string) =>
+      `Opraveno na ${now} (původně ${was}): ${signedPoints(diff)} · ${date} · ${reason}`,
   },
   /** Disputes on locked items (#46, spec §5.11, UI doc §7.1 TDispute). Chip text: `state.disputed`. */
   disputes: {
@@ -552,6 +561,48 @@ export const cs = {
         value_changed: 'Mezitím se to změnilo. Podívej se znovu.',
         note_required: 'Napiš poznámku.',
         not_found: 'Tenhle rozpor už neexistuje.',
+      },
+      /** Beside Ponechat on a Sporné row (#48): the fix sheet for this dispute. */
+      fix: 'Opravit',
+      fixFor: (what: string, name: string) => `Opravit: ${what} – ${name}`,
+    },
+    /** Opravy bodů on Správa and the fix sheet (#48, UI doc §7.5 AFix, spec §5.9). */
+    fix: {
+      title: 'Opravy bodů',
+      adjust: 'Upravit body',
+      correct: 'Opravit týden',
+      sheetAdjust: 'Upravit body',
+      sheetCorrect: 'Opravit týden',
+      add: 'Přidat',
+      remove: 'Ubrat',
+      who: 'Kdo',
+      week: 'Týden',
+      level: 'Úroveň',
+      points: 'Body',
+      reason: 'Důvod',
+      corrected: 'opraveno',
+      /** Points mode: his confirmed total now and after the fix. */
+      preview: (name: string, before: number, after: number) =>
+        `${name}: ${String(before)} → ${String(after)} b.`,
+      belowZero: 'Tolik bodů nemá.',
+      /** Week mode: what the correction moves on today's total (current deduction − new). */
+      difference: (n: number) => `Rozdíl: ${signedPoints(n)} k dnešku`,
+      hint: 'Důvod uvidí rodina u úpravy.',
+      hintDispute: 'Důvod uvidí rodina i jako odpověď na rozpor.',
+      sendAdd: (n: number, name: string) => `Přidat ${String(n)} b. – ${name}`,
+      sendRemove: (n: number, name: string) => `Ubrat ${String(n)} b. – ${name}`,
+      sendCorrect: (level: string, name: string) => `Opravit na ${level} – ${name}`,
+      saving: 'Ukládám…',
+      done: 'Opraveno.',
+      noTakers: 'Nikdo tu nesbírá body.',
+      noWeeks: 'Zatím žádný uzavřený týden.',
+      loadError: 'Opravy se nenačetly.',
+      retry: 'Zkusit znovu',
+      errors: {
+        week_waiting: 'Týden čeká na schůzku. Body teď jde jen přidat.',
+        would_go_negative: 'Tolik bodů nemá. Celkem by šel pod nulu.',
+        no_change: 'Týden už tuhle úroveň má.',
+        reason_required: 'Napiš důvod.',
       },
     },
     errors: {
@@ -770,6 +821,13 @@ export function formatKeys(n: number): string {
 }
 
 /** `5 bodů`, `1 bod`, `-3 body`. */
+/** Points with their sign, short: `+5 b.`, `−3 b.`, `0 b.`. */
+export function signedPoints(n: number): string {
+  if (n > 0) return `+${String(n)} b.`
+  if (n < 0) return `−${String(-n)} b.`
+  return '0 b.'
+}
+
 export function formatPoints(n: number): string {
   return `${n} ${plural(n, pointWords)}`
 }
