@@ -263,10 +263,12 @@ function pastWeekWith(ctx: SeedContext, during: readonly Piece[]): void {
   const week = listPeriods(tx)[0]
   if (!week) throw new Error('Demo seed: no past week')
   const settleAt = new Date(Math.min(week.cutoffAt.getTime() - HOUR, now.getTime() - HOUR))
-  const meeting = getMeeting(tx, settleAt)
+  // Off: this builds history mid-week (the past week settled early, as before #211). The seed's
+  // switches are set after its pieces, and 0027 writes `settleLastDay` on.
+  const meeting = getMeeting(tx, settleAt, false)
   if (!meeting.period) throw new Error('Demo seed: nothing to settle')
   const shown = meeting.takers.map((t) => ({ takerId: t.id, total: t.total }))
-  step('settle', settlePeriod(tx, tata, week.id, shown, settleAt))
+  step('settle', settlePeriod(tx, tata, week.id, shown, settleAt, false))
   const rejectAt = new Date(now.getTime() - HOUR / 2)
   const glass = doChore(ctx, 'mladsi', 'Vynést sklo a plasty do kontejneru', 4, rejectAt)
   step(

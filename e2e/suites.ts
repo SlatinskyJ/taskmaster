@@ -59,6 +59,10 @@ export const SUITES: readonly Suite[] = [
   // The fix sheet with the keyboard open (#48): it needs the disputes switch and open disputes.
   // Read-only: sheets are opened, never sent.
   { name: 'keyboard-fix', spec: 'keyboard-fix.spec.ts', seed: 'corrections' },
+  // Its own server: the password changes for good (#210).
+  { name: 'password', spec: 'password.spec.ts', seed: 'password' },
+  // Změnit heslo with the keyboard open (#210): it needs the passwordChange switch. Read-only.
+  { name: 'keyboard-password', spec: 'keyboard-password.spec.ts', seed: 'password' },
 ]
 
 /** Passkeys on (localhost) for the `on` suite only, at its own port. */

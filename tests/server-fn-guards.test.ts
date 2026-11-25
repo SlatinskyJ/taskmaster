@@ -74,6 +74,7 @@ const EXPECTED_ROLES: Record<string, string> = {
   passkeyRegisterOptionsFn: 'any',
   passkeyRegisterFn: 'any',
   listMyPasskeysFn: 'any',
+  changePasswordFn: 'any',
   removeMyPasskeyFn: 'any',
   listPasskeyCountsFn: 'admin',
   removeUserPasskeysFn: 'admin',

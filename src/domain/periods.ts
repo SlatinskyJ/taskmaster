@@ -1,5 +1,5 @@
 import type { Weekday } from './dates'
-import { addPragueDays, nextPragueWeekdayAt } from './dates'
+import { addPragueDays, nextPragueWeekdayAt, pragueDaysBetween } from './dates'
 import type { Person, PersonId } from './parties'
 import { findPerson, isActiveAdmin, isActiveGiver, isActiveTaker, isParty } from './parties'
 import type { Result } from './result'
@@ -206,32 +206,49 @@ export function hasStarted(period: PeriodSpan, now: Date): boolean {
 }
 
 /**
- * Settlement is allowed once the period has started (strictly after its first instant): before the cutoff it ends the running
- * period, after the cutoff it settles a period that ended there (spec §5.8). A period that
- * settling already ended early is settled. Double settlement of a period ended at its cutoff is
- * guarded by its settlement records (#44), not here.
+ * The period's last day (spec §5.8, Jakub 2026-11-24): the Prague calendar day its last minute
+ * falls on, i.e. the day of `cutoffAt − 1 ms`. Normally Sunday; a cutoff at Monday 00:00 makes it
+ * Sunday too.
  */
-export function canSettle(period: PeriodSpan, now: Date): boolean {
+export function isLastDay(period: PeriodSpan, now: Date): boolean {
+  return pragueDaysBetween(now, new Date(period.cutoffAt.getTime() - 1)) === 0
+}
+
+/**
+ * Settlement is allowed once the period has started (strictly after its first instant): before
+ * the cutoff it ends the running period, after the cutoff it settles a period that ended there
+ * (spec §5.8). With `lastDayOnly` (the `settleLastDay` switch, Jakub 2026-11-24) the running
+ * period can be settled only on its last day (`isLastDay`); after the cutoff nothing changes. A
+ * period that settling already ended early is settled. Double settlement of a period ended at its
+ * cutoff is guarded by its settlement records (#44), not here.
+ */
+export function canSettle(period: PeriodSpan, now: Date, lastDayOnly: boolean): boolean {
   // Strictly after the start, like `endPeriodEarly`: a settlement can't end a zero-length period.
-  return now.getTime() > period.startsAt.getTime() && period.endedAt == null
+  if (now.getTime() <= period.startsAt.getTime() || period.endedAt != null) return false
+  if (!lastDayOnly || now.getTime() >= period.cutoffAt.getTime()) return true
+  return isLastDay(period, now)
 }
 
 /**
  * The period the meeting settles (spec §5.8, §5.9 step 1). `periods` oldest first, `settled`
  * the ids that have settlement records. The oldest ended period without a settlement comes
  * first (a missed or late meeting; weeks are never skipped); only when every ended period is
- * settled, the running one, if it can be settled now. `undefined` = nothing to settle.
+ * settled, the running one, if it can be settled now (`lastDayOnly`: see `canSettle`). `undefined`
+ * = nothing to settle.
  */
 export function periodToSettle<P extends Period>(
   periods: readonly P[],
   settled: ReadonlySet<PeriodId>,
   now: Date,
+  lastDayOnly: boolean,
 ): P | undefined {
   const t = now.getTime()
   const ended = periods.find((p) => periodEnd(p).getTime() <= t && !settled.has(p.id))
   if (ended) return ended
   const running = periods.find((p) => isRunning(p, now))
-  return running && !settled.has(running.id) && canSettle(running, now) ? running : undefined
+  return running && !settled.has(running.id) && canSettle(running, now, lastDayOnly)
+    ? running
+    : undefined
 }
 
 /**
