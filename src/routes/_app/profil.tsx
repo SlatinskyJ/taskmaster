@@ -2,6 +2,7 @@ import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { ChevronLeft } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { ProfilePassword } from '~/components/auth/ProfilePassword'
 import { ProfilePasskeys } from '~/components/auth/ProfilePasskeys'
 import { Avatar } from '~/components/shell/Avatar'
 import { SectionLabel } from '~/components/shell/SectionLabel'
@@ -16,7 +17,8 @@ import { cn } from '~/lib/utils'
 import { logoutFn } from '~/server/auth/functions'
 import { getPasskeysEnabledFn, listMyPasskeysFn } from '~/server/passkeys/functions'
 
-// Profile (UI doc §7.4): light / dark / auto, effects on/off, passkeys (#29), log out. Both choices are
+// Profile (UI doc §7.4): light / dark / auto, effects on/off, passkeys (#29), own password
+// (#210, behind the `passwordChange` switch), log out. Both choices are
 // stored on this device (src/lib/theme.ts, src/lib/effects.ts): a phone and a shared screen
 // may want different ones.
 export const Route = createFileRoute('/_app/profil')({
@@ -38,7 +40,7 @@ const THEME_LABELS: Record<ThemePref, string> = {
 }
 
 function Profile() {
-  const { user } = Route.useRouteContext()
+  const { user, features } = Route.useRouteContext()
   const router = useRouter()
   const [theme, setTheme] = useThemePref()
   const [effects, setEffects] = useEffectsSwitch()
@@ -144,6 +146,8 @@ function Profile() {
         </Card>
 
         <ProfilePasskeys enabled={enabled} items={passkeys} />
+
+        <ProfilePassword enabled={features.passwordChange} username={user.username} />
 
         <Button
           variant="no"

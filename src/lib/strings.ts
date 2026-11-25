@@ -62,6 +62,26 @@ export const cs = {
     effects: 'Efekty',
     effectsLabel: 'Konfety a animace',
     effectsHint: 'Když dokončíš úkol nebo dosáhneš hranice',
+    /** Změnit heslo (#210). */
+    passwordSection: 'Heslo',
+    passwordRow: 'Změnit heslo',
+    passwordTitle: 'Změnit heslo',
+    currentPassword: 'Současné heslo',
+    newPassword: 'Nové heslo',
+    newPasswordAgain: 'Nové heslo znovu',
+    passwordHint: (min: number) => `Aspoň ${String(min)} znaků.`,
+    logOutOthers: 'Odhlásit na ostatních zařízeních',
+    passwordSubmit: 'Změnit heslo',
+    passwordSaving: 'Ukládám…',
+    passwordChanged: 'Heslo je změněné.',
+    passwordChangedOthers: 'Heslo je změněné. Ostatní zařízení jsou odhlášená.',
+    passwordErrors: {
+      mismatch: 'Nová hesla se neshodují.',
+      tooShort: (min: number) => `Nové heslo musí mít aspoň ${String(min)} znaků.`,
+      wrong: 'Současné heslo nesedí.',
+      changed: 'Heslo se mezitím změnilo. Zkus to znovu.',
+      featureOff: 'Změna hesla je teď vypnutá.',
+    },
   },
   /** One-time tasks (#33): GTasks, GCreate, TApprove (UI doc §7). */
   tasks: {

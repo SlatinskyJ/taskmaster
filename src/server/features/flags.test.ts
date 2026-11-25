@@ -13,7 +13,7 @@ describe('NO_FEATURES and ALL_FEATURES', () => {
 })
 
 describe('getFlags', () => {
-  it('reads the values the migrations leave: on since the release (0022), disputes off (0024), settleLastDay on (0027)', () => {
+  it('reads the values the migrations leave: on since the release (0022), disputes off (0024), settleLastDay on (0027), passwordChange off (0028)', () => {
     expect(getFlags(createTestDb())).toEqual({
       recurring: true,
       log: true,
@@ -22,6 +22,7 @@ describe('getFlags', () => {
       periodProposals: true,
       disputes: false,
       settleLastDay: true,
+      passwordChange: false,
     })
     expect(
       createTestDb()
@@ -35,7 +36,12 @@ describe('getFlags', () => {
   it('reads a switch turned off by hand in the database', () => {
     const db = createTestDb()
     db.run(sql`UPDATE feature_flags SET enabled = 0 WHERE key = 'recurring'`)
-    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, recurring: false, disputes: false })
+    expect(getFlags(db)).toEqual({
+      ...ALL_FEATURES,
+      recurring: false,
+      disputes: false,
+      passwordChange: false,
+    })
   })
 
   it('reads a switch with no row as off', () => {
@@ -50,13 +56,14 @@ describe('getFlags', () => {
       periodProposals: true,
       disputes: true,
       settleLastDay: true,
+      passwordChange: true,
     })
   })
 
   it('ignores a row for a switch the code does not know', () => {
     const db = createTestDb()
     db.insert(featureFlags).values({ key: 'teleport', enabled: false }).run()
-    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, disputes: false })
+    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, disputes: false, passwordChange: false })
   })
 
   it('refuses a hand edit that is not 0 or 1', () => {

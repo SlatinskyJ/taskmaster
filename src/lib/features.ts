@@ -20,6 +20,8 @@ export const FEATURE_KEYS = [
   /** Settle the running week only on its last day (#211). On from its migration (0027):
    * Jakub 2026-11-24, "flip once merged". */
   'settleLastDay',
+  /** Changing your own password on Profil (#210). */
+  'passwordChange',
 ] as const
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number]
@@ -36,6 +38,7 @@ export const NO_FEATURES: Readonly<Features> = {
   periodProposals: false,
   disputes: false,
   settleLastDay: false,
+  passwordChange: false,
 }
 
 /** Every switch on: the full app as designed (UI doc §6). */
@@ -47,4 +50,5 @@ export const ALL_FEATURES: Readonly<Features> = {
   periodProposals: true,
   disputes: true,
   settleLastDay: true,
+  passwordChange: true,
 }
