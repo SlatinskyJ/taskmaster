@@ -314,9 +314,9 @@ describe('task page: reopened bidding (#212)', () => {
     expect(html).toContain(`>${cs.tasks.approve}<`)
     expect(html).toContain(cs.rebid.approveHint(16))
   })
-  it('a parent in a round with no bids gets Ukončit vyjednávání', () => {
+  it('a parent in a round with no bids gets no turn-down (Jakub 2026-11-25)', () => {
     const html = render(TATA, round(null))
-    expect(html).toContain(cs.rebid.stop)
-    expect(html).toContain(cs.rebid.stopHint(18))
+    expect(html).not.toContain(cs.bids.turnDown)
+    expect(html).toContain(cs.rebid.noEntries)
   })
 })

@@ -190,17 +190,6 @@ export function refuseButton(task: TaskView, me: Me, on: boolean): BidButton | n
       variant: 'ghost',
     }
   }
-  // A round nobody bid in: a parent ends it, the agreed score stays (#212).
-  if (me.role === 'giver' && round) {
-    return {
-      key: 'refuse',
-      action: 'turnDownBids',
-      data: { taskId: task.id, bids: [] },
-      label: cs.rebid.stop,
-      hint: cs.rebid.stopHint(task.score),
-      variant: 'ghost',
-    }
-  }
   return null
 }
 
@@ -299,9 +288,7 @@ export function toastFor(
   round: boolean,
 ): string {
   if (call.action === 'reopenBidding') return cs.rebid.toast.reopened
-  if (call.action === 'turnDownBids') {
-    return call.data.bids.length === 0 ? cs.rebid.toast.stopped : cs.bids.toast.turnedDown
-  }
+  if (call.action === 'turnDownBids') return cs.bids.toast.turnedDown
   const mine = status === 'reserved' && me.role === 'taker'
   if (round) {
     if (call.action === 'placeBid') return cs.bids.toast.sent
