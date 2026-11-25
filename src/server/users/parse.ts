@@ -51,3 +51,20 @@ export function parseReset(data: unknown): { userId: number; password: string } 
   const d = record(data)
   return { userId: int(d.userId), password: str(d.password) }
 }
+
+function bool(value: unknown): boolean {
+  if (typeof value !== 'boolean') throw new Error('Invalid input')
+  return value
+}
+
+export interface ChangePasswordData {
+  current: string
+  next: string
+  logOutOthers: boolean
+}
+
+/** Profil → Změnit heslo (#210). Lengths are checked by ./changePassword. */
+export function parseChangePassword(data: unknown): ChangePasswordData {
+  const d = record(data)
+  return { current: str(d.current), next: str(d.next), logOutOthers: bool(d.logOutOthers) }
+}

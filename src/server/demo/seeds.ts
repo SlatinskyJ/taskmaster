@@ -58,6 +58,8 @@ export const SEEDS = {
     pieces: [pastWeek, thisWeek, disputes, corrections],
     features: ['week', 'disputes'],
   },
+  /** Changing your own password on Profil (#210): the demo people, the switch on. */
+  password: { pieces: [], features: ['passwordChange'] },
   /** Previews and dev: everything. */
   demo: {
     pieces: [

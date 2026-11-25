@@ -113,7 +113,13 @@ export function MeetingBody({
         <StepSettle meeting={meeting} ui={ui} dispatch={dispatch} onConfirm={onConfirm} />
       )}
       {step === 3 && (
-        <StepPlan ui={ui} plan={plan} nothing={!ui.result} otherLevels={otherLevels} />
+        <StepPlan
+          ui={ui}
+          plan={plan}
+          nothing={!ui.result}
+          runningCutoffAt={meeting.period ? null : meeting.runningCutoffAt}
+          otherLevels={otherLevels}
+        />
       )}
     </div>
   )
@@ -288,18 +294,30 @@ function StepPlan({
   ui,
   plan,
   nothing,
+  runningCutoffAt,
   otherLevels,
 }: {
   ui: MeetingUi
   plan: readonly TaskView[]
   nothing: boolean
+  /** Set before the running week's last day (#211): the card says when the week ends. */
+  runningCutoffAt: string | null
   otherLevels: boolean
 }) {
   const result = ui.result
   const starting = startingTotals(ui)
   return (
     <section className="grid gap-3">
-      {nothing && (
+      {nothing && runningCutoffAt && (
+        <div className="grid gap-1 rounded-card bg-surface p-4 text-center shadow-sticker">
+          <p className="text-row font-bold">{cs.meeting.notYet}</p>
+          <p className="text-meta font-bold break-words text-muted">
+            {cs.meeting.runsUntil(untilLabel(runningCutoffAt))}
+          </p>
+          <p className="text-meta font-bold break-words text-muted">{cs.meeting.settleOnLastDay}</p>
+        </div>
+      )}
+      {nothing && !runningCutoffAt && (
         <p className="rounded-card bg-surface p-4 text-center text-row font-bold shadow-sticker">
           {cs.meeting.nothing}
         </p>
