@@ -48,6 +48,8 @@ const EXPECTED_ROLES: Record<string, string> = {
   placeBidFn: 'taker',
   acceptOfferFn: 'taker',
   counterOfferFn: 'giver',
+  withdrawBidFn: 'taker',
+  turnDownBidsFn: 'giver',
   acceptLowestTaskBidFn: 'giver',
   getTaskDetailFn: 'giver,taker',
   listBidsToAnswerFn: 'giver',

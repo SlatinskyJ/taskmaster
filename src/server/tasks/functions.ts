@@ -25,7 +25,16 @@ import {
   declineTaskScoreChange,
   proposeTaskScoreChange,
 } from './scoreChange'
-import { acceptLowestTaskBid, acceptOffer, counterOffer, placeBid } from './bidding'
+import {
+  acceptLowestTaskBid,
+  acceptOffer,
+  counterOffer,
+  placeBid,
+  turnDownBids,
+  withdrawBid,
+} from './bidding'
+import { getFlags } from '~/server/features'
+import type { Db } from '~/server/db'
 import {
   approveTaskOffer,
   createTask,
@@ -114,6 +123,23 @@ export function parseCounter(data: unknown): { taskId: number; score: number; bi
   return { ...parseApproval(data), bidders: bidders(record(data).bidders, 0) }
 }
 
+/** A parent's turn-down: the open bids he saw, 1 to 50, one per taker. */
+export function parseTurnDown(data: unknown): {
+  taskId: number
+  bids: { takerId: number; score: number }[]
+} {
+  const { taskId, bids } = record(data)
+  if (!Array.isArray(bids) || bids.length < 1 || bids.length > MAX_BIDDERS) {
+    throw new Error('Invalid input')
+  }
+  const list = bids.map((b) => {
+    const { takerId, score } = record(b)
+    return { takerId: int(takerId), score: scoreOf(score) }
+  })
+  if (new Set(list.map((b) => b.takerId)).size !== list.length) throw new Error('Invalid input')
+  return { taskId: int(taskId), bids: list }
+}
+
 /** What every task action returns to a screen: only ok, id and status, or the refusal. */
 export function answered(result: Result<TaskRow, TaskError>): TaskActionResult {
   return result.ok ? { ok: true, id: result.value.id, status: result.value.status } : result
@@ -181,6 +207,45 @@ export const acceptLowestTaskBidFn = createServerFn({ method: 'POST' })
   .handler(({ data, context }) =>
     answered(acceptLowestTaskBid(getDb(), context.user.id, data.taskId, data.score, data.bidders)),
   )
+
+// ── Saying no in bidding (#208, behind the `bidRefusals` switch) ─────────────────────────
+
+export type RefusalResult = TaskActionResult | { ok: false; error: 'feature_off' }
+
+const OFF = { ok: false, error: 'feature_off' } as const
+const refusalsOn = (db: Db) => getFlags(db).bidRefusals
+
+/** A brother's Nechci: his own open bid closes. */
+export function withdrawBidHandler(
+  db: Db,
+  takerId: number,
+  data: { taskId: number },
+  now: Date,
+): RefusalResult {
+  if (!refusalsOn(db)) return OFF
+  return answered(withdrawBid(db, takerId, data.taskId, now))
+}
+
+/** A parent turns the bidding down: every open bid he saw closes. */
+export function turnDownBidsHandler(
+  db: Db,
+  giverId: number,
+  data: { taskId: number; bids: { takerId: number; score: number }[] },
+  now: Date,
+): RefusalResult {
+  if (!refusalsOn(db)) return OFF
+  return answered(turnDownBids(db, giverId, data.taskId, data.bids, now))
+}
+
+export const withdrawBidFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('taker')])
+  .validator(parseTaskId)
+  .handler(({ data, context }) => withdrawBidHandler(getDb(), context.user.id, data, new Date()))
+
+export const turnDownBidsFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('giver')])
+  .validator(parseTurnDown)
+  .handler(({ data, context }) => turnDownBidsHandler(getDb(), context.user.id, data, new Date()))
 
 /** A task with its negotiation thread. */
 export const getTaskDetailFn = createServerFn({ method: 'GET' })

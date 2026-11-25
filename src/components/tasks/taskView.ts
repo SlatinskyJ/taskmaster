@@ -21,6 +21,8 @@ export type BidCall =
       action: 'acceptLowestTaskBid' | 'counterOffer'
       data: { taskId: number; score: number; bidders: number[] }
     }
+  | { action: 'withdrawBid'; data: { taskId: number } }
+  | { action: 'turnDownBids'; data: { taskId: number; bids: { takerId: number; score: number }[] } }
 export type BidAction = BidCall['action']
 
 export type BidButton = BidCall & {
@@ -109,12 +111,14 @@ export function sendButton(task: TaskView, me: Me, value: number): SendButton | 
   if (task.status !== 'proposed') return null
   const data = { taskId: task.id, score: value }
   if (me.role === 'taker') {
+    // Same number (Jakub 2026-11-24): his previous bid only after the offer changed.
+    const again = value !== task.score && value === lastBid(task, me)
     return {
       action: 'placeBid',
       data,
       label: cs.bids.send,
-      hint: cs.bids.bidHint,
-      disabled: value === task.score || value === myBid(task, me),
+      hint: again ? cs.bids.sameAgainHint : cs.bids.bidHint,
+      disabled: value === task.score || again,
     }
   }
   if (me.role !== 'giver') return null
@@ -129,6 +133,44 @@ export function sendButton(task: TaskView, me: Me, value: number): SendButton | 
     ...texts,
     disabled: value === task.score,
   }
+}
+
+/** His previous bid in this round (open or withdrawn), never another brother's. */
+function lastBid(task: TaskView, me: Me): number | null {
+  return task.lastBids.find((b) => b.takerId === me.id)?.score ?? null
+}
+
+/**
+ * Saying no (#208, switch `bidRefusals`): a brother's Nechci closes his own open bid; a parent's
+ * Odmítnout nabídky closes every bid he sees, sent back so a bid that came in meanwhile is
+ * refused, not dropped unseen.
+ */
+export function refuseButton(task: TaskView, me: Me, on: boolean): BidButton | null {
+  if (!on || task.status !== 'proposed') return null
+  if (me.role === 'taker' && myBid(task, me) !== null) {
+    return {
+      key: 'refuse',
+      action: 'withdrawBid',
+      data: { taskId: task.id },
+      label: cs.bids.withdraw,
+      hint: cs.bids.withdrawHint,
+      variant: 'ghost',
+    }
+  }
+  if (me.role === 'giver' && task.bids.length > 0) {
+    return {
+      key: 'refuse',
+      action: 'turnDownBids',
+      data: {
+        taskId: task.id,
+        bids: task.bids.map((b) => ({ takerId: b.takerId, score: b.score })),
+      },
+      label: cs.bids.turnDown,
+      hint: cs.bids.turnDownHint(task.score),
+      variant: 'ghost',
+    }
+  }
+  return null
 }
 
 /** A "Čeká na tebe" row's short line: who offers, and my bid next to it. */
@@ -192,6 +234,8 @@ export function toastFor(action: BidAction, status: TaskView['status'], me: Me):
   if (status === 'reserved' && me.role === 'taker') return cs.bids.toast.agreedMine
   if (status === 'open' || status === 'reserved') return cs.bids.toast.agreed
   if (action === 'approveOffer') return cs.tasks.approved
+  if (action === 'withdrawBid') return cs.bids.toast.withdrawn
+  if (action === 'turnDownBids') return cs.bids.toast.turnedDown
   return cs.bids.toast.sent
 }
 

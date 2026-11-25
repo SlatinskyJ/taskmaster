@@ -204,6 +204,13 @@
       "when": 1795616208306,
       "tag": "0028_password_change_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1795616704309,
+      "tag": "0029_bid_refusals_switch",
+      "breakpoints": true
     }
   ]
 }

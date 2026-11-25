@@ -86,6 +86,7 @@ describe('demo seed (#62)', () => {
       week: false,
       disputes: false,
       passwordChange: false,
+      bidRefusals: false,
     })
   })
 
@@ -139,7 +140,7 @@ describe('demo seed (#62)', () => {
     for (const name of ['Home', 'nope', 'toString', 'constructor']) {
       const db = createTestDb()
       expect(() => seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: name }, T0)).toThrow(
-        `unknown TASKMASTER_SEED "${name}" (known: family, home, launch, tasks, week, recurring, scheduler, proposals, disputes, corrections, password, demo)`,
+        `unknown TASKMASTER_SEED "${name}" (known: family, home, launch, tasks, bids, week, recurring, scheduler, proposals, disputes, corrections, password, demo)`,
       )
       expect(db.select().from(users).all()).toHaveLength(0)
       expect(db.select().from(auditLog).all()).toHaveLength(0)
@@ -173,6 +174,7 @@ describe('demo seed (#62)', () => {
       home: NO_FEATURES,
       launch: NO_FEATURES,
       tasks: NO_FEATURES,
+      bids: { ...NO_FEATURES, bidRefusals: true },
       week: { ...NO_FEATURES, week: true, meeting: true },
       recurring: { ...NO_FEATURES, recurring: true, log: true },
       scheduler: { ...NO_FEATURES, recurring: true },
@@ -215,6 +217,11 @@ describe('demo seed (#62)', () => {
     expect(() => seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: 'launch' }, T0)).toThrow('boom')
     expect(db.select().from(users).all()).toHaveLength(0)
     expect(db.select().from(tasks).all()).toHaveLength(0)
-    expect(getFlags(db)).toEqual({ ...ALL_FEATURES, disputes: false, passwordChange: false })
+    expect(getFlags(db)).toEqual({
+      ...ALL_FEATURES,
+      disputes: false,
+      passwordChange: false,
+      bidRefusals: false,
+    })
   })
 })

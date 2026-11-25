@@ -27,6 +27,10 @@ function phrase(e: HistoryEntry, meId: number): string {
       return h.bid(n)
     case 'task.bid_accepted':
       return h.bidAccepted(n)
+    case 'task.bid_withdrawn':
+      return h.bidWithdrawn
+    case 'task.bids_turned_down':
+      return h.bidsTurnedDown
     case 'task.score_approved':
       return h.approved(n)
     case 'task.agreed':

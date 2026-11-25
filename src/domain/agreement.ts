@@ -1,5 +1,5 @@
 import type { Person, PersonId } from './parties'
-import type { BidBook } from './bids'
+import type { BidBook, OpenBid } from './bids'
 import { EMPTY_BOOK, pruneBook } from './bids'
 import { allParties, findPerson, isActiveAs, isActiveGiver, isParty } from './parties'
 import type { Result } from './result'
@@ -185,8 +185,12 @@ export function scoreForNewInstance(template: TemplateAgreement): Result<number,
 // Once a task is open or reserved, every action of either path is refused (`not_proposed`).
 
 export type OneTimeAgreement =
-  /** Negotiating: the giver's offer waiting for a taker's approval, and any open bids. */
-  | { status: 'proposed'; offer: ScoreProposal; book: BidBook }
+  /**
+   * Negotiating: the giver's offer waiting for a taker's approval, and any open bids.
+   * `lastBids`: each taker's newest bid since the giver side last changed the offer or turned the
+   * bidding down, open or withdrawn (the same-number rule, Jakub 2026-11-24).
+   */
+  | { status: 'proposed'; offer: ScoreProposal; book: BidBook; lastBids: readonly OpenBid[] }
   /** A giver and a taker approved: in the queue at `score`, any taker may reserve or do it. */
   | { status: 'open'; score: number }
   /** Agreed by bidding between `takerId` and `giverId`: reserved to that taker (spec §5.2 path 2). */
@@ -202,7 +206,12 @@ export function createOneTimeTask(
   if (!giver || !isActiveGiver(giver)) return fail('not_a_giver')
   const offer = proposeScore(people, giverId, score)
   if (!offer.ok) return offer
-  return ok(resolveOneTime({ status: 'proposed', offer: offer.value, book: EMPTY_BOOK }, people))
+  return ok(
+    resolveOneTime(
+      { status: 'proposed', offer: offer.value, book: EMPTY_BOOK, lastBids: [] },
+      people,
+    ),
+  )
 }
 
 /** The bid book without bids of people who no longer take part (spec §3, live). */
@@ -249,5 +258,5 @@ export function reopenOneTimeOffer(
   score: number,
 ): OneTimeAgreement {
   const offer: ScoreProposal = { score, proposedBy: giverId, approvedBy: [giverId] }
-  return resolveOneTime({ status: 'proposed', offer, book: EMPTY_BOOK }, people)
+  return resolveOneTime({ status: 'proposed', offer, book: EMPTY_BOOK, lastBids: [] }, people)
 }

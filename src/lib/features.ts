@@ -22,6 +22,8 @@ export const FEATURE_KEYS = [
   'settleLastDay',
   /** Changing your own password on Profil (#210). */
   'passwordChange',
+  /** Bidding: a brother's Nechci and a parent's turn-down (#208). */
+  'bidRefusals',
 ] as const
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number]
@@ -39,6 +41,7 @@ export const NO_FEATURES: Readonly<Features> = {
   disputes: false,
   settleLastDay: false,
   passwordChange: false,
+  bidRefusals: false,
 }
 
 /** Every switch on: the full app as designed (UI doc §6). */
@@ -51,4 +54,5 @@ export const ALL_FEATURES: Readonly<Features> = {
   disputes: true,
   settleLastDay: true,
   passwordChange: true,
+  bidRefusals: true,
 }

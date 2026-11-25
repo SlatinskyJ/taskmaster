@@ -5,6 +5,8 @@ import {
   approveTaskOfferFn,
   counterOfferFn,
   placeBidFn,
+  turnDownBidsFn,
+  withdrawBidFn,
 } from '~/server/tasks/functions'
 import { BID_CALLS, callBid } from './bidCalls'
 import type { BidCall } from './taskView'
@@ -18,6 +20,8 @@ vi.mock('~/server/tasks/functions', () => {
     placeBidFn: fn(),
     acceptLowestTaskBidFn: fn(),
     counterOfferFn: fn(),
+    withdrawBidFn: fn(),
+    turnDownBidsFn: fn(),
   }
 })
 
@@ -31,6 +35,8 @@ describe('callBid', () => {
     { action: 'placeBid', data: { taskId: 1, score: 24 } },
     { action: 'acceptLowestTaskBid', data: { taskId: 1, score: 22, bidders: [4] } },
     { action: 'counterOffer', data: { taskId: 1, score: 21, bidders: [] } },
+    { action: 'withdrawBid', data: { taskId: 1 } },
+    { action: 'turnDownBids', data: { taskId: 1, bids: [{ takerId: 3, score: 25 }] } },
   ] satisfies BidCall[])(
     'callBid sends $action to its own server function only, with its data as is',
     async (call) => {
@@ -41,6 +47,8 @@ describe('callBid', () => {
         placeBid: placeBidFn,
         acceptLowestTaskBid: acceptLowestTaskBidFn,
         counterOffer: counterOfferFn,
+        withdrawBid: withdrawBidFn,
+        turnDownBids: turnDownBidsFn,
       }
       for (const [action, fn] of Object.entries(fns)) {
         if (action === call.action) expect(fn).toHaveBeenCalledExactlyOnceWith({ data: call.data })
@@ -55,6 +63,8 @@ describe('callBid', () => {
       placeBid: placeBidFn,
       acceptLowestTaskBid: acceptLowestTaskBidFn,
       counterOffer: counterOfferFn,
+      withdrawBid: withdrawBidFn,
+      turnDownBids: turnDownBidsFn,
     })
   })
 })
