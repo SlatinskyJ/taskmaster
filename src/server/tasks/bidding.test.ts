@@ -4,7 +4,15 @@ import { byPerson, cancelItem } from '~/domain'
 import type { Db } from '~/server/db'
 import { auditLog, taskScoreApprovals } from '~/server/db/schema'
 import { updateUser } from '~/server/users/manage'
-import { acceptLowestTaskBid, acceptOffer, counterOffer, placeBid } from './bidding'
+import {
+  acceptLowestTaskBid,
+  acceptOffer,
+  counterOffer,
+  placeBid,
+  turnDownBids,
+  withdrawBid,
+} from './bidding'
+import { taskHistory } from './history'
 import { saveItem, toItem } from './item'
 import { completeTask, releaseTask, reserveTask } from './lifecycle'
 import {
@@ -668,6 +676,10 @@ describe('what screens get (PR B)', () => {
         { takerId: f.starsi, name: 'Starší', score: 25 },
       ],
       lowest: { score: 22, bidders: [{ id: f.mladsi, name: 'Mladší' }] },
+      lastBids: [
+        { takerId: f.starsi, score: 25 },
+        { takerId: f.mladsi, score: 22 },
+      ],
     })
     must(placeBid(f.db, f.starsi, id, 22, T2))
     expect(pendingApprovals(f.db, f.mladsi)[0]?.lowest).toEqual({
@@ -708,6 +720,7 @@ describe('what screens get (PR B)', () => {
         approverIds: [f.tata],
         bids: [{ takerId: f.starsi, name: 'Starší', score: 23 }],
         lowest: { score: 23, bidders: [{ id: f.starsi, name: 'Starší' }] },
+        lastBids: [{ takerId: f.starsi, score: 23 }],
         reservedBy: null,
         completedBy: null,
         completedAt: null,
@@ -766,6 +779,7 @@ describe('what screens get (PR B)', () => {
       reservedBy: { id: f.mladsi, name: 'Mladší' },
       bids: [],
       lowest: null,
+      lastBids: [],
       offeredByName: null,
     })
     expect(detail?.thread.map((e) => [e.by.name, e.score, e.state])).toEqual([
@@ -785,5 +799,206 @@ describe('what screens get (PR B)', () => {
     expect(listBidsToAnswer(f.db).map((t) => t.id)).toEqual([a, b])
     must(acceptLowestTaskBid(f.db, f.tata, a, 22, [f.mladsi], T3))
     expect(listBidsToAnswer(f.db).map((t) => t.id)).toEqual([b])
+  })
+})
+
+describe('same number (Jakub 2026-11-24)', () => {
+  it('5, counter, 5 again is fine', () => {
+    const f = family()
+    const id = car(f)
+    must(placeBid(f.db, f.starsi, id, 5, T1))
+    must(counterOffer(f.db, f.tata, id, 4, [], T2))
+    must(placeBid(f.db, f.starsi, id, 5, T3))
+    expect(thread(f.db, id)).toEqual([
+      ['giver', f.tata, 18, 'replaced'],
+      ['taker', f.starsi, 5, 'replaced'],
+      ['giver', f.tata, 4, null],
+      ['taker', f.starsi, 5, null],
+    ])
+  })
+  it('one brother twice: 5, 6, 6 is refused; 5, 6, 5 is fine', () => {
+    const f = family()
+    const id = car(f)
+    must(placeBid(f.db, f.starsi, id, 5, T1))
+    must(placeBid(f.db, f.starsi, id, 6, T1))
+    expect(placeBid(f.db, f.starsi, id, 6, T2)).toEqual({ ok: false, error: 'same_score' })
+    must(placeBid(f.db, f.starsi, id, 5, T2))
+  })
+  it('5, Nechci, 5 is refused until a counter', () => {
+    const f = family()
+    const id = car(f)
+    must(placeBid(f.db, f.starsi, id, 5, T1))
+    must(withdrawBid(f.db, f.starsi, id, T1))
+    expect(placeBid(f.db, f.starsi, id, 5, T2)).toEqual({ ok: false, error: 'same_score' })
+    must(counterOffer(f.db, f.tata, id, 4, [], T2))
+    must(placeBid(f.db, f.starsi, id, 5, T3))
+  })
+})
+
+describe('withdrawBid (Nechci, Jakub 2026-11-24)', () => {
+  it("closes only his own bid, logged; the brother's bid stays", () => {
+    const f = family()
+    const id = car(f)
+    must(placeBid(f.db, f.starsi, id, 25, T1))
+    must(placeBid(f.db, f.mladsi, id, 22, T1))
+    expect(must(withdrawBid(f.db, f.mladsi, id, T2))).toMatchObject({
+      status: 'proposed',
+      score: 18,
+      offerRound: 1,
+    })
+    expect(thread(f.db, id)).toEqual([
+      ['giver', f.tata, 18, null],
+      ['taker', f.starsi, 25, null],
+      ['taker', f.mladsi, 22, 'closed'],
+    ])
+    expect(lastAudit(f.db)).toMatchObject({
+      action: 'task.bid_withdrawn',
+      actorUserId: f.mladsi,
+      entityId: String(id),
+    })
+    expect(json(lastAudit(f.db)?.before)).toEqual({ entryId: 3, score: 22 })
+  })
+  it('twice is no_bid', () => {
+    const f = family()
+    const id = car(f)
+    must(placeBid(f.db, f.starsi, id, 25, T1))
+    must(withdrawBid(f.db, f.starsi, id, T1))
+    expect(withdrawBid(f.db, f.starsi, id, T2)).toEqual({ ok: false, error: 'no_bid' })
+  })
+  it('a giver cannot withdraw a bid; nothing is written', () => {
+    const f = family()
+    const id = car(f)
+    must(placeBid(f.db, f.starsi, id, 25, T1))
+    const before = audits(f.db, id).length
+    expect(withdrawBid(f.db, f.tata, id, T2)).toEqual({ ok: false, error: 'not_a_taker' })
+    expect(thread(f.db, id)).toHaveLength(2)
+    expect(audits(f.db, id)).toHaveLength(before)
+  })
+  it('a failed audit write rolls it back: the bid is still open', () => {
+    const f = family()
+    const id = car(f)
+    must(placeBid(f.db, f.starsi, id, 25, T1))
+    failAuditOn(f.db, 'task.bid_withdrawn')
+    expect(() => withdrawBid(f.db, f.starsi, id, T2)).toThrow(/audit down/)
+    expect(thread(f.db, id)).toEqual([
+      ['giver', f.tata, 18, null],
+      ['taker', f.starsi, 25, null],
+    ])
+  })
+})
+
+describe('Nechci and turn-down in the task history', () => {
+  it('both show on the task page history, by who did them', () => {
+    const f = family()
+    const id = car(f)
+    must(placeBid(f.db, f.starsi, id, 25, T1))
+    must(placeBid(f.db, f.mladsi, id, 22, T1))
+    must(withdrawBid(f.db, f.mladsi, id, T2))
+    must(turnDownBids(f.db, f.tata, id, [{ takerId: f.starsi, score: 25 }], T3))
+    const tail = taskHistory(f.db, id, String)
+      .slice(-2)
+      .map((e) => [e.action, e.by?.id, e.score])
+    expect(tail).toEqual([
+      ['task.bid_withdrawn', f.mladsi, null],
+      ['task.bids_turned_down', f.tata, 18],
+    ])
+  })
+})
+
+describe('turnDownBids (Jakub 2026-11-24)', () => {
+  const bidsOn = (f: ReturnType<typeof family>) => {
+    const id = car(f)
+    must(placeBid(f.db, f.starsi, id, 25, T1))
+    must(placeBid(f.db, f.mladsi, id, 22, T1))
+    return id
+  }
+  const seen = (f: ReturnType<typeof family>) => [
+    { takerId: f.mladsi, score: 22 },
+    { takerId: f.starsi, score: 25 },
+  ]
+
+  it('closes every bid and re-offers the same score in a new round, logged', () => {
+    const f = family()
+    const mama = addGiver(f)
+    const id = bidsOn(f)
+    expect(must(turnDownBids(f.db, mama, id, seen(f), T2))).toMatchObject({
+      status: 'proposed',
+      score: 18,
+      offerRound: 2,
+    })
+    expect(thread(f.db, id)).toEqual([
+      ['giver', f.tata, 18, 'replaced'],
+      ['taker', f.starsi, 25, 'closed'],
+      ['taker', f.mladsi, 22, 'closed'],
+      ['giver', mama, 18, null],
+    ])
+    expect(approvals(f.db, id, 2)).toEqual([[mama, 18]])
+    expect(offerInStep(f.db, id)).toBe(true)
+    expect(audits(f.db, id).filter((a) => a === 'task.bids_turned_down')).toHaveLength(1)
+    expect(lastAudit(f.db)).toMatchObject({ action: 'task.bids_turned_down', actorUserId: mama })
+    expect(json(lastAudit(f.db)?.before)).toEqual({
+      score: 18,
+      offerRound: 1,
+      entryIds: [2, 3],
+      offerEntryId: 1,
+    })
+    expect(json(lastAudit(f.db)?.after)).toEqual({ score: 18, offerRound: 2, entryId: 4 })
+  })
+  it('afterwards every brother may send his old number again', () => {
+    const f = family()
+    const id = bidsOn(f)
+    must(turnDownBids(f.db, f.tata, id, seen(f), T2))
+    must(placeBid(f.db, f.starsi, id, 25, T3))
+    must(placeBid(f.db, f.mladsi, id, 22, T3))
+  })
+  it('a stale screen (a new bid came in) is offer_changed; nothing closes, nothing logged', () => {
+    const f = family()
+    const id = car(f)
+    must(placeBid(f.db, f.starsi, id, 25, T1))
+    const saw = [{ takerId: f.starsi, score: 25 }]
+    must(placeBid(f.db, f.mladsi, id, 22, T1))
+    const before = audits(f.db, id).length
+    expect(turnDownBids(f.db, f.tata, id, saw, T2)).toEqual({ ok: false, error: 'offer_changed' })
+    expect(thread(f.db, id)).toEqual([
+      ['giver', f.tata, 18, null],
+      ['taker', f.starsi, 25, null],
+      ['taker', f.mladsi, 22, null],
+    ])
+    expect(audits(f.db, id)).toHaveLength(before)
+  })
+  it("after a turn-down a brother's yes agrees the task at the offer", () => {
+    const f = family()
+    const id = bidsOn(f)
+    must(turnDownBids(f.db, f.tata, id, seen(f), T2))
+    expect(must(approveTaskOffer(f.db, f.starsi, id, 18, T3))).toMatchObject({
+      status: 'open',
+      score: 18,
+    })
+  })
+  it('no bids is no_bids; an agreed task is not_proposed', () => {
+    const f = family()
+    const id = car(f)
+    expect(turnDownBids(f.db, f.tata, id, [], T1)).toEqual({ ok: false, error: 'no_bids' })
+    must(approveTaskOffer(f.db, f.starsi, id, 18, T1))
+    expect(turnDownBids(f.db, f.tata, id, [], T2)).toEqual({ ok: false, error: 'not_proposed' })
+  })
+  it('a taker cannot turn bids down; nothing is written', () => {
+    const f = family()
+    const id = bidsOn(f)
+    expect(turnDownBids(f.db, f.starsi, id, seen(f), T2)).toEqual({
+      ok: false,
+      error: 'not_a_giver',
+    })
+    expect(thread(f.db, id).every((r) => r[3] === null)).toBe(true)
+  })
+  it('a failed audit write rolls it back: bids, offer and round unchanged', () => {
+    const f = family()
+    const id = bidsOn(f)
+    failAuditOn(f.db, 'task.bids_turned_down')
+    expect(() => turnDownBids(f.db, f.tata, id, seen(f), T2)).toThrow(/audit down/)
+    expect(thread(f.db, id).every((r) => r[3] === null)).toBe(true)
+    expect(thread(f.db, id)).toHaveLength(3)
+    expect(row(f.db, id)).toMatchObject({ offerRound: 1, score: 18 })
+    expect(approvals(f.db, id, 2)).toEqual([])
   })
 })

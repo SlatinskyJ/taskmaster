@@ -255,6 +255,7 @@ describe('one-time tasks, path 1: score agreement (spec §5.2)', () => {
       status: 'proposed',
       offer: { score: 23, proposedBy: DAD, approvedBy: [DAD] },
       book: { bids: [] },
+      lastBids: [],
     })
     expect(value(approveOneTimeOffer(t, family, YOUNGER))).toEqual({ status: 'open', score: 23 })
   })

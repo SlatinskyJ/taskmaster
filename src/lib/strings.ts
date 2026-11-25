@@ -62,6 +62,26 @@ export const cs = {
     effects: 'Efekty',
     effectsLabel: 'Konfety a animace',
     effectsHint: 'Když dokončíš úkol nebo dosáhneš hranice',
+    /** Změnit heslo (#210). */
+    passwordSection: 'Heslo',
+    passwordRow: 'Změnit heslo',
+    passwordTitle: 'Změnit heslo',
+    currentPassword: 'Současné heslo',
+    newPassword: 'Nové heslo',
+    newPasswordAgain: 'Nové heslo znovu',
+    passwordHint: (min: number) => `Aspoň ${String(min)} znaků.`,
+    logOutOthers: 'Odhlásit na ostatních zařízeních',
+    passwordSubmit: 'Změnit heslo',
+    passwordSaving: 'Ukládám…',
+    passwordChanged: 'Heslo je změněné.',
+    passwordChangedOthers: 'Heslo je změněné. Ostatní zařízení jsou odhlášená.',
+    passwordErrors: {
+      mismatch: 'Nová hesla se neshodují.',
+      tooShort: (min: number) => `Nové heslo musí mít aspoň ${String(min)} znaků.`,
+      wrong: 'Současné heslo nesedí.',
+      changed: 'Heslo se mezitím změnilo. Zkus to znovu.',
+      featureOff: 'Změna hesla je teď vypnutá.',
+    },
   },
   /** One-time tasks (#33): GTasks, GCreate, TApprove (UI doc §7). */
   tasks: {
@@ -243,7 +263,24 @@ export const cs = {
     answer: 'Odpovědět',
     otherPriceShort: 'Jiná cena',
     open: 'Otevřít',
-    toast: { sent: 'Nabídka odeslána', agreed: 'Domluveno', agreedMine: 'Domluveno, úkol je tvůj' },
+    /** Same number (Jakub 2026-11-24): under a disabled Nabídnout on his previous bid. */
+    sameAgainHint: 'Stejné číslo můžeš poslat znovu, až rodiče změní nabídku.',
+    /** A brother's no (#208): only his own bid closes. */
+    withdraw: 'Nechci',
+    withdrawHint: 'Tvoje nabídka se uzavře. Nabídnout můžeš znovu.',
+    /** A parent's no (#208): every bid closes, the offer stays. */
+    turnDown: 'Odmítnout nabídky',
+    turnDownHint: (score: number) =>
+      `Všechny nabídky se uzavřou. Úkol zůstane navržený za ${String(score)} b.`,
+    /** A turn-down on a stale screen: a bid came in meanwhile. */
+    turnDownChanged: 'Mezitím přišla nová nabídka. Podívej se na ni.',
+    toast: {
+      sent: 'Nabídka odeslána',
+      agreed: 'Domluveno',
+      agreedMine: 'Domluveno, úkol je tvůj',
+      withdrawn: 'Nabídka stažena',
+      turnedDown: 'Nabídky odmítnuty',
+    },
   },
   /**
    * Score change of an agreed recurring template (spec §5.1): its price page and ways in. The
@@ -348,6 +385,8 @@ export const cs = {
     countered: (n: number) => `nabídka ${String(n)} b`,
     bid: (n: number) => `chce ${String(n)} b`,
     bidAccepted: (n: number) => `přijato ${String(n)} b`,
+    bidWithdrawn: 'nabídka stažena',
+    bidsTurnedDown: 'nabídky odmítnuty',
     approved: (n: number) => `souhlas s ${String(n)} b`,
     agreed: (n: number) => `domluveno za ${String(n)} b`,
     agreedReserved: (n: number, name: string) => `domluveno za ${String(n)} b · rezervace: ${name}`,
@@ -416,6 +455,10 @@ export const cs = {
     newTask: '+ Nový úkol',
     end: 'Ukončit schůzku',
     nothing: 'Teď není co vyúčtovat',
+    /** Before the running week's last day (#211): the week runs, settling waits for that day. */
+    notYet: 'Týden ještě běží',
+    runsUntil: (end: string) => `Týden běží do ${end}.`,
+    settleOnLastDay: 'Vyúčtovat půjde až v poslední den týdne.',
     settled: 'Týden je vyúčtovaný',
     errors: {
       totalsChanged: 'Mezitím se změnily body. Zkontroluj je a potvrď znovu.',

@@ -342,7 +342,7 @@ describe('the demo seed (previews)', () => {
     seedDemo(db, PREVIEW, T0)
     // The roller starts the week at boot, right after the seed.
     rollPeriods(db, new Date(T0.getTime() + 60_000), DEFAULT_PERIOD_DEFAULTS)
-    const meeting = getMeeting(db, new Date(T0.getTime() + 120_000))
+    const meeting = getMeeting(db, new Date(T0.getTime() + 120_000), false)
     if (!meeting.period) throw new Error('no meeting')
     expect(meeting.pending.map((t) => [t.title, t.score, t.completedBy?.name])).toEqual([
       ['Vytřít podlahu v kuchyni', 12, 'Starší'],

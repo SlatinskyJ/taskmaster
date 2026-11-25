@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNull } from 'drizzle-orm'
 import { toIsoUtc } from '~/domain/dates'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
@@ -69,6 +69,33 @@ export function openBids(db: Db | Tx, taskId: number): ThreadRow[] {
 }
 
 /**
+ * Each taker's newest bid since the newest giver row (a counter, a re-offer, a turn-down), open
+ * or closed: the same-number rule (spec §5.2, Jakub 2026-11-24). Oldest first.
+ */
+export function lastBids(db: Db | Tx, taskId: number): ThreadRow[] {
+  const giver = db
+    .select({ id: taskThread.id })
+    .from(taskThread)
+    .where(and(eq(taskThread.taskId, taskId), eq(taskThread.side, 'giver')))
+    .orderBy(desc(taskThread.id))
+    .get()
+  const rows = db
+    .select()
+    .from(taskThread)
+    .where(
+      and(
+        eq(taskThread.taskId, taskId),
+        eq(taskThread.side, 'taker'),
+        gt(taskThread.id, giver?.id ?? 0),
+      ),
+    )
+    .orderBy(asc(taskThread.id))
+    .all()
+  const newest = new Map(rows.map((r) => [r.userId, r]))
+  return [...newest.values()].sort((a, b) => a.id - b.id)
+}
+
+/**
  * The negotiation ended: every open row closes, as `accepted` for the ids given (the number the
  * task was agreed at) and `closed` for the rest. Returns the ids of each kind, ascending.
  */
@@ -97,4 +124,13 @@ export function threadOf(db: Db | Tx, taskId: number): ThreadRow[] {
     .where(eq(taskThread.taskId, taskId))
     .orderBy(asc(taskThread.id))
     .all()
+}
+
+/** Closes the given rows as `closed`: a taker's Nechci, a giver's turn-down (#208). */
+export function closeRows(tx: Tx, ids: readonly number[], now: Date) {
+  if (ids.length === 0) return
+  tx.update(taskThread)
+    .set({ closedAt: toIsoUtc(now), closedAs: 'closed' })
+    .where(inArray(taskThread.id, [...ids]))
+    .run()
 }

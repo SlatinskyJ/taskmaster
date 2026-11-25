@@ -194,8 +194,29 @@
     {
       "idx": 27,
       "version": "6",
-      "when": 1795530153940,
-      "tag": "0027_approve_anywhere_switch",
+      "when": 1795530286199,
+      "tag": "0027_settle_last_day_switch",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1795616208306,
+      "tag": "0028_password_change_switch",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1795616704309,
+      "tag": "0029_bid_refusals_switch",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1795617321520,
+      "tag": "0030_approve_anywhere_switch",
       "breakpoints": true
     }
   ]

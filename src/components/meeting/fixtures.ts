@@ -15,6 +15,7 @@ export const task = (over: Partial<TaskView>): TaskView => ({
   approverIds: [],
   bids: [],
   lowest: null,
+  lastBids: [],
   reservedBy: { id: 3, name: 'Starší' },
   completedBy: { id: 3, name: 'Starší' },
   completedAt: '2026-11-28T10:00:00.000Z',

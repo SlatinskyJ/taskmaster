@@ -105,7 +105,12 @@ function TaskPage() {
           <BidThread entries={thread} me={user.id} />
         </section>
       )}
-      <BidPanel key={`${String(task.score)}-${String(thread.length)}`} task={task} me={me} />
+      <BidPanel
+        key={`${String(task.score)}-${String(thread.length)}`}
+        task={task}
+        me={me}
+        refusals={features.bidRefusals}
+      />
       <TaskHistory entries={history} meId={user.id} />
     </Screen>
   )

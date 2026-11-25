@@ -7,6 +7,7 @@ import { callBid } from './bidCalls'
 import { BidPanel } from './BidPanel'
 import { BidsToAnswer } from './BidsToAnswer'
 import { WaitingForYou } from './WaitingForYou'
+import { cs } from '~/lib/strings'
 
 // What the bidding screens show (#34), rendered statically. The router, the action hook and the
 // server functions don't run in a static render, so they are stubbed as tasks.test.tsx does.
@@ -71,6 +72,7 @@ const view = (over: Partial<TaskView>): TaskView => ({
   approverIds: [2],
   bids: [],
   lowest: null,
+  lastBids: [],
   reservedBy: null,
   completedBy: null,
   completedAt: null,
@@ -90,6 +92,10 @@ const bids = view({
     { takerId: 3, name: 'Starší', score: 25 },
   ],
   lowest: { score: 22, bidders: [{ id: 4, name: 'Mladší' }] },
+  lastBids: [
+    { takerId: 4, score: 22 },
+    { takerId: 3, score: 25 },
+  ],
 })
 const buttons = (html: string) => html.match(/<button/g)?.length ?? 0
 
@@ -121,6 +127,43 @@ describe('BidPanel', () => {
     expect(all).toHaveLength(3)
     expect(all.every((b) => b.includes('disabled=""'))).toBe(true)
     action.busy = null
+  })
+})
+
+describe('BidPanel refusals (#208)', () => {
+  it('Nechci under the yes buttons with its hint, only with the switch on', () => {
+    action.busy = null
+    const on = renderToStaticMarkup(<BidPanel task={bids} me={STARSI} refusals />)
+    expect(on).toMatch(/Souhlasím.*Nechci.*Tvoje nabídka se uzavře\..*Chci jinou cenu/s)
+    const off = renderToStaticMarkup(<BidPanel task={bids} me={STARSI} refusals={false} />)
+    expect(off).not.toContain('Nechci')
+  })
+  it('a parent sees Odmítnout nabídky with the offer it keeps', () => {
+    action.busy = null
+    const html = renderToStaticMarkup(<BidPanel task={bids} me={TATA} refusals />)
+    expect(html).toMatch(
+      /Přijmout 22 \(Mladší\).*Odmítnout nabídky.*Všechny nabídky se uzavřou\. Úkol zůstane navržený za 18 b\./s,
+    )
+  })
+  it('a stale turn-down says a new bid came in', async () => {
+    action.busy = null
+    action.run.mockClear()
+    action.pressed.clear()
+    renderToStaticMarkup(<BidPanel task={bids} me={TATA} refusals />)
+    action.pressed.get('Odmítnout nabídky')?.onClick?.()
+    const [, , , opts] = action.run.mock.calls[0] as [
+      string,
+      unknown,
+      unknown,
+      { errorMessage?: (e: string) => string },
+    ]
+    expect(opts.errorMessage?.('offer_changed')).toBe(cs.bids.turnDownChanged)
+    expect(opts.errorMessage?.('no_bids')).toBe(cs.tasks.errors.noBids)
+    // Only the turn-down says so: a stale accept keeps the plain message.
+    action.pressed.get('Přijmout 22 (Mladší)')?.onClick?.()
+    const accept = action.run.mock.calls[1] as [string, unknown, unknown, object]
+    expect(accept[3]).not.toHaveProperty('errorMessage')
+    await Promise.resolve()
   })
 })
 

@@ -12,6 +12,7 @@ import {
   instanceMeta,
   lowestText,
   myBid,
+  refuseButton,
   sendButton,
   taskChipState,
   threadTime,
@@ -35,6 +36,7 @@ const view = (over: Partial<TaskView>): TaskView => ({
   approverIds: [2],
   bids: [],
   lowest: null,
+  lastBids: [],
   reservedBy: null,
   completedBy: null,
   completedAt: null,
@@ -107,6 +109,7 @@ describe('taskView', () => {
     const both = view({
       bids: [b(4, 'Mladší', 22), b(3, 'Starší', 25)],
       lowest: low(22, { id: 4, name: 'Mladší' }),
+      lastBids: [],
     })
     expect([myBid(both, STARSI), myBid(both, MLADSI)]).toEqual([25, 22])
     const other = view({ bids: [b(4, 'Mladší', 22)], lowest: low(22, { id: 4, name: 'Mladší' }) })
@@ -129,6 +132,7 @@ describe('taskView', () => {
     const one = view({
       bids: [b(4, 'Mladší', 22), b(3, 'Starší', 25)],
       lowest: low(22, { id: 4, name: 'Mladší' }),
+      lastBids: [],
     })
     expect(bidButtons(one, TATA)).toEqual([
       {
@@ -143,6 +147,7 @@ describe('taskView', () => {
     const tie = view({
       bids: [b(3, 'Starší', 22), b(4, 'Mladší', 22)],
       lowest: low(22, { id: 3, name: 'Starší' }, { id: 4, name: 'Mladší' }),
+      lastBids: [],
     })
     expect(bidButtons(tie, TATA)[0]).toMatchObject({
       label: 'Přijmout 22',
@@ -174,7 +179,7 @@ describe('taskView', () => {
     expect(sendButton(view({}), TATA, 30)).toMatchObject({ label: 'Nabídnout', disabled: false }) // decision 8a
   })
   it("a brother's bid: not the offer, not his own bid again", () => {
-    const t = view({ bids: [b(3, 'Starší', 25)] })
+    const t = view({ bids: [b(3, 'Starší', 25)], lastBids: [{ takerId: 3, score: 25 }] })
     expect([18, 25, 24].map((n) => sendButton(t, STARSI, n)?.disabled)).toEqual([true, true, false])
     expect(sendButton(t, STARSI, 24)).toMatchObject({
       action: 'placeBid',
@@ -182,6 +187,60 @@ describe('taskView', () => {
       label: 'Nabídnout',
       hint: 'Nabídka půjde rodičům.',
     })
+  })
+  it('same number (Jakub 2026-11-24): his previous bid waits for a counter, with its own hint', () => {
+    const before = view({ lastBids: [{ takerId: 3, score: 5 }] })
+    expect(sendButton(before, STARSI, 5)).toMatchObject({
+      disabled: true,
+      hint: cs.bids.sameAgainHint,
+    })
+    expect(sendButton(before, STARSI, 6)).toMatchObject({ disabled: false, hint: cs.bids.bidHint })
+    const countered = view({ bids: [b(3, 'Starší', 5)], lastBids: [] })
+    expect(sendButton(countered, STARSI, 5)?.disabled).toBe(false)
+    const other = view({ lastBids: [{ takerId: 4, score: 25 }] })
+    expect(sendButton(other, STARSI, 25)?.disabled).toBe(false)
+    expect(sendButton(view({}), STARSI, 18)).toMatchObject({
+      disabled: true,
+      hint: cs.bids.bidHint,
+    })
+  })
+  it('Nechci: a brother with an open bid, only with the switch on', () => {
+    const t = view({ bids: [b(3, 'Starší', 25), b(4, 'Mladší', 22)] })
+    expect(refuseButton(t, STARSI, true)).toMatchObject({
+      key: 'refuse',
+      action: 'withdrawBid',
+      data: { taskId: 1 },
+      label: 'Nechci',
+      hint: cs.bids.withdrawHint,
+      variant: 'ghost',
+    })
+    expect(refuseButton(view({ bids: [b(4, 'Mladší', 22)] }), STARSI, true)).toBeNull()
+    expect(refuseButton(t, STARSI, false)).toBeNull()
+  })
+  it('Odmítnout nabídky: a parent with bids sends the bids he sees, only with the switch on', () => {
+    const t = view({ bids: [b(4, 'Mladší', 22), b(3, 'Starší', 25)] })
+    expect(refuseButton(t, TATA, true)).toMatchObject({
+      key: 'refuse',
+      action: 'turnDownBids',
+      data: {
+        taskId: 1,
+        bids: [
+          { takerId: 4, score: 22 },
+          { takerId: 3, score: 25 },
+        ],
+      },
+      label: 'Odmítnout nabídky',
+      hint: cs.bids.turnDownHint(18),
+      variant: 'ghost',
+    })
+    expect(refuseButton(view({}), TATA, true)).toBeNull()
+    expect(refuseButton(t, TATA, false)).toBeNull()
+    expect(refuseButton({ ...t, status: 'open' }, TATA, true)).toBeNull()
+    expect(refuseButton(t, ADMIN, true)).toBeNull()
+  })
+  it('refusal toasts', () => {
+    expect(toastFor('withdrawBid', 'proposed', STARSI)).toBe('Nabídka stažena')
+    expect(toastFor('turnDownBids', 'proposed', TATA)).toBe('Nabídky odmítnuty')
   })
   it('nothing to do once agreed, or for the admin', () => {
     for (const [t, me] of [

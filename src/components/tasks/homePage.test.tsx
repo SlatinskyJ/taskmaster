@@ -167,6 +167,7 @@ describe('Domů', () => {
       approverIds: [],
       bids: [],
       lowest: null,
+      lastBids: [],
       reservedBy: null,
       completedBy: null,
       completedAt: null,
@@ -333,6 +334,7 @@ describe('Giver Domů (GHome, #41)', () => {
     approverIds: [2],
     bids: [],
     lowest: null,
+    lastBids: [],
     reservedBy: null,
     completedBy: null,
     completedAt: null,
@@ -349,6 +351,7 @@ describe('Giver Domů (GHome, #41)', () => {
         title: 'S nabídkou',
         bids: [{ takerId: 5, name: 'Mladší', score: 22 }],
         lowest: { score: 22, bidders: [{ id: 5, name: 'Mladší' }] },
+        lastBids: [],
       }),
     ],
     tasks: [
