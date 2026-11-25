@@ -362,14 +362,18 @@ describe('a giver turns a round down (#212)', () => {
     expect(json(lastAudit(f.db)?.after)).toEqual({ status: 'open', score: 18 })
   })
 
-  it('with no bids it stops the round', () => {
+  it('with no bids it is refused and the round runs on (Jakub 2026-11-25)', () => {
     const f = family()
     const id = round(f)
-    must(turnDownBids(f.db, f.tata, id, [], T2))
-    expect(row(f.db, id)).toMatchObject({ status: 'open', score: 18, biddingFrom: null })
-    // Nothing was turned down: logged as the round's end.
-    expect(lastAudit(f.db)).toMatchObject({ action: 'task.bidding_closed', actorUserId: f.tata })
-    expect(json(lastAudit(f.db)?.before)).toEqual({ score: 18, entryIds: [], offerEntryId: null })
+    const before = audits(f.db, id)
+    expect(turnDownBids(f.db, f.tata, id, [], T2)).toEqual({ ok: false, error: 'no_bids' })
+    expect(audits(f.db, id)).toEqual(before)
+    // Not even to take back his own counter: the round runs until a bid, a reservation or Hotovo.
+    must(counterOffer(f.db, f.tata, id, 15, [], T2))
+    const countered = audits(f.db, id)
+    expect(turnDownBids(f.db, f.tata, id, [], T3)).toEqual({ ok: false, error: 'no_bids' })
+    expect(row(f.db, id)).toMatchObject({ status: 'open', biddingFrom: 1 })
+    expect(audits(f.db, id)).toEqual(countered)
   })
 
   it('a stale screen is offer_changed; nothing closes', () => {
@@ -395,8 +399,12 @@ describe('a giver turns a round down (#212)', () => {
   it('the history names the reopen and the end', () => {
     const f = family()
     const id = round(f)
-    must(turnDownBids(f.db, f.tata, id, [], T2))
+    must(reserveTask(f.db, f.starsi, id, T2))
     const actions = taskHistory(f.db, id, String).map((e) => e.action)
-    expect(actions.slice(-2)).toEqual(['task.bidding_reopened', 'task.bidding_closed'])
+    expect(actions.slice(-3)).toEqual([
+      'task.bidding_reopened',
+      'task.reserved',
+      'task.bidding_closed',
+    ])
   })
 })
