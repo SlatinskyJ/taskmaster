@@ -1,6 +1,7 @@
 import type { AgreementError, OneTimeAgreement } from './agreement'
 import { isValidScore, liveBook, proposeScore } from './agreement'
-import { bidOf, lowestBid, placeBid } from './bids'
+import type { OpenBid } from './bids'
+import { EMPTY_BOOK, bidOf, lowestBid, placeBid } from './bids'
 import type { Person, PersonId } from './parties'
 import { isActiveAs } from './parties'
 import type { Result } from './result'
@@ -32,7 +33,7 @@ import { fail, ok } from './result'
 const taker = (people: readonly Person[], id: PersonId) => isActiveAs(people, id, 'taker')
 const giver = (people: readonly Person[], id: PersonId) => isActiveAs(people, id, 'giver')
 
-/** A taker bids (or re-bids) a score different from the current offer and his own bid. */
+/** A taker bids (or re-bids) a score different from the current offer and his previous bid. */
 export function placeOneTimeBid(
   task: OneTimeAgreement,
   people: readonly Person[],
@@ -42,10 +43,49 @@ export function placeOneTimeBid(
   if (task.status !== 'proposed') return fail('not_proposed')
   if (!taker(people, takerId)) return fail('not_a_taker')
   if (!isValidScore(score)) return fail('invalid_score')
-  if (score === task.offer.score || score === bidOf(task.book, takerId)?.score) {
+  // Same number (Jakub 2026-11-24): never the offer; his previous bid only after a counter.
+  if (score === task.offer.score || score === bidOf({ bids: task.lastBids }, takerId)?.score) {
     return fail('same_score')
   }
-  return ok({ ...task, book: placeBid(task.book, takerId, score) })
+  return ok({
+    ...task,
+    book: placeBid(task.book, takerId, score),
+    lastBids: placeBid({ bids: task.lastBids }, takerId, score).bids,
+  })
+}
+
+/** A taker says no ("Nechci", Jakub 2026-11-24): only his own open bid closes. */
+export function withdrawOneTimeBid(
+  task: OneTimeAgreement,
+  people: readonly Person[],
+  takerId: PersonId,
+): Result<OneTimeAgreement, AgreementError> {
+  if (task.status !== 'proposed') return fail('not_proposed')
+  if (!taker(people, takerId)) return fail('not_a_taker')
+  if (!bidOf(task.book, takerId)) return fail('no_bid')
+  return ok({ ...task, book: { bids: task.book.bids.filter((b) => b.by !== takerId) } })
+}
+
+/**
+ * A giver turns the bidding down (Jakub 2026-11-24): every open bid closes and the task stays
+ * proposed at the current offer, now offered by this giver (a new round: previous bids no longer
+ * block a number). `seen` are the open bids he saw; if they changed meanwhile, `offer_changed`.
+ */
+export function turnDownOneTimeBids(
+  task: OneTimeAgreement,
+  people: readonly Person[],
+  giverId: PersonId,
+  seen: readonly OpenBid[],
+): Result<OneTimeAgreement, AgreementError> {
+  if (task.status !== 'proposed') return fail('not_proposed')
+  if (!giver(people, giverId)) return fail('not_a_giver')
+  const live = liveBook(task.book, people).bids
+  if (live.length === 0) return fail('no_bids')
+  const key = (b: OpenBid) => `${String(b.by)}:${String(b.score)}`
+  if (!sameTakers(live.map(key), seen.map(key))) return fail('offer_changed')
+  const offer = proposeScore(people, giverId, task.offer.score)
+  if (!offer.ok) return offer
+  return ok({ ...task, offer: offer.value, book: EMPTY_BOOK, lastBids: [] })
 }
 
 /**
@@ -83,7 +123,7 @@ function withOffer(
 ): Result<OneTimeAgreement, AgreementError> {
   const offer = proposeScore(people, giverId, score)
   if (!offer.ok) return offer
-  return ok({ ...task, offer: offer.value })
+  return ok({ ...task, offer: offer.value, lastBids: [] })
 }
 
 /** The takers who hold a bid at `score`: one → reserved to him, several → open; none → null. */
@@ -98,8 +138,8 @@ function agreeAt(
   return ok({ status: 'open', score })
 }
 
-/** The same takers, in any order. A list that names a taker twice is never a match. */
-function sameTakers(a: readonly PersonId[], b: readonly PersonId[]): boolean {
+/** The same takers (or bids), in any order. A list that names one twice is never a match. */
+function sameTakers<T>(a: readonly T[], b: readonly T[]): boolean {
   const set = new Set(a)
   return (
     a.length === b.length &&

@@ -1,12 +1,19 @@
 import { eq, sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
-import { ALL_FEATURES, NO_FEATURES } from '~/lib/features'
+import { ALL_FEATURES, FEATURE_KEYS, NO_FEATURES } from '~/lib/features'
 import { auditLog, featureFlags } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { getFlags, setSwitchesIn } from './flags'
 
+describe('NO_FEATURES and ALL_FEATURES', () => {
+  it('hold every switch, all off and all on', () => {
+    expect(NO_FEATURES).toStrictEqual(Object.fromEntries(FEATURE_KEYS.map((k) => [k, false])))
+    expect(ALL_FEATURES).toStrictEqual(Object.fromEntries(FEATURE_KEYS.map((k) => [k, true])))
+  })
+})
+
 describe('getFlags', () => {
-  it('reads the values the migrations leave: on since the release (0022), disputes, approveAnywhere and openRows off (0024, 0027, 0028)', () => {
+  it('reads the values the migrations leave: on since the release (0022), disputes off (0024), settleLastDay on (0027), passwordChange off (0028), bidRefusals off (0029), approveAnywhere and openRows off (0030, 0031)', () => {
     expect(getFlags(createTestDb())).toEqual({
       recurring: true,
       log: true,
@@ -14,6 +21,9 @@ describe('getFlags', () => {
       meeting: true,
       periodProposals: true,
       disputes: false,
+      settleLastDay: true,
+      passwordChange: false,
+      bidRefusals: false,
       approveAnywhere: false,
       openRows: false,
     })
@@ -33,9 +43,17 @@ describe('getFlags', () => {
       ...ALL_FEATURES,
       recurring: false,
       disputes: false,
+      passwordChange: false,
+      bidRefusals: false,
       approveAnywhere: false,
       openRows: false,
     })
+  })
+
+  it('an empty table reads every switch as off', () => {
+    const db = createTestDb()
+    db.delete(featureFlags).run()
+    expect(Object.values(getFlags(db)).every((on) => !on)).toBe(true)
   })
 
   it('reads a switch with no row as off', () => {
@@ -49,6 +67,9 @@ describe('getFlags', () => {
       meeting: true,
       periodProposals: true,
       disputes: true,
+      settleLastDay: true,
+      passwordChange: true,
+      bidRefusals: true,
       approveAnywhere: true,
       openRows: true,
     })
@@ -60,6 +81,8 @@ describe('getFlags', () => {
     expect(getFlags(db)).toEqual({
       ...ALL_FEATURES,
       disputes: false,
+      passwordChange: false,
+      bidRefusals: false,
       approveAnywhere: false,
       openRows: false,
     })
@@ -117,7 +140,12 @@ describe('setSwitchesIn (#183)', () => {
     })
     expect(getFlags(db)).toEqual({ ...NO_FEATURES, recurring: true, log: true })
     const log = db.select().from(auditLog).all()
-    expect(log.map((r) => r.entityId)).toEqual(['week', 'meeting', 'periodProposals'])
+    expect(log.map((r) => r.entityId)).toEqual([
+      'week',
+      'meeting',
+      'periodProposals',
+      'settleLastDay',
+    ])
     expect(JSON.parse(log[0]?.before ?? 'null')).toEqual({ enabled: true })
     expect(JSON.parse(log[0]?.after ?? 'null')).toEqual({ enabled: false })
   })

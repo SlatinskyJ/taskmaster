@@ -45,6 +45,8 @@ export const SEEDS = {
   },
   /** The task page (#36). */
   tasks: { pieces: [priceChange], features: [] },
+  /** Saying no in bidding (#208): "Umýt auto" with two bids, the refusals switch on. */
+  bids: { pieces: [negotiation], features: ['bidRefusals'] },
   /** Týden and the weekly meeting (#44, #45). */
   week: { pieces: [pastWeek, thisWeek], features: ['week', 'meeting'] },
   /** Recurring chores made by a person (#38): + Teď and Zapsat. */
@@ -60,6 +62,8 @@ export const SEEDS = {
     pieces: [pastWeek, thisWeek, disputes, corrections],
     features: ['week', 'disputes'],
   },
+  /** Changing your own password on Profil (#210): the demo people, the switch on. */
+  password: { pieces: [], features: ['passwordChange'] },
   /** Previews and dev: everything. */
   demo: {
     pieces: [

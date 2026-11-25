@@ -1,6 +1,7 @@
 // Launch switches (family launch 2026-11-22: one-time tasks only; every switch on since
 // migration 0022). A switched-off feature keeps its code and routes; only its entry points are
-// hidden. The values live in the database table `feature_flags` (src/server/features); the app
+// hidden. A switch can also hold a rule (`settleLastDay`, #211), so it can be turned off by hand
+// without a deploy. The values live in the database table `feature_flags` (src/server/features); the app
 // shell reads them on every page load and screens get them as `context.features`. A new
 // unfinished feature gets a new switch, off, and turns it on when its issue lands.
 /** The switches, in the order the seed migration writes them. */
@@ -16,6 +17,13 @@ export const FEATURE_KEYS = [
   'periodProposals',
   /** Disputes and corrections (#46–#48), one switch for both (Jakub 2026-11-22). */
   'disputes',
+  /** Settle the running week only on its last day (#211). On from its migration (0027):
+   * Jakub 2026-11-24, "flip once merged". */
+  'settleLastDay',
+  /** Changing your own password on Profil (#210). */
+  'passwordChange',
+  /** Bidding: a brother's Nechci and a parent's turn-down (#208). */
+  'bidRefusals',
   /** Approve done work from the task page and Úkoly; Ke schválení first on a parent's Domů
    * (#206). */
   'approveAnywhere',
@@ -36,6 +44,9 @@ export const NO_FEATURES: Readonly<Features> = {
   meeting: false,
   periodProposals: false,
   disputes: false,
+  settleLastDay: false,
+  passwordChange: false,
+  bidRefusals: false,
   approveAnywhere: false,
   openRows: false,
 }
@@ -48,6 +59,9 @@ export const ALL_FEATURES: Readonly<Features> = {
   meeting: true,
   periodProposals: true,
   disputes: true,
+  settleLastDay: true,
+  passwordChange: true,
+  bidRefusals: true,
   approveAnywhere: true,
   openRows: true,
 }

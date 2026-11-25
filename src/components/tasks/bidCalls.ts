@@ -4,18 +4,19 @@ import {
   approveTaskOfferFn,
   counterOfferFn,
   placeBidFn,
+  turnDownBidsFn,
+  withdrawBidFn,
 } from '~/server/tasks/functions'
-import type { TaskActionResult } from '~/server/tasks/functions'
+import type { RefusalResult } from '~/server/tasks/functions'
 import type { BidAction, BidCall } from './taskView'
 
 // The one place a bid button reaches the server (#34). Components import no bidding server
 // function themselves.
 
-type WithBidders = Extract<BidCall, { data: { bidders: number[] } }>
-type DataFor<A extends BidAction> = A extends WithBidders['action']
-  ? WithBidders['data']
-  : Exclude<BidCall, WithBidders>['data']
-type CallFor<A extends BidAction> = (args: { data: DataFor<A> }) => Promise<TaskActionResult>
+/** The data of the call whose action names `A` (a call may name several actions). */
+type DataOf<C, A> = C extends { action: infer X; data: infer D } ? (A extends X ? D : never) : never
+type DataFor<A extends BidAction> = DataOf<BidCall, A>
+type CallFor<A extends BidAction> = (args: { data: DataFor<A> }) => Promise<RefusalResult>
 
 export const BID_CALLS: { [A in BidAction]: CallFor<A> } = {
   approveOffer: approveTaskOfferFn,
@@ -23,9 +24,11 @@ export const BID_CALLS: { [A in BidAction]: CallFor<A> } = {
   placeBid: placeBidFn,
   acceptLowestTaskBid: acceptLowestTaskBidFn,
   counterOffer: counterOfferFn,
+  withdrawBid: withdrawBidFn,
+  turnDownBids: turnDownBidsFn,
 }
 
-export function callBid(call: BidCall): Promise<TaskActionResult> {
+export function callBid(call: BidCall): Promise<RefusalResult> {
   switch (call.action) {
     case 'approveOffer':
       return BID_CALLS.approveOffer({ data: call.data })
@@ -37,5 +40,9 @@ export function callBid(call: BidCall): Promise<TaskActionResult> {
       return BID_CALLS.acceptLowestTaskBid({ data: call.data })
     case 'counterOffer':
       return BID_CALLS.counterOffer({ data: call.data })
+    case 'withdrawBid':
+      return BID_CALLS.withdrawBid({ data: call.data })
+    case 'turnDownBids':
+      return BID_CALLS.turnDownBids({ data: call.data })
   }
 }

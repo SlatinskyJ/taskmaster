@@ -6,6 +6,8 @@ import {
   acceptOneTimeOffer,
   counterOneTimeOffer,
   placeOneTimeBid,
+  turnDownOneTimeBids,
+  withdrawOneTimeBid,
 } from './bidding'
 import { EMPTY_BOOK, lowestBid, placeBid, pruneBook } from './bids'
 import type { Person } from './parties'
@@ -399,5 +401,124 @@ describe('bid book helpers', () => {
   it('pruneBook returns the same book when nothing is dropped', () => {
     const book = placeBid(EMPTY_BOOK, 2, 10)
     expect(pruneBook(book, () => true)).toBe(book)
+  })
+})
+
+describe('same number (Jakub 2026-11-24)', () => {
+  it('a brother may not repeat his previous bid before a counter', () => {
+    expect(error(placeOneTimeBid(bid(carWash(), OLDER, 5), family, OLDER, 5))).toBe('same_score')
+  })
+
+  it('after a counter he may send the same number again', () => {
+    const countered = value(counterOneTimeOffer(bid(carWash(), OLDER, 5), family, DAD, 4, []))
+    expect(proposed(countered).lastBids).toEqual([])
+    expect(proposed(bid(countered, OLDER, 5)).book.bids).toEqual([{ by: OLDER, score: 5 }])
+  })
+
+  it('a withdrawn bid still counts as his previous bid', () => {
+    const t = value(withdrawOneTimeBid(bid(carWash(), OLDER, 5), family, OLDER))
+    expect(proposed(t).book.bids).toEqual([])
+    expect(error(placeOneTimeBid(t, family, OLDER, 5))).toBe('same_score')
+    expect(proposed(bid(t, OLDER, 6)).book.bids).toEqual([{ by: OLDER, score: 6 }])
+  })
+
+  it('the current offer is never a bid', () => {
+    expect(error(placeOneTimeBid(carWash(), family, OLDER, 30))).toBe('same_score')
+  })
+
+  it('the check is per brother', () => {
+    const t = bid(carWash(), OLDER, 25)
+    expect(proposed(bid(t, YOUNGER, 25)).book.bids).toEqual([
+      { by: OLDER, score: 25 },
+      { by: YOUNGER, score: 25 },
+    ])
+  })
+
+  it('a bid replaces only his own entry in lastBids', () => {
+    const t = proposed(bid(bid(bid(carWash(), OLDER, 5), YOUNGER, 7), OLDER, 6))
+    expect(t.lastBids).toEqual([
+      { by: YOUNGER, score: 7 },
+      { by: OLDER, score: 6 },
+    ])
+    expect(error(placeOneTimeBid(t, family, OLDER, 6))).toBe('same_score')
+    expect(proposed(bid(t, OLDER, 5)).book.bids).toContainEqual({ by: OLDER, score: 5 })
+  })
+})
+
+describe('withdrawOneTimeBid (Jakub 2026-11-24)', () => {
+  it('drops only his own bid', () => {
+    const t = bid(bid(carWash(), OLDER, 25), YOUNGER, 22)
+    const after = proposed(value(withdrawOneTimeBid(t, family, YOUNGER)))
+    expect(after.book.bids).toEqual([{ by: OLDER, score: 25 }])
+    expect(after.offer).toEqual(proposed(t).offer)
+  })
+
+  it('needs an open bid of his own', () => {
+    expect(error(withdrawOneTimeBid(bid(carWash(), OLDER, 25), family, YOUNGER))).toBe('no_bid')
+  })
+
+  it('only a taker withdraws', () => {
+    const t = bid(carWash(), OLDER, 25)
+    for (const who of [DAD, JAKUB]) {
+      expect(error(withdrawOneTimeBid(t, family, who))).toBe('not_a_taker')
+    }
+  })
+
+  it('an agreed task is not proposed', () => {
+    const agreed = value(approveOneTimeOffer(carWash(), family, OLDER))
+    expect(error(withdrawOneTimeBid(agreed, family, OLDER))).toBe('not_proposed')
+  })
+})
+
+describe('turnDownOneTimeBids (Jakub 2026-11-24)', () => {
+  const twoBids = () => bid(bid(carWash(withMum), OLDER, 25, withMum), YOUNGER, 22, withMum)
+
+  it('closes every bid; the task stays proposed at the offer, re-offered by this giver', () => {
+    const seen = [
+      { by: YOUNGER, score: 22 },
+      { by: OLDER, score: 25 },
+    ]
+    const t = proposed(value(turnDownOneTimeBids(twoBids(), withMum, MUM, seen)))
+    expect(t.book.bids).toEqual([])
+    expect(t.lastBids).toEqual([])
+    expect(t.offer).toEqual({ score: 30, proposedBy: MUM, approvedBy: [MUM] })
+  })
+
+  it('after a turn-down a brother may send his old number again', () => {
+    const seen = [
+      { by: OLDER, score: 25 },
+      { by: YOUNGER, score: 22 },
+    ]
+    const t = value(turnDownOneTimeBids(twoBids(), withMum, DAD, seen))
+    expect(proposed(bid(t, OLDER, 25, withMum)).book.bids).toEqual([{ by: OLDER, score: 25 }])
+  })
+
+  it('refuses a stale screen: a bid missing or a different number', () => {
+    expect(error(turnDownOneTimeBids(twoBids(), withMum, DAD, [{ by: OLDER, score: 25 }]))).toBe(
+      'offer_changed',
+    )
+    const other = [
+      { by: OLDER, score: 24 },
+      { by: YOUNGER, score: 22 },
+    ]
+    expect(error(turnDownOneTimeBids(twoBids(), withMum, DAD, other))).toBe('offer_changed')
+  })
+
+  it('needs bids', () => {
+    expect(error(turnDownOneTimeBids(carWash(), family, DAD, []))).toBe('no_bids')
+  })
+
+  it('only a giver turns down', () => {
+    const t = bid(carWash(), OLDER, 25)
+    for (const who of [OLDER, JAKUB]) {
+      expect(error(turnDownOneTimeBids(t, family, who, [{ by: OLDER, score: 25 }]))).toBe(
+        'not_a_giver',
+      )
+    }
+  })
+
+  it('an agreed task is not proposed', () => {
+    const agreed = value(approveOneTimeOffer(carWash(), family, OLDER))
+    expect(error(turnDownOneTimeBids(agreed, family, DAD, []))).toBe('not_proposed')
   })
 })

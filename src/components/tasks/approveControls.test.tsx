@@ -33,6 +33,7 @@ const done: TaskView = {
   approvedBy: [],
   approverIds: [],
   bids: [],
+  lastBids: [],
   lowest: null,
   reservedBy: { id: 3, name: 'Starší' },
   completedBy: { id: 3, name: 'Starší' },

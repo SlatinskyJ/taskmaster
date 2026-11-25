@@ -22,6 +22,7 @@ export function taskErrorMessage(error: string): string {
     case 'not_allowed':
     case 'not_a_giver':
     case 'not_a_taker':
+    case 'feature_off':
       return cs.tasks.errors.notAllowed
     case 'invalid_schedule':
       return cs.templates.errors.invalidSchedule
