@@ -272,10 +272,8 @@ export const cs = {
     /** Header line in a round with a parent's counter: "Táta nabízí 16 b". */
     offer: (name: string, score: number) => `${name} nabízí ${String(score)} b`,
     turnDownHint: (score: number) => `Všechny nabídky se uzavřou. Dál platí ${String(score)} b.`,
-    stop: 'Ukončit vyjednávání',
-    stopHint: (score: number) => `Dál platí ${String(score)} b.`,
     noEntries: 'Zatím žádná nabídka.',
-    toast: { reopened: 'Vyjednávání otevřeno', stopped: 'Vyjednávání ukončeno' },
+    toast: { reopened: 'Vyjednávání otevřeno' },
   },
   /**
    * Score change of an agreed recurring template (spec §5.1): its price page and ways in. The
