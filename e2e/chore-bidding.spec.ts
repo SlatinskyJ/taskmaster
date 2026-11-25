@@ -67,6 +67,6 @@ test('Starší says Nechci on Zalít kytky, then Táta turns the bids down', asy
   await expect(page.getByText(cs.bids.toast.turnedDown, { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: cs.bids.turnDown, exact: true })).toHaveCount(0)
   await expect(page.getByText(cs.templatePrice.proposedNow(4))).toBeVisible()
-  await expect(threadRow(page, /chce 6\b/)).toContainText(cs.bids.closed)
-  await expect(threadRow(page, /chce 7\b/)).toContainText(cs.bids.closed)
+  await expect(threadRow(page, /chce 6(?!\d)/)).toContainText(cs.bids.closed)
+  await expect(threadRow(page, /chce 7(?!\d)/)).toContainText(cs.bids.closed)
 })
