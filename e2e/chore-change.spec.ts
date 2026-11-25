@@ -23,7 +23,7 @@ test('Starší says Nechci and may not send 10 again; Táta turns the bids down,
   await expect(page.getByRole('heading', { name: 'Umýt koupelnu' })).toBeVisible()
   await page.getByRole('button', { name: cs.bids.withdraw, exact: true }).click()
   await expect(page.getByText(cs.bids.toast.withdrawn, { exact: true })).toBeVisible()
-  await expect(threadRow(page, /chceš 10\b/)).toContainText(cs.bids.closed)
+  await expect(threadRow(page, /chceš 10(?!\d)/)).toContainText(cs.bids.closed)
   await expect(page.getByRole('button', { name: cs.bids.withdraw, exact: true })).toHaveCount(0)
   // The stepper still shows his withdrawn 10: the same number waits for the parents' move.
   await expect(page.getByRole('status').filter({ hasText: /^10$/ })).toBeVisible()
@@ -39,7 +39,7 @@ test('Starší says Nechci and may not send 10 again; Táta turns the bids down,
   await page.getByRole('button', { name: cs.bids.turnDown, exact: true }).click()
   await expect(page.getByText(cs.bids.toast.turnedDown, { exact: true })).toBeVisible()
   await expect(page.getByText(cs.templatePrice.now(8), { exact: true })).toBeVisible()
-  await expect(threadRow(page, /chce 11\b/)).toContainText(cs.bids.closed)
+  await expect(threadRow(page, /chce 11(?!\d)/)).toContainText(cs.bids.closed)
   for (const name of [/^Přijmout/, new RegExp(`^${cs.bids.turnDown}$`)]) {
     await expect(page.getByRole('button', { name })).toHaveCount(0)
   }
