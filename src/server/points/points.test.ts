@@ -140,9 +140,9 @@ describe('takerPoints after a settlement', () => {
     doneTask(f, { score: 30, completedAt: plus(SAT, 7_200_000), earner: f.starsi })
     doneTask(f, { score: 30, completedAt: plus(SAT, 7_200_000), earner: f.mladsi })
     expect(takerPoints(f.db, MEETING).takers.map((t) => t.confirmed)).toEqual([130, 30])
-    const m = getMeeting(f.db, MEETING)
+    const m = getMeeting(f.db, MEETING, false)
     const shown = m.period ? m.takers.map((t) => ({ takerId: t.id, total: t.total })) : []
-    must(settlePeriod(f.db, f.tata, f.p1.id, shown, MEETING))
+    must(settlePeriod(f.db, f.tata, f.p1.id, shown, MEETING, false))
     return f
   }
 
