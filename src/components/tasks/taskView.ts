@@ -46,6 +46,11 @@ export function canWorkOn(task: Pick<TaskView, 'status' | 'reservedBy'>, me: Me)
   return me.role === 'taker' && task.status === 'reserved' && task.reservedBy?.id === me.id
 }
 
+/** ✓ Schválit / ✕ Zamítnout (spec §5.5, #206): a parent, on done work not yet confirmed. */
+export function canApprove(task: Pick<TaskView, 'status'>, me: Me): boolean {
+  return me.role === 'giver' && task.status === 'done_unconfirmed'
+}
+
 /** His own open bid, never another brother's. */
 export function myBid(task: TaskView, me: Me): number | null {
   return task.bids.find((b) => b.takerId === me.id)?.score ?? null

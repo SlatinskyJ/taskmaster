@@ -25,7 +25,8 @@ import { createInstanceFn } from '~/server/instances/functions'
 
 // Úkoly: all one-time tasks grouped by state, active first (UI doc §7.2 GTasks, #41), givers only. A giver can release a
 // reservation or mark an open task done themselves (spec §5.4–§5.5). Recurring templates are
-// listed below the one-time tasks, so rows that need action stay on top (#37).
+// listed below the one-time tasks, so rows that need action stay on top (#37). With the
+// approveAnywhere switch, done work waiting for a parent gets ✓ / ✕ here too (#206).
 export const Route = createFileRoute('/_app/ukoly/')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/ukoly')
@@ -113,7 +114,12 @@ function Tasks() {
         {list.length === 0 ? (
           <EmptyState>{cs.tasks.empty}</EmptyState>
         ) : (
-          <TaskGroups list={list} meta={meta} action={action} />
+          <TaskGroups
+            list={list}
+            meta={meta}
+            action={action}
+            approve={features.approveAnywhere ? { busy, run } : undefined}
+          />
         )}
       </section>
       {features.recurring && (
