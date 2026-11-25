@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "61aad5ad-9462-4406-bf9b-b1f9abb70909",
-  "prevId": "0234ced5-ff94-4692-9734-035b3dd5f8c0",
+  "id": "6f0d5ea1-4701-4bbc-af8b-2b475d221161",
+  "prevId": "605e33f7-f574-4cf5-b561-228f830c01d5",
   "tables": {
     "audit_log": {
       "name": "audit_log",
@@ -1507,14 +1507,6 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
-        },
-        "offer_round": {
-          "name": "offer_round",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1
         }
       },
       "indexes": {},
@@ -1547,13 +1539,12 @@
         }
       },
       "compositePrimaryKeys": {
-        "template_score_approvals_template_id_offer_round_user_id_pk": {
+        "template_score_approvals_template_id_user_id_pk": {
           "columns": [
             "template_id",
-            "offer_round",
             "user_id"
           ],
-          "name": "template_score_approvals_template_id_offer_round_user_id_pk"
+          "name": "template_score_approvals_template_id_user_id_pk"
         }
       },
       "uniqueConstraints": {},
@@ -1758,22 +1749,6 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
-        },
-        "offer_round": {
-          "name": "offer_round",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1
-        },
-        "bids_from": {
-          "name": "bids_from",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
         },
         "approval_required": {
           "name": "approval_required",

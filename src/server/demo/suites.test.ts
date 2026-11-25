@@ -84,7 +84,7 @@ describe('e2e seeds (#183)', () => {
       ['starsi', 108, 'upper', 100, 8],
       ['mladsi', 50, 'lower', 50, 0],
     ])
-    const meeting = getMeeting(db, new Date(T0.getTime() + 120_000))
+    const meeting = getMeeting(db, new Date(T0.getTime() + 120_000), false)
     if (!meeting.period) throw new Error('no meeting')
     expect(meeting.takers.map((t) => [t.name, t.total])).toEqual([
       ['Starší', 120],

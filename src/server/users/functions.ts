@@ -1,17 +1,30 @@
 import { createServerFn } from '@tanstack/react-start'
-import { requireRole } from '~/server/auth/guards'
+import { requireRole, requireUser } from '~/server/auth/guards'
+import { clientIp, sessionToken } from '~/server/auth/http'
 import { getDb } from '~/server/db'
-import { createUserAction, resetPasswordAction, updateUserAction } from './actions'
-import type { PeopleActionResult, ResetPasswordResult } from './actions'
+import {
+  changePasswordAction,
+  createUserAction,
+  resetPasswordAction,
+  updateUserAction,
+} from './actions'
+import type { ChangePasswordResult, PeopleActionResult, ResetPasswordResult } from './actions'
 import type { PeopleError } from './admin'
-import { parseNewPerson, parsePersonEdit, parseReset } from './parse'
+import { parseChangePassword, parseNewPerson, parsePersonEdit, parseReset } from './parse'
 import { listUsers } from './people'
 import type { PersonSummary } from './people'
 
-// Server functions for the admin console (#47, #134). Admin only; ./manage checks it again
-// inside each write's transaction. Each handler is one call into ./actions (tested there).
+// Server functions for the admin console (#47, #134). Admin only, except `changePasswordFn`
+// (any signed-in user, own account, #210); ./manage checks the admin again inside each write's
+// transaction. Each handler is one call into ./actions (tested there).
 
-export type { PeopleActionResult, PeopleError, PersonSummary, ResetPasswordResult }
+export type {
+  ChangePasswordResult,
+  PeopleActionResult,
+  PeopleError,
+  PersonSummary,
+  ResetPasswordResult,
+}
 
 /** Everyone, for the people list on Správa. Never the password hash (see `listUsers`). */
 export const listUsersFn = createServerFn({ method: 'GET' })
@@ -35,3 +48,11 @@ export const resetPasswordFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('admin')])
   .validator(parseReset)
   .handler(({ data, context }) => resetPasswordAction(getDb(), context.user.id, data))
+
+/** Profil → Změnit heslo (#210): the signed-in user's own password. */
+export const changePasswordFn = createServerFn({ method: 'POST' })
+  .middleware([requireUser])
+  .validator(parseChangePassword)
+  .handler(({ data, context }) =>
+    changePasswordAction(getDb(), context.user.id, sessionToken() ?? '', data, clientIp()),
+  )

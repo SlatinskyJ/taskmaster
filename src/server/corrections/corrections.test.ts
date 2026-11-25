@@ -38,7 +38,7 @@ const earn = (f: F, taker: number, score: number, at = plus(SAT, H)) =>
 
 /** Táta settles the week the meeting shows at `now`. */
 function settle(db: Db, tata: number, now: Date) {
-  const m = getMeeting(db, now)
+  const m = getMeeting(db, now, false)
   if (!m.period) throw new Error('nothing to settle')
   must(
     settlePeriod(
@@ -47,6 +47,7 @@ function settle(db: Db, tata: number, now: Date) {
       m.period.id,
       m.takers.map((t) => ({ takerId: t.id, total: t.total })),
       now,
+      false,
     ),
   )
 }
@@ -293,7 +294,7 @@ describe('no removal while a week waits for its meeting (ruling 8)', () => {
     const SUNDAY = prague(2026, 12, 6, 20)
     settle(f.db, f.tata, SUNDAY) // week 2: 0 + 55 → lower, 5 carry
     expect(total(f, f.starsi)).toBe(5)
-    expect(getMeeting(f.db, prague(2026, 12, 13, 20)).period).not.toBeNull()
+    expect(getMeeting(f.db, prague(2026, 12, 13, 20), false).period).not.toBeNull()
   })
 })
 

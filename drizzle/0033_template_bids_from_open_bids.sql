@@ -1,4 +1,4 @@
--- Redo the 0030 backfill (#232): a proposed chore keeps 0 (its newest giver row is its floor), and
+-- Redo the 0032 backfill (#232): a proposed chore keeps 0 (its newest giver row is its floor), and
 -- an agreed chore's floor sits just below its oldest open row, so bids in flight at deploy still
 -- count for the same-number rule; with nothing open, its newest row.
 UPDATE `templates` SET `bids_from` = CASE WHEN `status` = 'active' THEN coalesce(

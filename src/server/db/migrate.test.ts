@@ -287,15 +287,15 @@ describe('data migrations', () => {
     sqlite.close()
   })
 
-  it('0029 keeps every template approval as offer round 1', () => {
+  it('0031 keeps every template approval as offer round 1', () => {
     const A = '2026-11-24T10:00:00.000Z'
     const dir = tempDir()
     const before = join(dir, 'm')
     cpSync('drizzle', before, { recursive: true })
-    // Keep migrations 0000–0028 only: the state of a database before offer rounds on templates.
+    // Keep migrations 0000–0030 only: the state of a database before offer rounds on templates.
     const path = join(before, 'meta', '_journal.json')
     const journal = JSON.parse(readFileSync(path, 'utf8')) as { entries: { idx: number }[] }
-    journal.entries = journal.entries.filter((e) => e.idx <= 28)
+    journal.entries = journal.entries.filter((e) => e.idx <= 30)
     writeFileSync(path, JSON.stringify(journal))
     const sqlite = new Database(join(dir, 'db.sqlite'))
     applyMigrations(sqlite, before)
@@ -323,15 +323,15 @@ describe('data migrations', () => {
     sqlite.close()
   })
 
-  it("0030 and 0031 start each template's bid floor below its bids in flight", () => {
+  it("0032 and 0033 start each template's bid floor below its bids in flight", () => {
     const A = '2026-11-24T10:00:00.000Z'
     const dir = tempDir()
     const before = join(dir, 'm')
     cpSync('drizzle', before, { recursive: true })
-    // Keep migrations 0000–0029 only: the state of a database before the bid floor (#232).
+    // Keep migrations 0000–0031 only: the state of a database before the bid floor (#232).
     const path = join(before, 'meta', '_journal.json')
     const journal = JSON.parse(readFileSync(path, 'utf8')) as { entries: { idx: number }[] }
-    journal.entries = journal.entries.filter((e) => e.idx <= 29)
+    journal.entries = journal.entries.filter((e) => e.idx <= 31)
     writeFileSync(path, JSON.stringify(journal))
     const sqlite = new Database(join(dir, 'db.sqlite'))
     applyMigrations(sqlite, before)
