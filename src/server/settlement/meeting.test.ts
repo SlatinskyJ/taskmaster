@@ -15,7 +15,7 @@ const MONDAY = prague(2026, 11, 30, 10)
 
 /** The totals the meeting screen shows now. */
 function shown(db: Db, now: Date): ShownTotal[] {
-  const m = getMeeting(db, now)
+  const m = getMeeting(db, now, false)
   return m.period ? m.takers.map((t) => ({ takerId: t.id, total: t.total })) : []
 }
 
@@ -47,7 +47,7 @@ function example() {
 
 describe('getMeeting', () => {
   it('nothing to settle before the first roll', () => {
-    expect(getMeeting(family().db, MEETING)).toEqual({ period: null })
+    expect(getMeeting(family().db, MEETING, false)).toEqual({ period: null, runningCutoffAt: null })
   })
 
   it('getMeeting on Sunday 20:00 lists pending done before now and previews each taker', () => {
@@ -58,7 +58,7 @@ describe('getMeeting', () => {
       earner: f.mladsi,
       status: 'done_unconfirmed',
     })
-    const m = getMeeting(f.db, MEETING)
+    const m = getMeeting(f.db, MEETING, false)
     expect(m).toMatchObject({
       period: {
         id: f.p1.id,
@@ -86,9 +86,9 @@ describe('getMeeting', () => {
       status: 'done_unconfirmed',
     })
     doneTask(f, { score: 8, completedAt: CUTOFF, earner: f.mladsi, status: 'done_unconfirmed' })
-    const m = getMeeting(f.db, MONDAY)
+    const m = getMeeting(f.db, MONDAY, false)
     expect(m.period && m.pending.map((t) => t.id)).toEqual([before])
-    expect(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MONDAY), MONDAY)).toEqual({
+    expect(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MONDAY), MONDAY, false)).toEqual({
       ok: false,
       error: 'pending_items',
     })
@@ -98,7 +98,7 @@ describe('getMeeting', () => {
 describe('settlePeriod', () => {
   it('settle on Sunday writes a record per active taker, audits each, and ends the running week', () => {
     const f = example()
-    const result = must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING))
+    const result = must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING, false))
     expect(records(f.db)).toEqual([
       [f.p1.id, f.starsi, 130, 'upper', 100, 30],
       [f.p1.id, f.mladsi, 30, 'none', 0, 30],
@@ -133,7 +133,7 @@ describe('settlePeriod', () => {
     const f = example()
     const defaults = { ...D, lengthDays: 14, levels: { lower: 40, upper: 80 } }
     must(savePeriodDefaults(f.db, f.admin, defaults, plus(MEETING, -3_600_000)))
-    const result = must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING))
+    const result = must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING, false))
     expect(result.next).toMatchObject({
       startsAt: MEETING,
       cutoffAt: prague(2026, 12, 13, 23, 59),
@@ -154,7 +154,7 @@ describe('settlePeriod', () => {
     doneTask(f, { score: 20, completedAt: CUTOFF, earner: f.mladsi })
     doneTask(f, { score: 20, completedAt: prague(2026, 11, 30, 9), earner: f.starsi })
     rollPeriods(f.db, plus(CUTOFF, 1000), D)
-    const m = getMeeting(f.db, MONDAY)
+    const m = getMeeting(f.db, MONDAY, false)
     expect(m).toMatchObject({
       period: { id: f.p1.id, endsAt: CUTOFF.toISOString(), running: false },
       takers: [
@@ -162,7 +162,7 @@ describe('settlePeriod', () => {
         { id: f.mladsi, total: 40 },
       ],
     })
-    const result = must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MONDAY), MONDAY))
+    const result = must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MONDAY), MONDAY, false))
     expect(result.next).toBeNull()
     expect(records(f.db)).toEqual([
       [f.p1.id, f.starsi, 130, 'upper', 100, 30],
@@ -173,11 +173,11 @@ describe('settlePeriod', () => {
 
   it('next settlement: carry-over plus new points', () => {
     const f = example()
-    must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING))
+    must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING, false))
     doneTask(f, { score: 40, completedAt: prague(2026, 12, 2, 18), earner: f.starsi })
     const p2 = listPeriods(f.db)[1]
     const at = prague(2026, 12, 6, 20)
-    must(settlePeriod(f.db, f.tata, p2?.id ?? 0, shown(f.db, at), at))
+    must(settlePeriod(f.db, f.tata, p2?.id ?? 0, shown(f.db, at), at, false))
     expect(records(f.db).slice(2)).toEqual([
       [p2?.id, f.starsi, 70, 'lower', 50, 20],
       [p2?.id, f.mladsi, 30, 'none', 0, 30],
@@ -193,7 +193,7 @@ describe('settlePeriod', () => {
   ])('level boundaries end to end: %i', (total, level, deducted, carry) => {
     const f = week()
     if (total > 0) doneTask(f, { score: total, completedAt: plus(SAT, 1000), earner: f.starsi })
-    must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING))
+    must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING, false))
     expect(records(f.db)[0]).toEqual([f.p1.id, f.starsi, total, level, deducted, carry])
   })
 
@@ -205,7 +205,7 @@ describe('settlePeriod', () => {
       earner: f.starsi,
       status: 'done_unconfirmed',
     })
-    expect(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING)).toEqual({
+    expect(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING, false)).toEqual({
       ok: false,
       error: 'pending_items',
     })
@@ -221,14 +221,14 @@ describe('settlePeriod', () => {
     doneTask(f, { score: 5, completedAt: plus(MEETING, 60_000), earner: f.starsi })
     const later = plus(MEETING, 120_000)
     const refused = { ok: false, error: 'totals_changed' }
-    expect(settlePeriod(f.db, f.tata, f.p1.id, seen, later)).toEqual(refused)
+    expect(settlePeriod(f.db, f.tata, f.p1.id, seen, later, false)).toEqual(refused)
     const now = shown(f.db, later)
-    expect(settlePeriod(f.db, f.tata, f.p1.id, now.slice(1), later)).toEqual(refused)
+    expect(settlePeriod(f.db, f.tata, f.p1.id, now.slice(1), later, false)).toEqual(refused)
     expect(
-      settlePeriod(f.db, f.tata, f.p1.id, [...now, { takerId: f.admin, total: 0 }], later),
+      settlePeriod(f.db, f.tata, f.p1.id, [...now, { takerId: f.admin, total: 0 }], later, false),
     ).toEqual(refused)
     expect(records(f.db)).toEqual([])
-    must(settlePeriod(f.db, f.tata, f.p1.id, now, later))
+    must(settlePeriod(f.db, f.tata, f.p1.id, now, later, false))
   })
 
   it('totals swapped between takers: totals_changed', () => {
@@ -237,7 +237,7 @@ describe('settlePeriod', () => {
       { takerId: f.starsi, total: 30 },
       { takerId: f.mladsi, total: 130 },
     ]
-    expect(settlePeriod(f.db, f.tata, f.p1.id, swapped, MEETING)).toEqual({
+    expect(settlePeriod(f.db, f.tata, f.p1.id, swapped, MEETING, false)).toEqual({
       ok: false,
       error: 'totals_changed',
     })
@@ -249,7 +249,7 @@ describe('settlePeriod', () => {
     const seen = shown(f.db, stale)
     // The scheduler already started P2; the confirm's clock was read just before the cutoff.
     rollPeriods(f.db, CUTOFF, D)
-    expect(settlePeriod(f.db, f.tata, f.p1.id, seen, stale)).toEqual({
+    expect(settlePeriod(f.db, f.tata, f.p1.id, seen, stale, false)).toEqual({
       ok: false,
       error: 'not_running',
     })
@@ -260,8 +260,8 @@ describe('settlePeriod', () => {
   it('second settle is already_settled', () => {
     const f = example()
     const seen = shown(f.db, MEETING)
-    must(settlePeriod(f.db, f.tata, f.p1.id, seen, MEETING))
-    expect(settlePeriod(f.db, f.tata, f.p1.id, seen, plus(MEETING, 1000))).toEqual({
+    must(settlePeriod(f.db, f.tata, f.p1.id, seen, MEETING, false))
+    expect(settlePeriod(f.db, f.tata, f.p1.id, seen, plus(MEETING, 1000), false)).toEqual({
       ok: false,
       error: 'already_settled',
     })
@@ -274,27 +274,27 @@ describe('settlePeriod', () => {
     // week to settle (the oldest ended one), so it settles.
     const seen = shown(f.db, prague(2026, 11, 29, 23, 58))
     rollPeriods(f.db, CUTOFF, D)
-    must(settlePeriod(f.db, f.tata, f.p1.id, seen, plus(CUTOFF, 30_000)))
+    must(settlePeriod(f.db, f.tata, f.p1.id, seen, plus(CUTOFF, 30_000), false))
     // Two weeks later with P2 unsettled: a confirm for P3 is not the week to settle.
     const at = prague(2026, 12, 8, 10)
     rollPeriods(f.db, at, D)
     const [, p2, p3] = listPeriods(f.db)
-    expect(settlePeriod(f.db, f.tata, p3?.id ?? 0, shown(f.db, at), at)).toEqual({
+    expect(settlePeriod(f.db, f.tata, p3?.id ?? 0, shown(f.db, at), at, false)).toEqual({
       ok: false,
       error: 'wrong_period',
     })
-    expect(settlePeriod(f.db, f.tata, 999, shown(f.db, at), at)).toEqual({
+    expect(settlePeriod(f.db, f.tata, 999, shown(f.db, at), at, false)).toEqual({
       ok: false,
       error: 'not_found',
     })
-    must(settlePeriod(f.db, f.tata, p2?.id ?? 0, shown(f.db, at), at))
+    must(settlePeriod(f.db, f.tata, p2?.id ?? 0, shown(f.db, at), at, false))
   })
 
   it('nothing to settle once every week is settled and the new one just started', () => {
     const f = example()
-    const result = must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING))
-    expect(getMeeting(f.db, MEETING)).toEqual({ period: null })
-    expect(settlePeriod(f.db, f.tata, result.next?.id ?? 0, [], MEETING)).toEqual({
+    const result = must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING, false))
+    expect(getMeeting(f.db, MEETING, false)).toEqual({ period: null, runningCutoffAt: null })
+    expect(settlePeriod(f.db, f.tata, result.next?.id ?? 0, [], MEETING, false)).toEqual({
       ok: false,
       error: 'nothing_to_settle',
     })
@@ -304,7 +304,7 @@ describe('settlePeriod', () => {
     const f = example()
     const seen = shown(f.db, MEETING)
     for (const id of [f.starsi, f.admin, 999]) {
-      expect(settlePeriod(f.db, id, f.p1.id, seen, MEETING)).toEqual({
+      expect(settlePeriod(f.db, id, f.p1.id, seen, MEETING, false)).toEqual({
         ok: false,
         error: 'not_a_giver',
       })
@@ -330,12 +330,17 @@ describe('settlePeriod', () => {
     const tata = user('tata', 'giver')
     rollPeriods(db, SAT, D)
     const [p1] = listPeriods(db)
-    expect(getMeeting(db, MEETING)).toEqual({ period: null })
-    expect(settlePeriod(db, admin, p1?.id ?? 0, [], MEETING)).toEqual({
+    expect(getMeeting(db, MEETING, false)).toEqual({ period: null, runningCutoffAt: null })
+    // Mid-week with the rule on: still nothing to show, there is nobody to settle.
+    expect(getMeeting(db, prague(2026, 11, 25, 10), true)).toEqual({
+      period: null,
+      runningCutoffAt: null,
+    })
+    expect(settlePeriod(db, admin, p1?.id ?? 0, [], MEETING, false)).toEqual({
       ok: false,
       error: 'not_a_giver',
     })
-    expect(settlePeriod(db, tata, p1?.id ?? 0, [], MEETING)).toEqual({
+    expect(settlePeriod(db, tata, p1?.id ?? 0, [], MEETING, false)).toEqual({
       ok: false,
       error: 'no_takers',
     })
@@ -347,7 +352,7 @@ describe('settlePeriod', () => {
       const f = example()
       const seen = shown(f.db, MEETING)
       failAuditOn(f.db, action)
-      expect(() => settlePeriod(f.db, f.tata, f.p1.id, seen, MEETING)).toThrow(/audit down/)
+      expect(() => settlePeriod(f.db, f.tata, f.p1.id, seen, MEETING, false)).toThrow(/audit down/)
       expect(records(f.db)).toEqual([])
       expect(
         f.db
@@ -367,7 +372,7 @@ describe('adjustments at the meeting (#48)', () => {
     adjustment(f, f.starsi, 15, plus(SAT, 7_200_000))
     adjustment(f, f.starsi, 2, plus(CUTOFF, 60_000))
     rollPeriods(f.db, MONDAY, D)
-    const m = getMeeting(f.db, MONDAY)
+    const m = getMeeting(f.db, MONDAY, false)
     if (!m.period) throw new Error('nothing to settle')
     expect(m.takers.find((t) => t.id === f.starsi)).toMatchObject({ total: 55, level: 'lower' })
   })
@@ -382,5 +387,62 @@ describe('weekWaiting (#48)', () => {
     const f = week()
     expect(weekWaiting(f.db, MEETING)).toBe(false)
     expect(weekWaiting(f.db, MONDAY)).toBe(true)
+  })
+})
+
+describe('last day only (#211, spec §5.8)', () => {
+  const WED = prague(2026, 11, 25, 10)
+  const shownAt = (db: Db, now: Date) => {
+    const m = getMeeting(db, now, false)
+    return m.period ? m.takers.map((t) => ({ takerId: t.id, total: t.total })) : []
+  }
+
+  it('mid-week the meeting shows when the running week ends, not the week', () => {
+    const f = example()
+    expect(getMeeting(f.db, WED, true)).toEqual({
+      period: null,
+      runningCutoffAt: CUTOFF.toISOString(),
+    })
+    expect(getMeeting(f.db, WED, false).period?.id).toBe(f.p1.id)
+  })
+
+  it('on the last day the running week is offered', () => {
+    const f = example()
+    expect(getMeeting(f.db, prague(2026, 11, 29, 0, 0), true).period?.id).toBe(f.p1.id)
+    expect(getMeeting(f.db, MEETING, true).period?.id).toBe(f.p1.id)
+  })
+
+  it('mid-week settling is refused and writes nothing', () => {
+    const f = example()
+    const r = settlePeriod(f.db, f.tata, f.p1.id, shownAt(f.db, WED), WED, true)
+    expect(r).toEqual({ ok: false, error: 'nothing_to_settle' })
+    expect(records(f.db)).toEqual([])
+    expect(actions(f.db)).not.toContain('settlement.created')
+    expect(listPeriods(f.db)[0]?.endedAt ?? null).toBeNull()
+  })
+
+  it('on the last day settling ends the running week', () => {
+    const f = example()
+    const r = settlePeriod(f.db, f.tata, f.p1.id, shownAt(f.db, MEETING), MEETING, true)
+    expect(r.ok).toBe(true)
+    expect(records(f.db)).toHaveLength(2)
+  })
+
+  it('a late meeting on a weekday still settles the ended week', () => {
+    const f = example()
+    rollPeriods(f.db, MONDAY, D)
+    const wednesday = prague(2026, 12, 2, 10)
+    expect(getMeeting(f.db, wednesday, true).period?.id).toBe(f.p1.id)
+    const r = settlePeriod(f.db, f.tata, f.p1.id, shownAt(f.db, wednesday), wednesday, true)
+    expect(r.ok).toBe(true)
+    // Then the running week (P2) waits for its own last day.
+    expect(getMeeting(f.db, wednesday, true)).toEqual({
+      period: null,
+      runningCutoffAt: prague(2026, 12, 6, 23, 59).toISOString(),
+    })
+  })
+
+  it('no takers or no week: nothing to show', () => {
+    expect(getMeeting(family().db, WED, true)).toEqual({ period: null, runningCutoffAt: null })
   })
 })
