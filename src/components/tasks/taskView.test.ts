@@ -518,13 +518,8 @@ describe('a reopened round (#212)', () => {
       }),
     ])
   })
-  it('a parent ends a round: Ukončit with no bids, Odmítnout with bids', () => {
-    expect(refuseButton(round(18, null), TATA, true)).toMatchObject({
-      action: 'turnDownBids',
-      label: cs.rebid.stop,
-      hint: cs.rebid.stopHint(18),
-      data: { taskId: 1, bids: [] },
-    })
+  it('a parent turns a round down only with bids (Jakub 2026-11-25)', () => {
+    expect(refuseButton(round(18, null), TATA, true)).toBeNull()
     expect(refuseButton(round(18, null, [b(4, 'Mladší', 15)]), TATA, true)).toMatchObject({
       label: cs.bids.turnDown,
       hint: cs.rebid.turnDownHint(18),
@@ -532,7 +527,7 @@ describe('a reopened round (#212)', () => {
     })
     expect(refuseButton(round(18, null), TATA, false)).toBeNull()
   })
-  it('a brother or admin gets no Ukončit in a round nobody bid in', () => {
+  it('a brother or admin gets no button in a round nobody bid in', () => {
     expect(refuseButton(round(18, null), STARSI, true)).toBeNull()
     expect(refuseButton(round(18, null), ADMIN, true)).toBeNull()
   })
@@ -583,7 +578,6 @@ describe('a reopened round (#212)', () => {
     expect(toastFor(turnDown([{ takerId: 4, score: 15 }]), 'open', TATA, true)).toBe(
       cs.bids.toast.turnedDown,
     )
-    expect(toastFor(turnDown([]), 'open', TATA, true)).toBe(cs.rebid.toast.stopped)
     expect(toastFor(call('reopenBidding'), 'open', STARSI, false)).toBe(cs.rebid.toast.reopened)
     expect(toastFor(call('placeBid'), 'open', STARSI, true)).toBe(cs.bids.toast.sent)
     expect(toastFor(call('withdrawBid'), 'open', STARSI, true)).toBe(cs.bids.toast.withdrawn)

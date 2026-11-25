@@ -53,7 +53,6 @@ test('the round shows only its own bids, and Táta turns them down', async ({ pa
   await openTask(page, 'tata', ROUND)
   await expect(threadRow(page, /chce 15\b/)).toHaveCount(1)
   await expect(threadRow(page, /chce 14\b/)).toHaveCount(0)
-  await expect(page.getByRole('button', { name: cs.rebid.stop, exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: cs.bids.turnDown, exact: true }).click()
   await expect(page.getByText(cs.bids.toast.turnedDown, { exact: true })).toBeVisible()
   await expect(page.getByText(cs.state.open, { exact: true }).first()).toBeVisible()
