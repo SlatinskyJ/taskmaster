@@ -25,8 +25,8 @@ test("Mladší's Nechci, then Táta turns the bidding down", async ({ page }) =>
   await page.getByRole('button', { name: cs.bids.withdraw, exact: true }).click()
   await expect(page.getByText(cs.bids.toast.withdrawn, { exact: true })).toBeVisible()
   await expect(page.getByText(`${cs.bids.yourBid} 22`)).toHaveCount(0)
-  await expect(threadRow(page, /chceš? 22\b/)).toContainText(cs.bids.closed)
-  await expect(threadRow(page, /chceš? 25\b/)).not.toContainText(cs.bids.closed)
+  await expect(threadRow(page, /chceš? 22(?!\d)/)).toContainText(cs.bids.closed)
+  await expect(threadRow(page, /chceš? 25(?!\d)/)).not.toContainText(cs.bids.closed)
   await logout(page)
 
   // (b) Táta turns the rest down: still Navrženo at 18, every bid closed.
@@ -34,7 +34,7 @@ test("Mladší's Nechci, then Táta turns the bidding down", async ({ page }) =>
   await page.getByRole('button', { name: cs.bids.turnDown, exact: true }).click()
   await expect(page.getByText(cs.bids.toast.turnedDown, { exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: cs.bids.turnDown, exact: true })).toHaveCount(0)
-  await expect(threadRow(page, /chceš? 25\b/)).toContainText(cs.bids.closed)
+  await expect(threadRow(page, /chceš? 25(?!\d)/)).toContainText(cs.bids.closed)
   await expect(page.getByRole('region', { name: cs.history.title })).toContainText(
     cs.history.bidsTurnedDown,
   )

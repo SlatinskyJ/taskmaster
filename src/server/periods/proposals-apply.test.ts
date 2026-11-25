@@ -36,9 +36,9 @@ const audit = (db: Db, action: AuditAction) =>
   db.select().from(auditLog).where(eq(auditLog.action, action)).orderBy(asc(auditLog.id)).all()
 
 function settle(f: W, now: Date) {
-  const m = getMeeting(f.db, now)
+  const m = getMeeting(f.db, now, false)
   const totals = m.period ? m.takers.map((t) => ({ takerId: t.id, total: t.total })) : []
-  return must(settlePeriod(f.db, f.tata, f.p1.id, totals, now))
+  return must(settlePeriod(f.db, f.tata, f.p1.id, totals, now, false))
 }
 
 describe('agreed changes apply at the start', () => {
