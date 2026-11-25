@@ -23,7 +23,7 @@ describe('stepOf', () => {
   })
 
   it('nothing to settle shows step 3 only', () => {
-    expect(stepOf({ period: null }, START)).toBe(3)
+    expect(stepOf({ period: null, runningCutoffAt: null }, START)).toBe(3)
   })
 
   it('after a confirm the screen shows step 3 and never step 2', () => {
@@ -32,7 +32,7 @@ describe('stepOf', () => {
     // The reloaded meeting already offers the new week for step 2 (§5.8); the screen stays.
     expect(stepOf(week(), done)).toBe(3)
     expect(stepOf(pendingWeek(), done)).toBe(3)
-    expect(stepOf({ period: null }, done)).toBe(3)
+    expect(stepOf({ period: null, runningCutoffAt: null }, done)).toBe(3)
   })
 })
 
@@ -204,7 +204,7 @@ describe('createConfirm', () => {
 
   it('nothing to settle sends nothing', async () => {
     const send = vi.fn()
-    await createConfirm(send, vi.fn(), vi.fn())({ period: null })
+    await createConfirm(send, vi.fn(), vi.fn())({ period: null, runningCutoffAt: null })
     expect(send).not.toHaveBeenCalled()
   })
 })

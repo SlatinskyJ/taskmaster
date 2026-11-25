@@ -26,7 +26,7 @@ function withSwitch(enabled: boolean) {
   const f = week()
   f.db.update(featureFlags).set({ enabled }).where(eq(featureFlags.key, 'disputes')).run()
   doneTask(f, { score: 60, completedAt: plus(SAT, 1000), earner: f.starsi })
-  const m = getMeeting(f.db, MEETING)
+  const m = getMeeting(f.db, MEETING, false)
   if (!m.period) throw new Error('nothing to settle')
   must(
     settlePeriod(
@@ -35,6 +35,7 @@ function withSwitch(enabled: boolean) {
       m.period.id,
       m.takers.map((t) => ({ takerId: t.id, total: t.total })),
       MEETING,
+      false,
     ),
   )
   const s = f.db.select().from(settlements).where(eq(settlements.takerId, f.starsi)).get()

@@ -34,7 +34,7 @@ const starsi = (f: F) => ({ id: f.starsi, role: 'taker' as const })
 
 /** Táta confirms the meeting at `now` with the totals it shows. */
 function settle(db: Db, tata: number, now: Date) {
-  const m = getMeeting(db, now)
+  const m = getMeeting(db, now, false)
   if (!m.period) throw new Error('nothing to settle')
   must(
     settlePeriod(
@@ -43,6 +43,7 @@ function settle(db: Db, tata: number, now: Date) {
       m.period.id,
       m.takers.map((t) => ({ takerId: t.id, total: t.total })),
       now,
+      false,
     ),
   )
 }
