@@ -1,12 +1,19 @@
 import { eq, sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
-import { ALL_FEATURES, NO_FEATURES } from '~/lib/features'
+import { ALL_FEATURES, FEATURE_KEYS, NO_FEATURES } from '~/lib/features'
 import { auditLog, featureFlags } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { getFlags, setSwitchesIn } from './flags'
 
+describe('NO_FEATURES and ALL_FEATURES', () => {
+  it('hold every switch, all off and all on', () => {
+    expect(NO_FEATURES).toStrictEqual(Object.fromEntries(FEATURE_KEYS.map((k) => [k, false])))
+    expect(ALL_FEATURES).toStrictEqual(Object.fromEntries(FEATURE_KEYS.map((k) => [k, true])))
+  })
+})
+
 describe('getFlags', () => {
-  it('reads the values the migrations leave: on since the release (0022), disputes off (0024)', () => {
+  it('reads the values the migrations leave: on since the release (0022), disputes off (0024), settleLastDay on (0027)', () => {
     expect(getFlags(createTestDb())).toEqual({
       recurring: true,
       log: true,
@@ -14,6 +21,7 @@ describe('getFlags', () => {
       meeting: true,
       periodProposals: true,
       disputes: false,
+      settleLastDay: true,
     })
     expect(
       createTestDb()
@@ -41,6 +49,7 @@ describe('getFlags', () => {
       meeting: true,
       periodProposals: true,
       disputes: true,
+      settleLastDay: true,
     })
   })
 
@@ -102,7 +111,12 @@ describe('setSwitchesIn (#183)', () => {
     })
     expect(getFlags(db)).toEqual({ ...NO_FEATURES, recurring: true, log: true })
     const log = db.select().from(auditLog).all()
-    expect(log.map((r) => r.entityId)).toEqual(['week', 'meeting', 'periodProposals'])
+    expect(log.map((r) => r.entityId)).toEqual([
+      'week',
+      'meeting',
+      'periodProposals',
+      'settleLastDay',
+    ])
     expect(JSON.parse(log[0]?.before ?? 'null')).toEqual({ enabled: true })
     expect(JSON.parse(log[0]?.after ?? 'null')).toEqual({ enabled: false })
   })

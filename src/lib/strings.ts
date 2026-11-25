@@ -416,6 +416,10 @@ export const cs = {
     newTask: '+ Nový úkol',
     end: 'Ukončit schůzku',
     nothing: 'Teď není co vyúčtovat',
+    /** Before the running week's last day (#211): the week runs, settling waits for that day. */
+    notYet: 'Týden ještě běží',
+    runsUntil: (end: string) => `Týden běží do ${end}.`,
+    settleOnLastDay: 'Vyúčtovat půjde až v poslední den týdne.',
     settled: 'Týden je vyúčtovaný',
     errors: {
       totalsChanged: 'Mezitím se změnily body. Zkontroluj je a potvrď znovu.',

@@ -179,11 +179,11 @@ Givers see the same for every taker.
 ### 5.8 Periods
 - A period runs from the end of the previous period to its own end. It is not tied to calendar weeks.
 - Defaults (global settings): length 7 days, cutoff at the end of Sunday (Jakub, 2026-11-21: 23:59 Europe/Prague), default lower/upper levels.
-- **Settling ends the period (Jakub, 2026-11-21):** the meeting normally runs before the cutoff. Confirming the settlement (5.9 step 2) ends the period at that moment, and the next period starts then. Its cutoff is set from its start and the default length as usual, so a meeting on Sunday at 20:00 starts a period that ends the next Sunday at 23:59, not the same night. The cutoff is the latest end of a period.
+- **Settling ends the period (Jakub, 2026-11-21):** the meeting normally runs on the period's last day, before the cutoff. Confirming the settlement (5.9 step 2) ends the period at that moment, and the next period starts then. Its cutoff is set from its start and the default length as usual, so a meeting on Sunday at 20:00 starts a period that ends the next Sunday at 23:59, not the same night. The cutoff is the latest end of a period.
 - **Changing the defaults (Jakub, 2026-11-16):** the admin can change them directly. A **giver** can also propose a change; it takes effect only after **period agreement** (section 3), the same way as a per-period change. Either way, a new default applies only to periods that have not started yet; the running period never changes. **[call]** A proposal that has not been agreed by the time the next period starts stays open for the period after it, until it is agreed, rejected, or withdrawn.
 - The next period is created automatically with defaults. A different **length/cutoff** or different **levels** for a period need **period agreement (section 3) before that period starts**. Once a period has started, its cutoff and levels are locked.
 - **[call]** If no settlement has happened by the cutoff, the next period still starts at the cutoff. Completions after the cutoff belong to the next period even if the meeting hasn't been held yet.
-- Settlement of the running period is allowed any time before its cutoff (it ends the period, see above); settlement of a period that ended at its cutoff is allowed any time after.
+- Settlement of the running period is allowed only on its **last day** (Jakub, 2026-11-24): the Prague calendar day its last minute falls on (normally Sunday; a cutoff at 00:00 makes it the day before). It ends the period, see above. Before that day the meeting screen shows when the period ends. Settlement of a period that ended at its cutoff is allowed any time after.
 
 ### 5.9 Weekly meeting and settlement
 A giver (normally Dad) runs a guided **meeting screen**:
