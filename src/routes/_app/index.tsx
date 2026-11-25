@@ -5,6 +5,7 @@ import { MyPoints } from '~/components/points/MyPoints'
 import { Screen } from '~/components/shell/Screen'
 import { TakerBoard } from '~/components/tasks/TakerBoard'
 import { RecurringList } from '~/components/templates/RecurringList'
+import { ToApprove } from '~/components/tasks/ToApprove'
 import { WaitingForYou } from '~/components/tasks/WaitingForYou'
 import { buttonVariants } from '~/components/ui/button'
 import { guardScreen } from '~/lib/screenGuard'
@@ -71,7 +72,8 @@ export const Route = createFileRoute('/_app/')({
 })
 
 // A taker's points card first (it belongs to the header, spec §7 sketch), then "Čeká na tebe",
-// then the work lists. A parent's points overview sits under "Čeká na tebe" (GHome, #41).
+// then the work lists. A parent's points overview sits under "Čeká na tebe" (GHome, #41). With the
+// approveAnywhere switch, a parent's Ke schválení comes first, when anything waits (#206).
 function Home() {
   const { user, features } = Route.useRouteContext()
   const {
@@ -93,6 +95,7 @@ function Home() {
     features.periodProposals && proposals && !('error' in proposals)
       ? waitingProposals(proposals, user.id)
       : []
+  const approveOnTop = user.role === 'giver' && features.approveAnywhere
   const giverIdle =
     proposalRows.length +
       waiting.length +
@@ -105,6 +108,7 @@ function Home() {
   return (
     <Screen title={`${cs.home.greeting}, ${user.displayName}!`} user={user}>
       {user.role === 'taker' && <MyPoints points={points} me={user.id} />}
+      {approveOnTop && <ToApprove items={toApprove} />}
       <WaitingForYou
         items={waiting}
         templates={shownTemplates}
@@ -126,6 +130,7 @@ function Home() {
             toApprove={toApprove}
             bids={bids}
             me={{ id: user.id, role: user.role }}
+            approveOnTop={approveOnTop}
           />
           {giverIdle && (
             <EmptyState

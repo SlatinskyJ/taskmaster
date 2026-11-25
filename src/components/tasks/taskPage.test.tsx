@@ -19,6 +19,7 @@ const page = vi.hoisted(() => {
     history: HistoryEntry[]
     disputes: boolean
     reopen: boolean
+    approveAnywhere: boolean
     marks: Record<string, unknown>
   } = {
     user: null,
@@ -26,6 +27,7 @@ const page = vi.hoisted(() => {
     history: [],
     disputes: false,
     reopen: false,
+    approveAnywhere: false,
     marks: {},
   }
   return state
@@ -35,7 +37,12 @@ vi.mock('@tanstack/react-router', () => ({
     ...opts,
     useRouteContext: () => ({
       user: page.user,
-      features: { disputes: page.disputes, reopenBidding: page.reopen, bidRefusals: true },
+      features: {
+        disputes: page.disputes,
+        reopenBidding: page.reopen,
+        bidRefusals: true,
+        approveAnywhere: page.approveAnywhere,
+      },
     }),
     useLoaderData: () => ({
       task: page.task,
@@ -110,6 +117,32 @@ describe('task page', () => {
       expect(html).not.toContain(`>${cs.work.done}<`)
       expect(html).not.toContain(`>${cs.work.release}<`)
     }
+  })
+})
+
+describe('task page: Schválit and Zamítnout (#206)', () => {
+  const TATA = { id: 2, role: 'giver', displayName: 'Táta' } as const
+  const STARSI = { id: 3, role: 'taker', displayName: 'Starší' } as const
+  const done: TaskView = {
+    ...reserved,
+    status: 'done_unconfirmed',
+    completedBy: { id: 3, name: 'Starší' },
+    earnerId: 3,
+  }
+  const shows = (html: string) =>
+    html.includes(`>${cs.work.approve}<`) && html.includes(`>${cs.work.reject}<`)
+
+  it('switch on: a parent on done work gets both; the brother who did it gets neither', () => {
+    page.approveAnywhere = true
+    expect(shows(render(TATA, done))).toBe(true)
+    expect(render(STARSI, done)).not.toContain(`>${cs.work.approve}<`)
+    expect(shows(render(TATA, reserved))).toBe(false)
+    page.approveAnywhere = false
+  })
+
+  it('switch off: no Schválit on the page, as before', () => {
+    page.approveAnywhere = false
+    expect(render(TATA, done)).not.toContain(`>${cs.work.approve}<`)
   })
 })
 
