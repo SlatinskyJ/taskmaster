@@ -34,6 +34,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'tasks', spec: 'task-page.spec.ts', seed: 'tasks' },
   // Its own server: Nechci and the turn-down close bids for good (#208).
   { name: 'bids', spec: 'bid-refusals.spec.ts', seed: 'bids' },
+  // Its own server: it approves and rejects for good (#206).
+  { name: 'approve', spec: 'approve.spec.ts', seed: 'approve' },
   // Its own server: a round changes the task for good (#212).
   { name: 'rebid', spec: 'rebidding.spec.ts', seed: 'rebid' },
   { name: 'week', spec: 'week.spec.ts', seed: 'week' },
@@ -63,6 +65,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'password', spec: 'password.spec.ts', seed: 'password' },
   // Změnit heslo with the keyboard open (#210): it needs the passwordChange switch. Read-only.
   { name: 'keyboard-password', spec: 'keyboard-password.spec.ts', seed: 'password' },
+  // The reject reason (#206) with the keyboard open. Read-only: forms are opened, never sent.
+  { name: 'keyboard-approve', spec: 'keyboard-approve.spec.ts', seed: 'approve' },
 ]
 
 /** Passkeys on (localhost) for the `on` suite only, at its own port. */

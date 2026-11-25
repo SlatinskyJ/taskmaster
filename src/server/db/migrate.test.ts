@@ -287,15 +287,15 @@ describe('data migrations', () => {
     sqlite.close()
   })
 
-  it('0031 keeps every template approval as offer round 1', () => {
+  it('0032 keeps every template approval as offer round 1', () => {
     const A = '2026-11-24T10:00:00.000Z'
     const dir = tempDir()
     const before = join(dir, 'm')
     cpSync('drizzle', before, { recursive: true })
-    // Keep migrations 0000–0030 only: the state of a database before offer rounds on templates.
+    // Keep migrations 0000–0031 only: the state of a database before offer rounds on templates.
     const path = join(before, 'meta', '_journal.json')
     const journal = JSON.parse(readFileSync(path, 'utf8')) as { entries: { idx: number }[] }
-    journal.entries = journal.entries.filter((e) => e.idx <= 30)
+    journal.entries = journal.entries.filter((e) => e.idx <= 31)
     writeFileSync(path, JSON.stringify(journal))
     const sqlite = new Database(join(dir, 'db.sqlite'))
     applyMigrations(sqlite, before)
