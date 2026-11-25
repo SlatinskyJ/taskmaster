@@ -37,6 +37,7 @@ const features = vi.hoisted(() => ({
   week: true,
   meeting: true,
   periodProposals: false,
+  approveAnywhere: false,
 }))
 vi.mock('./useTaskAction', () => ({ useTaskAction: () => ({ busy: null, run: vi.fn() }) }))
 vi.mock('./bidCalls', () => ({ callBid: vi.fn(), BID_CALLS: {} }))
@@ -387,6 +388,41 @@ describe('Giver Domů (GHome, #41)', () => {
     expect(html).toContain(`${cs.home.waitingOnTakers} (1)`)
     expect(html).not.toContain('Taky pro Tátu')
     expect(html.split('data-slot="points-bar"')).toHaveLength(3)
+  })
+
+  describe('switch approveAnywhere on (#206)', () => {
+    beforeEach(() => {
+      features.approveAnywhere = true
+    })
+    afterEach(() => {
+      features.approveAnywhere = false
+    })
+
+    it('Ke schválení comes first, once, then Čeká na tebe, the boys’ points, Vyjednávání, Čeká na kluky', () => {
+      const html = render(tata, [], full)
+      const at = (s: string) => html.indexOf(s)
+      const order = [
+        cs.work.toApprove,
+        cs.home.waiting,
+        'Kluci tento týden',
+        cs.bids.toAnswer,
+        'Čeká na kluky',
+      ]
+      for (const s of order) expect(at(s), s).toBeGreaterThan(-1)
+      for (let i = 1; i < order.length; i++)
+        expect(at(order[i - 1] ?? ''), order[i]).toBeLessThan(at(order[i] ?? ''))
+      expect(html.split(`${cs.work.toApprove} (`)).toHaveLength(2)
+    })
+
+    it('nothing to approve: no Ke schválení at all', () => {
+      const html = render(tata, [], { ...full, toApprove: [] })
+      expect(html).not.toContain(cs.work.toApprove)
+    })
+
+    it('a brother never gets Ke schválení', () => {
+      const html = render({ id: 4, role: 'taker', displayName: 'Starší' }, [], full)
+      expect(html).not.toContain(cs.work.toApprove)
+    })
   })
 
   it('a parent never gets a brother’s own points card, even with points loaded', () => {

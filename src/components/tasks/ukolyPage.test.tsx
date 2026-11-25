@@ -7,13 +7,13 @@ import type { TaskView } from '~/server/tasks/functions'
 
 // Úkoly itself (#41), rendered statically through its route: one-time tasks grouped by state.
 // Lives here, not in src/routes, because the router generator treats every file there as a route.
-const page = vi.hoisted(() => ({ data: {} }))
+const page = vi.hoisted(() => ({ data: {}, approveAnywhere: true }))
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (opts: Record<string, unknown>) => ({
     ...opts,
     useRouteContext: () => ({
       user: { id: 2, role: 'giver', displayName: 'Táta' },
-      features: ALL_FEATURES,
+      features: { ...ALL_FEATURES, approveAnywhere: page.approveAnywhere },
     }),
     useLoaderData: () => page.data,
   }),
@@ -130,6 +130,24 @@ describe('Úkoly grouped by state (#41)', () => {
     expect(html).not.toContain(cs.work.doneSelf)
     // No bids yet: the parent can still close it, and reaches the round through the name.
     expect(render([{ ...round, bids: [] }])).toContain(cs.work.doneSelf)
+  })
+
+  it('switch on: Čeká na potvrzení rows get ✓ Schválit and ✕ Zamítnout; other rows keep theirs (#206)', () => {
+    page.approveAnywhere = true
+    const html = render(all)
+    expect(html.match(new RegExp(`aria-label="${cs.work.approve}"`, 'g'))).toHaveLength(1)
+    expect(html.match(new RegExp(`aria-label="${cs.work.reject}"`, 'g'))).toHaveLength(1)
+    expect(html).toContain(`${cs.work.doneBy} Mladší`)
+    expect(html).toContain(cs.work.release)
+    expect(html).toContain(cs.work.doneSelf)
+  })
+
+  it('switch off: no Schválit on Úkoly, as before', () => {
+    page.approveAnywhere = false
+    const html = render(all)
+    expect(html).not.toContain(`aria-label="${cs.work.approve}"`)
+    expect(html).toContain(`${cs.work.doneBy} Mladší`)
+    page.approveAnywhere = true
   })
 
   it('shows the empty line when there are no tasks', () => {

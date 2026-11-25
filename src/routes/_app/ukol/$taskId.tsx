@@ -3,6 +3,7 @@ import { DisputeControl } from '~/components/disputes/DisputeControl'
 import { taskDisputes } from '~/components/disputes/disputeProps'
 import { Screen } from '~/components/shell/Screen'
 import { SectionLabel } from '~/components/shell/SectionLabel'
+import { ApprovePanel } from '~/components/tasks/ApproveControls'
 import { BidPanel } from '~/components/tasks/BidPanel'
 import { BidThread } from '~/components/tasks/BidThread'
 import { ReopenBidding } from '~/components/tasks/ReopenBidding'
@@ -103,6 +104,8 @@ function TaskPage() {
             />
           ))}
       </Card>
+      {/* ✓ / ✕ for done work waiting for a parent (#206). */}
+      {features.approveAnywhere && <ApprovePanel task={task} me={me} />}
       <TaskWorkPanel task={task} me={me} />
       {/* An instance's score is fixed when it is made (spec §4, #38): no price change. */}
       {oneTime && (
