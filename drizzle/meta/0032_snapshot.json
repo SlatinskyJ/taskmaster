@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "fd0e058c-217c-40c8-8206-69c39eda6274",
-  "prevId": "bf51f62c-1b73-4d3a-bcc9-5f2f9c2c88c9",
+  "id": "83c56e15-88f1-405c-9947-25d48b2a3902",
+  "prevId": "c6b8f902-c310-470e-ab2a-e79775c6753e",
   "tables": {
     "audit_log": {
       "name": "audit_log",
@@ -1766,14 +1766,6 @@
           "notNull": true,
           "autoincrement": false,
           "default": 1
-        },
-        "bids_from": {
-          "name": "bids_from",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
         },
         "approval_required": {
           "name": "approval_required",

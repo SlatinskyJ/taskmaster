@@ -1,8 +1,8 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "bf51f62c-1b73-4d3a-bcc9-5f2f9c2c88c9",
-  "prevId": "6f0d5ea1-4701-4bbc-af8b-2b475d221161",
+  "id": "c6b8f902-c310-470e-ab2a-e79775c6753e",
+  "prevId": "391a983e-6efd-4fb3-8d74-74864964cf55",
   "tables": {
     "audit_log": {
       "name": "audit_log",
@@ -1507,14 +1507,6 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
-        },
-        "offer_round": {
-          "name": "offer_round",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1
         }
       },
       "indexes": {},
@@ -1547,13 +1539,12 @@
         }
       },
       "compositePrimaryKeys": {
-        "template_score_approvals_template_id_offer_round_user_id_pk": {
+        "template_score_approvals_template_id_user_id_pk": {
           "columns": [
             "template_id",
-            "offer_round",
             "user_id"
           ],
-          "name": "template_score_approvals_template_id_offer_round_user_id_pk"
+          "name": "template_score_approvals_template_id_user_id_pk"
         }
       },
       "uniqueConstraints": {},
@@ -1758,14 +1749,6 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
-        },
-        "offer_round": {
-          "name": "offer_round",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 1
         },
         "approval_required": {
           "name": "approval_required",

@@ -17,17 +17,20 @@ export function GiverHome({
   toApprove,
   bids,
   me,
+  approveOnTop = false,
 }: {
   points: PointsOverview
   tasks: readonly TaskView[]
   toApprove: readonly TaskView[]
   bids: readonly TaskView[]
   me: Me
+  /** Ke schválení already sits at the top of Domů (#206), so not here again. */
+  approveOnTop?: boolean
 }) {
   return (
     <>
       <TakersPoints points={points} />
-      <ToApprove items={toApprove} />
+      {!approveOnTop && <ToApprove items={toApprove} />}
       <BidsToAnswer items={bids} />
       <WaitingOnTakers items={waitingOnTakers(tasks, me)} me={me} />
     </>

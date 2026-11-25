@@ -215,29 +215,36 @@
     {
       "idx": 30,
       "version": "6",
-      "when": 1795617093172,
-      "tag": "0030_reopen_bidding",
+      "when": 1795617321520,
+      "tag": "0030_approve_anywhere_switch",
       "breakpoints": true
     },
     {
       "idx": 31,
       "version": "6",
-      "when": 1795617285045,
-      "tag": "0031_chore_bidding",
+      "when": 1795617826508,
+      "tag": "0031_reopen_bidding",
       "breakpoints": true
     },
     {
       "idx": 32,
       "version": "6",
-      "when": 1795617465622,
-      "tag": "0032_template_bids_from",
+      "when": 1795618121929,
+      "tag": "0032_chore_bidding",
       "breakpoints": true
     },
     {
       "idx": 33,
       "version": "6",
-      "when": 1795617466299,
-      "tag": "0033_template_bids_from_open_bids",
+      "when": 1795618332834,
+      "tag": "0033_template_bids_from",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1795618333448,
+      "tag": "0034_template_bids_from_open_bids",
       "breakpoints": true
     }
   ]

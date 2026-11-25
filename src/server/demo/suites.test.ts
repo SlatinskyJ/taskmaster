@@ -8,6 +8,8 @@ import { takerPoints } from '~/server/points'
 import { getMeeting } from '~/server/settlement/meeting'
 import { listTasks } from '~/server/tasks'
 import { rejectionsSince } from '~/server/tasks/rejections'
+import { getFlags } from '~/server/features/flags'
+import { NO_FEATURES } from '~/lib/features'
 import { listTemplates } from '~/server/templates/templates'
 import { seedDemo } from './seed'
 import type { SeedName } from './seeds'
@@ -40,7 +42,7 @@ describe('e2e seeds (#183)', () => {
     expect(db.select().from(templates).all()).toHaveLength(0)
   })
 
-  for (const seed of ['home', 'launch'] as const) {
+  for (const seed of ['home', 'launch', 'approve'] as const) {
     it(`${seed}: Starší 40 + 12, Mladší 55 + 0, and a task in each state Domů and Úkoly show`, () => {
       const db = seeded(seed)
       expect(takerPoints(db, T0).takers.map((t) => [t.name, t.confirmed, t.pending])).toEqual([
@@ -58,6 +60,14 @@ describe('e2e seeds (#183)', () => {
       expect(listPeriods(db)).toHaveLength(1)
     })
   }
+
+  it('approve (#206): only the approveAnywhere switch on; e2e/approve.spec.ts opens tasks 6 and 3', () => {
+    const db = seeded('approve')
+    expect(getFlags(db)).toEqual({ ...NO_FEATURES, approveAnywhere: true })
+    const byId = new Map(listTasks(db).map((t) => [t.id, t.title]))
+    expect(byId.get(6)).toBe('Vytřít podlahu v kuchyni')
+    expect(byId.get(3)).toBe('Vyluxovat celý obývák a chodbu')
+  })
 
   it('tasks: only "Shrabat listí na zahradě", open at 10, Táta’s 12 waiting for both', () => {
     const db = seeded('tasks')

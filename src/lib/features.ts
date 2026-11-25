@@ -24,6 +24,9 @@ export const FEATURE_KEYS = [
   'passwordChange',
   /** Bidding: a brother's Nechci and a parent's turn-down (#208). */
   'bidRefusals',
+  /** Approve done work from the task page and Úkoly; Ke schválení first on a parent's Domů
+   * (#206). */
+  'approveAnywhere',
   'reopenBidding',
   /** Bidding on a proposed recurring chore's first price (#209). */
   'choreBidding',
@@ -45,6 +48,7 @@ export const NO_FEATURES: Readonly<Features> = {
   settleLastDay: false,
   passwordChange: false,
   bidRefusals: false,
+  approveAnywhere: false,
   reopenBidding: false,
   choreBidding: false,
 }
@@ -60,6 +64,7 @@ export const ALL_FEATURES: Readonly<Features> = {
   settleLastDay: true,
   passwordChange: true,
   bidRefusals: true,
+  approveAnywhere: true,
   reopenBidding: true,
   choreBidding: true,
 }
