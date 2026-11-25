@@ -211,6 +211,13 @@
       "when": 1795616704309,
       "tag": "0029_bid_refusals_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1795617321520,
+      "tag": "0030_approve_anywhere_switch",
+      "breakpoints": true
     }
   ]
 }

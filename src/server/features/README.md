@@ -7,6 +7,7 @@ the launch; 0022 turns every one on (all five features built). 0024 adds `disput
 only on its last day, #211), on: Jakub asked for it to be flipped at merge.
 0028 adds `passwordChange` (changing your own password on Profil, #210), off.
 0029 adds `bidRefusals` (a brother's Nechci and a parent's turn-down in bidding, #208), off.
+0030 adds `approveAnywhere` (approve from the task page and Úkoly, #206), off.
 
 - `flags.ts`: `getFlags(db)`. A switch with no row reads as off; an unknown row is ignored.
 - `functions.ts`: `getFeaturesFn`, signed-in users only. The app shell (`src/routes/_app.tsx`)

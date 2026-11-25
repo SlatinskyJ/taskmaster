@@ -24,6 +24,9 @@ export const FEATURE_KEYS = [
   'passwordChange',
   /** Bidding: a brother's Nechci and a parent's turn-down (#208). */
   'bidRefusals',
+  /** Approve done work from the task page and Úkoly; Ke schválení first on a parent's Domů
+   * (#206). */
+  'approveAnywhere',
 ] as const
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number]
@@ -42,6 +45,7 @@ export const NO_FEATURES: Readonly<Features> = {
   settleLastDay: false,
   passwordChange: false,
   bidRefusals: false,
+  approveAnywhere: false,
 }
 
 /** Every switch on: the full app as designed (UI doc §6). */
@@ -55,4 +59,5 @@ export const ALL_FEATURES: Readonly<Features> = {
   settleLastDay: true,
   passwordChange: true,
   bidRefusals: true,
+  approveAnywhere: true,
 }
