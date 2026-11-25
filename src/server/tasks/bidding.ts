@@ -346,7 +346,7 @@ function acceptBids(
 
 /**
  * A giver turns a reopened round down (#212): every open row of the round closes, the task stays
- * open at its agreed score. With no bids it stops the round or takes back his counter.
+ * open at its agreed score. Only with bids (the domain refuses `no_bids`, Jakub 2026-11-25).
  */
 function endRound(tx: Tx, task: TaskRow, giverId: number, now: Date): TaskRow {
   const bids = openBids(tx, task.id)
@@ -354,8 +354,7 @@ function endRound(tx: Tx, task: TaskRow, giverId: number, now: Date): TaskRow {
   const { row } = saveItem(tx, task, toItem(task), { endBidding: true }, now)
   writeAudit(tx, {
     actor: { kind: 'user', userId: giverId },
-    // Nothing to turn down: he stopped the round (its history line says so, not "odmítnuty").
-    action: bids.length > 0 ? 'task.bids_turned_down' : 'task.bidding_closed',
+    action: 'task.bids_turned_down',
     entityType: 'task',
     entityId: task.id,
     before: {

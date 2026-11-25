@@ -621,12 +621,10 @@ describe('in a reopened round (#212)', () => {
       score: 25,
     })
   })
-  it('a turn-down ends the round at the agreed score, also with no bids', () => {
+  it('a turn-down ends the round at the agreed score; with no bids it is refused (Jakub 2026-11-25)', () => {
+    expect(error(turnDownOneTimeBids(round(), family, DAD, []))).toBe('no_bids')
     const countered = value(counterOneTimeOffer(round(), family, DAD, 20, []))
-    expect(value(turnDownOneTimeBids(countered, family, DAD, []))).toEqual({
-      status: 'open',
-      score: 30,
-    })
+    expect(error(turnDownOneTimeBids(countered, family, DAD, []))).toBe('no_bids')
     const t = bid(round(), OLDER, 25)
     expect(error(turnDownOneTimeBids(t, family, DAD, []))).toBe('offer_changed')
     expect(value(turnDownOneTimeBids(t, family, DAD, [{ by: OLDER, score: 25 }]))).toEqual({

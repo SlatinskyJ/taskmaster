@@ -84,8 +84,8 @@ export function turnDownOneTimeBids(
   if (!isNegotiating(task)) return fail('not_proposed')
   if (!giver(people, giverId)) return fail('not_a_giver')
   const live = liveBook(task.book, people).bids
-  // In a round it may come with no bids: a giver stops a round or takes back his counter.
-  if (live.length === 0 && task.status === 'proposed') return fail('no_bids')
+  // Nothing to turn down, also in a reopened round (Jakub 2026-11-25).
+  if (live.length === 0) return fail('no_bids')
   const key = (b: OpenBid) => `${String(b.by)}:${String(b.score)}`
   if (!sameTakers(live.map(key), seen.map(key))) return fail('offer_changed')
   if (task.status === 'rebidding') return ok({ status: 'open', score: task.score })
