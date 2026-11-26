@@ -46,6 +46,8 @@ export const AUDIT_ACTIONS = [
   'template.score_change_proposed',
   'template.bid_placed',
   'template.score_countered',
+  'template.bid_withdrawn',
+  'template.bids_turned_down',
   'template.score_changed',
   'template.agreed',
   'template.updated',

@@ -70,6 +70,7 @@ const dishes: TemplateView = {
   approvedBy: [],
   schedule: null,
   deadline: null,
+  bidding: null,
   change: {
     offer: { score: 4, byName: 'Táta' },
     bids: [{ takerId: 5, name: 'Mladší', score: 5 }],

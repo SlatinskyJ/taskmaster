@@ -199,6 +199,7 @@ describe('WaitingForYou with templates (#37)', () => {
     approvedBy: ['Táta'],
     schedule: { days: [0, 1, 2, 3, 4, 5, 6] as (0 | 1 | 2 | 3 | 4 | 5 | 6)[], time: '18:00' },
     deadline: { dayOffset: 1, due: '07:00', graceMinutes: 120 },
+    bidding: null,
     change: null,
   }
 
@@ -304,6 +305,7 @@ describe('template price change: ways in', () => {
     approvedBy: [],
     schedule: null,
     deadline: null,
+    bidding: null,
     change: {
       offer: { score: 4, byName: 'Táta' },
       bids: [{ takerId: 5, name: 'Mladší', score: 5 }],
