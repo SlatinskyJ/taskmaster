@@ -275,6 +275,9 @@ export const cs = {
     turnDown: 'Odmítnout nabídky',
     turnDownHint: (score: number) =>
       `Všechny nabídky se uzavřou. Úkol zůstane navržený za ${String(score)} b.`,
+    /** A parent's no on a chore's price change (#232): the parents' offer stays in flight. */
+    turnDownChangeHint: (score: number, offer: number) =>
+      `Všechny nabídky se uzavřou. Dál platí ${String(score)} b, nabídka ${String(offer)} b zůstává.`,
     /** A turn-down on a stale screen: a bid came in meanwhile. */
     turnDownChanged: 'Mezitím přišla nová nabídka. Podívej se na ni.',
     toast: {

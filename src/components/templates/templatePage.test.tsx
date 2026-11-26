@@ -74,6 +74,7 @@ const dishes: TemplateView = {
   schedule: null,
   deadline: null,
   bidding: null,
+  lastBids: [],
   change: {
     offer: { score: 4, byName: 'Táta' },
     bids: [{ takerId: 5, name: 'Mladší', score: 5 }],

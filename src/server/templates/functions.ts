@@ -15,6 +15,7 @@ import {
   withdrawTemplateBid,
 } from './scoreChange'
 import type {
+  BiddingOpts,
   NewTemplate,
   TemplateChangeView,
   TemplateDetail,
@@ -45,8 +46,11 @@ const answered = (result: Result<TemplateRow, TemplateError>): TemplateActionRes
     ? { ok: true, id: result.value.id, score: result.value.score, status: result.value.status }
     : result
 
-/** The `choreBidding` switch (#209) as the score actions take it. */
-const bidding = (db: Db) => ({ choreBidding: getFlags(db).choreBidding })
+/** The switches `choreBidding` (#209) and `bidRefusals` (#232) as the score actions take them. */
+const bidding = (db: Db): BiddingOpts => {
+  const { choreBidding, bidRefusals } = getFlags(db)
+  return { choreBidding, bidRefusals }
+}
 
 /** A giver proposes a new recurring template (spec §5.1). */
 export const createTemplateFn = createServerFn({ method: 'POST' })
@@ -103,7 +107,7 @@ export function acceptTemplateOfferHandler(db: Db, userId: number, data: Score, 
   return answered(acceptOfferOnTemplate(db, userId, data.templateId, data.score, now, bidding(db)))
 }
 
-/** A taker's Nechci on a proposed template: his open bid closes. */
+/** A taker's Nechci: his open bid closes (a proposed chore, or a price change with `bidRefusals`). */
 export function withdrawTemplateBidHandler(
   db: Db,
   userId: number,
@@ -113,7 +117,10 @@ export function withdrawTemplateBidHandler(
   return answered(withdrawTemplateBid(db, userId, data.templateId, now, bidding(db)))
 }
 
-/** A giver turns a proposed template's bidding down: the bids he saw close, the offer stands. */
+/**
+ * A giver turns the bids he saw down (a proposed chore, or a price change with `bidRefusals`):
+ * they close and the offer stands; a price change with no offer ends.
+ */
 export function turnDownTemplateBidsHandler(
   db: Db,
   userId: number,

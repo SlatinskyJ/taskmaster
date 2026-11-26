@@ -22,13 +22,22 @@ import {
  * What a person can do about an agreed template's score (spec §5.1), like BidPanel for a task:
  * the yes button with its outcome right under it, then a new number on the stepper. A brother
  * bids; a parent makes a new offer, or at the lowest bid accepts it. On a proposed chore with
- * first-price bidding (#209) the same, plus a no button (Nechci / Odmítnout nabídky) like a Návrh.
+ * first-price bidding (#209) the same, plus a no button (Nechci / Odmítnout nabídky) like a Návrh;
+ * on an agreed chore's price change that no button only with `refusals` (switch `bidRefusals`, #232).
  */
-export function TemplatePricePanel({ template, me }: { template: TemplateView; me: Me }) {
+export function TemplatePricePanel({
+  template,
+  me,
+  refusals = false,
+}: {
+  template: TemplateView
+  me: Me
+  refusals?: boolean
+}) {
   const { busy, run } = useTaskAction()
   const mine = myTemplateBid(template, me)
   const [value, setValue] = useState(stepperStart(template, me))
-  const refusal = priceRefusal(template, me)
+  const refusal = priceRefusal(template, me, refusals)
   const yes = refusal ? [...priceButtons(template, me), refusal] : priceButtons(template, me)
   const proposed = template.status === 'proposed'
   const send = priceSend(template, me, value)

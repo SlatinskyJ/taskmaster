@@ -84,3 +84,22 @@ test('a proposed chore offers no bidding with choreBidding off (#209)', async ({
   await expect(page.getByText(cs.notFound.message)).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Vynést koše' })).toHaveCount(0)
 })
+
+test('a price change offers no Nechci or turn-down with bidRefusals off (#232)', async ({
+  page,
+}) => {
+  // The `recurring` seed has the switch off; "Vyndat myčku" (the second template, /sablona/2) has
+  // a change in flight: Mladší bids 5, Táta offers 4.
+  await passwordLogin(page, 'tata')
+  await expect(page).toHaveURL(/\/$/)
+  await page.goto('/sablona/2')
+  await expect(page.getByRole('heading', { name: 'Vyndat myčku' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Přijmout 5/ })).toBeVisible()
+  await expect(page.getByRole('button', { name: cs.bids.turnDown, exact: true })).toHaveCount(0)
+
+  await switchTo(page, 'mladsi')
+  await page.goto('/sablona/2')
+  await expect(page.getByRole('heading', { name: 'Vyndat myčku' })).toBeVisible()
+  await expect(page.getByText(`${cs.bids.yourBid} 5`)).toBeVisible()
+  await expect(page.getByRole('button', { name: cs.bids.withdraw, exact: true })).toHaveCount(0)
+})
