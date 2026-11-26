@@ -78,7 +78,7 @@ function TaskPage() {
   const waiting = waitingText(task, me)
   const oneTime = task.origin === 'one_time'
   return (
-    <Screen title={task.title} user={user} back="history">
+    <Screen title={task.title} user={user} back="history" fullTitle>
       <Card className="grid gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <StateChip state={taskChipState(task)} />
