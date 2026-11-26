@@ -5,6 +5,7 @@ import { trackVisualViewport } from '~/lib/visualViewport'
 import { Toaster } from '~/components/ui/sonner'
 import { themeBootScript } from '~/lib/theme'
 import { pwaLinks, pwaMeta, themeColorMeta } from '~/pwa/head'
+import { installBootScript } from '~/pwa/install'
 import { registerServiceWorker } from '~/pwa/register'
 import appCss from '~/styles/app.css?url'
 
@@ -38,6 +39,8 @@ function RootDocument({ children }: { children: ReactNode }) {
     <html lang="cs" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+        {/* beforeinstallprompt can fire before hydration; keep it for Profil (#302). */}
+        <script dangerouslySetInnerHTML={{ __html: installBootScript }} />
         <HeadContent />
         {themeColorMeta.map((meta) => (
           <meta key={meta.media} {...meta} />
