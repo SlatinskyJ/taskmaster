@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { sectionLabelClass } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
@@ -17,21 +17,9 @@ import type { PersonSummary } from '~/server/users/functions'
 // fields and Uložit scroll in one body, Uložit after the last field (#159, Jakub 2026-11-26):
 // with the phone keyboard up, a pinned Uložit under a short field list hid that more fields
 // follow. Uložit may sit under the keyboard; the body scrolls to it (CLAUDE.md phone form
-// rule). Exported on its own so tests render it without the drawer's portal.
+// rule); a refusal scrolls into view. Exported on its own so tests render it without the drawer's portal.
 
 type Role = PersonSummary['role']
-
-/** How long vaul takes to move the sheet above the keyboard (as in FixDrawer). */
-const KEYBOARD_SETTLE_MS = 300
-
-/** Once the sheet has moved up, scroll the focused field into the body's visible part. */
-function revealField(e: React.FocusEvent) {
-  const el = e.target
-  if (!(el instanceof HTMLInputElement)) return
-  setTimeout(() => {
-    el.scrollIntoView({ block: 'nearest' })
-  }, KEYBOARD_SETTLE_MS)
-}
 const ROLES: readonly Role[] = ['taker', 'giver', 'admin']
 
 export interface PersonFormValues {
@@ -76,6 +64,11 @@ export function PersonForm({ mode, person, isSelf = false, onSubmit, onReset }: 
     setError(null)
   }
   const id = mode === 'add' ? 'person-add' : 'person-edit'
+  // A refusal shows at the end of the scroll body, maybe under the keyboard (#159): bring it up.
+  const alertRef = useRef<HTMLParagraphElement>(null)
+  useEffect(() => {
+    if (error) alertRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [error])
 
   async function submit() {
     setBusy(true)
@@ -100,7 +93,6 @@ export function PersonForm({ mode, person, isSelf = false, onSubmit, onReset }: 
       <div
         data-slot="person-form-body"
         className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-1"
-        onFocus={revealField}
       >
         <label className="grid gap-1.5">
           <span className={sectionLabelClass}>{cs.admin.displayName}</span>
@@ -187,7 +179,7 @@ export function PersonForm({ mode, person, isSelf = false, onSubmit, onReset }: 
         )}
         <div className="grid gap-3 pt-3">
           {error && (
-            <p role="alert" className="font-bold text-state-rejected-text">
+            <p ref={alertRef} role="alert" className="font-bold text-state-rejected-text">
               {error}
             </p>
           )}

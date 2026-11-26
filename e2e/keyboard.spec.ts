@@ -3,8 +3,10 @@ import { cs } from '../src/lib/strings'
 import { passwordLogin } from './helpers'
 import {
   expectAboveKeyboard,
+  KEYBOARD_HEIGHT,
   openKeyboard,
   panKeyboard,
+  PHONE,
   PHONE_BROWSER,
   useKeyboard,
 } from './keyboard'
@@ -67,6 +69,30 @@ test('Správa, Nový člověk: Uložit comes after the last field in the same sc
   await expectAboveKeyboard(page, password)
   await save.scrollIntoViewIfNeeded()
   await expectAboveKeyboard(page, save)
+})
+
+test.describe('the installed app on an iPhone', () => {
+  test.use({ viewport: PHONE })
+
+  test('Správa, Nový člověk: a refusal shows above the keyboard (#159)', async ({ page }) => {
+    await useKeyboard(page, KEYBOARD_HEIGHT)
+    await passwordLogin(page, 'admin')
+    await page.waitForURL((url) => !url.pathname.startsWith('/login'))
+    await page.goto('/sprava')
+    await page.getByRole('button', { name: cs.admin.add }).click()
+    const sheet = page.getByRole('dialog')
+    const field = (name: string) => sheet.getByRole('textbox', { name: new RegExp(`^${name}`) })
+    await field(cs.admin.displayName).fill('Táta dvakrát')
+    // `tata` is taken on this seed, so the server refuses.
+    await field(cs.admin.username).fill('tata')
+    const password = field(cs.admin.password)
+    await openKeyboard(page, password)
+    await password.fill('heslo1234')
+    await password.press('Enter')
+    const alert = sheet.getByRole('alert')
+    await expect(alert).toBeVisible()
+    await expectAboveKeyboard(page, alert)
+  })
 })
 
 async function openResetDialog(page: Page) {

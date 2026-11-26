@@ -11,7 +11,7 @@ import type { ChangePasswordValues, PasswordField } from './changePasswordForm'
 import { checkBeforeSending, EMPTY_PASSWORD_FORM, nextField, outcomeOf } from './changePasswordForm'
 
 // The form inside ChangePasswordDrawer (Profil, #210). Fields scroll in their own body and the
-// button sits in the footer, so it stays reachable above the phone keyboard (as PersonForm).
+// button sits in the footer, so it stays reachable above the phone keyboard.
 
 interface Props {
   username: string
