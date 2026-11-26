@@ -21,7 +21,7 @@ Read `.claude/skills/pr-review-rounds/judge-contract.md` first. It defines your 
 
 ## Screenshots (code rounds)
 
-You don't run the app. You look at the builder's screenshots: the folder your prompt names (`Screenshots: <folder>`, 360 px wide, one file per screen and state) and the ones in the PR brief (the iPhone 15 Pro screen, 393×852, one screen per file).
+You don't run the app. You look at the builder's screenshots: the folder your prompt names (`Screenshots: <folder>`: the iPhone 15 Pro screen, 393×852, one file per screen and state, plus `-360` files of every row with a long name at 360 px). The brief shows a pick of the same files; don't open the brief's images again.
 
 1. **List first.** From the diff, write down every screen and state this PR adds or changes: each kind of row, each set of buttons on a row, each form and dialog, each empty and error state.
 2. **Look at every file** in the folder (Read tool). Judge what the picture shows, not what the class names promise: a `truncate` in the code tells you text can be cut, the screenshot tells you whether a person can still read it. Look for text cut or broken in the middle of a word, something the code renders that is not on the picture (a chip label, a name, the line under the title), things on top of each other, a row whose buttons squeeze out its text.
@@ -29,8 +29,8 @@ You don't run the app. You look at the builder's screenshots: the folder your pr
 
 | What you see | Finding |
 | --- | --- |
-| Something a person needs to read or tap is cut, hidden or covered | `should-fix` on the line that lays it out. Name the file. `Failure: <who>, <screen> at 360 px → <what they cannot read or do> (<file>)` |
-| A screen or state on your list has no 360 px screenshot, or there is no folder | `should-fix` on the line that renders it. `Failure: <screen, state> at 360 px → on no screenshot; nobody has seen whether <what has to fit there> fits`. `Fix: add a screenshot of <state>` |
+| Something a person needs to read or tap is cut, hidden or covered | `should-fix` on the line that lays it out. Name the file. `Failure: <who>, <screen> → <what they cannot read or do> (<file>)` |
+| A screen or state on your list has no screenshot, a row with a long name has no `-360` file, or there is no folder | `should-fix` on the line that renders it. `Failure: <screen, state> → on no screenshot; nobody has seen whether <what has to fit there> fits`. `Fix: add a screenshot of <state>` |
 | A form, sheet or dialog with a text field has no keyboard-open screenshot (`-keyboard-`), or on it the field being typed in sits under the keyboard, or the form has no case in `e2e/keyboard.spec.ts` | `should-fix` on the line that lays out the form. `Failure: <who>, <screen> with the keyboard open → <what they cannot see while typing>` |
 | A row that shows a task name is shot only with short ones | the same finding: a row is checked with a long Czech task name (about 30 letters), or not at all |
 | A value the code states exactly (`min-h-10` is 40 px; a contrast ratio from two tokens) | needs no screenshot; cite the line |
