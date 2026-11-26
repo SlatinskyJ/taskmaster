@@ -1,6 +1,8 @@
 import type { ClockTime, DeadlineRule, TemplateSchedule } from '~/domain'
 import type { Weekday } from '~/domain/dates'
 import { TASK_SCORE_MAX } from '~/lib/taskLimits'
+import { TEMPLATE_STATUSES } from '~/server/db/schema'
+import type { TemplateStatus } from '~/server/db/schema'
 import { optionalDescription, seenDescriptionOf } from '~/server/descriptions/parse'
 import type { NewTemplate } from './templates'
 
@@ -69,13 +71,33 @@ export function parseApproval(data: unknown): { templateId: number; score: numbe
   return { templateId: int(templateId), score: scoreOf(score) }
 }
 
-/** A yes, bid or accept: the number, and the text the page showed (#207 ruling 8). */
+/** The chore status a price call's page showed (#243); absent = not checked. */
+export function seenStatusOf(body: Record<string, unknown>): { seenStatus?: TemplateStatus } {
+  const seen = body.seenStatus
+  if (seen === undefined) return {}
+  if (!TEMPLATE_STATUSES.some((s) => s === seen)) invalid()
+  return { seenStatus: seen as TemplateStatus }
+}
+
+/** A yes, bid or accept: the number, the text and the status the page showed (#207, #243). */
 export function parseSeenScore(data: unknown): {
   templateId: number
   score: number
   seenDescription?: string | null
+  seenStatus?: TemplateStatus
 } {
-  return { ...parseApproval(data), ...seenDescriptionOf(record(data)) }
+  const body = record(data)
+  return { ...parseApproval(body), ...seenDescriptionOf(body), ...seenStatusOf(body) }
+}
+
+/** A giver's counter or accept: the number, and the status his page showed (#243). */
+export function parseSeenApproval(data: unknown): {
+  templateId: number
+  score: number
+  seenStatus?: TemplateStatus
+} {
+  const body = record(data)
+  return { ...parseApproval(body), ...seenStatusOf(body) }
 }
 
 /** Most bids a turn-down may name: more than any family has takers. */
