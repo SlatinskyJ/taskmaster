@@ -29,6 +29,7 @@ export function BidsToAnswer({
         {items.map((task) => (
           <li key={task.id}>
             <TaskRow
+              described={task.description !== null}
               name={task.title}
               state="negotiating"
               points={task.score}

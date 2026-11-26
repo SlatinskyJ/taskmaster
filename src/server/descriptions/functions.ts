@@ -6,10 +6,13 @@ import { getDb } from '~/server/db'
 import { getFlags } from '~/server/features'
 import { answerDescriptionChange, changeDescriptionOf } from './descriptions'
 import { rawDescription } from './parse'
-import type { DescriptionServerError, DescriptionTarget } from './rows'
+import { listDescriptionChangesWaiting } from './rows'
+import type { DescriptionServerError, DescriptionTarget, DescriptionWaitingRow } from './rows'
 
 // Server functions for descriptions (#207), behind the `descriptions` switch. Roles are checked
 // here (guards) and again by the domain rules inside (`not_a_giver`, `not_a_taker`).
+
+export type { DescriptionTarget, DescriptionWaitingRow, WaitingDescription } from './rows'
 
 export type DescriptionOutcome = 'applied' | 'waiting' | 'withdrawn' | 'agreed' | 'declined'
 
@@ -97,3 +100,12 @@ export const answerDescriptionFn = createServerFn({ method: 'POST' })
   .handler(({ data, context }) =>
     answerDescriptionHandler(getDb(), context.user.id, data, new Date()),
   )
+
+/** Domů: the waiting changes this brother may OK (ruling 6); none with the switch off. */
+export function descriptionChangesWaitingHandler(db: Db, userId: number): DescriptionWaitingRow[] {
+  return getFlags(db).descriptions ? listDescriptionChangesWaiting(db, userId) : []
+}
+
+export const listDescriptionChangesWaitingFn = createServerFn({ method: 'GET' })
+  .middleware([requireRole('taker')])
+  .handler(({ context }) => descriptionChangesWaitingHandler(getDb(), context.user.id))

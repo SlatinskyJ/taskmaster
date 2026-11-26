@@ -5,6 +5,7 @@ import { Screen } from '~/components/shell/Screen'
 import { sectionLabelClass } from '~/components/shell/SectionLabel'
 import { ScoreField, START_SCORE } from '~/components/tasks/ScoreField'
 import type { ItemKind, RecurringValue } from '~/components/templates/actions'
+import { NewDescriptionField } from '~/components/descriptions/NewDescriptionField'
 import { DEFAULT_RECURRING, submitNewItem } from '~/components/templates/actions'
 import { RecurringFields } from '~/components/templates/RecurringFields'
 import { Button } from '~/components/ui/button'
@@ -38,6 +39,7 @@ function NewTask() {
   const [title, setTitle] = useState('')
   const [score, setScore] = useState(START_SCORE)
   const [approvalRequired, setApprovalRequired] = useState(true)
+  const [description, setDescription] = useState('')
   const [recurring, setRecurring] = useState<RecurringValue>(DEFAULT_RECURRING)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -46,7 +48,13 @@ function NewTask() {
     setBusy(true)
     setError(null)
     try {
-      const result = await submitNewItem(kind, { title, score, approvalRequired, recurring })
+      const result = await submitNewItem(kind, {
+        title,
+        score,
+        approvalRequired,
+        recurring,
+        description: features.descriptions ? description : '',
+      })
       if (!result.ok) {
         setError(taskErrorMessage(result.error))
         return
@@ -107,6 +115,9 @@ function NewTask() {
               className="font-bold"
             />
           </label>
+          {features.descriptions && (
+            <NewDescriptionField value={description} onChange={setDescription} />
+          )}
           <ScoreField value={score} onChange={setScore} />
           <label className="flex min-h-tap items-center gap-2.5 text-row font-extrabold">
             <input

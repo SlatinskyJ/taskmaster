@@ -4,6 +4,7 @@ import type { Result } from '~/domain/result'
 import type { Db } from '~/server/db'
 import { getDb } from '~/server/db'
 import type { TemplateRow, TemplateStatus } from '~/server/db/schema'
+import { STALE, seenOf, unseen } from '~/server/descriptions/seen'
 import { getFlags } from '~/server/features'
 import { hasDescription } from '~/server/descriptions/parse'
 import {
@@ -64,10 +65,6 @@ const bidding = (db: Db): BiddingOpts => {
 
 const OFF = { ok: false, error: 'feature_off' } as const
 
-/** A taker's page's text, checked only with the `descriptions` switch on (ruling 8). */
-const seenOf = (db: Db, data: { seenDescription?: string | null }) =>
-  getFlags(db).descriptions ? data.seenDescription : undefined
-
 /** A giver proposes a new recurring template (spec §5.1); a description needs the switch. */
 export function createTemplateHandler(
   db: Db,
@@ -81,6 +78,7 @@ export function createTemplateHandler(
 
 /** A giver or taker approves the template score they were shown (spec §3). */
 export function approveTemplateScoreHandler(db: Db, userId: number, data: Seen, now: Date) {
+  if (unseen(db, data)) return STALE
   return answered(
     approveTemplateScore(db, userId, data.templateId, data.score, now, seenOf(db, data)),
   )
@@ -121,6 +119,7 @@ type Seen = Score & { seenDescription?: string | null }
 
 /** A taker bids a score. */
 export function bidTemplateScoreHandler(db: Db, userId: number, data: Seen, now: Date) {
+  if (unseen(db, data)) return STALE
   const opts = { ...bidding(db), seenDescription: seenOf(db, data) }
   return answered(bidOnTemplate(db, userId, data.templateId, data.score, now, opts))
 }
@@ -138,6 +137,7 @@ export function acceptTemplateBidHandler(db: Db, userId: number, data: Score, no
 
 /** A taker accepts the giver side's offer he saw. */
 export function acceptTemplateOfferHandler(db: Db, userId: number, data: Seen, now: Date) {
+  if (unseen(db, data)) return STALE
   const opts = { ...bidding(db), seenDescription: seenOf(db, data) }
   return answered(acceptOfferOnTemplate(db, userId, data.templateId, data.score, now, opts))
 }

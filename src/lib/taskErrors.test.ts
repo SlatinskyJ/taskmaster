@@ -28,6 +28,12 @@ describe('taskErrorMessage', () => {
     ['invalid_deadline', 'Termín nedává smysl. Zkontroluj ho.'],
     ['already_approved', 'Souhlas už máš zapsaný.'],
     ['no_offer', cs.tasks.errors.offerChanged],
+    ['description_too_long', 'Popis je delší než 1000 znaků.'],
+    ['description_frozen', 'Popis už nejde změnit.'],
+    ['not_changeable', 'Tady popis měnit nemůžeš.'],
+    ['same_description', 'Popis je stejný jako teď.'],
+    ['no_change', 'Návrh už neplatí. Podívej se znovu.'],
+    ['not_involved', 'Tenhle návrh neodsouhlasuješ ty.'],
     ['not_agreed', 'Tenhle opakovaný úkol ještě není domluvený.'],
   ])('%s → Czech message', (code, message) => {
     expect(taskErrorMessage(code)).toBe(message)
@@ -48,5 +54,11 @@ describe('scoreChangeErrorMessage', () => {
     ['not_a_giver', cs.tasks.errors.notAllowed],
   ])('%s', (code, message) => {
     expect(scoreChangeErrorMessage(code)).toBe(message)
+  })
+})
+
+describe('offerChanged (#207 ruling 3)', () => {
+  it('fits a changed text as well as a changed price', () => {
+    expect(cs.tasks.errors.offerChanged).toBe('Úkol se mezitím změnil. Podívej se znovu.')
   })
 })

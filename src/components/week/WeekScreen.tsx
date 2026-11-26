@@ -207,6 +207,7 @@ function TakerWeek({
                 return (
                   <li key={`${item.status}-${String(item.taskId)}-${item.at}`}>
                     <TaskRow
+                      described={false}
                       name={item.title}
                       state={itemChip(item)}
                       points={item.score}
@@ -240,6 +241,7 @@ function AdjustmentRow({
   const d = disputes ? adjustmentDispute(adjustment, takerName) : null
   return (
     <TaskRow
+      described={false}
       name={row.name}
       state={row.state}
       stateLabel={row.stateLabel}

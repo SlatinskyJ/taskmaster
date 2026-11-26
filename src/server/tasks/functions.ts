@@ -34,6 +34,8 @@ import {
   turnDownBids,
   withdrawBid,
 } from './bidding'
+import { STALE, seenOf, unseen } from '~/server/descriptions/seen'
+import type { Seen as SeenText } from '~/server/descriptions/seen'
 import { getFlags } from '~/server/features'
 import { hasDescription, optionalDescription, seenDescriptionOf } from '~/server/descriptions/parse'
 import type { Db } from '~/server/db'
@@ -170,18 +172,13 @@ export function answered(result: Result<TaskRow, TaskError>): TaskActionResult {
 
 // ── Descriptions (#207, behind the `descriptions` switch) ────────────────────────────────
 
-interface Seen {
+interface Seen extends SeenText {
   taskId: number
   score: number
-  seenDescription?: string | null
 }
 
 /** The switch, as the views take it: descriptions are shown only with it on. */
 const shown = (db: Db) => ({ descriptions: getFlags(db).descriptions })
-
-/** The page's text, checked only with the switch on (ruling 8). */
-const seenOf = (db: Db, data: Seen) =>
-  getFlags(db).descriptions ? data.seenDescription : undefined
 
 /** A giver creates a one-time task with an offer (spec §5.2); a description needs the switch. */
 export function createTaskHandler(
@@ -196,16 +193,19 @@ export function createTaskHandler(
 
 /** A giver or taker approves the offer they were shown (spec §5.2 path 1). */
 export function approveTaskOfferHandler(db: Db, userId: number, data: Seen, now: Date) {
+  if (unseen(db, data)) return STALE
   return answered(approveTaskOffer(db, userId, data.taskId, data.score, now, seenOf(db, data)))
 }
 
 /** A taker bids (or re-bids) a number of his own. */
 export function placeBidHandler(db: Db, takerId: number, data: Seen, now: Date) {
+  if (unseen(db, data)) return STALE
   return answered(placeBid(db, takerId, data.taskId, data.score, now, seenOf(db, data)))
 }
 
 /** A taker with a bid takes the offer he was shown: reserved to him. */
 export function acceptOfferHandler(db: Db, takerId: number, data: Seen, now: Date) {
+  if (unseen(db, data)) return STALE
   return answered(acceptOffer(db, takerId, data.taskId, data.score, now, seenOf(db, data)))
 }
 

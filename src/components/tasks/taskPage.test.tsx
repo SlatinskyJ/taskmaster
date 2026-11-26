@@ -21,6 +21,8 @@ const page = vi.hoisted(() => {
     reopen: boolean
     approveAnywhere: boolean
     openRows: boolean
+    descriptions: boolean
+    change: unknown
     marks: Record<string, unknown>
   } = {
     user: null,
@@ -30,6 +32,8 @@ const page = vi.hoisted(() => {
     reopen: false,
     approveAnywhere: false,
     openRows: false,
+    descriptions: false,
+    change: null,
     marks: {},
   }
   return state
@@ -45,6 +49,7 @@ vi.mock('@tanstack/react-router', () => ({
         bidRefusals: true,
         approveAnywhere: page.approveAnywhere,
         openRows: page.openRows,
+        descriptions: page.descriptions,
       },
     }),
     useLoaderData: () => ({
@@ -52,6 +57,7 @@ vi.mock('@tanstack/react-router', () => ({
       thread: [],
       history: page.history,
       disputeMarks: page.marks,
+      descriptionChange: page.change,
     }),
   }),
   notFound: () => new Error('not found'),
@@ -77,6 +83,10 @@ vi.mock('./useTaskAction', () => ({ useTaskAction: () => ({ busy: null, run: vi.
 vi.mock('./bidCalls', () => ({ callBid: vi.fn(), BID_CALLS: {} }))
 vi.mock('~/server/tasks/functions', () => ({
   getTaskDetailFn: vi.fn(() => Promise.resolve({ task: page.task, thread: [], history: [] })),
+}))
+vi.mock('~/server/descriptions/functions', () => ({
+  changeDescriptionFn: vi.fn(),
+  answerDescriptionFn: vi.fn(),
 }))
 vi.mock('~/server/disputes/functions', () => ({
   getItemMarkFn: vi.fn(() => Promise.resolve(null)),
@@ -432,5 +442,67 @@ describe('task page: reopened bidding (#212)', () => {
     const html = render(TATA, round(null))
     expect(html).not.toContain(cs.bids.turnDown)
     expect(html).toContain(cs.rebid.noEntries)
+  })
+})
+
+describe('task page: description (#207)', () => {
+  const GIVER = { id: 2, role: 'giver', displayName: 'Táta' } as const
+  const BROTHER = { id: 4, role: 'taker', displayName: 'Mladší' } as const
+  const described = { ...reserved, description: 'Celý obývák.\nI pod gaučem.' }
+  const on = (fn: () => void) => {
+    page.descriptions = true
+    try {
+      fn()
+    } finally {
+      page.descriptions = false
+      page.change = null
+    }
+  }
+
+  it('switch off: no Popis block, even for a parent', () => {
+    expect(render(GIVER, described)).not.toContain('data-slot="description"')
+  })
+
+  it('switch on: the text; Upravit popis for Táta, nothing to edit for a brother', () => {
+    on(() => {
+      const giver = render(GIVER, described)
+      expect(giver).toContain('Celý obývák.\nI pod gaučem.')
+      expect(giver).toContain(`>${cs.description.edit}<`)
+      const brother = render(BROTHER, described)
+      expect(brother).toContain('Celý obývák.\nI pod gaučem.')
+      expect(brother).not.toContain(cs.description.edit)
+    })
+  })
+
+  it('an instance shows its text without Upravit', () => {
+    on(() => {
+      const html = render(GIVER, { ...described, origin: 'on_demand', templateId: 5 })
+      expect(html).toContain('Celý obývák.')
+      expect(html).not.toContain(cs.description.edit)
+    })
+  })
+
+  it('a done task shows its text without Upravit', () => {
+    on(() => {
+      const html = render(GIVER, { ...described, status: 'done_unconfirmed' })
+      expect(html).toContain('Celý obývák.')
+      expect(html).not.toContain(cs.description.edit)
+    })
+  })
+
+  it('a waiting change: the card, with yes and no for the brother it waits for', () => {
+    on(() => {
+      page.change = {
+        id: 9,
+        description: 'Jen obývák.',
+        proposedBy: 2,
+        createdAt: '2026-11-26T10:00:00.000Z',
+        waitingFor: [3],
+        waitingForNames: ['Starší'],
+      }
+      const html = render({ id: 3, role: 'taker', displayName: 'Starší' }, described)
+      expect(html).toContain(cs.description.waitingTitle)
+      expect(html).toContain(`>${cs.description.agree}<`)
+    })
   })
 })

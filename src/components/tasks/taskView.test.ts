@@ -69,7 +69,7 @@ const call = (action: BidAction): BidCall => {
     case 'turnDownBids':
       return { action, data: { taskId: 1, bids: [{ takerId: 3, score: 25 }] } }
     default:
-      return { action, data: { taskId: 1, score: 18 } }
+      return { action, data: { taskId: 1, score: 18, seenDescription: null } }
   }
 }
 const low = (score: number, ...bidders: { id: number; name: string }[]) => ({ score, bidders })
@@ -94,7 +94,7 @@ describe('taskView', () => {
       {
         key: 'approve',
         action: 'approveOffer',
-        data: { taskId: 1, score: 18 },
+        data: { taskId: 1, score: 18, seenDescription: null },
         label: 'Souhlasím',
         hint: 'Úkol bude volný pro všechny.',
         variant: 'ok',
@@ -105,7 +105,7 @@ describe('taskView', () => {
       {
         key: 'take',
         action: 'acceptOffer',
-        data: { taskId: 1, score: 18 },
+        data: { taskId: 1, score: 18, seenDescription: null },
         label: 'Beru za 18',
         hint: 'Úkol bude tvůj.',
         variant: 'ok',
@@ -113,7 +113,7 @@ describe('taskView', () => {
       {
         key: 'approve',
         action: 'approveOffer',
-        data: { taskId: 1, score: 18 },
+        data: { taskId: 1, score: 18, seenDescription: null },
         label: 'Souhlasím',
         hint: 'Úkol bude volný pro všechny.',
         variant: 'ghost',
@@ -517,8 +517,8 @@ describe('a reopened round (#212)', () => {
     expect(approve?.hint).toBe('Platí nová cena 16 b. Úkol zůstane volný.')
     const mine = bidButtons(round(16, tata, [b(3, 'Starší', 15)]), STARSI)
     expect(mine.map((x) => [x.action, x.data])).toEqual([
-      ['acceptOffer', { taskId: 1, score: 16 }],
-      ['approveOffer', { taskId: 1, score: 16 }],
+      ['acceptOffer', { taskId: 1, score: 16, seenDescription: null }],
+      ['approveOffer', { taskId: 1, score: 16, seenDescription: null }],
     ])
     expect(mine[0]?.label).toBe(cs.bids.take(16))
   })
@@ -607,5 +607,27 @@ describe('a reopened round (#212)', () => {
     // Not in a round: as before.
     expect(toastFor(call('placeBid'), 'proposed', STARSI, false)).toBe(cs.bids.toast.sent)
     expect(toastFor(call('approveOffer'), 'proposed', STARSI, false)).toBe(cs.tasks.approved)
+  })
+})
+
+describe('taker calls carry the text the page showed (#207)', () => {
+  const STARSI = { id: 3, role: 'taker' } as const
+  const text = 'Celý obývák.\nI pod gaučem.'
+
+  it.each([
+    ['no description', null],
+    ['a description', text],
+  ] as const)('%s: Souhlasím, Beru za and Poslat carry it', (_, description) => {
+    const t = view({ description, bids: [b(3, 'Starší', 20)] })
+    const buttons = bidButtons(t, STARSI)
+    expect(buttons.map((x) => x.data)).toEqual([
+      { taskId: t.id, score: t.score, seenDescription: description },
+      { taskId: t.id, score: t.score, seenDescription: description },
+    ])
+    expect(sendButton(t, STARSI, 22)?.data).toEqual({
+      taskId: t.id,
+      score: 22,
+      seenDescription: description,
+    })
   })
 })

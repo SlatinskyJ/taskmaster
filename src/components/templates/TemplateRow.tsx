@@ -47,6 +47,7 @@ export function TemplateRow({
   )
   return (
     <TaskRow
+      described={t.description !== null}
       name={t.title}
       state={chip.state}
       stateLabel={chip.label}

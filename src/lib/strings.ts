@@ -111,7 +111,7 @@ export const cs = {
     errors: {
       invalidTitle: (max: number) => `Napiš název (nejvýš ${String(max)} znaků).`,
       invalidScore: 'Body musí být celé číslo od 1.',
-      offerChanged: 'Cena se mezitím změnila. Podívej se znovu.',
+      offerChanged: 'Úkol se mezitím změnil. Podívej se znovu.',
       gone: 'Tenhle úkol už je vyřízený.',
       reservedByOther: 'Tenhle úkol si už vzal někdo jiný.',
       notAllowed: 'Tohle teď udělat nemůžeš.',
@@ -441,6 +441,13 @@ export const cs = {
     scheduledCreated: (n: number) => `přidáno podle rozvrhu za ${String(n)} b`,
     /** Its grace window ended with nobody done (#39). */
     expired: 'prošlo',
+    /** A description (#207): set at once, or proposed and answered. */
+    descriptionChanged: 'nový popis',
+    descriptionProposed: 'návrh nového popisu',
+    descriptionApproved: 'souhlas s novým popisem',
+    descriptionDeclined: 'nesouhlas s novým popisem',
+    descriptionWithdrawn: 'návrh popisu stažen',
+    descriptionDiscarded: 'návrh popisu propadl',
     other: 'změna',
   },
   home: {
@@ -532,6 +539,50 @@ export const cs = {
       `Opraveno na úroveň ${now} (původně ${was}): ${signedPoints(diff)} · ${date} · ${reason}`,
   },
   /** Disputes on locked items (#46, spec §5.11, UI doc §7.1 TDispute). Chip text: `state.disputed`. */
+  /** What done means on a task or chore (#207, spec §4). */
+  description: {
+    label: 'Popis',
+    none: 'Bez popisu',
+    add: 'Přidat popis',
+    edit: 'Upravit popis',
+    sheetTitle: 'Popis úkolu',
+    field: 'Co znamená hotovo',
+    count: (n: number) => `${String(n)} / 1000`,
+    save: 'Uložit',
+    saving: 'Ukládám…',
+    newField: 'Popis (nepovinné)',
+    newHint: 'Napiš, co přesně znamená hotovo. Kluci to uvidí, než souhlasí.',
+    resetWarn: 'Kdo už souhlasil, bude muset souhlasit znovu.',
+    waitWarn: 'Kluci nový popis nejdřív odsouhlasí.',
+    waitingTitle: 'Nový popis čeká na souhlas',
+    waitingRemove: 'Návrh: popis odebrat',
+    /** What a waiting change changes (Jakub 2026-11-26): the hint and screen-reader words. */
+    diffHint: 'Podtržené přibylo, přeškrtnuté ubylo.',
+    diffAdded: 'přibylo:',
+    diffRemoved: 'ubylo:',
+    waitingFor: (names: string) => `Čeká na: ${names}`,
+    agree: 'Souhlasím s popisem',
+    decline: 'Nesouhlasím',
+    takeBack: 'Vzít zpět',
+    homeRow: 'Nový popis k odsouhlasení',
+    hasIcon: 'Má popis',
+    readAndAgree: 'Přečíst a souhlasit',
+    toast: {
+      applied: 'Popis uložen.',
+      waiting: 'Popis čeká na souhlas kluků.',
+      withdrawn: 'Návrh popisu vzat zpět.',
+      agreed: 'Nový popis platí.',
+      declined: 'Zůstává starý popis.',
+    },
+    errors: {
+      description_too_long: 'Popis je delší než 1000 znaků.',
+      description_frozen: 'Popis už nejde změnit.',
+      not_changeable: 'Tady popis měnit nemůžeš.',
+      same_description: 'Popis je stejný jako teď.',
+      no_change: 'Návrh už neplatí. Podívej se znovu.',
+      not_involved: 'Tenhle návrh neodsouhlasuješ ty.',
+    },
+  },
   disputes: {
     action: 'Rozporovat',
     actionFor: (what: string, name: string) => `Rozporovat: ${what} – ${name}`,

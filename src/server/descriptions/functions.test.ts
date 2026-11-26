@@ -27,6 +27,7 @@ import { changeDescriptionOf } from './descriptions'
 import {
   answerDescriptionHandler,
   changeDescriptionHandler,
+  descriptionChangesWaitingHandler,
   parseDescriptionAnswer,
   parseDescriptionChange,
 } from './functions'
@@ -112,6 +113,7 @@ describe('switch on', () => {
       proposedBy: f.tata,
       createdAt: T1.toISOString(),
       waitingFor: [f.starsi, f.mladsi],
+      waitingForNames: ['Starší', 'Mladší'],
     })
     const answer = { target, changeId: change?.id ?? 0, yes: true }
     expect(answerDescriptionHandler(f.db, f.mladsi, answer, T2)).toStrictEqual({
@@ -179,9 +181,6 @@ describe('ruling 8 through the handlers', () => {
       parseSeenScore({ templateId: tid, score, seenDescription: 'old' })
     expect(approveTemplateScoreHandler(f.db, f.starsi, tpl(10), T2)).toEqual(stale)
     expect(bidTemplateScoreHandler(f.db, f.mladsi, tpl(14), T2)).toEqual(stale)
-    expect(bidTemplateScoreHandler(f.db, f.mladsi, { templateId: tid, score: 14 }, T2).ok).toBe(
-      true,
-    )
     expect(acceptTemplateOfferHandler(f.db, f.mladsi, tpl(10), T3)).toEqual(stale)
   })
 
@@ -203,6 +202,33 @@ describe('ruling 8 through the handlers', () => {
         T2,
       ).ok,
     ).toBe(true)
+  })
+
+  it('switch on: a call with no seenDescription is refused by all six (ruling 2)', () => {
+    const { f, id, tid } = changed(true)
+    const task = (score: number) => ({ taskId: id, score })
+    expect(approveTaskOfferHandler(f.db, f.starsi, task(18), T2)).toEqual(stale)
+    expect(placeBidHandler(f.db, f.mladsi, task(25), T2)).toEqual(stale)
+    must(placeBid(f.db, f.mladsi, id, 25, T2))
+    expect(acceptOfferHandler(f.db, f.mladsi, task(18), T3)).toEqual(stale)
+    const tpl = (score: number) => ({ templateId: tid, score })
+    expect(approveTemplateScoreHandler(f.db, f.starsi, tpl(10), T2)).toEqual(stale)
+    expect(bidTemplateScoreHandler(f.db, f.mladsi, tpl(14), T2)).toEqual(stale)
+    expect(acceptTemplateOfferHandler(f.db, f.mladsi, tpl(10), T3)).toEqual(stale)
+  })
+
+  it('switch off: a call with no seenDescription goes through', () => {
+    const { f, id, tid } = changed(false)
+    expect(placeBidHandler(f.db, f.mladsi, { taskId: id, score: 25 }, T2).ok).toBe(true)
+    expect(acceptOfferHandler(f.db, f.mladsi, { taskId: id, score: 18 }, T3).ok).toBe(true)
+    expect(approveTaskOfferHandler(f.db, f.starsi, { taskId: car(f), score: 18 }, T2).ok).toBe(true)
+    const tpl = (score: number) => ({ templateId: tid, score })
+    expect(bidTemplateScoreHandler(f.db, f.mladsi, tpl(14), T2).ok).toBe(true)
+    expect(acceptTemplateOfferHandler(f.db, f.mladsi, tpl(10), T3).ok).toBe(true)
+    const t = { title: 'z', score: 6, approvalRequired: true, schedule: null, deadline: null }
+    const fresh = must(createTemplate(f.db, f.tata, t, T0)).id
+    const yes = { templateId: fresh, score: 6 }
+    expect(approveTemplateScoreHandler(f.db, f.starsi, yes, T2).ok).toBe(true)
   })
 
   it('switch on: the current text (normalised) goes through', () => {
@@ -289,5 +315,56 @@ describe('parsers', () => {
         'Invalid input',
       )
     }
+  })
+})
+
+describe('Domů: waiting description changes (ruling 6)', () => {
+  it('a reserved task lists only for the reserver; an open task and a chore for every brother', () => {
+    const f = family()
+    on(f)
+    const reserved = car(f)
+    must(approveTaskOffer(f.db, f.starsi, reserved, 18, T0))
+    must(reserveTask(f.db, f.starsi, reserved, T0))
+    must(changeDescriptionOf(f.db, { kind: 'task', id: reserved }, f.tata, 'Jen obývák.', T1))
+    const open = car(f)
+    must(approveTaskOffer(f.db, f.mladsi, open, 18, T0))
+    must(changeDescriptionOf(f.db, { kind: 'task', id: open }, f.tata, 'I chodba.', T1))
+    const chore = agreedTemplate(f)
+    must(changeDescriptionOf(f.db, { kind: 'template', id: chore }, f.tata, 'Hrnce ručně.', T1))
+    const names = (id: number) => descriptionChangesWaitingHandler(f.db, id).map((r) => r.target)
+    expect(names(f.starsi)).toEqual([
+      { kind: 'task', id: reserved },
+      { kind: 'task', id: open },
+      { kind: 'template', id: chore },
+    ])
+    expect(names(f.mladsi)).toEqual([
+      { kind: 'task', id: open },
+      { kind: 'template', id: chore },
+    ])
+    const [first] = descriptionChangesWaitingHandler(f.db, f.starsi)
+    expect(Object.keys(first ?? {}).sort()).toEqual(['changeId', 'name', 'score', 'target'])
+  })
+
+  it("a closed change and a parent's view list nothing", () => {
+    const f = family()
+    on(f)
+    const id = car(f)
+    must(approveTaskOffer(f.db, f.mladsi, id, 18, T0))
+    must(changeDescriptionOf(f.db, { kind: 'task', id }, f.tata, 'I chodba.', T1))
+    expect(descriptionChangesWaitingHandler(f.db, f.tata)).toEqual([])
+    const change = getTaskDetail(f.db, id, { descriptions: true })?.descriptionChange
+    const answer = { target: { kind: 'task', id } as const, changeId: change?.id ?? 0, yes: false }
+    expect(answerDescriptionHandler(f.db, f.starsi, answer, T2).ok).toBe(true)
+    expect(descriptionChangesWaitingHandler(f.db, f.starsi)).toEqual([])
+  })
+
+  it('switch off: nothing', () => {
+    const f = family()
+    on(f)
+    const id = car(f)
+    must(approveTaskOffer(f.db, f.mladsi, id, 18, T0))
+    must(changeDescriptionOf(f.db, { kind: 'task', id }, f.tata, 'I chodba.', T1))
+    setFlag(f, 'descriptions', false)
+    expect(descriptionChangesWaitingHandler(f.db, f.starsi)).toEqual([])
   })
 })

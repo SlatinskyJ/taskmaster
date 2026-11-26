@@ -1,4 +1,6 @@
 import { createFileRoute, notFound } from '@tanstack/react-router'
+import { DescriptionBlock } from '~/components/descriptions/DescriptionBlock'
+import { canEditDescription } from '~/components/descriptions/descriptionCalls'
 import { DisputeControl } from '~/components/disputes/DisputeControl'
 import { templateDispute } from '~/components/disputes/disputeProps'
 import { EmptyState } from '~/components/EmptyState'
@@ -45,7 +47,7 @@ export const Route = createFileRoute('/_app/sablona/$templateId')({
 
 function TemplatePage() {
   const { user, features } = Route.useRouteContext()
-  const { template: t, thread, waitingFor, disputeMark } = Route.useLoaderData()
+  const { template: t, thread, waitingFor, disputeMark, descriptionChange } = Route.useLoaderData()
   const dispute = features.disputes ? templateDispute(t) : null
   const me = { id: user.id, role: user.role }
   const chip = templateChip(t)
@@ -73,6 +75,16 @@ function TemplatePage() {
           <p className="text-meta text-muted">{cs.templatePrice.futureOnly}</p>
         )}
         {waiting && <p className="font-bold break-words">{waiting}</p>}
+        {features.descriptions && (
+          <DescriptionBlock
+            text={t.description}
+            change={descriptionChange}
+            target={{ kind: 'template', id: t.id }}
+            canEdit={canEditDescription({ kind: 'template' }, me)}
+            proposed={proposed}
+            me={me}
+          />
+        )}
         {/* With first-price bidding (#209) the price panel below has Souhlasím. */}
         {proposed && !t.bidding && waitingFor.some((p) => p.id === user.id) && (
           <AgreeToChore template={t} />

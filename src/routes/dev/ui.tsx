@@ -104,6 +104,7 @@ function EffectsDemo() {
         <PointsBar confirmed={70} pending={10} lower={85} upper={100} />
       </Card>
       <TaskRow
+        described={false}
         name={SAMPLE.title}
         state={rowState}
         points={POINTS}
@@ -229,6 +230,7 @@ function UiShowcase() {
         <div className="grid gap-3">
           {STATES.map((s, i) => (
             <TaskRow
+              described={false}
               key={s}
               name={SAMPLE.rows[i % SAMPLE.rows.length]}
               state={s}

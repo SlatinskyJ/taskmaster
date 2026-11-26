@@ -156,6 +156,19 @@ describe('Úkoly grouped by state (#41)', () => {
     expect(render([{ ...round, bids: [] }])).toContain(cs.work.doneSelf)
   })
 
+  it('Hotovo bez bodů is an icon button with its name, no visible label (#176, #180, #194)', () => {
+    const html = render(all)
+    const button = /<button[^>]*aria-label="Hotovo bez bodů"[^>]*>[\s\S]*?<\/button>/.exec(
+      html,
+    )?.[0]
+    expect(button).toBeDefined()
+    expect(button).toMatch(/class="[^"]*size-tap/)
+    expect(button).toContain('title="Hotovo bez bodů"')
+    expect(button?.replace(/<[^>]+>/g, '')).toBe('')
+    // The reserved row keeps its labelled Uvolnit.
+    expect(html).toContain(`>${cs.work.release}</button>`)
+  })
+
   it('switch on: Čeká na potvrzení rows get ✓ Schválit and ✕ Zamítnout; other rows keep theirs (#206)', () => {
     page.approveAnywhere = true
     const html = render(all)

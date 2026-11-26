@@ -1,3 +1,4 @@
+import { CircleCheckBig } from 'lucide-react'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { EmptyState } from '~/components/EmptyState'
@@ -96,14 +97,19 @@ function Tasks() {
     }
     if (t.status === 'open') {
       return (
+        // An icon, so a long name keeps its room at 360 px (#176, #180, #194); the Dialog says
+        // it in words before anything happens.
         <Button
           variant="ghost"
+          size="icon"
+          aria-label={cs.work.doneSelf}
+          title={cs.work.doneSelf}
           disabled={busy !== null}
           onClick={() => {
             setClosing(t)
           }}
         >
-          {cs.work.doneSelf}
+          <CircleCheckBig aria-hidden="true" className="size-5" />
         </Button>
       )
     }

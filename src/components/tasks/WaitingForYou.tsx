@@ -6,7 +6,9 @@ import { approveOutcome, approveTemplate } from '~/components/templates/actions'
 import { myTemplateBid, priceMeta, templateChip } from '~/components/templates/priceView'
 import { Button, buttonVariants } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
+import { cn } from '~/lib/utils'
 import { templateDetail } from '~/lib/templateText'
+import type { DescriptionWaitingRow } from '~/server/descriptions/functions'
 import type { ProposalKind } from '~/server/periods/functions'
 import type { TaskView } from '~/server/tasks/functions'
 import type { TemplateView } from '~/server/templates/functions'
@@ -15,7 +17,11 @@ import type { Me } from './taskView'
 import { bidButtons, myBid, taskChipState, toastFor, waitingMeta } from './taskView'
 import { taskLink, templateLink } from './rowLink'
 import { TaskRow } from './TaskRow'
+import type { RowLink } from './rowLink'
 import { useTaskAction } from './useTaskAction'
+
+const targetLink = (t: DescriptionWaitingRow['target']): RowLink =>
+  t.kind === 'task' ? taskLink(t.id) : templateLink(t.id)
 
 /**
  * "Čeká na tebe" (UI doc §6 [call]: always at the top of Domů): new task offers and new
@@ -26,13 +32,17 @@ import { useTaskAction } from './useTaskAction'
  * link "Jiná cena" to the page; with my bid only "Otevřít", because picking between "Beru" and
  * "Souhlasím" needs both hints, which a row has no room for.
  * A price change of an agreed template (#138) waiting for this person's side links to its page;
- * so does a new price of an agreed one-time task waiting for this person (#36).
+ * so does a new price of an agreed one-time task waiting for this person (#36), and a new
+ * description waiting for his OK (#207 ruling 6). A proposed item with a description links to its
+ * page ("Přečíst a souhlasit", a full-width line under the row so the name keeps its width)
+ * instead of Souhlasím, so he reads the text first (ruling 1, Jakub 2026-11-26).
  */
 export function WaitingForYou({
   items,
   templates = [],
   priceChanges,
   taskPriceChanges,
+  descriptionChanges,
   proposals = [],
   me,
   links = false,
@@ -43,6 +53,8 @@ export function WaitingForYou({
   priceChanges: readonly TemplateView[]
   /** Required too: one-time tasks whose new price waits for this person (#36). */
   taskPriceChanges: readonly TaskView[]
+  /** Required too: description changes waiting for this brother's OK (#207). */
+  descriptionChanges: readonly DescriptionWaitingRow[]
   /** Proposals for next week or the default week waiting for this person (#43). */
   proposals?: readonly ProposalKind[]
   me: Me
@@ -58,6 +70,7 @@ export function WaitingForYou({
     templates.length +
     priceChanges.length +
     taskPriceChanges.length +
+    descriptionChanges.length +
     proposals.length
   if (count === 0) return null
 
@@ -94,12 +107,12 @@ export function WaitingForYou({
     )
   }
 
-  function answerLink(t: TemplateView, label: string) {
+  function answerLink(t: TemplateView, label: string, wide = false) {
     return (
       <Link
         to="/sablona/$templateId"
         params={{ templateId: String(t.id) }}
-        className={buttonVariants({ variant: 'ghost' })}
+        className={cn(buttonVariants({ variant: 'ghost' }), wide && 'w-full')}
       >
         {label}
       </Link>
@@ -123,12 +136,12 @@ export function WaitingForYou({
     )
   }
 
-  function pageLink(task: TaskView, label: string) {
+  function pageLink(task: TaskView, label: string, wide = false) {
     return (
       <Link
         to="/ukol/$taskId"
         params={{ taskId: String(task.id) }}
-        className={buttonVariants({ variant: 'ghost' })}
+        className={cn(buttonVariants({ variant: 'ghost' }), wide && 'w-full')}
       >
         {label}
       </Link>
@@ -169,11 +182,17 @@ export function WaitingForYou({
         {items.map((task) => (
           <li key={`task-${String(task.id)}`}>
             <TaskRow
+              described={task.description !== null}
               name={task.title}
               state={taskChipState(task)}
               points={task.score}
               meta={waitingMeta(task, me)}
-              action={taskActions(task)}
+              action={task.description === null ? taskActions(task) : undefined}
+              footer={
+                task.description === null
+                  ? undefined
+                  : pageLink(task, cs.description.readAndAgree, true)
+              }
               link={links ? taskLink(task.id) : undefined}
             />
           </li>
@@ -181,12 +200,18 @@ export function WaitingForYou({
         {templates.map((t) => (
           <li key={`template-${String(t.id)}`}>
             <TaskRow
+              described={t.description !== null}
               name={t.title}
               state={templateChip(t).state}
               points={t.score}
               meta={(t.bidding && priceMeta(t, me)) ?? cs.templates.recurringMeta}
               detail={templateDetail(t)}
-              action={templateActions(t)}
+              action={t.description === null ? templateActions(t) : undefined}
+              footer={
+                t.description === null
+                  ? undefined
+                  : answerLink(t, cs.description.readAndAgree, true)
+              }
               link={links ? templateLink(t.id) : undefined}
             />
           </li>
@@ -194,6 +219,7 @@ export function WaitingForYou({
         {priceChanges.map((t) => (
           <li key={`price-${String(t.id)}`}>
             <TaskRow
+              described={t.description !== null}
               name={t.title}
               state="negotiating"
               points={t.score}
@@ -206,12 +232,30 @@ export function WaitingForYou({
         {taskPriceChanges.map((t) => (
           <li key={`task-price-${String(t.id)}`}>
             <TaskRow
+              described={t.description !== null}
               name={t.title}
               state="negotiating"
               points={t.score}
               meta={cs.taskPrice.rowMeta(t.score, t.scoreChange?.score ?? t.score)}
               action={pageLink(t, cs.bids.answer)}
               link={links ? taskLink(t.id) : undefined}
+            />
+          </li>
+        ))}
+        {descriptionChanges.map((c) => (
+          <li key={`description-${c.target.kind}-${String(c.target.id)}`}>
+            <TaskRow
+              name={c.name}
+              state="negotiating"
+              points={c.score}
+              meta={cs.description.homeRow}
+              described
+              action={
+                <Link {...targetLink(c.target)} className={buttonVariants({ variant: 'ghost' })}>
+                  {cs.bids.answer}
+                </Link>
+              }
+              link={links ? targetLink(c.target) : undefined}
             />
           </li>
         ))}

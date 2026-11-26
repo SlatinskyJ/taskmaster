@@ -17,6 +17,8 @@ import type {
 interface ScoreData {
   templateId: number
   score: number
+  /** A brother's yes or bid (#207): the text the page showed, refused as stale if it changed. */
+  seenDescription?: string | null
 }
 
 /** One call to a template score server function. */
@@ -70,9 +72,8 @@ function firstPriceButtons(t: TemplateView, me: Me): PriceButton[] {
   const { offer, lowest } = bidding
   if (me.role === 'taker') {
     const hint = cs.templatePrice.firstAgreeHint(offer.score)
-    return [
-      { key: 'approve', action: 'approve', data: data(offer.score), label: cs.tasks.approve, hint },
-    ]
+    const seen = { ...data(offer.score), seenDescription: t.description }
+    return [{ key: 'approve', action: 'approve', data: seen, label: cs.tasks.approve, hint }]
   }
   if (lowest === null) return []
   const who = lowestBidders(t)
@@ -91,7 +92,8 @@ export function priceButtons(t: TemplateView, me: Me): PriceButton[] {
   const { offer, lowest } = t.change
   if (me.role === 'taker' && offer) {
     const label = cs.templatePrice.acceptOffer(offer.score)
-    return [{ key: 'offer', action: 'acceptOffer', data: data(offer.score), label, hint }]
+    const seen = { ...data(offer.score), seenDescription: t.description }
+    return [{ key: 'offer', action: 'acceptOffer', data: seen, label, hint }]
   }
   if (me.role === 'giver' && lowest !== null) {
     const label = cs.templatePrice.acceptBid(lowest, lowestNames(t))
@@ -151,7 +153,7 @@ function firstPriceSend(t: TemplateView, me: Me, value: number): PriceSend {
     const same = value === lastBid(t, me)
     return {
       action: 'bid',
-      data,
+      data: { ...data, seenDescription: t.description },
       label: cs.bids.send,
       hint: same ? cs.bids.sameAgainHint : cs.bids.bidHint,
       disabled: value === offer || same || value === myTemplateBid(t, me),
@@ -181,7 +183,7 @@ export function priceSend(t: TemplateView, me: Me, value: number): PriceSend | n
     const same = value === lastBid(t, me)
     return {
       action: 'bid',
-      data,
+      data: { ...data, seenDescription: t.description },
       label: cs.bids.send,
       hint: same ? cs.bids.sameAgainHint : cs.bids.bidHint,
       disabled: value === t.score || value === offer || same || value === myTemplateBid(t, me),

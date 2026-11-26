@@ -3,6 +3,7 @@ import type { Tx } from '~/server/audit'
 import { nextPeriod } from '~/domain'
 import { settlements, tasks as taskTable, templates as templateTable } from '~/server/db/schema'
 import { adjustPointsIn, correctSettlementIn } from '~/server/corrections'
+import { changeDescriptionOf } from '~/server/descriptions/descriptions'
 import { dismissDisputeIn, loadTarget, openDisputeIn } from '~/server/disputes'
 import {
   createOnDemandInstance,
@@ -106,6 +107,43 @@ export const priceChange: Piece = (ctx) => {
   const rake = offer(ctx, 'Shrabat listí na zahradě', 10)
   step('agree 10', approveTaskOffer(tx, id('mladsi'), rake.id, 10, now))
   step('new price 12', proposeTaskScoreChange(tx, id('tata'), rake.id, 12, now))
+}
+
+/**
+ * #207: what done means. "Uklidit kolárnu" proposed with a two-line text, so a brother reads it
+ * before he agrees; "Odnést krabice do sklepa" open, with Táta's new text waiting for a brother's
+ * OK; the chore "Utřít prach v pokoji" agreed with a text.
+ */
+export const descriptions: Piece = (ctx) => {
+  const { tx, id, now } = ctx
+  const give = (title: string, score: number, description: string) =>
+    step(
+      `offer "${title}"`,
+      createTask(tx, id('tata'), { title, score, approvalRequired: true, description }, now),
+    )
+  give('Uklidit kolárnu', 14, 'Zamést celou podlahu.\nKola pověsit na háky.')
+  const boxes = give('Odnést krabice do sklepa', 8, 'Všechny krabice z chodby.')
+  step('agree 8', approveTaskOffer(tx, id('mladsi'), boxes.id, 8, now))
+  step(
+    'new text',
+    changeDescriptionOf(
+      tx,
+      { kind: 'task', id: boxes.id },
+      id('tata'),
+      'Všechny krabice z chodby.\nPrázdné složit a dát k popelnicím.',
+      now,
+    ),
+  )
+  const input: NewTemplate = {
+    title: 'Utřít prach v pokoji',
+    score: 4,
+    approvalRequired: true,
+    schedule: null,
+    deadline: null,
+    description: 'Police, stůl i parapet. Hadr je pod dřezem.',
+  }
+  const dust = step('template "Utřít prach"', createTemplateIn(tx, id('tata'), input, now))
+  step('approve "Utřít prach"', approveTemplateScoreIn(tx, id('starsi'), dust.id, 4, now))
 }
 
 /** #36: a cancelled task with its reason in the history. */
