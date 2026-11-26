@@ -9,6 +9,7 @@ function facts(over: Partial<PrFacts> = {}): PrFacts {
     number: 9,
     draft: false,
     approvedSha: A,
+    labelEventId: 501,
     headSha: A,
     headIsApproved: true,
     updatedByAction: false,

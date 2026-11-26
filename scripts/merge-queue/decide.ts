@@ -6,8 +6,10 @@ export type Ci = 'green' | 'pending' | 'red'
 export interface PrFacts {
   number: number
   draft: boolean
-  /** From the App's approval marker after the latest qualifying label; null = not recorded. */
+  /** From the Action's HMAC-signed approval marker after the latest qualifying label; null = not recorded. */
   approvedSha: string | null
+  /** Id of the latest qualifying merge-me label event; signs this PR's hand-over marker. */
+  labelEventId: number
   headSha: string
   /** Head is the approved SHA, or accepted update merges the Action made on top of it. */
   headIsApproved: boolean
@@ -20,7 +22,7 @@ export interface PrFacts {
   unresolvedThreads: number
   inStack: boolean
   behind: boolean
-  /** The App posted a hand-over comment after the latest qualifying label. */
+  /** A hand-over marker signed for the latest qualifying label exists. */
   handedOver: boolean
 }
 
