@@ -375,11 +375,18 @@ export function changeHint(task: Pick<TaskView, 'status' | 'reservedBy'>, me: Me
  * one when its slot was ("včera 7:00 · podle rozvrhu", #39). Else undefined (also expired).
  */
 export function instanceMeta(
-  task: Pick<TaskView, 'status' | 'origin' | 'dueAt' | 'graceEndsAt' | 'createdAt'>,
+  task: Pick<TaskView, 'status' | 'origin' | 'dueAt' | 'graceEndsAt' | 'createdAt'> & {
+    planDay?: string | null
+  },
   now: Date,
 ): string | undefined {
   // The Prošlo chip says it all; "po termínu" beside it would say it twice.
   if (task.status === 'expired') return undefined
+  // A week copy for a later day (#257) says its day, not when it was made.
+  if (task.dueAt === null && task.planDay != null && laterDay({ planDay: task.planDay }, now)) {
+    const { weekday, day, month } = toPragueWallTime(parseIsoUtc(task.planDay))
+    return cs.instances.plannedFor(`${cs.weekdays[weekday]} ${String(day)}. ${String(month)}.`)
+  }
   if (task.dueAt !== null && task.graceEndsAt !== null) {
     return formatDue(task.dueAt, task.graceEndsAt, now)
   }

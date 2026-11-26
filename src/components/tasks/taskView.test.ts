@@ -415,6 +415,29 @@ describe('waitingOnTakers (GHome "Čeká na kluky", #41)', () => {
   })
 })
 
+describe('instanceMeta on a later week copy (#257)', () => {
+  const base = {
+    status: 'open' as const,
+    origin: 'scheduled' as const,
+    dueAt: null,
+    graceEndsAt: null,
+    createdAt: '2026-11-26T18:16:00.000Z',
+  }
+  const now = new Date('2026-11-26T18:20:00.000Z')
+
+  it("says the copy's day, not when it was made", () => {
+    expect(instanceMeta({ ...base, planDay: '2026-11-26T23:00:00.000Z' }, now)).toBe(
+      'na pá 27. 11.',
+    )
+  })
+
+  it("today's copy keeps the usual line", () => {
+    expect(instanceMeta({ ...base, planDay: '2026-11-25T23:00:00.000Z' }, now)).toBe(
+      'dnes 19:16 · podle rozvrhu',
+    )
+  })
+})
+
 describe('instanceMeta (#38)', () => {
   const now = new Date('2026-11-24T17:00:00.000Z') // Tue 18:00 Prague
   it('a deadline instance: its due time', () => {

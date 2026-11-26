@@ -157,6 +157,8 @@ export const cs = {
      * 360 px still shows it ("včera 7:00 · podle rozvrhu").
      */
     scheduledAt: (when: string) => `${when} · podle rozvrhu`,
+    /** A week copy for a later day (#257): "na pá 27. 11." */
+    plannedFor: (day: string) => `na ${day}`,
     today: (time: string) => `dnes ${time}`,
     yesterday: (time: string) => `včera ${time}`,
     errors: {
