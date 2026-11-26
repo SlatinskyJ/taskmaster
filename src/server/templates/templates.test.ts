@@ -1,8 +1,18 @@
-import { eq } from 'drizzle-orm'
+import { asc, eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
+import { fromPragueWallTime } from '~/domain/dates'
 import type { Db } from '~/server/db'
-import { auditLog, templates, templateScoreApprovals, users } from '~/server/db/schema'
+import {
+  auditLog,
+  featureFlags,
+  tasks,
+  templates,
+  templateScoreApprovals,
+  users,
+} from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
+import { rollPeriods } from '~/server/periods'
 import { updateUser } from '~/server/users/manage'
 import type { NewTemplate } from './templates'
 import { addEntry } from './thread'
@@ -597,5 +607,59 @@ describe('"Čeká na tebe": template price changes', () => {
     const f = agreed()
     must(createTemplate(f.db, f.tata, { ...DISHES, title: 'Vynést koš' }, T0))
     for (const who of [f.tata, f.mama, f.starsi, f.mladsi]) expect(f.ids(who)).toEqual([])
+  })
+})
+
+describe('week copies at agreement (#257, spec §5.12)', () => {
+  const MON = fromPragueWallTime({ year: 2026, month: 11, day: 30, hour: 0, minute: 0 })
+  const WED_NOON = fromPragueWallTime({ year: 2026, month: 12, day: 2, hour: 12, minute: 0 })
+  const DAILY: NewTemplate = {
+    title: 'Nakrmit kočku',
+    score: 3,
+    approvalRequired: true,
+    schedule: { days: [0, 1, 2, 3, 4, 5, 6], time: { hour: 18, minute: 0 } },
+    deadline: null,
+  }
+  const copies = (db: Db, id: number) =>
+    db.select().from(tasks).where(eq(tasks.templateId, id)).orderBy(asc(tasks.id)).all()
+
+  function agreedMidWeek(weekPlan: boolean) {
+    const f = family()
+    rollPeriods(f.db, MON, DEFAULT_PERIOD_DEFAULTS)
+    f.db
+      .update(featureFlags)
+      .set({ enabled: weekPlan })
+      .where(eq(featureFlags.key, 'weekPlan'))
+      .run()
+    const id = must(createTemplate(f.db, f.tata, DAILY, T0)).id
+    must(approveTemplateScore(f.db, f.starsi, id, 3, WED_NOON))
+    return { f, id }
+  }
+
+  it('a template agreed mid-week with the switch off gets no copies at agreement (the next tick makes the old single instance)', () => {
+    const { f, id } = agreedMidWeek(false)
+    expect(copies(f.db, id)).toEqual([])
+  })
+
+  it('a template agreed mid-week with weekPlan on has its remaining copies at once', () => {
+    const { f, id } = agreedMidWeek(true)
+    const rows = copies(f.db, id)
+    expect(rows.map((r) => [r.planDayAt, r.status, r.weekRules])).toEqual(
+      [2, 3, 4, 5, 6].map((day) => [
+        fromPragueWallTime({ year: 2026, month: 12, day, hour: 0, minute: 0 }).toISOString(),
+        'open',
+        true,
+      ]),
+    )
+    // Logged after the agreement, by the system.
+    const order = f.db
+      .select({ action: auditLog.action, kind: auditLog.actorKind })
+      .from(auditLog)
+      .orderBy(asc(auditLog.id))
+      .all()
+      .filter((a) => a.action === 'template.agreed' || a.action === 'instance.created')
+    expect(order[0]).toEqual({ action: 'template.agreed', kind: 'user' })
+    expect(order.slice(1).every((a) => a.kind === 'system')).toBe(true)
+    expect(order).toHaveLength(6)
   })
 })

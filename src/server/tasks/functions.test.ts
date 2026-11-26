@@ -3,6 +3,7 @@ import { fail, ok } from '~/domain/result'
 import type { TaskRow } from '~/server/db/schema'
 import {
   answered,
+  completeTaskHandler,
   parseAcceptBid,
   parseChangeAnswer,
   parseChangeProposal,
@@ -11,6 +12,8 @@ import {
   parseTurnDown,
   proposeTaskScoreChangeHandler,
   reopenBiddingHandler,
+  reserveTaskHandler,
+  shown,
   turnDownBidsHandler,
   withdrawBidHandler,
   taskDetailHandler,
@@ -22,6 +25,7 @@ import { placeBid } from './bidding'
 import { reserveTask } from './lifecycle'
 import { approveTaskOffer } from './tasks'
 import { car, family, must, row, T0, T1, T2, thread } from './testing'
+import { prague, setWeekPlan, WED_NOON, weekFamily } from '~/server/instances/testing'
 
 // Input checks of the bidding server functions (Security: no empty, huge or repeated bidders
 // list, no score above TASK_SCORE_MAX).
@@ -211,7 +215,7 @@ describe('the reopenBidding switch (#212)', () => {
       ok: false,
       error: 'bidding_instead',
     })
-    must(reserveTask(f.db, f.starsi, id, T1))
+    must(reserveTask(f.db, f.starsi, id, T1, false))
     expect(proposeTaskScoreChangeHandler(f.db, f.starsi, data, T2)).toEqual({
       ok: true,
       id,
@@ -248,5 +252,47 @@ describe("the admin reads a task's page only while disputes is on (#222)", () =>
     expect(taskDetailHandler(f.db, admin(f), { taskId: id })).toEqual(
       taskDetailHandler(f.db, { id: f.tata, role: 'giver' }, { taskId: id }),
     )
+  })
+})
+
+describe('the weekPlan switch on Hotovo and Rezervovat (#257)', () => {
+  it("complete: with the switch on, Hotovo on Thursday's copy on Wednesday is refused before_day; with it off, allowed", () => {
+    const f = weekFamily()
+    const taskId = f.day[3] ?? 0
+    expect(completeTaskHandler(f.db, f.starsi, { taskId }, WED_NOON)).toEqual({
+      ok: false,
+      error: 'before_day',
+    })
+    setWeekPlan(f.db, false)
+    expect(completeTaskHandler(f.db, f.starsi, { taskId }, WED_NOON)).toEqual({
+      ok: true,
+      id: taskId,
+      status: 'done_unconfirmed',
+    })
+  })
+
+  it("reserve: with the switch on, Rezervovat on yesterday's no-deadline copy before the expiry tick is refused past_grace; with it off, allowed", () => {
+    const f = weekFamily()
+    const taskId = f.day[2] ?? 0
+    const thu = prague(12, 3, 10)
+    expect(reserveTaskHandler(f.db, f.starsi, { taskId }, thu)).toEqual({
+      ok: false,
+      error: 'past_grace',
+    })
+    setWeekPlan(f.db, false)
+    expect(reserveTaskHandler(f.db, f.starsi, { taskId }, thu)).toEqual({
+      ok: true,
+      id: taskId,
+      status: 'reserved',
+    })
+  })
+})
+
+describe('the views a screen reads (shown, #257)', () => {
+  it("listBoardFn's opts (shown(db)) set weekPlanAt only with the switch on", () => {
+    const f = weekFamily()
+    expect(shown(f.db, WED_NOON)).toEqual({ descriptions: false, weekPlanAt: WED_NOON })
+    setWeekPlan(f.db, false)
+    expect(shown(f.db, WED_NOON)).toEqual({ descriptions: false, weekPlanAt: undefined })
   })
 })

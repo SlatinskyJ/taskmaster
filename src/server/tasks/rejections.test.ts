@@ -9,7 +9,7 @@ const H = 3_600_000
 
 /** Starší does task `id` and Táta rejects it at `at`. */
 function doneAndRejected(f: ReturnType<typeof week>, id: number, at: Date, reason?: string) {
-  must(completeTask(f.db, f.starsi, id, plus(at, -60_000)))
+  must(completeTask(f.db, f.starsi, id, plus(at, -60_000), false))
   must(rejectTask(f.db, f.tata, id, reason, at))
 }
 

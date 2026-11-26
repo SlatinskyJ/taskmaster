@@ -204,6 +204,7 @@ describe('WaitingForYou with templates (#37)', () => {
     waitingFor: [],
     scoreChange: null,
     rebidding: null,
+    planDay: null,
   }
   const template = {
     id: 1,
@@ -315,6 +316,7 @@ describe('WaitingForYou with templates (#37)', () => {
 
 describe('ToApprove', () => {
   const item: TaskView = {
+    planDay: null,
     id: 1,
     title: 'Vyluxovat celý obývák a chodbu',
     description: null,
@@ -413,6 +415,7 @@ describe('template price change: ways in', () => {
 
   it('"Čeká na tebe": a new price of a one-time task, Odpovědět to its page, counted (#36)', () => {
     const task: TaskView = {
+      planDay: null,
       id: 7,
       title: 'Vyluxovat celý obývák a chodbu',
       description: null,
@@ -544,6 +547,7 @@ describe('Úkoly: a proposed chore with first-price bidding (#209)', () => {
 
 describe('TakerBoard Moje row (#148)', () => {
   const reserved: TaskView = {
+    planDay: null,
     id: 1,
     title: 'Vyluxovat celý obývák a chodbu',
     description: null,

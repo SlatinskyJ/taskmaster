@@ -42,6 +42,8 @@ export function taskErrorMessage(error: string): string {
       return cs.tasks.errors.reasonTooLong(REASON_MAX)
     case 'past_grace':
       return cs.instances.errors.pastGrace
+    case 'before_day':
+      return cs.instances.errors.beforeDay
     case 'score_changed':
       return cs.instances.errors.scoreChanged
     case 'already_open':

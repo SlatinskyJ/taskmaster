@@ -4,6 +4,7 @@ import type { TaskView } from '~/server/tasks/functions'
 // Test data for the meeting screen tests. Not imported by app code.
 
 export const task = (over: Partial<TaskView>): TaskView => ({
+  planDay: null,
   id: 1,
   title: 'Vyndat myčku',
   description: null,

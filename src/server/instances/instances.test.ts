@@ -16,6 +16,7 @@ import {
   logChoicesAt,
   selfLogInstance,
 } from './instances'
+import { MON_10, THU_0005, WED_NOON, prague, setWeekPlan, weekFamily } from './testing'
 
 // "+ Teď" and Zapsat (#38, spec §5.3 origins 2 and 3).
 
@@ -122,8 +123,8 @@ describe('createOnDemandInstance ("+ Teď")', () => {
     const strict = must(createOnDemandInstance(f.db, f.tata, binsTemplate(f, true), T1))
     const loose = must(createOnDemandInstance(f.db, f.tata, binsTemplate(f, false), T1))
     expect([strict.approvalRequired, loose.approvalRequired]).toEqual([true, false])
-    expect(must(completeTask(f.db, f.starsi, strict.id, T1)).status).toBe('done_unconfirmed')
-    expect(must(completeTask(f.db, f.starsi, loose.id, T1)).status).toBe('confirmed')
+    expect(must(completeTask(f.db, f.starsi, strict.id, T1, false)).status).toBe('done_unconfirmed')
+    expect(must(completeTask(f.db, f.starsi, loose.id, T1, false)).status).toBe('confirmed')
   })
 
   it('only a giver may: a taker and the admin are refused, nothing written', () => {
@@ -218,7 +219,7 @@ describe('selfLogInstance (Zapsat)', () => {
       ok: false,
       error: 'already_open',
     })
-    must(reserveTask(f.db, f.starsi, open.id, T1))
+    must(reserveTask(f.db, f.starsi, open.id, T1, false))
     expect(selfLogInstance(f.db, f.mladsi, tpl, 3, T1)).toEqual({
       ok: false,
       error: 'already_open',
@@ -226,7 +227,7 @@ describe('selfLogInstance (Zapsat)', () => {
     expect([taskRows(f).length, auditRows(f).length]).toEqual([1, audits + 1])
     // Another chore is fine; so is this one once the board copy is done.
     expect(must(selfLogInstance(f.db, f.mladsi, other, 4, T1)).status).toBe('done_unconfirmed')
-    must(completeTask(f.db, f.starsi, open.id, T1))
+    must(completeTask(f.db, f.starsi, open.id, T1, false))
     expect(must(selfLogInstance(f.db, f.mladsi, tpl, 3, T2)).status).toBe('done_unconfirmed')
   })
 
@@ -344,5 +345,90 @@ describe('listLoggableTemplates', () => {
     expect(listLoggableTemplates(f.db).find((t) => t.id === dishes)?.onBoard).toBe(false)
     must(createOnDemandInstance(f.db, f.tata, dishes, T1))
     expect(listLoggableTemplates(f.db).find((t) => t.id === dishes)?.onBoard).toBe(true)
+  })
+})
+
+describe('week plan (#257, spec §5.12)', () => {
+  const THU_10 = prague(12, 3, 10)
+
+  it("on-demand with the switch on is marked with today's day; with it off it is not", () => {
+    const f = weekFamily()
+    const marked = must(createOnDemandInstance(f.db, f.tata, f.cat, WED_NOON))
+    expect(marked).toMatchObject({
+      planDayAt: prague(12, 2, 0).toISOString(),
+      weekRules: true,
+      origin: 'on_demand',
+    })
+    const entry = auditRows(f).find(
+      (a) => a.action === 'instance.created' && a.entityId === String(marked.id),
+    )
+    expect(json(entry?.after)).toMatchObject({ planDayAt: prague(12, 2, 0).toISOString() })
+    // Its day rules apply: Hotovo works today, and it is over at midnight.
+    expect(must(completeTask(f.db, f.starsi, marked.id, WED_NOON, true)).status).toBe(
+      'done_unconfirmed',
+    )
+    setWeekPlan(f.db, false)
+    expect(must(createOnDemandInstance(f.db, f.tata, f.cat, WED_NOON))).toMatchObject({
+      planDayAt: null,
+      weekRules: false,
+    })
+  })
+
+  it("Zapsat: refused while today's copy is open or reserved; allowed while only tomorrow's or yesterday's is", () => {
+    const f = weekFamily()
+    const thursday = f.day[3] ?? 0
+    // Wednesday's copy is still open (the midnight expiry has not run), Friday's too.
+    expect(selfLogInstance(f.db, f.mladsi, f.cat, 3, THU_10)).toEqual({
+      ok: false,
+      error: 'already_open',
+    })
+    must(reserveTask(f.db, f.starsi, thursday, THU_10, true))
+    expect(selfLogInstance(f.db, f.mladsi, f.cat, 3, THU_10)).toEqual({
+      ok: false,
+      error: 'already_open',
+    })
+    must(completeTask(f.db, f.starsi, thursday, THU_10, true))
+    expect(must(selfLogInstance(f.db, f.mladsi, f.cat, 3, THU_10)).status).toBe('done_unconfirmed')
+  })
+
+  it('Zapsat with the switch on: an old-rule copy (made before the flip, week_rules 0) still blocks', () => {
+    const f = weekFamily()
+    must(completeTask(f.db, f.starsi, f.day[3] ?? 0, THU_10, true))
+    setWeekPlan(f.db, false)
+    must(createOnDemandInstance(f.db, f.tata, f.cat, MON_10))
+    setWeekPlan(f.db, true)
+    expect(selfLogInstance(f.db, f.mladsi, f.cat, 3, THU_10)).toEqual({
+      ok: false,
+      error: 'already_open',
+    })
+  })
+
+  it('Zapsat with the switch off: any open copy blocks (unchanged)', () => {
+    const f = weekFamily()
+    must(completeTask(f.db, f.starsi, f.day[3] ?? 0, THU_10, true))
+    setWeekPlan(f.db, false)
+    expect(selfLogInstance(f.db, f.mladsi, f.cat, 3, THU_10)).toEqual({
+      ok: false,
+      error: 'already_open',
+    })
+  })
+
+  it('a no-deadline copy for yesterday still open at 00:05 does not block Zapsat today', () => {
+    const f = weekFamily()
+    // Thursday 00:05: Wednesday's copy is open until the expiry job runs; Thursday's is done.
+    must(completeTask(f.db, f.starsi, f.day[3] ?? 0, THU_0005, true))
+    expect(must(selfLogInstance(f.db, f.mladsi, f.cat, 3, THU_0005)).status).toBe(
+      'done_unconfirmed',
+    )
+  })
+
+  it('listLoggableTemplates.onBoard follows the same rule', () => {
+    const f = weekFamily()
+    const tile = () => listLoggableTemplates(f.db, THU_10).find((t) => t.id === f.cat)?.onBoard
+    expect(tile()).toBe(true)
+    must(completeTask(f.db, f.starsi, f.day[3] ?? 0, THU_10, true))
+    expect(tile()).toBe(false)
+    setWeekPlan(f.db, false)
+    expect(tile()).toBe(true)
   })
 })

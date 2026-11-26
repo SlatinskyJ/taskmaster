@@ -36,7 +36,7 @@ export type Loaded =
 export function load(db: Db | Tx, target: DescriptionTarget): Loaded | null {
   if (target.kind === 'task') {
     const row = db.select().from(tasks).where(eq(tasks.id, target.id)).get()
-    return row ? { kind: 'task', row, rule: taskDescriptionRule(toItem(row)) } : null
+    return row ? { kind: 'task', row, rule: taskDescriptionRule(toItem(row, false)) } : null
   }
   const row = db.select().from(templates).where(eq(templates.id, target.id)).get()
   if (!row) return null

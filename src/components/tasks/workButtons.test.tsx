@@ -71,6 +71,7 @@ const STARSI = { id: 3, role: 'taker' } as const
 const MLADSI = { id: 4, role: 'taker' } as const
 const TATA = { id: 2, role: 'giver' } as const
 const view = (over: Partial<TaskView>): TaskView => ({
+  planDay: null,
   id: 1,
   title: 'Vyluxovat celý obývák a chodbu',
   description: null,
@@ -214,6 +215,36 @@ describe('TakerBoard Moje row (Domů)', () => {
     expect(html).toContain('Vynést koše')
     action.pressed.get(cs.work.release)?.onClick?.({ currentTarget: null })
     expect(lastRun()[0]).toBe('release-1')
+  })
+})
+
+describe("TakerBoard: a later day's copy (#257)", () => {
+  // Thursday 1 January 2099 in Prague: always a later day.
+  const later = view({
+    id: 5,
+    origin: 'scheduled',
+    templateId: 9,
+    planDay: '2098-12-31T23:00:00.000Z',
+  })
+
+  it("Domů: a later reserved copy shows 'Čt' and Uvolnit, no Hotovo", () => {
+    const html = renderToStaticMarkup(<TakerBoard items={[later]} me={3} />)
+    expect(html).toContain('Vyluxovat celý obývák a chodbu')
+    expect(html).toContain('>Čt<')
+    expect(count(html, `aria-label="${cs.work.release}"`)).toBe(1)
+    expect(html).not.toContain(`>${cs.work.done}<`)
+  })
+
+  it("today's reserved copy keeps Hotovo", () => {
+    const today = view({ id: 6, planDay: '2026-11-25T23:00:00.000Z' })
+    const html = renderToStaticMarkup(<TakerBoard items={[today]} me={3} />)
+    expect(html).toContain(`>${cs.work.done}<`)
+  })
+
+  it('the task page: a later copy reserved by him shows Uvolnit but no Hotovo', () => {
+    const html = renderToStaticMarkup(<TaskWorkPanel task={later} me={STARSI} />)
+    expect(html).toContain(`>${cs.work.release}<`)
+    expect(html).not.toContain(`>${cs.work.done}<`)
   })
 })
 

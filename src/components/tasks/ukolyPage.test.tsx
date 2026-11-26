@@ -60,6 +60,7 @@ const boys = [
   { id: 4, name: 'Mladší' },
 ]
 const task = (id: number, title: string, over: Partial<TaskView>): TaskView => ({
+  planDay: null,
   id,
   title,
   description: null,

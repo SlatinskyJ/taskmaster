@@ -1,6 +1,6 @@
 import type { Weekday } from './dates'
 import { addPragueDays, fromPragueWallTime, startOfPragueDay, toPragueWallTime } from './dates'
-import type { Deadline } from './lifecycle'
+import type { CopyDay, Deadline } from './lifecycle'
 import type { Result } from './result'
 import { fail, ok } from './result'
 
@@ -141,4 +141,48 @@ export function slotOutcome(input: {
   if (input.lastSlotAt && slot <= input.lastSlotAt.getTime()) return 'none'
   if (!input.deadline && input.hasOpenInstance) return 'skip'
   return 'make'
+}
+
+/** The Prague day an instant falls on, as a week copy's day (spec §5.12). */
+export function copyDay(instant: Date): CopyDay {
+  const startsAt = startOfPragueDay(instant)
+  return { startsAt, endsAt: addPragueDays(startsAt, 1) }
+}
+
+/**
+ * The slots a week plan makes copies for (spec §5.12): every slot `s` with `from <= s < until`
+ * and after `lastSlotAt`, ascending. Of the slots at or before `at` only the latest is kept
+ * (catch-up after downtime, spec §11). Slots are built per Prague calendar day, so a slot keeps
+ * its wall-clock time across a DST change.
+ */
+export function weekSlots(input: {
+  schedule: TemplateSchedule
+  from: Date
+  lastSlotAt: Date | null
+  at: Date
+  until: Date
+}): Date[] {
+  const { schedule, from, lastSlotAt, at, until } = input
+  const slots: Date[] = []
+  for (
+    let day = startOfPragueDay(from);
+    day.getTime() < until.getTime();
+    day = addPragueDays(day, 1)
+  ) {
+    const w = toPragueWallTime(day)
+    if (!schedule.days.includes(w.weekday)) continue
+    const slot = fromPragueWallTime({
+      year: w.year,
+      month: w.month,
+      day: w.day,
+      hour: schedule.time?.hour ?? 0,
+      minute: schedule.time?.minute ?? 0,
+    })
+    if (slot.getTime() < from.getTime() || slot.getTime() >= until.getTime()) continue
+    if (lastSlotAt && slot.getTime() <= lastSlotAt.getTime()) continue
+    slots.push(slot)
+  }
+  const past = slots.filter((s) => s.getTime() <= at.getTime())
+  const future = slots.filter((s) => s.getTime() > at.getTime())
+  return [...past.slice(-1), ...future]
 }

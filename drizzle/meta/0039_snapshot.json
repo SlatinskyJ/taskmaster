@@ -1,0 +1,3094 @@
+{
+  "id": "971c2dc4-e10b-49a9-9e47-238c1aff1953",
+  "prevId": "c9b83041-6493-4621-aa41-e644e53d694f",
+  "version": "6",
+  "dialect": "sqlite",
+  "tables": {
+    "audit_log": {
+      "name": "audit_log",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "at": {
+          "name": "at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actor_kind": {
+          "name": "actor_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actor_user_id": {
+          "name": "actor_user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "action": {
+          "name": "action",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "entity_type": {
+          "name": "entity_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "entity_id": {
+          "name": "entity_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "before": {
+          "name": "before",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "after": {
+          "name": "after",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "audit_log_entity_idx": {
+          "name": "audit_log_entity_idx",
+          "columns": [
+            "entity_type",
+            "entity_id"
+          ],
+          "isUnique": false
+        },
+        "audit_log_at_idx": {
+          "name": "audit_log_at_idx",
+          "columns": [
+            "at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "audit_log_actor_check": {
+          "name": "audit_log_actor_check",
+          "value": "(\"audit_log\".\"actor_kind\" = 'user') = (\"audit_log\".\"actor_user_id\" IS NOT NULL)"
+        },
+        "audit_log_before_json": {
+          "name": "audit_log_before_json",
+          "value": "\"audit_log\".\"before\" IS NULL OR json_valid(\"audit_log\".\"before\")"
+        },
+        "audit_log_after_json": {
+          "name": "audit_log_after_json",
+          "value": "\"audit_log\".\"after\" IS NULL OR json_valid(\"audit_log\".\"after\")"
+        }
+      }
+    },
+    "login_failures": {
+      "name": "login_failures",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "at": {
+          "name": "at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "login_failures_key_at_idx": {
+          "name": "login_failures_key_at_idx",
+          "columns": [
+            "key",
+            "at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "sessions": {
+      "name": "sessions",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "method": {
+          "name": "method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "sessions_token_hash_unique": {
+          "name": "sessions_token_hash_unique",
+          "columns": [
+            "token_hash"
+          ],
+          "isUnique": true
+        },
+        "sessions_user_idx": {
+          "name": "sessions_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "sessions_user_id_users_id_fk": {
+          "name": "sessions_user_id_users_id_fk",
+          "tableFrom": "sessions",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "point_adjustments": {
+      "name": "point_adjustments",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "taker_id": {
+          "name": "taker_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "points": {
+          "name": "points",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "correction_id": {
+          "name": "correction_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "dispute_id": {
+          "name": "dispute_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "made_by": {
+          "name": "made_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "made_at": {
+          "name": "made_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "point_adjustments_correction_id_unique": {
+          "name": "point_adjustments_correction_id_unique",
+          "columns": [
+            "correction_id"
+          ],
+          "isUnique": true
+        },
+        "point_adjustments_taker_idx": {
+          "name": "point_adjustments_taker_idx",
+          "columns": [
+            "taker_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "point_adjustments_taker_id_users_id_fk": {
+          "name": "point_adjustments_taker_id_users_id_fk",
+          "tableFrom": "point_adjustments",
+          "columnsFrom": [
+            "taker_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "point_adjustments_correction_id_settlement_corrections_id_fk": {
+          "name": "point_adjustments_correction_id_settlement_corrections_id_fk",
+          "tableFrom": "point_adjustments",
+          "columnsFrom": [
+            "correction_id"
+          ],
+          "tableTo": "settlement_corrections",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "point_adjustments_dispute_id_disputes_id_fk": {
+          "name": "point_adjustments_dispute_id_disputes_id_fk",
+          "tableFrom": "point_adjustments",
+          "columnsFrom": [
+            "dispute_id"
+          ],
+          "tableTo": "disputes",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "point_adjustments_made_by_users_id_fk": {
+          "name": "point_adjustments_made_by_users_id_fk",
+          "tableFrom": "point_adjustments",
+          "columnsFrom": [
+            "made_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "point_adjustments_points_check": {
+          "name": "point_adjustments_points_check",
+          "value": "\"point_adjustments\".\"points\" <> 0"
+        },
+        "point_adjustments_reason_check": {
+          "name": "point_adjustments_reason_check",
+          "value": "length(trim(\"point_adjustments\".\"reason\")) BETWEEN 1 AND 1000"
+        }
+      }
+    },
+    "settlement_corrections": {
+      "name": "settlement_corrections",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "settlement_id": {
+          "name": "settlement_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "level": {
+          "name": "level",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "deducted": {
+          "name": "deducted",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "dispute_id": {
+          "name": "dispute_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "made_by": {
+          "name": "made_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "made_at": {
+          "name": "made_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "settlement_corrections_settlement_idx": {
+          "name": "settlement_corrections_settlement_idx",
+          "columns": [
+            "settlement_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "settlement_corrections_settlement_id_settlements_id_fk": {
+          "name": "settlement_corrections_settlement_id_settlements_id_fk",
+          "tableFrom": "settlement_corrections",
+          "columnsFrom": [
+            "settlement_id"
+          ],
+          "tableTo": "settlements",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "settlement_corrections_dispute_id_disputes_id_fk": {
+          "name": "settlement_corrections_dispute_id_disputes_id_fk",
+          "tableFrom": "settlement_corrections",
+          "columnsFrom": [
+            "dispute_id"
+          ],
+          "tableTo": "disputes",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "settlement_corrections_made_by_users_id_fk": {
+          "name": "settlement_corrections_made_by_users_id_fk",
+          "tableFrom": "settlement_corrections",
+          "columnsFrom": [
+            "made_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "settlement_corrections_level_check": {
+          "name": "settlement_corrections_level_check",
+          "value": "\"settlement_corrections\".\"level\" IN ('none', 'lower', 'upper')"
+        },
+        "settlement_corrections_deducted_check": {
+          "name": "settlement_corrections_deducted_check",
+          "value": "\"settlement_corrections\".\"deducted\" >= 0 AND (\"settlement_corrections\".\"level\" = 'none') = (\"settlement_corrections\".\"deducted\" = 0)"
+        },
+        "settlement_corrections_reason_check": {
+          "name": "settlement_corrections_reason_check",
+          "value": "length(trim(\"settlement_corrections\".\"reason\")) BETWEEN 1 AND 1000"
+        }
+      }
+    },
+    "description_changes": {
+      "name": "description_changes",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "task_id": {
+          "name": "task_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "template_id": {
+          "name": "template_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "proposed_by": {
+          "name": "proposed_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "closed_as": {
+          "name": "closed_as",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "closed_by": {
+          "name": "closed_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "description_changes_open_task_idx": {
+          "name": "description_changes_open_task_idx",
+          "columns": [
+            "task_id"
+          ],
+          "where": "closed_at IS NULL AND task_id IS NOT NULL",
+          "isUnique": true
+        },
+        "description_changes_open_template_idx": {
+          "name": "description_changes_open_template_idx",
+          "columns": [
+            "template_id"
+          ],
+          "where": "closed_at IS NULL AND template_id IS NOT NULL",
+          "isUnique": true
+        },
+        "description_changes_task_idx": {
+          "name": "description_changes_task_idx",
+          "columns": [
+            "task_id"
+          ],
+          "isUnique": false
+        },
+        "description_changes_template_idx": {
+          "name": "description_changes_template_idx",
+          "columns": [
+            "template_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "description_changes_task_id_tasks_id_fk": {
+          "name": "description_changes_task_id_tasks_id_fk",
+          "tableFrom": "description_changes",
+          "columnsFrom": [
+            "task_id"
+          ],
+          "tableTo": "tasks",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "description_changes_template_id_templates_id_fk": {
+          "name": "description_changes_template_id_templates_id_fk",
+          "tableFrom": "description_changes",
+          "columnsFrom": [
+            "template_id"
+          ],
+          "tableTo": "templates",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "description_changes_proposed_by_users_id_fk": {
+          "name": "description_changes_proposed_by_users_id_fk",
+          "tableFrom": "description_changes",
+          "columnsFrom": [
+            "proposed_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "description_changes_closed_by_users_id_fk": {
+          "name": "description_changes_closed_by_users_id_fk",
+          "tableFrom": "description_changes",
+          "columnsFrom": [
+            "closed_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "description_changes_target_check": {
+          "name": "description_changes_target_check",
+          "value": "(\"description_changes\".\"task_id\" IS NULL) <> (\"description_changes\".\"template_id\" IS NULL)"
+        },
+        "description_changes_closed_check": {
+          "name": "description_changes_closed_check",
+          "value": "(\"description_changes\".\"closed_at\" IS NULL AND \"description_changes\".\"closed_as\" IS NULL) OR (\"description_changes\".\"closed_at\" IS NOT NULL AND \"description_changes\".\"closed_as\" IS NOT NULL AND \"description_changes\".\"closed_as\" IN ('agreed', 'applied', 'declined', 'withdrawn', 'replaced', 'discarded'))"
+        }
+      }
+    },
+    "disputes": {
+      "name": "disputes",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "item_kind": {
+          "name": "item_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "item_id": {
+          "name": "item_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "opened_by": {
+          "name": "opened_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "opened_at": {
+          "name": "opened_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "resolved_by": {
+          "name": "resolved_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "resolved_at": {
+          "name": "resolved_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "disputes_one_open_idx": {
+          "name": "disputes_one_open_idx",
+          "columns": [
+            "item_kind",
+            "item_id"
+          ],
+          "where": "\"disputes\".\"status\" = 'open'",
+          "isUnique": true
+        },
+        "disputes_item_idx": {
+          "name": "disputes_item_idx",
+          "columns": [
+            "item_kind",
+            "item_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "disputes_opened_by_users_id_fk": {
+          "name": "disputes_opened_by_users_id_fk",
+          "tableFrom": "disputes",
+          "columnsFrom": [
+            "opened_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "disputes_resolved_by_users_id_fk": {
+          "name": "disputes_resolved_by_users_id_fk",
+          "tableFrom": "disputes",
+          "columnsFrom": [
+            "resolved_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "disputes_kind_check": {
+          "name": "disputes_kind_check",
+          "value": "\"disputes\".\"item_kind\" IN ('task_score', 'template_score', 'completion', 'rejection', 'settlement', 'adjustment')"
+        },
+        "disputes_status_check": {
+          "name": "disputes_status_check",
+          "value": "\"disputes\".\"status\" IN ('open', 'dismissed', 'corrected')"
+        },
+        "disputes_reason_check": {
+          "name": "disputes_reason_check",
+          "value": "length(trim(\"disputes\".\"reason\")) BETWEEN 1 AND 1000"
+        },
+        "disputes_resolution_check": {
+          "name": "disputes_resolution_check",
+          "value": "(\"disputes\".\"status\" = 'open' AND \"disputes\".\"resolved_by\" IS NULL AND \"disputes\".\"resolved_at\" IS NULL AND \"disputes\".\"note\" IS NULL) OR (\"disputes\".\"status\" <> 'open' AND \"disputes\".\"resolved_by\" IS NOT NULL AND \"disputes\".\"resolved_at\" IS NOT NULL AND \"disputes\".\"note\" IS NOT NULL)"
+        },
+        "disputes_note_check": {
+          "name": "disputes_note_check",
+          "value": "\"disputes\".\"status\" = 'open' OR length(trim(coalesce(\"disputes\".\"note\", ''))) > 0"
+        }
+      }
+    },
+    "feature_flags": {
+      "name": "feature_flags",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "enabled": {
+          "name": "enabled",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "feature_flags_enabled_check": {
+          "name": "feature_flags_enabled_check",
+          "value": "\"feature_flags\".\"enabled\" IN (0, 1)"
+        }
+      }
+    },
+    "app_meta": {
+      "name": "app_meta",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "users": {
+      "name": "users",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "display_name": {
+          "name": "display_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "active": {
+          "name": "active",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "users_username_unique": {
+          "name": "users_username_unique",
+          "columns": [
+            "username"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "users_role_check": {
+          "name": "users_role_check",
+          "value": "\"users\".\"role\" IN ('taker', 'giver', 'admin')"
+        },
+        "users_username_check": {
+          "name": "users_username_check",
+          "value": "\"users\".\"username\" = lower(\"users\".\"username\")"
+        }
+      }
+    },
+    "task_score_approvals": {
+      "name": "task_score_approvals",
+      "columns": {
+        "task_id": {
+          "name": "task_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "offer_round": {
+          "name": "offer_round",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "score": {
+          "name": "score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "task_score_approvals_task_id_tasks_id_fk": {
+          "name": "task_score_approvals_task_id_tasks_id_fk",
+          "tableFrom": "task_score_approvals",
+          "columnsFrom": [
+            "task_id"
+          ],
+          "tableTo": "tasks",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "task_score_approvals_user_id_users_id_fk": {
+          "name": "task_score_approvals_user_id_users_id_fk",
+          "tableFrom": "task_score_approvals",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "task_score_approvals_task_id_offer_round_user_id_pk": {
+          "columns": [
+            "task_id",
+            "offer_round",
+            "user_id"
+          ],
+          "name": "task_score_approvals_task_id_offer_round_user_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "task_score_change_approvals": {
+      "name": "task_score_change_approvals",
+      "columns": {
+        "change_id": {
+          "name": "change_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "task_score_change_approvals_change_id_task_score_changes_id_fk": {
+          "name": "task_score_change_approvals_change_id_task_score_changes_id_fk",
+          "tableFrom": "task_score_change_approvals",
+          "columnsFrom": [
+            "change_id"
+          ],
+          "tableTo": "task_score_changes",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "task_score_change_approvals_user_id_users_id_fk": {
+          "name": "task_score_change_approvals_user_id_users_id_fk",
+          "tableFrom": "task_score_change_approvals",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "task_score_change_approvals_change_id_user_id_pk": {
+          "columns": [
+            "change_id",
+            "user_id"
+          ],
+          "name": "task_score_change_approvals_change_id_user_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "task_score_changes": {
+      "name": "task_score_changes",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "task_id": {
+          "name": "task_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "score": {
+          "name": "score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "proposed_by": {
+          "name": "proposed_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "closed_as": {
+          "name": "closed_as",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "closed_by": {
+          "name": "closed_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "task_score_changes_open_idx": {
+          "name": "task_score_changes_open_idx",
+          "columns": [
+            "task_id"
+          ],
+          "where": "closed_at IS NULL",
+          "isUnique": true
+        },
+        "task_score_changes_task_idx": {
+          "name": "task_score_changes_task_idx",
+          "columns": [
+            "task_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "task_score_changes_task_id_tasks_id_fk": {
+          "name": "task_score_changes_task_id_tasks_id_fk",
+          "tableFrom": "task_score_changes",
+          "columnsFrom": [
+            "task_id"
+          ],
+          "tableTo": "tasks",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "task_score_changes_proposed_by_users_id_fk": {
+          "name": "task_score_changes_proposed_by_users_id_fk",
+          "tableFrom": "task_score_changes",
+          "columnsFrom": [
+            "proposed_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "task_score_changes_closed_by_users_id_fk": {
+          "name": "task_score_changes_closed_by_users_id_fk",
+          "tableFrom": "task_score_changes",
+          "columnsFrom": [
+            "closed_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "task_score_changes_score_check": {
+          "name": "task_score_changes_score_check",
+          "value": "\"task_score_changes\".\"score\" >= 1"
+        },
+        "task_score_changes_closed_check": {
+          "name": "task_score_changes_closed_check",
+          "value": "(\"task_score_changes\".\"closed_at\" IS NULL AND \"task_score_changes\".\"closed_as\" IS NULL) OR (\"task_score_changes\".\"closed_at\" IS NOT NULL AND \"task_score_changes\".\"closed_as\" IS NOT NULL AND \"task_score_changes\".\"closed_as\" IN ('agreed', 'declined', 'withdrawn', 'discarded'))"
+        }
+      }
+    },
+    "task_thread": {
+      "name": "task_thread",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "task_id": {
+          "name": "task_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "side": {
+          "name": "side",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "score": {
+          "name": "score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "closed_as": {
+          "name": "closed_as",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "task_thread_open_offer_idx": {
+          "name": "task_thread_open_offer_idx",
+          "columns": [
+            "task_id"
+          ],
+          "where": "closed_at IS NULL AND side = 'giver'",
+          "isUnique": true
+        },
+        "task_thread_open_bid_idx": {
+          "name": "task_thread_open_bid_idx",
+          "columns": [
+            "task_id",
+            "user_id"
+          ],
+          "where": "closed_at IS NULL AND side = 'taker'",
+          "isUnique": true
+        },
+        "task_thread_task_idx": {
+          "name": "task_thread_task_idx",
+          "columns": [
+            "task_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "task_thread_task_id_tasks_id_fk": {
+          "name": "task_thread_task_id_tasks_id_fk",
+          "tableFrom": "task_thread",
+          "columnsFrom": [
+            "task_id"
+          ],
+          "tableTo": "tasks",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "task_thread_user_id_users_id_fk": {
+          "name": "task_thread_user_id_users_id_fk",
+          "tableFrom": "task_thread",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "task_thread_side_check": {
+          "name": "task_thread_side_check",
+          "value": "\"task_thread\".\"side\" IN ('giver', 'taker')"
+        },
+        "task_thread_score_check": {
+          "name": "task_thread_score_check",
+          "value": "\"task_thread\".\"score\" >= 1"
+        },
+        "task_thread_closed_check": {
+          "name": "task_thread_closed_check",
+          "value": "(\"task_thread\".\"closed_at\" IS NULL AND \"task_thread\".\"closed_as\" IS NULL) OR (\"task_thread\".\"closed_at\" IS NOT NULL AND \"task_thread\".\"closed_as\" IS NOT NULL AND \"task_thread\".\"closed_as\" IN ('replaced', 'accepted', 'closed'))"
+        }
+      }
+    },
+    "tasks": {
+      "name": "tasks",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "score": {
+          "name": "score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "offer_round": {
+          "name": "offer_round",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "approval_required": {
+          "name": "approval_required",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "agreed_at": {
+          "name": "agreed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reserved_by": {
+          "name": "reserved_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reserved_via": {
+          "name": "reserved_via",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "reserved_giver_id": {
+          "name": "reserved_giver_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completed_by": {
+          "name": "completed_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "earner_id": {
+          "name": "earner_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "template_id": {
+          "name": "template_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "origin": {
+          "name": "origin",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'one_time'"
+        },
+        "due_at": {
+          "name": "due_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "grace_ends_at": {
+          "name": "grace_ends_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "bidding_from": {
+          "name": "bidding_from",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "plan_day_at": {
+          "name": "plan_day_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "week_rules": {
+          "name": "week_rules",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        }
+      },
+      "indexes": {
+        "tasks_status_idx": {
+          "name": "tasks_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        },
+        "tasks_template_idx": {
+          "name": "tasks_template_idx",
+          "columns": [
+            "template_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "tasks_created_by_users_id_fk": {
+          "name": "tasks_created_by_users_id_fk",
+          "tableFrom": "tasks",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "tasks_reserved_by_users_id_fk": {
+          "name": "tasks_reserved_by_users_id_fk",
+          "tableFrom": "tasks",
+          "columnsFrom": [
+            "reserved_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "tasks_reserved_giver_id_users_id_fk": {
+          "name": "tasks_reserved_giver_id_users_id_fk",
+          "tableFrom": "tasks",
+          "columnsFrom": [
+            "reserved_giver_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "tasks_completed_by_users_id_fk": {
+          "name": "tasks_completed_by_users_id_fk",
+          "tableFrom": "tasks",
+          "columnsFrom": [
+            "completed_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "tasks_earner_id_users_id_fk": {
+          "name": "tasks_earner_id_users_id_fk",
+          "tableFrom": "tasks",
+          "columnsFrom": [
+            "earner_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "tasks_template_id_templates_id_fk": {
+          "name": "tasks_template_id_templates_id_fk",
+          "tableFrom": "tasks",
+          "columnsFrom": [
+            "template_id"
+          ],
+          "tableTo": "templates",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "tasks_status_check": {
+          "name": "tasks_status_check",
+          "value": "\"tasks\".\"status\" IN ('proposed', 'open', 'reserved', 'done_unconfirmed', 'confirmed', 'cancelled', 'expired', 'rejected')"
+        },
+        "tasks_origin_check": {
+          "name": "tasks_origin_check",
+          "value": "\"tasks\".\"origin\" IN ('one_time', 'on_demand', 'self_logged', 'scheduled') AND (\"tasks\".\"origin\" = 'one_time') = (\"tasks\".\"template_id\" IS NULL)"
+        },
+        "tasks_deadline_check": {
+          "name": "tasks_deadline_check",
+          "value": "(\"tasks\".\"due_at\" IS NULL AND \"tasks\".\"grace_ends_at\" IS NULL) OR (\"tasks\".\"due_at\" IS NOT NULL AND \"tasks\".\"grace_ends_at\" IS NOT NULL AND \"tasks\".\"template_id\" IS NOT NULL)"
+        },
+        "tasks_score_check": {
+          "name": "tasks_score_check",
+          "value": "\"tasks\".\"score\" >= 1"
+        },
+        "tasks_title_check": {
+          "name": "tasks_title_check",
+          "value": "length(trim(\"tasks\".\"title\")) > 0"
+        }
+      }
+    },
+    "template_score_approvals": {
+      "name": "template_score_approvals",
+      "columns": {
+        "template_id": {
+          "name": "template_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "score": {
+          "name": "score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "offer_round": {
+          "name": "offer_round",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "template_score_approvals_template_id_templates_id_fk": {
+          "name": "template_score_approvals_template_id_templates_id_fk",
+          "tableFrom": "template_score_approvals",
+          "columnsFrom": [
+            "template_id"
+          ],
+          "tableTo": "templates",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_score_approvals_user_id_users_id_fk": {
+          "name": "template_score_approvals_user_id_users_id_fk",
+          "tableFrom": "template_score_approvals",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "template_score_approvals_template_id_offer_round_user_id_pk": {
+          "columns": [
+            "template_id",
+            "offer_round",
+            "user_id"
+          ],
+          "name": "template_score_approvals_template_id_offer_round_user_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "template_slots": {
+      "name": "template_slots",
+      "columns": {
+        "template_id": {
+          "name": "template_id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_slot_at": {
+          "name": "last_slot_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "template_slots_template_id_templates_id_fk": {
+          "name": "template_slots_template_id_templates_id_fk",
+          "tableFrom": "template_slots",
+          "columnsFrom": [
+            "template_id"
+          ],
+          "tableTo": "templates",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "template_thread": {
+      "name": "template_thread",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "template_id": {
+          "name": "template_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "side": {
+          "name": "side",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "score": {
+          "name": "score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "closed_as": {
+          "name": "closed_as",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "template_thread_open_offer_idx": {
+          "name": "template_thread_open_offer_idx",
+          "columns": [
+            "template_id"
+          ],
+          "where": "closed_at IS NULL AND side = 'giver'",
+          "isUnique": true
+        },
+        "template_thread_open_bid_idx": {
+          "name": "template_thread_open_bid_idx",
+          "columns": [
+            "template_id",
+            "user_id"
+          ],
+          "where": "closed_at IS NULL AND side = 'taker'",
+          "isUnique": true
+        },
+        "template_thread_template_idx": {
+          "name": "template_thread_template_idx",
+          "columns": [
+            "template_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "template_thread_template_id_templates_id_fk": {
+          "name": "template_thread_template_id_templates_id_fk",
+          "tableFrom": "template_thread",
+          "columnsFrom": [
+            "template_id"
+          ],
+          "tableTo": "templates",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "template_thread_user_id_users_id_fk": {
+          "name": "template_thread_user_id_users_id_fk",
+          "tableFrom": "template_thread",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "template_thread_side_check": {
+          "name": "template_thread_side_check",
+          "value": "\"template_thread\".\"side\" IN ('giver', 'taker')"
+        },
+        "template_thread_score_check": {
+          "name": "template_thread_score_check",
+          "value": "\"template_thread\".\"score\" >= 1"
+        },
+        "template_thread_closed_check": {
+          "name": "template_thread_closed_check",
+          "value": "(\"template_thread\".\"closed_at\" IS NULL AND \"template_thread\".\"closed_as\" IS NULL) OR (\"template_thread\".\"closed_at\" IS NOT NULL AND \"template_thread\".\"closed_as\" IS NOT NULL AND \"template_thread\".\"closed_as\" IN ('replaced', 'accepted', 'closed'))"
+        }
+      }
+    },
+    "templates": {
+      "name": "templates",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "score": {
+          "name": "score",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "offer_round": {
+          "name": "offer_round",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "bids_from": {
+          "name": "bids_from",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "approval_required": {
+          "name": "approval_required",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "schedule_days": {
+          "name": "schedule_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "schedule_time": {
+          "name": "schedule_time",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "due_day_offset": {
+          "name": "due_day_offset",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "due_time": {
+          "name": "due_time",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "grace_minutes": {
+          "name": "grace_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "agreed_at": {
+          "name": "agreed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "templates_status_idx": {
+          "name": "templates_status_idx",
+          "columns": [
+            "status"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "templates_created_by_users_id_fk": {
+          "name": "templates_created_by_users_id_fk",
+          "tableFrom": "templates",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "templates_status_check": {
+          "name": "templates_status_check",
+          "value": "\"templates\".\"status\" IN ('proposed', 'active')"
+        },
+        "templates_score_check": {
+          "name": "templates_score_check",
+          "value": "\"templates\".\"score\" >= 1"
+        },
+        "templates_title_check": {
+          "name": "templates_title_check",
+          "value": "length(trim(\"templates\".\"title\")) > 0"
+        },
+        "templates_days_check": {
+          "name": "templates_days_check",
+          "value": "\"templates\".\"schedule_days\" BETWEEN 0 AND 127"
+        },
+        "templates_time_check": {
+          "name": "templates_time_check",
+          "value": "\"templates\".\"schedule_time\" IS NULL OR \"templates\".\"schedule_days\" > 0"
+        },
+        "templates_deadline_check": {
+          "name": "templates_deadline_check",
+          "value": "(\"templates\".\"due_day_offset\" IS NULL) = (\"templates\".\"due_time\" IS NULL) AND (\"templates\".\"due_time\" IS NULL) = (\"templates\".\"grace_minutes\" IS NULL)"
+        },
+        "templates_offset_check": {
+          "name": "templates_offset_check",
+          "value": "\"templates\".\"due_day_offset\" >= 0"
+        },
+        "templates_grace_check": {
+          "name": "templates_grace_check",
+          "value": "\"templates\".\"grace_minutes\" >= 0"
+        }
+      }
+    },
+    "passkey_challenges": {
+      "name": "passkey_challenges",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "challenge": {
+          "name": "challenge",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "purpose": {
+          "name": "purpose",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_handle": {
+          "name": "user_handle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "ip_key": {
+          "name": "ip_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "passkey_challenges_token_hash_unique": {
+          "name": "passkey_challenges_token_hash_unique",
+          "columns": [
+            "token_hash"
+          ],
+          "isUnique": true
+        },
+        "passkey_challenges_expires_idx": {
+          "name": "passkey_challenges_expires_idx",
+          "columns": [
+            "expires_at"
+          ],
+          "isUnique": false
+        },
+        "passkey_challenges_ip_idx": {
+          "name": "passkey_challenges_ip_idx",
+          "columns": [
+            "ip_key"
+          ],
+          "isUnique": false
+        },
+        "passkey_challenges_user_idx": {
+          "name": "passkey_challenges_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "passkey_challenges_user_id_users_id_fk": {
+          "name": "passkey_challenges_user_id_users_id_fk",
+          "tableFrom": "passkey_challenges",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "passkeys": {
+      "name": "passkeys",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "credential_id": {
+          "name": "credential_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "public_key": {
+          "name": "public_key",
+          "type": "blob",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "counter": {
+          "name": "counter",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "transports": {
+          "name": "transports",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_handle": {
+          "name": "user_handle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "device_kind": {
+          "name": "device_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "backed_up": {
+          "name": "backed_up",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "last_used_at": {
+          "name": "last_used_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "passkeys_credential_id_unique": {
+          "name": "passkeys_credential_id_unique",
+          "columns": [
+            "credential_id"
+          ],
+          "isUnique": true
+        },
+        "passkeys_user_idx": {
+          "name": "passkeys_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "passkeys_user_id_users_id_fk": {
+          "name": "passkeys_user_id_users_id_fk",
+          "tableFrom": "passkeys",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "periods": {
+      "name": "periods",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "starts_at": {
+          "name": "starts_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoff_at": {
+          "name": "cutoff_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ended_at": {
+          "name": "ended_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "lower_level": {
+          "name": "lower_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "upper_level": {
+          "name": "upper_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "periods_starts_at_idx": {
+          "name": "periods_starts_at_idx",
+          "columns": [
+            "starts_at"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "periods_span_check": {
+          "name": "periods_span_check",
+          "value": "\"periods\".\"cutoff_at\" > \"periods\".\"starts_at\""
+        },
+        "periods_levels_check": {
+          "name": "periods_levels_check",
+          "value": "\"periods\".\"lower_level\" >= 1 AND \"periods\".\"lower_level\" <= \"periods\".\"upper_level\""
+        },
+        "periods_ended_check": {
+          "name": "periods_ended_check",
+          "value": "\"periods\".\"ended_at\" IS NULL OR (\"periods\".\"ended_at\" > \"periods\".\"starts_at\" AND \"periods\".\"ended_at\" < \"periods\".\"cutoff_at\")"
+        }
+      }
+    },
+    "settlements": {
+      "name": "settlements",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "period_id": {
+          "name": "period_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "taker_id": {
+          "name": "taker_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "total_before": {
+          "name": "total_before",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "level": {
+          "name": "level",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "deducted": {
+          "name": "deducted",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "carry_over": {
+          "name": "carry_over",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "settled_by": {
+          "name": "settled_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "settled_at": {
+          "name": "settled_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "settlements_period_taker_idx": {
+          "name": "settlements_period_taker_idx",
+          "columns": [
+            "period_id",
+            "taker_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "settlements_period_id_periods_id_fk": {
+          "name": "settlements_period_id_periods_id_fk",
+          "tableFrom": "settlements",
+          "columnsFrom": [
+            "period_id"
+          ],
+          "tableTo": "periods",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "settlements_taker_id_users_id_fk": {
+          "name": "settlements_taker_id_users_id_fk",
+          "tableFrom": "settlements",
+          "columnsFrom": [
+            "taker_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "settlements_settled_by_users_id_fk": {
+          "name": "settlements_settled_by_users_id_fk",
+          "tableFrom": "settlements",
+          "columnsFrom": [
+            "settled_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "settlements_points_check": {
+          "name": "settlements_points_check",
+          "value": "\"settlements\".\"total_before\" >= 0 AND \"settlements\".\"deducted\" >= 0 AND \"settlements\".\"carry_over\" >= 0 AND \"settlements\".\"carry_over\" = \"settlements\".\"total_before\" - \"settlements\".\"deducted\""
+        },
+        "settlements_level_check": {
+          "name": "settlements_level_check",
+          "value": "\"settlements\".\"level\" IN ('none', 'lower', 'upper')"
+        },
+        "settlements_deducted_check": {
+          "name": "settlements_deducted_check",
+          "value": "(\"settlements\".\"level\" = 'none') = (\"settlements\".\"deducted\" = 0)"
+        }
+      }
+    },
+    "period_defaults": {
+      "name": "period_defaults",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "length_days": {
+          "name": "length_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoff_weekday": {
+          "name": "cutoff_weekday",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoff_hour": {
+          "name": "cutoff_hour",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoff_minute": {
+          "name": "cutoff_minute",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lower_level": {
+          "name": "lower_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "upper_level": {
+          "name": "upper_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "period_defaults_updated_by_users_id_fk": {
+          "name": "period_defaults_updated_by_users_id_fk",
+          "tableFrom": "period_defaults",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "period_defaults_singleton_check": {
+          "name": "period_defaults_singleton_check",
+          "value": "\"period_defaults\".\"id\" = 1"
+        },
+        "period_defaults_length_check": {
+          "name": "period_defaults_length_check",
+          "value": "\"period_defaults\".\"length_days\" BETWEEN 7 AND 364 AND \"period_defaults\".\"length_days\" % 7 = 0"
+        },
+        "period_defaults_cutoff_check": {
+          "name": "period_defaults_cutoff_check",
+          "value": "\"period_defaults\".\"cutoff_weekday\" BETWEEN 0 AND 6 AND \"period_defaults\".\"cutoff_hour\" BETWEEN 0 AND 23 AND \"period_defaults\".\"cutoff_minute\" BETWEEN 0 AND 59"
+        },
+        "period_defaults_levels_check": {
+          "name": "period_defaults_levels_check",
+          "value": "\"period_defaults\".\"lower_level\" >= 1 AND \"period_defaults\".\"lower_level\" <= \"period_defaults\".\"upper_level\""
+        }
+      }
+    },
+    "defaults_proposal_approvals": {
+      "name": "defaults_proposal_approvals",
+      "columns": {
+        "proposal_id": {
+          "name": "proposal_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "dpa_user_idx": {
+          "name": "dpa_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "defaults_proposal_approvals_proposal_id_defaults_proposals_id_fk": {
+          "name": "defaults_proposal_approvals_proposal_id_defaults_proposals_id_fk",
+          "tableFrom": "defaults_proposal_approvals",
+          "columnsFrom": [
+            "proposal_id"
+          ],
+          "tableTo": "defaults_proposals",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "defaults_proposal_approvals_user_id_users_id_fk": {
+          "name": "defaults_proposal_approvals_user_id_users_id_fk",
+          "tableFrom": "defaults_proposal_approvals",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "defaults_proposal_approvals_proposal_id_user_id_pk": {
+          "columns": [
+            "proposal_id",
+            "user_id"
+          ],
+          "name": "defaults_proposal_approvals_proposal_id_user_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "defaults_proposals": {
+      "name": "defaults_proposals",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "length_days": {
+          "name": "length_days",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoff_weekday": {
+          "name": "cutoff_weekday",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoff_hour": {
+          "name": "cutoff_hour",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoff_minute": {
+          "name": "cutoff_minute",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lower_level": {
+          "name": "lower_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "upper_level": {
+          "name": "upper_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "proposed_by": {
+          "name": "proposed_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "closed_by": {
+          "name": "closed_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "defaults_proposals_pending_idx": {
+          "name": "defaults_proposals_pending_idx",
+          "columns": [
+            "status"
+          ],
+          "where": "\"defaults_proposals\".\"status\" = 'pending'",
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "defaults_proposals_proposed_by_users_id_fk": {
+          "name": "defaults_proposals_proposed_by_users_id_fk",
+          "tableFrom": "defaults_proposals",
+          "columnsFrom": [
+            "proposed_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "defaults_proposals_closed_by_users_id_fk": {
+          "name": "defaults_proposals_closed_by_users_id_fk",
+          "tableFrom": "defaults_proposals",
+          "columnsFrom": [
+            "closed_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "defaults_proposals_status_check": {
+          "name": "defaults_proposals_status_check",
+          "value": "\"defaults_proposals\".\"status\" IN ('pending', 'agreed', 'rejected', 'withdrawn')"
+        },
+        "defaults_proposals_length_check": {
+          "name": "defaults_proposals_length_check",
+          "value": "\"defaults_proposals\".\"length_days\" BETWEEN 7 AND 364 AND \"defaults_proposals\".\"length_days\" % 7 = 0"
+        },
+        "defaults_proposals_cutoff_check": {
+          "name": "defaults_proposals_cutoff_check",
+          "value": "\"defaults_proposals\".\"cutoff_weekday\" BETWEEN 0 AND 6 AND \"defaults_proposals\".\"cutoff_hour\" BETWEEN 0 AND 23 AND \"defaults_proposals\".\"cutoff_minute\" BETWEEN 0 AND 59"
+        },
+        "defaults_proposals_levels_check": {
+          "name": "defaults_proposals_levels_check",
+          "value": "\"defaults_proposals\".\"lower_level\" >= 1 AND \"defaults_proposals\".\"lower_level\" <= \"defaults_proposals\".\"upper_level\""
+        }
+      }
+    },
+    "period_proposal_approvals": {
+      "name": "period_proposal_approvals",
+      "columns": {
+        "proposal_id": {
+          "name": "proposal_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "approved_at": {
+          "name": "approved_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "ppa_user_idx": {
+          "name": "ppa_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "period_proposal_approvals_proposal_id_period_proposals_id_fk": {
+          "name": "period_proposal_approvals_proposal_id_period_proposals_id_fk",
+          "tableFrom": "period_proposal_approvals",
+          "columnsFrom": [
+            "proposal_id"
+          ],
+          "tableTo": "period_proposals",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "period_proposal_approvals_user_id_users_id_fk": {
+          "name": "period_proposal_approvals_user_id_users_id_fk",
+          "tableFrom": "period_proposal_approvals",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "period_proposal_approvals_proposal_id_user_id_pk": {
+          "columns": [
+            "proposal_id",
+            "user_id"
+          ],
+          "name": "period_proposal_approvals_proposal_id_user_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "period_proposals": {
+      "name": "period_proposals",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
+        "after_period_id": {
+          "name": "after_period_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cutoff_at": {
+          "name": "cutoff_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "lower_level": {
+          "name": "lower_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "upper_level": {
+          "name": "upper_level",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "proposed_by": {
+          "name": "proposed_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "closed_by": {
+          "name": "closed_by",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "period_proposals_open_idx": {
+          "name": "period_proposals_open_idx",
+          "columns": [
+            "after_period_id"
+          ],
+          "where": "\"period_proposals\".\"status\" IN ('pending', 'agreed')",
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "period_proposals_after_period_id_periods_id_fk": {
+          "name": "period_proposals_after_period_id_periods_id_fk",
+          "tableFrom": "period_proposals",
+          "columnsFrom": [
+            "after_period_id"
+          ],
+          "tableTo": "periods",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "period_proposals_proposed_by_users_id_fk": {
+          "name": "period_proposals_proposed_by_users_id_fk",
+          "tableFrom": "period_proposals",
+          "columnsFrom": [
+            "proposed_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "period_proposals_closed_by_users_id_fk": {
+          "name": "period_proposals_closed_by_users_id_fk",
+          "tableFrom": "period_proposals",
+          "columnsFrom": [
+            "closed_by"
+          ],
+          "tableTo": "users",
+          "columnsTo": [
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "period_proposals_status_check": {
+          "name": "period_proposals_status_check",
+          "value": "\"period_proposals\".\"status\" IN ('pending', 'agreed', 'rejected', 'withdrawn', 'lapsed')"
+        },
+        "period_proposals_levels_check": {
+          "name": "period_proposals_levels_check",
+          "value": "\"period_proposals\".\"lower_level\" >= 1 AND \"period_proposals\".\"lower_level\" <= \"period_proposals\".\"upper_level\""
+        }
+      }
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

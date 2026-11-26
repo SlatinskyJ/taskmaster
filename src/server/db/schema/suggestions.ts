@@ -4,7 +4,7 @@ import { users } from './users'
 
 // In-app suggestions (spec §5.13, #247). The rules are the domain's (src/domain/suggestions.ts);
 // the store is src/server/suggestions/. Rows are never deleted, done and dismissed are final, the
-// author's text and, once set, the sent text never change (triggers in migration 0038). Lengths
+// author's text and, once set, the sent text never change (triggers in migration 0040). Lengths
 // count characters (code points), as SQLite's `length()` does. Times are UTC ISO 8601 with
 // milliseconds.
 export const SUGGESTION_STATUSES = ['new', 'sent', 'done', 'dismissed'] as const

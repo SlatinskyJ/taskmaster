@@ -24,7 +24,7 @@ Node 22 + pnpm (`corepack enable`). `pnpm install` also installs the lefthook pr
 - `pnpm dev`: dev server on port 3000
 - `pnpm build` then `pnpm start`: production server (`.output/`)
 - `pnpm typecheck`, `pnpm lint`, `pnpm format:check` (or `pnpm format`), `pnpm test`
-- `pnpm mutation --mutate <src files>`: mutation testing (Stryker). CI job `mutation` runs it on a PR's changed `src/` files and lists surviving mutants; not a required check.
+- `pnpm mutation --mutate <src files>`: mutation testing (Stryker). CI job `mutation` runs it on the `src/` lines a PR adds or changes and lists surviving mutants; not a required check.
 - `pnpm db:generate --name <change>`: write a migration after editing `src/server/db/schema/`; commit `drizzle/`. `pnpm db:check`: schema and migrations agree and apply to an empty DB (CI job `migrations`). Never edit a committed migration.
 - DB code: `src/server/db/` (`getDb()`; tests use `createTestDb()` from `~/server/db/testing`). The server migrates on boot. SQLite file: `$DATA_DIR/taskmaster.db` (`.data/` in dev).
 - Audit: every state change goes through `withAudit` (`src/server/audit/`, see its README).
