@@ -9,16 +9,15 @@ import {
   type DemoLogin,
   type Device,
   type SizeKey,
-  frameName,
   frameSrc,
   needsLogin,
   newDeviceId,
   parseLayout,
   safePath,
   serializeLayout,
-  tokenFromName,
 } from '~/lib/multiLayout'
 import { type FrameStatus, logInDevice } from '~/lib/multiLogin'
+import { frameNameFor, tokenInFrameName } from '~/lib/frame'
 import { cs } from '~/lib/strings'
 import { frameLoginFn } from '~/server/auth/functions'
 import { getDevPagesAllowed } from '~/server/env/functions'
@@ -64,9 +63,9 @@ function readFrame(
     const win = iframe?.contentWindow
     if (win?.location.origin !== window.location.origin) return null
     const path = safePath(win.location.pathname + win.location.search + win.location.hash)
-    const named = tokenFromName(win.name)
-    if (path === null || named === null) return null
-    return { path, token: named.token }
+    const token = tokenInFrameName(win.name)
+    if (path === null || token === null) return null
+    return { path, token: token ?? null }
   } catch {
     return null
   }
@@ -75,7 +74,7 @@ function readFrame(
 const openFrame = (device: Device, previous: OpenFrame | undefined): OpenFrame => ({
   reloadKey: (previous?.reloadKey ?? 0) + 1,
   src: frameSrc(device),
-  name: frameName(device.token),
+  name: frameNameFor(device.token),
 })
 
 function initialState() {

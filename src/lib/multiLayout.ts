@@ -1,4 +1,4 @@
-import { FRAME_NAME_PREFIX, FRAME_QUERY, NO_TOKEN } from '~/lib/frame'
+import { FRAME_QUERY, NO_TOKEN } from '~/lib/frame'
 
 // The multi-user viewer's layout (/dev/multi, dev and PR previews only): which devices are on
 // the desk, their sizes, the address and session of each, and how that is remembered in the
@@ -102,17 +102,6 @@ export function frameSrc(device: Device): string {
   const url = new URL(safePath(device.path) ?? '/', BASE)
   url.searchParams.set(FRAME_QUERY, device.token ?? NO_TOKEN)
   return url.pathname + url.search + url.hash
-}
-
-export function frameName(token: string | null | undefined): string {
-  return FRAME_NAME_PREFIX + (token ?? '')
-}
-
-/** A frame's token from its window name (null when logged out), or null for any other name. */
-export function tokenFromName(name: string): { token: string | null } | null {
-  if (!name.startsWith(FRAME_NAME_PREFIX)) return null
-  const token = name.slice(FRAME_NAME_PREFIX.length)
-  return { token: token === '' ? null : token }
 }
 
 export function needsLogin(device: Device): boolean {

@@ -2,14 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_LAYOUT,
   type Device,
-  frameName,
   frameSrc,
   needsLogin,
   newDeviceId,
   parseLayout,
   safePath,
   serializeLayout,
-  tokenFromName,
 } from './multiLayout'
 
 const device = (over: Partial<Device> = {}): Device => ({
@@ -106,6 +104,9 @@ describe('safePath', () => {
     ['http://x/ukoly', null],
     ['javascript:alert(1)', null],
     ['data:text/html,hi', null],
+    // The URL parser throws on these.
+    ['http://[::1', null],
+    ['//[', null],
   ])('%j → %j', (input, expected) => {
     expect(safePath(input)).toBe(expected)
   })
@@ -141,26 +142,14 @@ describe('frameSrc', () => {
   })
 })
 
-describe('frameName and tokenFromName', () => {
-  it('names a frame by its token', () => {
-    expect(frameName(undefined)).toBe('tm-frame:')
-    expect(frameName(null)).toBe('tm-frame:')
-    expect(frameName('abc')).toBe('tm-frame:abc')
-  })
-
-  it('reads the token back', () => {
-    expect(tokenFromName('tm-frame:abc')).toEqual({ token: 'abc' })
-    expect(tokenFromName('tm-frame:')).toEqual({ token: null })
-    expect(tokenFromName('')).toBeNull()
-    expect(tokenFromName('other')).toBeNull()
-  })
-})
-
 describe('newDeviceId', () => {
   it('is one past the highest id, never a duplicate', () => {
     expect(newDeviceId(DEFAULT_LAYOUT)).toBe('d4')
     expect(newDeviceId([])).toBe('d1')
     expect(newDeviceId([device({ id: 'd1' }), device({ id: 'd3' })])).toBe('d4')
     expect(newDeviceId([device({ id: 'x' }), device({ id: 'd2' })])).toBe('d3')
+    expect(newDeviceId([device({ id: 'd9' }), device({ id: 'd10' })])).toBe('d11')
+    expect(newDeviceId([device({ id: 'xd7' })])).toBe('d1')
+    expect(newDeviceId([device({ id: 'd7x' })])).toBe('d1')
   })
 })

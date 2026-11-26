@@ -19,11 +19,21 @@ interface Named {
   name: string
 }
 
+/** A frame's window name for its token (none: `tm-frame:`). */
+export function frameNameFor(token: string | null | undefined): string {
+  return FRAME_NAME_PREFIX + (token ?? '')
+}
+
+/** The token in a frame's window name: undefined for none, null for a name that is no frame's. */
+export function tokenInFrameName(name: string): string | undefined | null {
+  if (!name.startsWith(FRAME_NAME_PREFIX)) return null
+  const token = name.slice(FRAME_NAME_PREFIX.length)
+  return token === '' ? undefined : token
+}
+
 /** The frame's token from its window name: undefined for none, null outside a frame. */
 function frameToken(win: Named | undefined): string | undefined | null {
-  if (!win?.name.startsWith(FRAME_NAME_PREFIX)) return null
-  const token = win.name.slice(FRAME_NAME_PREFIX.length)
-  return token === '' ? undefined : token
+  return win ? tokenInFrameName(win.name) : null
 }
 
 /** Headers for a server function call: the frame's token in a frame, nothing otherwise. */
@@ -79,5 +89,5 @@ export function guardedReentryUrl(
 /** After a login or logout in a frame: remember the new token (or none) in its name. */
 export function keepFrameToken(win: Named | undefined, token: string | undefined): void {
   if (!win || frameToken(win) === null) return
-  win.name = FRAME_NAME_PREFIX + (token ?? '')
+  win.name = frameNameFor(token)
 }
