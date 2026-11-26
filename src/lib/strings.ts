@@ -197,6 +197,8 @@ export const cs = {
     when: 'Kdy vzniká',
     /** Index = weekday, 0 = Sunday (src/domain/dates.ts). */
     days: ['Ne', 'Po', 'Út', 'St', 'Čt', 'Pá', 'So'],
+    /** A schedule of all seven days (#258), on Úkoly and in the plan table. */
+    everyDay: 'každý den',
     atTime: 'V čase',
     withTime: 'V určitý čas',
     noTimeHint: 'Bez času vznikne o půlnoci.',
@@ -557,6 +559,47 @@ export const cs = {
     /** Under a corrected settled week on Historie. */
     correctedLine: (now: string, was: string, diff: number, date: string, reason: string) =>
       `Opraveno na úroveň ${now} (původně ${was}): ${signedPoints(diff)} · ${date} · ${reason}`,
+  },
+  /** The plan table on Týden (#258, spec §5.12): chores × days of the running week. */
+  plan: {
+    title: 'Plán týdne',
+    /** Under the title on Týden's card: a brother's, then a parent's line. */
+    cardTaker: 'Rozděl si úkoly na dny.',
+    cardGiver: 'Kdo co dělá který den.',
+    freeCount: (n: number) => `Volných: ${String(n)}`,
+    turnHint: 'Otoč telefon na šířku, uvidíš celý týden.',
+    scrollHint: 'Dny posouváš do strany, názvy úkolů zůstávají vlevo.',
+    tapHint: 'Klepni na volné políčko a je tvoje.',
+    /** Legend and cell texts. */
+    mine: 'Moje',
+    pendingShort: 'čeká',
+    expiredShort: 'prošlo',
+    cancelledShort: 'zrušeno',
+    count: (n: number) => `${String(n)}×`,
+    /** Toast after a reserve: "Rezervováno: St". */
+    reserved: (day: string) => `Rezervováno: ${day}`,
+    reservedByYou: (points: string) => `Rezervováno tebou · ${points}`,
+    reservedBy: (name: string) => `rezervováno: ${name}`,
+    byYou: 'rezervováno tebou',
+    /** A row of the several-copies sheet: a scheduled copy, a parent's extra ("Navíc 14:20"). */
+    bySchedule: 'Podle rozvrhu',
+    extra: (time: string) => `Navíc ${time}`,
+    close: 'Zavřít',
+    openTask: 'Otevřít úkol',
+    noRows: 'Žádný opakovaný úkol nemá pevné dny.',
+    /** A cell's label after "title, day: ". */
+    aria: {
+      free: 'volné, rezervovat',
+      /** A parent's tap opens the page. */
+      freeGiver: 'volné',
+      mine: 'rezervováno tebou, uvolnit',
+      reserved: (name: string) => `rezervováno, ${name}`,
+      pending: (name: string) => `čeká na potvrzení, ${name}`,
+      confirmed: (name: string) => `hotovo, ${name}`,
+      expired: 'prošlo',
+      cancelled: 'zrušeno',
+      count: (n: number) => `${String(n)} ${plural(n, copyWords)}, otevřít seznam`,
+    },
   },
   /** Disputes on locked items (#46, spec §5.11, UI doc §7.1 TDispute). Chip text: `state.disputed`. */
   /** What done means on a task or chore (#207, spec §4). */
@@ -1100,6 +1143,9 @@ export function plural(n: number, forms: PluralForms): string {
 
 /** `1 nový`, `3 nové`, `5 nových`: new suggestions on Správa. */
 export const newWords: PluralForms = { one: 'nový', few: 'nové', many: 'nových' }
+
+/** `2 kopie`, `5 kopií`: copies in one plan cell. */
+export const copyWords: PluralForms = { one: 'kopie', few: 'kopie', many: 'kopií' }
 
 export const keyWords: PluralForms = { one: 'klíč', few: 'klíče', many: 'klíčů' }
 

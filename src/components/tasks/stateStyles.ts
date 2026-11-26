@@ -56,3 +56,7 @@ export const STATE_STRIPE: Record<ItemStateKey, string> = {
   rejected: 'border-l-state-rejected',
   disputed: 'border-l-state-disputed',
 }
+
+/** Diagonal stripes of points or work waiting for approval: the points bar and the plan table. */
+export const PENDING_STRIPES =
+  'bg-[repeating-linear-gradient(-45deg,var(--s-pending)_0_6px,color-mix(in_srgb,var(--s-pending)_50%,transparent)_6px_12px)]'

@@ -12,6 +12,7 @@ export const APP_PATHS = [
   '/tyden',
   '/tyden/pristi',
   '/tyden/vychozi',
+  '/tyden/plan',
   '/ukoly',
   '/ukoly/novy',
   '/schuzka',
@@ -34,6 +35,8 @@ export const SCREEN_ROLES: Readonly<Record<AppPath, readonly Role[]>> = {
   '/tyden/pristi': ['taker', 'giver'],
   /** A parent proposes a new default week (#43, UI doc §7.2 GDefaults). */
   '/tyden/vychozi': ['giver'],
+  /** The plan table: chores × days of the running week (#258, spec §5.12). */
+  '/tyden/plan': ['taker', 'giver'],
   '/ukoly': ['giver'],
   '/ukoly/novy': ['giver'],
   '/schuzka': ['giver'],
