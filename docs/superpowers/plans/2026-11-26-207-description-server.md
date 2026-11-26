@@ -245,7 +245,7 @@ A template's entries use the `template.*` names and `entityType: 'template'`.
   - an open task in a reopened round (`biddingFrom` set): still waits (Review Focus, open not proposed);
   - a reserved task: the other taker's OK → `not_involved`; the reserver's OK applies it;
   - Review Focus 2: a reserved task with a waiting change, then release → open, then the other taker's OK applies it;
-  - ruling 1: a bid-won reservation with a waiting change is released back to proposed. `tasks.description` is the new text, the row closed `applied`, and there is one `task.description_changed` entry by the releaser, after `task.released`, with no `task.description_change_discarded`;
+  - ruling 1: a bid-won reservation with a waiting change is released back to proposed. `tasks.description` is the new text, the row closed `applied`, and there is one `task.description_changed` entry by the releaser, after `task.released`, with no `task.description_change_discarded`. No ruling-7 reset on top: `offerRound` went up by exactly one (the release's), and the only approval in the new round is the one `reopenOffer` wrote for `reservedGiverId`;
   - completion discards the change (ruling 2);
   - a giver's second change replaces the first: the old row is `replaced`, and the entry carries `replacedId`;
   - Review Focus 1: an OK naming the replaced `changeId` → `offer_changed`; with no change → `no_change`;
