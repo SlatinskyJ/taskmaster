@@ -1,4 +1,6 @@
 import { createFileRoute, notFound } from '@tanstack/react-router'
+import { DescriptionBlock } from '~/components/descriptions/DescriptionBlock'
+import { canEditDescription } from '~/components/descriptions/descriptionCalls'
 import { DisputeControl } from '~/components/disputes/DisputeControl'
 import { templateDispute } from '~/components/disputes/disputeProps'
 import { EmptyState } from '~/components/EmptyState'
@@ -45,7 +47,7 @@ export const Route = createFileRoute('/_app/sablona/$templateId')({
 
 function TemplatePage() {
   const { user, features } = Route.useRouteContext()
-  const { template: t, thread, waitingFor, disputeMark } = Route.useLoaderData()
+  const { template: t, thread, waitingFor, disputeMark, descriptionChange } = Route.useLoaderData()
   const dispute = features.disputes ? templateDispute(t) : null
   const me = { id: user.id, role: user.role }
   const chip = templateChip(t)
@@ -66,6 +68,16 @@ function TemplatePage() {
                 : cs.templatePrice.now(t.score)}
           </span>
         </div>
+        {features.descriptions && (
+          <DescriptionBlock
+            text={t.description}
+            change={descriptionChange}
+            target={{ kind: 'template', id: t.id }}
+            canEdit={canEditDescription({ kind: 'template' }, me)}
+            proposed={proposed}
+            me={me}
+          />
+        )}
         {proposed && <p className="text-meta text-muted">{cs.templatePrice.startsWhenAll}</p>}
         {meta && <p className="font-bold break-words">{meta}</p>}
         <p className="text-meta break-words text-muted">{templateDetail(t)}</p>

@@ -59,6 +59,8 @@ export interface NewItemForm {
   score: number
   approvalRequired: boolean
   recurring: RecurringValue
+  /** What done means (#207); blank = none, and the field is only there with the switch on. */
+  description: string
 }
 
 type ActionResult = { ok: true; id: number } | { ok: false; error: string }
@@ -69,15 +71,19 @@ export async function submitNewItem(
   form: NewItemForm,
   fns: {
     createTask: (input: {
-      data: { title: string; score: number; approvalRequired: boolean }
+      data: { title: string; score: number; approvalRequired: boolean; description?: string }
     }) => Promise<ActionResult>
     createTemplate: (input: { data: NewTemplate }) => Promise<ActionResult>
   } = { createTask: createTaskFn, createTemplate: createTemplateFn },
 ): Promise<ActionResult> {
   const { title, score, approvalRequired } = form
-  if (kind === 'one_time') return fns.createTask({ data: { title, score, approvalRequired } })
+  // Sent only when written, so a server with the switch off is never asked to store one.
+  const text = form.description.trim() === '' ? {} : { description: form.description }
+  if (kind === 'one_time') {
+    return fns.createTask({ data: { title, score, approvalRequired, ...text } })
+  }
   return fns.createTemplate({
-    data: { title, score, approvalRequired, ...toDefinition(form.recurring) },
+    data: { title, score, approvalRequired, ...toDefinition(form.recurring), ...text },
   })
 }
 

@@ -1,4 +1,6 @@
 import { createFileRoute, Link, notFound } from '@tanstack/react-router'
+import { DescriptionBlock } from '~/components/descriptions/DescriptionBlock'
+import { canEditDescription } from '~/components/descriptions/descriptionCalls'
 import { DisputeControl } from '~/components/disputes/DisputeControl'
 import { taskDisputes } from '~/components/disputes/disputeProps'
 import { Screen } from '~/components/shell/Screen'
@@ -64,7 +66,7 @@ export const Route = createFileRoute('/_app/ukol/$taskId')({
 
 function TaskPage() {
   const { user, features } = Route.useRouteContext()
-  const { task, thread, history, disputeMarks } = Route.useLoaderData()
+  const { task, thread, history, disputeMarks, descriptionChange } = Route.useLoaderData()
   const me = { id: user.id, role: user.role }
   const meta = detailMeta(task, me)
   const due = instanceMeta(task, new Date())
@@ -79,6 +81,19 @@ function TaskPage() {
           {meta && <span className="text-meta text-muted">{meta}</span>}
           {due && <span className="text-meta text-muted">{due}</span>}
         </div>
+        {features.descriptions && (
+          <DescriptionBlock
+            text={task.description}
+            change={descriptionChange}
+            target={{ kind: 'task', id: task.id }}
+            canEdit={canEditDescription(
+              { kind: 'task', status: task.status, origin: task.origin },
+              me,
+            )}
+            proposed={task.status === 'proposed'}
+            me={me}
+          />
+        )}
         {roundLines(task).map((line) => (
           <p key={line} className="text-meta text-muted">
             {line}

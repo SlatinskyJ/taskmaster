@@ -20,6 +20,8 @@ const page = vi.hoisted(() => {
     thread: unknown[]
     waitingFor: { id: number; name: string }[]
     disputes: boolean
+    descriptions: boolean
+    change: unknown
     mark: unknown
   } = {
     user: null,
@@ -27,6 +29,8 @@ const page = vi.hoisted(() => {
     thread: [],
     waitingFor: [],
     disputes: false,
+    descriptions: false,
+    change: null,
     mark: null,
   }
   return state
@@ -34,12 +38,16 @@ const page = vi.hoisted(() => {
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (opts: Record<string, unknown>) => ({
     ...opts,
-    useRouteContext: () => ({ user: page.user, features: { disputes: page.disputes } }),
+    useRouteContext: () => ({
+      user: page.user,
+      features: { disputes: page.disputes, descriptions: page.descriptions },
+    }),
     useLoaderData: () => ({
       template: page.template,
       thread: page.thread,
       waitingFor: page.waitingFor,
       disputeMark: page.mark,
+      descriptionChange: page.change,
     }),
   }),
   notFound: () => new Error('not found'),
@@ -54,6 +62,10 @@ vi.mock('~/components/tasks/useTaskAction', () => ({
 vi.mock('./priceCalls', () => ({ callPrice: vi.fn(), PRICE_CALLS: {} }))
 vi.mock('~/server/templates/functions', () => ({
   getTemplateDetailFn: vi.fn(() => Promise.resolve({ template: page.template, thread: [] })),
+}))
+vi.mock('~/server/descriptions/functions', () => ({
+  changeDescriptionFn: vi.fn(),
+  answerDescriptionFn: vi.fn(),
 }))
 vi.mock('~/server/disputes/functions', () => ({
   getItemMarkFn: vi.fn(() => Promise.resolve(null)),
@@ -235,5 +247,38 @@ describe('a proposed chore’s page (#205)', () => {
     expect(html).toContain('Platí 3 b.')
     expect(html).not.toContain('Navržená cena')
     expect(html).toContain('Historie ceny')
+  })
+})
+
+describe('chore page: description (#207)', () => {
+  const TATA = { id: 2, role: 'giver', displayName: 'Táta' } as const
+  const described = { ...dishes, description: 'Talíře do myčky.\nHrnce ručně.' }
+
+  it('switch off: no Popis block', () => {
+    expect(render(TATA, thread, described)).not.toContain('data-slot="description"')
+  })
+
+  it('switch on: the text, Upravit popis for Táta only, the waiting card', () => {
+    page.descriptions = true
+    page.change = {
+      id: 3,
+      description: null,
+      proposedBy: 2,
+      createdAt: '2026-11-26T10:00:00.000Z',
+      waitingFor: [4],
+      waitingForNames: ['Starší'],
+    }
+    try {
+      const giver = render(TATA, thread, described)
+      expect(giver).toContain('Talíře do myčky.\nHrnce ručně.')
+      expect(giver).toContain(`>${cs.description.edit}<`)
+      expect(giver).toContain(cs.description.waitingRemove)
+      const brother = render(STARSI, thread, described)
+      expect(brother).not.toContain(cs.description.edit)
+      expect(brother).toContain(`>${cs.description.agree}<`)
+    } finally {
+      page.descriptions = false
+      page.change = null
+    }
   })
 })

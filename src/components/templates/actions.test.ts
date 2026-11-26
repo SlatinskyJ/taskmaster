@@ -39,12 +39,16 @@ describe('toDefinition', () => {
   })
 })
 
+const dataOf = (fn: { mock: { calls: unknown[][] } }) =>
+  (fn.mock.calls[0]?.[0] as { data: Record<string, unknown> }).data
+
 describe('submitNewItem', () => {
   const form = {
     title: 'Vynést koše',
     score: 4,
     approvalRequired: true,
     recurring: R({ days: [2], time: '18:00', hasDeadline: true }),
+    description: '',
   }
   const fns = () => ({
     createTask: vi.fn(() => Promise.resolve({ ok: true as const, id: 1 })),
@@ -73,6 +77,26 @@ describe('submitNewItem', () => {
       data: { title: 'Vynést koše', score: 4, approvalRequired: true },
     })
   })
+
+  it.each(['one_time', 'recurring'] as const)(
+    '%s with a description → it is in the call data',
+    async (kind) => {
+      const f = fns()
+      await submitNewItem(kind, { ...form, description: 'Koše i tříděný.' }, f)
+      const call = kind === 'one_time' ? f.createTask : f.createTemplate
+      expect(dataOf(call)).toMatchObject({ description: 'Koše i tříděný.' })
+    },
+  )
+
+  it.each(['one_time', 'recurring'] as const)(
+    '%s with a blank description → no description key',
+    async (kind) => {
+      const f = fns()
+      await submitNewItem(kind, { ...form, description: '  \n ' }, f)
+      const call = kind === 'one_time' ? f.createTask : f.createTemplate
+      expect(dataOf(call)).not.toHaveProperty('description')
+    },
+  )
 
   it('passes a refusal through', async () => {
     const f = fns()
