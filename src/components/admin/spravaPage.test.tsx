@@ -2,9 +2,11 @@ import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
+import { FEATURE_KEYS, NO_FEATURES } from '~/lib/features'
 import { cs } from '~/lib/strings'
 import { listPasskeyCountsFn } from '~/server/passkeys/functions'
 import { getAdminDisputesFn } from '~/server/disputes/functions'
+import { getFeaturesFn } from '~/server/features/functions'
 import type { AdminDisputeEntry } from '~/server/disputes/functions'
 import { getPeriodDefaultsFn } from '~/server/periods/functions'
 import { getAdminSuggestionsFn } from '~/server/suggestions/functions'
@@ -43,6 +45,10 @@ vi.mock('~/server/corrections/functions', () => ({
   adjustPointsFn: vi.fn(),
   correctSettlementFn: vi.fn(),
 }))
+vi.mock('~/server/features/functions', () => ({
+  getFeaturesFn: vi.fn(() => Promise.resolve({ ...NO_FEATURES, log: true })),
+  setSwitchFn: vi.fn(),
+}))
 vi.mock('~/server/suggestions/functions', () => ({
   getAdminSuggestionsFn: vi.fn(() => Promise.resolve({ items: [], canSend: false })),
   closeSuggestionFn: vi.fn(),
@@ -67,9 +73,11 @@ describe('Správa route', () => {
       defaults: 'defaults',
       disputes: [],
       fixable: [],
+      switches: { ...NO_FEATURES, log: true },
       suggestions: { items: [], canSend: false },
     })
     expect(getPeriodDefaultsFn).toHaveBeenCalled()
+    expect(getFeaturesFn).toHaveBeenCalled()
     expect(listUsersFn).toHaveBeenCalled()
     expect(listPasskeyCountsFn).toHaveBeenCalled()
     expect(getAdminDisputesFn).toHaveBeenCalled()
@@ -90,6 +98,7 @@ describe('Správa route', () => {
       defaults: DEFAULT_PERIOD_DEFAULTS,
       disputes: [],
       fixable: [],
+      switches: NO_FEATURES,
       suggestions: { items: [], canSend: false },
     }
     const Page = route.component
@@ -119,6 +128,7 @@ describe('Správa: Sporné (#47)', () => {
     disputes: unknown,
     fixable: unknown = [],
     suggestions: unknown = { error: 'feature_off' },
+    switches: unknown = NO_FEATURES,
   ) => {
     page.data = {
       people: [],
@@ -126,6 +136,7 @@ describe('Správa: Sporné (#47)', () => {
       defaults: DEFAULT_PERIOD_DEFAULTS,
       disputes,
       fixable,
+      switches,
       suggestions,
     }
     const Page = route.component
@@ -177,7 +188,8 @@ describe('Správa: Sporné (#47)', () => {
   })
 
   it('suggestions switch off: no Návrhy text at all', () => {
-    const html = render([entry])
+    // Funkce in its error state: its list names the switches, Návrhy zlepšení among them (#296).
+    const html = render([entry], [], { error: 'feature_off' }, { error: 'failed' })
     expect(html).not.toContain('Návrh')
   })
 
@@ -190,5 +202,42 @@ describe('Správa: Sporné (#47)', () => {
     const html = render([entry], [], { error: 'load' })
     expect(html).toContain(cs.suggestions.loadError)
     expect(html).toContain(cs.admin.defaults.title)
+  })
+})
+
+describe('Správa: Funkce (#296)', () => {
+  const render = (switches: unknown) => {
+    page.data = {
+      people: [],
+      passkeys: {},
+      defaults: DEFAULT_PERIOD_DEFAULTS,
+      disputes: [],
+      fixable: [],
+      suggestions: { error: 'feature_off' },
+      switches,
+    }
+    const Page = route.component
+    return renderToStaticMarkup(<Page />)
+  }
+
+  it('a failed switch read gives the card its error state, the rest still loads', async () => {
+    vi.mocked(getFeaturesFn).mockRejectedValueOnce(new Error('net'))
+    await expect(route.loader()).resolves.toMatchObject({
+      defaults: 'defaults',
+      switches: { error: 'failed' },
+    })
+  })
+
+  it('renders Funkce last, after Přidat člověka, one switch per launch switch', () => {
+    const html = render(NO_FEATURES)
+    const funkce = html.indexOf(`>${cs.admin.features.title}<`)
+    expect(funkce).toBeGreaterThan(html.indexOf(`>${cs.admin.add}<`))
+    expect(html.match(/role="switch"/g)).toHaveLength(FEATURE_KEYS.length)
+  })
+
+  it('shows the error state after a failed read', () => {
+    const html = render({ error: 'failed' })
+    expect(html).toContain(cs.admin.features.failedLoad)
+    expect(html).not.toContain('role="switch"')
   })
 })
