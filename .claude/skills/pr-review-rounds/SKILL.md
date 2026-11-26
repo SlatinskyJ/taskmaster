@@ -17,7 +17,7 @@ A PR that closes an issue goes through **two phases** in the same PR. Each phase
 | Counter in the PR body | `Plan round: N/5` | `Review round: N/5` |
 | Ends with | you build the plan (section 5) | Jakub merges (section 6) |
 
-Sections 2, 3, 4 and 7 are the same in both phases. A PR with no issue (ad-hoc) and a Dependabot PR have only the code phase; their PR body says `Plan: none (ad-hoc)` or `Plan: none (Dependabot)`.
+Sections 2, 3, 4 and 7 are the same in both phases. A PR with no issue (ad-hoc), a Dependabot PR and a small PR (at most about 300 lines, no protected area, `CLAUDE.md`) have only the code phase; their PR body says `Plan: none (ad-hoc)`, `Plan: none (Dependabot)` or `Plan: none (small, about <n> lines)`. A small PR still goes through the pre-flight lists in section 1 itself.
 
 ## 1. Before round 1
 
@@ -53,14 +53,15 @@ Sections 2, 3, 4 and 7 are the same in both phases. A PR with no issue (ad-hoc) 
     The PR body line becomes `Plan: removed in <sha>`. To read the plan again later: `git show <sha>~1:<path>`.
 - The PR brief exists (skill `pr-brief`) and its link is at the top of the PR body. Every ruling you made while building (a place where you left the plan) is in the brief.
 - The PR body has the line `Review round: 0/5`.
-- **Screenshots for the UX judge** (UX on the panel). The UX judge does not run the app; it judges your screenshots. Take them in the same Playwright run as the brief's (skill `pr-brief`), with the viewport 360×800, light theme, one screen per file (no `fullPage`; scroll and take another file for what sits below the fold):
+- **Screenshots: one set, for the UX judge and the brief.** The UX judge does not run the app; it judges your screenshots. Take them once, in one Playwright run, with the brief's screen (skill `pr-brief`: iPhone 15 Pro, 393×852, `deviceScaleFactor: 3`, light theme, one screen per file, no `fullPage`; scroll and take another file for what sits below the fold). The brief shows a pick of these same files; never take a second set for it.
     - one for every screen and every state this PR adds or changes: each kind of row, each set of buttons on a row, each form and dialog, each empty and error state;
     - logged in as the role that sees it, on the demo data (`TASKMASTER_ENV=preview`);
     - a long Czech task name (about 30 letters, like "Vyluxovat celý obývák a chodbu") in every row that shows one;
+    - every row that shows a long name once more at 360×800 (the narrowest phone), named `<screen>-<role>-360.png`; only those rows, not every screen;
     - every form, sheet or dialog with a text field once more with the phone keyboard open (`e2e/keyboard.ts`: `useKeyboard`, then `openKeyboard` on each field), named `<screen>-<role>-keyboard-<field>.png`;
     - named `<screen>-<role>-<state>.png`, in one folder outside the repo.
 
-    Look at each one before round 1. Whatever a person needs to read or tap is whole. Retake the ones a fix changes before the next round. An ad-hoc PR with screens has no plan, so also go through the UX pre-flight list above.
+    Look at each one before round 1. Whatever a person needs to read or tap is whole. Retake the ones a fix changes before the next round. An ad-hoc or small PR with screens has no plan, so also go through the UX pre-flight list above.
 - The `preview` label is set if the PR changes something a user sees (screens, flows, styles, Czech text) and off otherwise (`CLAUDE.md`, PR flow step 5). Add it together with marking the PR ready, never on a draft: it deploys a preview and takes a slot. With the label, the brief links the preview.
 - Mark the PR ready for review.
 
@@ -75,11 +76,13 @@ Sections 2, 3, 4 and 7 are the same in both phases. A PR with no issue (ad-hoc) 
 | Dockerfile, CI workflows, what runs when the server starts (`src/server/plugins/`, the migration runner), the preview host files (`deploy/preview/`, `docs/runbooks/`), backup or deploy config, a new native dependency (it compiles or ships a binary, like `better-sqlite3`) | + Ops |
 | only docs or comments | none: skip to section 6 |
 
-Write the panel into the PR body: `Judges: Rules, Architecture, Tests`. If the code ends up touching more than the plan said, the code phase panel grows to match. The Architecture judge checks the panel against this table; when it asks for a missing judge, add that judge and run it in the next round with `first review` in place of the round-2 line, so it reads the whole diff.
+**Plan phase panel:** only Rules, Architecture and Tests from the table (each where the table asks for it). Security, UX and Ops join in code round 1 with a first review of the whole diff; the UX and Security pre-flight lists in section 1 stand in for them in the plan. Exception: a plan that changes auth, sessions, passkeys or role checks keeps Security in the plan phase.
+
+Write the panel into the PR body: `Judges: Rules, Architecture, Tests` (plan phase) and the full code phase panel. If the code ends up touching more than the plan said, the code phase panel grows to match. The Architecture judge checks the panel against this table; when it asks for a missing judge, add that judge and run it in the next round with `first review` in place of the round-2 line, so it reads the whole diff.
 
 ## 3. Run a round
 
-Bump the phase's counter in the PR body (`Plan round: N/5` or `Review round: N/5`). Make a fresh, empty folder outside the repo for this round (`<scratch>/judges-pr<n>-<phase>-r<N>/`). Spawn one subagent per judge, all at once (Agent tool). Model and effort per judge, from a dry-run test against real reviews (2026-11-21):
+Bump the phase's counter in the PR body (`Plan round: N/5` or `Review round: N/5`). Make a fresh, empty folder outside the repo for this round (`<scratch>/judges-pr<n>-<phase>-r<N>/`). Round 1 of a phase: spawn one subagent per judge, all at once (Agent tool), and keep each agent's id. **Round 2+: reuse the judge's agent.** Send it the round-2 lines of the prompt below (round number, your replies, last commit, findings file) with SendMessage instead of spawning a new one: it keeps the spec, its skill and the diff it already read. Spawn fresh only when that agent can no longer be reached (a new session, a compaction lost its id); then the full prompt goes in. A new phase always starts fresh agents, so code judges read the code cold. Model and effort per judge, from a dry-run test against real reviews (2026-11-21):
 
 | Judge | Plan rounds | Code rounds |
 | --- | --- | --- |
@@ -131,7 +134,7 @@ A judge that returns `NOT STARTED` hit the gate in the judge contract: a plan fi
 
 A judge re-raising an answered point without new evidence: reply `Answered in round <k>; no new evidence (judge contract, rule 6)`. If the fix is small and clearly right, just do it instead of arguing.
 
-Next round only when some `blocker` or `should-fix` thread is still open, or you pushed fixes. Only the judges with open findings run again. Don't message Jakub between rounds.
+Next round only when some `blocker` or `should-fix` thread is still open, or you pushed fixes. Only the judges with an open `blocker` or `should-fix` thread run again. A judge whose last verdict was `APPROVE` does not run again in this phase; its approval stands (pass `--panel` with only the judges of this round). Exception: your fixes change files in that judge's lane (its row in the panel table, e.g. a fix touches a screen and UX approved): that judge runs again on the diff since its last commit. Don't message Jakub between rounds.
 
 ## 5. Exit of the plan phase
 
@@ -140,6 +143,7 @@ Next round only when some `blocker` or `should-fix` thread is still open, or you
 Then:
 - Update the PR body line: `Plan round: N/5 · all judges APPROVE · 0 open threads`.
 - Build the plan (`CLAUDE.md`, PR flow step 3). Don't wait for Jakub and don't message him: the judges' approval is the go-ahead.
+- **Build in a fresh agent.** Your context is full of plan rounds the build doesn't need. Spawn one subagent (Agent tool, Opus) with only: `Build the approved plan <plan path> on branch <branch> (PR #<n>), following CLAUDE.md PR flow steps 3 and 4. Push when CI-ready. Report: commits, every place you left the plan and why, anything unfinished.` Wait for it, check its report against the plan's tasks, then do section 1 code phase yourself (delete the plan, brief, screenshots, ready). Fixes in code rounds are yours. The plan file is the handoff; if you get lost after a compaction, reread it, not your memory.
 - Until then, the branch gets no code. Not scaffolding, not a migration, not "the easy part".
 
 ## 6. Exit of the code phase
@@ -190,7 +194,7 @@ How: add the label `needs-jakub` to the PR, post one PR comment that mentions `@
 | Telling a code-phase judge what the plan said | Judges read the code cold |
 | Posting while a judge still runs, or a judge posting itself | Wait for every judge, then one `post-judge-review.ts` run |
 | Committing or pushing while judges run | Wait; a judge's `commit` must be the PR head |
-| Screenshots only of the screens that look good, or with short task names | Every changed screen and state, at 360 px, with a long task name |
+| Screenshots only of the screens that look good, or with short task names | Every changed screen and state, with a long task name, and those rows at 360 px |
 | Fixing `pre-existing` findings inside the PR | Issue + link |
 | Pinging Jakub after each round | Only at exit or escalation |
 | Merging a non-trivial PR because all judges approved | Jakub merges |
