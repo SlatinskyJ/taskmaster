@@ -52,12 +52,15 @@ function revealField(e: React.FocusEvent) {
 }
 
 /** The sheet's scrolling body: put the form in it, under the header. */
-export function DrawerBody({ className, ...props }: ComponentProps<'div'>) {
+export function DrawerBody({ className, onFocus, ...props }: ComponentProps<'div'>) {
   return (
     <div
       data-slot="drawer-body"
       className={cn('-mx-1 min-h-0 overflow-y-auto px-1', className)}
-      onFocus={revealField}
+      onFocus={(e) => {
+        revealField(e)
+        onFocus?.(e)
+      }}
       {...props}
     />
   )
