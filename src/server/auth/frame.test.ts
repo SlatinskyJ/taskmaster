@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { frameRedirectLocation, readFrame } from './frame'
+import { frameRedirectLocation, frameSignals, readFrame } from './frame'
 
 const PROD = { NODE_ENV: 'production' }
 const PREVIEW = { NODE_ENV: 'production', TASKMASTER_ENV: 'preview' }
@@ -128,5 +128,20 @@ describe('frameRedirectLocation', () => {
     expect(
       frameRedirectLocation(PREVIEW, { ...NONE, fetchDest: 'iframe' }, REQ, '/sprava'),
     ).toBeNull()
+  })
+})
+
+describe('frameSignals', () => {
+  it('maps the header, the query and Sec-Fetch-Dest', () => {
+    const headers: Record<string, string> = { 'x-tm-frame': 'h', 'sec-fetch-dest': 'iframe' }
+    expect(frameSignals((n) => headers[n], new URL('http://x/?tmFrame=q'))).toEqual({
+      header: 'h',
+      query: 'q',
+      fetchDest: 'iframe',
+    })
+  })
+
+  it('leaves absent signals undefined', () => {
+    expect(frameSignals(() => undefined, new URL('http://x/sprava'))).toEqual(NONE)
   })
 })

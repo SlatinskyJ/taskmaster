@@ -1,4 +1,4 @@
-import { FRAME_QUERY, NO_TOKEN } from '~/lib/frame'
+import { FRAME_HEADER, FRAME_QUERY, NO_TOKEN } from '~/lib/frame'
 import { devPagesAllowed } from '~/server/env/devPages'
 
 // Is this request from a viewer frame, and with which session token? Framework-free: ./http
@@ -14,6 +14,18 @@ export interface FrameSignals {
   query: string | undefined
   /** `Sec-Fetch-Dest`: `iframe` marks a frame's document load even without the query. */
   fetchDest: string | undefined
+}
+
+/** The frame signals of a request: the one place that maps a request to them. */
+export function frameSignals(
+  getHeader: (name: string) => string | undefined,
+  url: URL,
+): FrameSignals {
+  return {
+    header: getHeader(FRAME_HEADER),
+    query: url.searchParams.get(FRAME_QUERY) ?? undefined,
+    fetchDest: getHeader('sec-fetch-dest'),
+  }
 }
 
 function tokenOf(value: string): string | undefined {

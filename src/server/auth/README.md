@@ -50,6 +50,12 @@ session token, or `-` for none. In a frame:
   `frameToken` instead of setting the cookie; logging out ends only that frame's session;
 - the sessions are ordinary ones: same table, expiry, audit.
 
+A frame's page load that the server redirects (`/` → `/sprava`, `/login` → landing) keeps its
+`tmFrame` query on the new address when it stays on the site (`frameRedirect.ts`, a request
+middleware in `src/start.ts`), so the frame arrives logged in. On the client, a frame loaded
+without its token re-enters the same address with it at most once per 5 s (`src/lib/frame.ts`
+`guardedReentryUrl`), so a redirect that still drops the query can't become a reload loop.
+
 The client (`src/lib/frame.ts`, `src/start.ts`) keeps the token in the frame's `window.name`
 (`tm-frame:<token>`) and sends it on every server function call. In production every frame
 signal is ignored and `frameLoginFn` answers `not_available`, as it does when `ADMIN_PASSWORD`
