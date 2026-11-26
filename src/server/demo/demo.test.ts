@@ -23,14 +23,15 @@ import { rejectionsSince } from '~/server/tasks/rejections'
 import { getMeeting } from '~/server/settlement/meeting'
 import { ALL_FEATURES } from '~/lib/features'
 import { getFlags } from '~/server/features'
-import { CHORE_DISPUTE_REASON, CORRECTION_REASON, WEEK_CHORES } from './pieces'
+import { getWeekPlan } from '~/server/instances/weekPlan'
+import { CHORE_DISPUTE_REASON, CORRECTION_REASON, PLAN_CHORES, WEEK_CHORES } from './pieces'
 import { DEMO_PASSWORD, seedDemo } from './seed'
 
 const T0 = new Date('2026-11-17T10:00:00.000Z')
 const PREVIEW = { TASKMASTER_ENV: 'preview', NODE_ENV: 'production' }
 
-/** A copy of the week plan's chores (#257), checked in its own test below. */
-const WEEK_TITLES = new Set(WEEK_CHORES.map((c) => c.title))
+/** A copy of the week plan's chores (#257) or the plan table's (#258), checked in their own tests below. */
+const WEEK_TITLES = new Set([...WEEK_CHORES, ...PLAN_CHORES].map((c) => c.title))
 const weekCopy = (t: { origin: string; title: string }) =>
   t.origin === 'scheduled' && WEEK_TITLES.has(t.title)
 
@@ -143,6 +144,9 @@ describe('the demo seed (previews)', () => {
       ['task.description_change_proposed', 'user'],
       // #257: the week plan's copies, made by the system (counted in their own test).
       ...Array<string[]>(7).fill(['instance.created', 'system']),
+      // #258: the plan table's copies (system), then Starší holds tomorrow's vacuum.
+      ...Array<string[]>(17).fill(['instance.created', 'system']),
+      ['task.reserved', 'user'],
     ])
   })
 
@@ -195,7 +199,9 @@ describe('the demo seed (previews)', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     // The offers; #44's done chores are checked in their own test below.
-    const all = listTasks(db).filter((t) => t.status === 'proposed' || t.status === 'reserved')
+    const all = listTasks(db).filter(
+      (t) => (t.status === 'proposed' || t.status === 'reserved') && !weekCopy(t),
+    )
     expect(
       all.map((t) => [t.title, t.status, t.score, t.bids.map((b) => [b.name, b.score])]),
     ).toEqual([
@@ -262,7 +268,7 @@ describe('the demo seed (previews)', () => {
     expect(getFlags(db)).toEqual({ ...ALL_FEATURES, week: false })
   })
 
-  it('adds eleven templates (#37, #38, #39, #209, #232, #207, #257): three waiting for agreement, eight agreed', () => {
+  it('adds fifteen templates (#37, #38, #39, #209, #232, #207, #257, #258): three waiting for agreement, twelve agreed', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     expect(
@@ -329,6 +335,39 @@ describe('the demo seed (previews)', () => {
         time: '18:00',
         due: '07:00',
       },
+      // #258's plan-table chores.
+      {
+        title: 'Vyluxovat celý obývák a chodbu',
+        status: 'active',
+        score: 6,
+        days: 127,
+        time: null,
+        due: null,
+      },
+      {
+        title: 'Prostřít stůl k večeři',
+        status: 'active',
+        score: 2,
+        days: 127,
+        time: null,
+        due: null,
+      },
+      {
+        title: 'Zalít kytky na balkoně',
+        status: 'active',
+        score: 3,
+        days: 127,
+        time: null,
+        due: null,
+      },
+      {
+        title: 'Vynést koš na plasty',
+        status: 'active',
+        score: 4,
+        days: (1 << 2) | (1 << 5),
+        time: '18:00',
+        due: '07:00',
+      },
     ])
     const actions = db
       .select({ action: auditLog.action })
@@ -337,11 +376,17 @@ describe('the demo seed (previews)', () => {
       .all()
       .map((r) => r.action)
     expect(actions).toEqual([
-      // By template (the entity index, ids as text: 1, 10, 11, 2, …): #39's water, #257's cat
-      // and sorted waste, #39's fish, the bins, the dishwasher, then the school bag.
+      // By template (the entity index, ids as text: 1, 10, 11, 12, …, 15, 2, …): #39's water,
+      // #257's cat and sorted waste, #258's four chores, #39's fish, the bins, the dishwasher,
+      // then the school bag.
       ...['template.created', 'template.score_approved', 'template.agreed'],
       ...['template.created', 'template.score_approved', 'template.agreed'],
       ...['template.created', 'template.score_approved', 'template.agreed'],
+      ...Array.from({ length: 4 }, () => [
+        'template.created',
+        'template.score_approved',
+        'template.agreed',
+      ]).flat(),
       ...['template.created', 'template.score_approved', 'template.agreed'],
       'template.created',
       'template.created',
@@ -385,7 +430,7 @@ describe('the demo seed (previews)', () => {
         .from(templates)
         .all()
         .map((t) => t.score),
-    ).toEqual([1, 1, 4, 3, 2, 10, 4, 8, 4, 3, 4])
+    ).toEqual([1, 1, 4, 3, 2, 10, 4, 8, 4, 3, 4, 6, 2, 3, 4])
   })
 
   it('all or nothing: a failing template leaves no people either', () => {
@@ -674,7 +719,12 @@ describe('the week plan (#257)', () => {
     seedDemo(db, PREVIEW, T0)
     const day = (d: number) =>
       fromPragueWallTime({ year: 2026, month: 11, day: d, hour: 0, minute: 0 }).toISOString()
-    const copies = db.select().from(tasks).orderBy(asc(tasks.id)).all().filter(weekCopy)
+    const copies = db
+      .select()
+      .from(tasks)
+      .orderBy(asc(tasks.id))
+      .all()
+      .filter((t) => weekCopy(t) && WEEK_CHORES.some((c) => c.title === t.title))
     expect(copies.map((r) => [r.title, r.planDayAt, r.status, r.weekRules])).toEqual([
       ...[18, 19, 20, 21, 22].map((d) => ['Nakrmit kočku', day(d), 'open', true]),
       ['Vynést tříděný odpad', day(17), 'open', true],
@@ -712,4 +762,26 @@ describe('the week plan (#257)', () => {
       expect(at).toEqual([...at].sort())
     },
   )
+})
+
+describe('the plan table (#258)', () => {
+  it("demo at T0: the plan table has the four #258 chores, agreed now, so today has none of their copies; Starší holds tomorrow's vacuum", () => {
+    const db = createTestDb()
+    seedDemo(db, PREVIEW, T0)
+    const plan = getWeekPlan(db, T0)
+    const titles = new Set(PLAN_CHORES.map((c) => c.title))
+    const rows = plan.rows.filter((r) => titles.has(r.title))
+    expect(rows.map((r) => r.title)).toEqual([
+      'Prostřít stůl k večeři',
+      'Vyluxovat celý obývák a chodbu',
+      'Vynést koš na plasty',
+      'Zalít kytky na balkoně',
+    ])
+    const at = plan.days.indexOf(plan.today)
+    // Tuesday 17. 11.: the bins' 18:00 slot is still ahead, the every-day chores start tomorrow.
+    expect(rows.map((r) => r.cells[at]?.map((c) => c.status))).toEqual([[], [], ['open'], []])
+    expect(rows[1]?.cells[at + 1]?.map((c) => [c.status, c.person?.name])).toEqual([
+      ['reserved', 'Starší'],
+    ])
+  })
 })

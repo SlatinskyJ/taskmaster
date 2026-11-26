@@ -72,6 +72,7 @@ describe('canSee', () => {
     '/tyden': 'taker giver',
     '/tyden/pristi': 'taker giver',
     '/tyden/vychozi': 'giver',
+    '/tyden/plan': 'taker giver',
     '/ukoly': 'giver',
     '/ukoly/novy': 'giver',
     '/schuzka': 'giver',

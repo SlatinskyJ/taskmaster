@@ -90,6 +90,9 @@ export const SUITES: readonly Suite[] = [
   { name: 'frames', spec: 'frames.spec.ts', seed: 'family' },
   // Week chore copies (#257): Domů and Zapsat by the copy's day. Read-only.
   { name: 'weekcopies', spec: 'week-copies.spec.ts', seed: 'weekplan' },
+  // The plan table on Týden (#258). Its own server: it reserves, releases and adds an extra copy
+  // for good.
+  { name: 'week-plan', spec: 'week-plan.spec.ts', seed: 'plantable' },
   // The multi-user viewer (#265): logs frames in and out and proposes tasks, so its own server.
   // `week`: the boys' Týden tab is on.
   { name: 'multi', spec: 'multi.spec.ts', seed: 'week' },

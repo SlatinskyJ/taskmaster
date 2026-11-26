@@ -1,9 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { Screen } from '~/components/shell/Screen'
+import { freeCount } from '~/components/week/planView'
 import { WeekScreen } from '~/components/week/WeekScreen'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { getDisputeListFn } from '~/server/disputes/functions'
+import { getWeekPlanFn } from '~/server/instances/functions'
 import { getProposalsFn } from '~/server/periods/functions'
 import { getWeekFn } from '~/server/settlement/functions'
 
@@ -19,13 +21,15 @@ export const Route = createFileRoute('/_app/tyden/')({
     proposals: context.features.periodProposals ? await getProposalsFn() : null,
     // Rozporováno (#46): only with the disputes switch on.
     disputeList: context.features.disputes ? await getDisputeListFn() : null,
+    // Plán týdne card (#258): only with the weekPlan switch on.
+    plan: context.features.weekPlan ? await getWeekPlanFn() : null,
   }),
   component: WeekPage,
 })
 
 function WeekPage() {
   const { user, features } = Route.useRouteContext()
-  const { week, proposals, disputeList } = Route.useLoaderData()
+  const { week, proposals, disputeList, plan } = Route.useLoaderData()
   const giver = user.role === 'giver'
   return (
     <Screen title={giver ? cs.nav.week : cs.week.myTitle} user={user}>
@@ -35,6 +39,7 @@ function WeekPage() {
         disputes={features.disputes}
         links={features.openRows}
         disputeList={disputeList && !('error' in disputeList) ? disputeList : []}
+        plan={plan && !('error' in plan) ? { free: freeCount(plan) } : undefined}
         nextWeek={
           proposals && !('error' in proposals)
             ? {

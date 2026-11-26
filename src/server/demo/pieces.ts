@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm'
 import type { Tx } from '~/server/audit'
 import { nextPeriod } from '~/domain'
-import { startOfPragueDay } from '~/domain/dates'
+import { addPragueDays, startOfPragueDay, toIsoUtc } from '~/domain/dates'
 import { settlements, tasks as taskTable, templates as templateTable } from '~/server/db/schema'
 import { adjustPointsIn, correctSettlementIn } from '~/server/corrections'
 import { changeDescriptionOf } from '~/server/descriptions/descriptions'
@@ -31,6 +31,7 @@ import {
   cancelTask,
   completeTask,
   createTask,
+  expireTask,
   placeBid,
   proposeTaskScoreChange,
   rejectTask,
@@ -640,6 +641,101 @@ export const weekChores: Piece = ({ tx, id, now }) => {
   rollPeriods(tx, now, defaults)
   // Only these chores: the other pieces' scheduled chores keep their old-rule instances.
   for (const t of made) makeWeekCopies(tx, now, { templateId: t.id, log: SEED_LOG })
+}
+
+/** The plan table's chores (#258): three every day (one with the long name), one twice a week. */
+export const PLAN_CHORES: readonly NewTemplate[] = [
+  {
+    title: 'Vyluxovat celý obývák a chodbu',
+    score: 6,
+    approvalRequired: true,
+    schedule: { days: [0, 1, 2, 3, 4, 5, 6], time: null },
+    deadline: null,
+  },
+  {
+    title: 'Prostřít stůl k večeři',
+    score: 2,
+    approvalRequired: true,
+    schedule: { days: [0, 1, 2, 3, 4, 5, 6], time: null },
+    deadline: null,
+  },
+  {
+    title: 'Zalít kytky na balkoně',
+    score: 3,
+    approvalRequired: true,
+    schedule: { days: [0, 1, 2, 3, 4, 5, 6], time: null },
+    deadline: null,
+  },
+  {
+    title: 'Vynést koš na plasty',
+    score: 4,
+    approvalRequired: true,
+    schedule: { days: [2, 5], time: { hour: 18, minute: 0 } },
+    deadline: { dayOffset: 1, due: { hour: 7, minute: 0 }, graceMinutes: 60 },
+  },
+]
+
+/**
+ * #258: Táta's four plan-table chores, agreed by Starší, with their week copies. With no week
+ * running yet (seed `plantable`) the week starts at yesterday's 00:00 Prague and the chores are
+ * agreed then, so yesterday is a column: Starší's "Zalít kytky" there is confirmed and
+ * "Vyluxovat…" expired. Inside a seed that already runs a week (`demo`) they are agreed now and
+ * their copies start with the next slot. Then today's copies, where there are: Mladší holds
+ * "Vyluxovat…", Starší's "Zalít kytky" waits for approval, "Prostřít stůl" stays free; Starší
+ * holds the next "Vyluxovat…" after today. No on-demand extra: the switch is off while pieces run.
+ */
+export const planTable: Piece = ({ tx, id, now }) => {
+  const defaults = getPeriodDefaults(tx)
+  const today = startOfPragueDay(now)
+  const yesterday = currentPeriod(tx, now) ? null : addPragueDays(today, -1)
+  if (yesterday) rollPeriods(tx, yesterday, defaults)
+  const agreeAt = yesterday ?? now
+  const [vacuum, table, flowers, bin] = PLAN_CHORES.map((input) => {
+    const t = step(`template "${input.title}"`, createTemplateIn(tx, id('tata'), input, agreeAt))
+    step(
+      `approve "${input.title}"`,
+      approveTemplateScoreIn(tx, id('starsi'), t.id, t.score, agreeAt),
+    )
+    if (yesterday) makeWeekCopies(tx, yesterday, { templateId: t.id, log: SEED_LOG })
+    return t.id
+  })
+  if (vacuum === undefined || table === undefined || flowers === undefined || bin === undefined)
+    throw new Error('Demo seed: plan chores missing')
+  const copies = (templateId: number) =>
+    tx
+      .select()
+      .from(taskTable)
+      .where(eq(taskTable.templateId, templateId))
+      .orderBy(taskTable.planDayAt, taskTable.id)
+      .all()
+      .filter((r) => r.planDayAt !== null)
+  const on = (templateId: number, day: Date) =>
+    copies(templateId).find((r) => r.planDayAt === toIsoUtc(day))?.id
+  if (yesterday) {
+    const done = on(flowers, yesterday)
+    if (done === undefined) throw new Error("Demo seed: no copy of yesterday's flowers")
+    const evening = new Date(yesterday.getTime() + 18 * HOUR)
+    step("yesterday's flowers done", completeTask(tx, id('starsi'), done, evening, true))
+    step(
+      "yesterday's flowers approved",
+      approveTask(tx, id('tata'), done, new Date(evening.getTime() + HOUR)),
+    )
+  }
+  rollPeriods(tx, now, defaults)
+  for (const t of [vacuum, table, flowers, bin])
+    makeWeekCopies(tx, now, { templateId: t, log: SEED_LOG })
+  if (yesterday) {
+    const over = on(vacuum, yesterday)
+    if (over !== undefined) step("yesterday's vacuum expired", expireTask(tx, over, now, true))
+  }
+  const vacuumToday = on(vacuum, today)
+  if (vacuumToday !== undefined)
+    step('Mladší holds the vacuum', reserveTask(tx, id('mladsi'), vacuumToday, now, true))
+  const flowersToday = on(flowers, today)
+  if (flowersToday !== undefined)
+    step('Starší waters the flowers', completeTask(tx, id('starsi'), flowersToday, now, true))
+  const later = copies(vacuum).find((r) => r.planDayAt !== null && r.planDayAt > toIsoUtc(today))
+  if (later) step('Starší holds a later vacuum', reserveTask(tx, id('starsi'), later.id, now, true))
 }
 
 /**

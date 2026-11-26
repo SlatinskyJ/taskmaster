@@ -6,7 +6,8 @@ import { getWeekFn } from '~/server/settlement/functions'
 import { getDisputeListFn } from '~/server/disputes/functions'
 import { getProposalsFn } from '~/server/periods/functions'
 import { defaultsProposal, periodProposal, proposalsView } from '../proposals/fixtures'
-import { takerWeek, week } from './fixtures'
+import { getWeekPlanFn } from '~/server/instances/functions'
+import { planFixture, takerWeek, week } from './fixtures'
 
 // Týden through its route (#45): the loader's call, the title per role, no placeholder.
 const page = vi.hoisted(() => ({
@@ -40,7 +41,7 @@ vi.mock('@tanstack/react-router', () => ({
         {children}
       </a>
     ) : (
-      <a>{children}</a>
+      <a href={to}>{children}</a>
     ),
 }))
 vi.mock('~/server/periods/functions', () => ({
@@ -49,6 +50,9 @@ vi.mock('~/server/periods/functions', () => ({
 vi.mock('~/server/disputes/functions', () => ({
   getDisputeListFn: vi.fn(() => Promise.resolve([])),
   openDisputeFn: vi.fn(),
+}))
+vi.mock('~/server/instances/functions', () => ({
+  getWeekPlanFn: vi.fn(() => Promise.resolve('plan')),
 }))
 vi.mock('~/server/settlement/functions', () => ({
   getWeekFn: vi.fn(() => Promise.resolve('week')),
@@ -61,15 +65,50 @@ describe('Týden page', () => {
   interface Features {
     periodProposals: boolean
     disputes: boolean
+    weekPlan?: boolean
   }
   type Loader = (a: { context: { features: Features } }) => Promise<unknown>
-  const load = (periodProposals: boolean, disputes = false) =>
+  const load = (periodProposals: boolean, disputes = false, weekPlan = false) =>
     (Route as unknown as { loader: Loader }).loader({
-      context: { features: { periodProposals, disputes } },
+      context: { features: { periodProposals, disputes, weekPlan } },
     })
 
+  it('weekPlan off: no card and no getWeekPlanFn call', async () => {
+    expect(await load(false)).toMatchObject({ plan: null })
+    expect(getWeekPlanFn).not.toHaveBeenCalled()
+    page.user = { id: 3, role: 'taker', displayName: 'Starší' }
+    page.data = { week: takerWeek(), proposals: null, plan: null }
+    expect(renderToStaticMarkup(<Page />)).not.toContain('href="/tyden/plan"')
+  })
+
+  it('weekPlan on: the loader asks for the plan once; the card links to /tyden/plan with "Volných: 2" and sits before the tabs', async () => {
+    expect(await load(false, false, true)).toMatchObject({ plan: 'plan' })
+    expect(getWeekPlanFn).toHaveBeenCalledTimes(1)
+    page.user = { id: 3, role: 'taker', displayName: 'Starší' }
+    // The fixture's free copies from today on: Wednesday's table and one of the two vacuums.
+    page.data = { week: takerWeek(), proposals: null, plan: planFixture() }
+    const html = renderToStaticMarkup(<Page />)
+    expect(html).toContain('Rozděl si úkoly na dny. Volných: 2')
+    expect(html).toContain('href="/tyden/plan"')
+    expect(html.indexOf('href="/tyden/plan"')).toBeGreaterThan(-1)
+    expect(html.indexOf('href="/tyden/plan"')).toBeLessThan(html.indexOf('role="tablist"'))
+    page.data = { week: takerWeek(), proposals: null, plan: { error: 'feature_off' } }
+    expect(renderToStaticMarkup(<Page />)).not.toContain('href="/tyden/plan"')
+  })
+
+  it('weekPlan on, a giver: Kdo co dělá který den.', () => {
+    page.user = { id: 2, role: 'giver', displayName: 'Táta' }
+    page.data = { week: week(), proposals: null, plan: planFixture() }
+    expect(renderToStaticMarkup(<Page />)).toContain('Kdo co dělá který den. Volných: 2')
+  })
+
   it('the loader asks for the week; with the switch off nothing about proposals', async () => {
-    expect(await load(false)).toEqual({ week: 'week', proposals: null, disputeList: null })
+    expect(await load(false)).toEqual({
+      week: 'week',
+      proposals: null,
+      disputeList: null,
+      plan: null,
+    })
     expect(getWeekFn).toHaveBeenCalledTimes(1)
     expect(getProposalsFn).not.toHaveBeenCalled()
   })
@@ -79,13 +118,19 @@ describe('Týden page', () => {
       week: 'week',
       proposals: proposalsView(),
       disputeList: null,
+      plan: null,
     })
     expect(getProposalsFn).toHaveBeenCalledTimes(1)
   })
 
   it('disputes switch on: the loader also asks for Rozporováno; off it does not', async () => {
     expect(getDisputeListFn).not.toHaveBeenCalled()
-    expect(await load(false, true)).toEqual({ week: 'week', proposals: null, disputeList: [] })
+    expect(await load(false, true)).toEqual({
+      week: 'week',
+      proposals: null,
+      disputeList: [],
+      plan: null,
+    })
     expect(getDisputeListFn).toHaveBeenCalledTimes(1)
   })
 
