@@ -71,11 +71,20 @@ describe('wordDiff', () => {
     expect(join('removed')).toBe(b)
   })
 
-  it('a 1000-letter text is fast enough', () => {
+  it('two 1000-letter texts: right, and fast enough to render on tap', () => {
     const a = 'slovo '.repeat(166)
     const b = 'jiné '.repeat(200)
     const t = performance.now()
-    wordDiff(a, b)
-    expect(performance.now() - t).toBeLessThan(200)
+    const parts = wordDiff(a, b)
+    // Generous: a phone takes a few ms; the bound only catches a runaway, and must hold under
+    // mutation testing's instrumented runs too (CI took 218 ms there).
+    expect(performance.now() - t).toBeLessThan(2000)
+    const side = (skip: string) =>
+      parts
+        .filter((p) => p.kind !== skip)
+        .map((p) => p.text)
+        .join('')
+    expect(side('added')).toBe(a)
+    expect(side('removed')).toBe(b)
   })
 })
