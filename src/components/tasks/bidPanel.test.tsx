@@ -63,6 +63,7 @@ const TATA = { id: 2, role: 'giver' } as const
 const view = (over: Partial<TaskView>): TaskView => ({
   id: 1,
   title: 'Umýt auto',
+  description: null,
   status: 'proposed',
   score: 18,
   approvalRequired: true,

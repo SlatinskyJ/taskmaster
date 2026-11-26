@@ -62,6 +62,7 @@ const boys = [
 const task = (id: number, title: string, over: Partial<TaskView>): TaskView => ({
   id,
   title,
+  description: null,
   status: 'open',
   score: 5,
   approvalRequired: true,
@@ -182,6 +183,7 @@ describe('switch openRows (#205): Úkoly rows open their page', () => {
   const chore: TemplateView = {
     id: 9,
     title: 'Vyndat myčku',
+    description: null,
     status: 'active',
     score: 3,
     approvalRequired: true,

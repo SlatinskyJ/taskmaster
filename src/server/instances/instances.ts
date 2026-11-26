@@ -76,6 +76,7 @@ export function insertInstance(
     .values({
       ...columnsOf(item),
       title: template.title,
+      description: template.description,
       score: template.score,
       approvalRequired: item.approvalRequired,
       templateId: template.id,
@@ -93,6 +94,7 @@ export function insertInstance(
     templateId: template.id,
     origin,
     status: row.status,
+    description: row.description,
     score: row.score,
     dueAt: row.dueAt,
     graceEndsAt: row.graceEndsAt,

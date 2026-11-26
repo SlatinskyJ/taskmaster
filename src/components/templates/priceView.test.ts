@@ -25,6 +25,7 @@ const ADMIN: Me = { id: 1, role: 'admin' }
 const base: TemplateView = {
   id: 7,
   title: 'Vyndat myčku',
+  description: null,
   status: 'active',
   score: 3,
   approvalRequired: true,

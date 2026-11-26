@@ -66,6 +66,7 @@ const { getItemMarkFn } = await import('~/server/disputes/functions')
 const dishes: TemplateView = {
   id: 9,
   title: 'Vyluxovat celý obývák a chodbu',
+  description: null,
   status: 'active',
   score: 3,
   approvalRequired: true,

@@ -312,6 +312,7 @@ describe('reads', () => {
       {
         id,
         title: 'Vynést koše',
+        description: null,
         status: 'proposed',
         score: 4,
         approvalRequired: true,
@@ -332,6 +333,7 @@ describe('reads', () => {
         'change',
         'createdByName',
         'deadline',
+        'description',
         'id',
         'lastBids',
         'schedule',
@@ -516,6 +518,7 @@ describe('template detail (price page)', () => {
         { id: starsi, name: 'Starší' },
         { id: expect.any(Number) as number, name: 'Mladší' },
       ],
+      descriptionChange: null,
     })
     must(approveTemplateScore(db, starsi, id, DISHES.score, T0))
     expect(getTemplateDetail(db, id, starsi)?.template.status).toBe('active')
