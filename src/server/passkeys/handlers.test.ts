@@ -148,11 +148,13 @@ describe('passkeys on', () => {
     expect(req.deleted).not.toContain(SESSION)
   })
 
-  it('no challenge cookie → expired_challenge', async () => {
+  it('no challenge cookie → expired_challenge, nothing cleared or set', async () => {
     const { device } = await enrol()
     const started = await h.passkeyLoginOptions(ON)
     if (!started.ok) throw new Error(started.error)
     req.cookies.delete(CHALLENGE)
+    req.set = []
+    req.deleted = []
     expect(
       await h.passkeyLogin(
         device.authenticate(
@@ -164,6 +166,9 @@ describe('passkeys on', () => {
       ok: false,
       error: 'expired_challenge',
     })
+    // It stops there: no cookie cleared or set.
+    expect(req.deleted).toEqual([])
+    expect(req.set).toEqual([])
   })
 
   it('issues login challenges under the caller IP', async () => {
@@ -200,21 +205,6 @@ describe('early returns', () => {
     for (let i = 0; i < MAX_LOGIN_CHALLENGES_PER_IP; i++) await h.passkeyLoginOptions(ON)
     req.set = []
     expect(await h.passkeyLoginOptions(ON)).toEqual({ ok: false, error: 'busy' })
-    expect(req.set).toEqual([])
-  })
-
-  it('login with no challenge cookie → expired_challenge, nothing cleared or set', async () => {
-    const { device } = await enrol()
-    const options = await h.passkeyLoginOptions(ON)
-    if (!options.ok) throw new Error(options.error)
-    req.cookies.delete(CHALLENGE)
-    req.set = []
-    req.deleted = []
-    expect(await h.passkeyLogin(loginAnswer(device, options.optionsJson), ON)).toEqual({
-      ok: false,
-      error: 'expired_challenge',
-    })
-    expect(req.deleted).toEqual([])
     expect(req.set).toEqual([])
   })
 
