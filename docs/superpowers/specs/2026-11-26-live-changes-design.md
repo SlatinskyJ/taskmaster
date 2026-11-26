@@ -1,6 +1,6 @@
 # Live change notices: design
 
-Status: design, agreed with Jakub 2026-11-26 (thread "Brainstorm live change notifications").
+Status: design, approved by Jakub 2026-11-26 (thread "Brainstorm live change notifications").
 
 ## Intent
 
