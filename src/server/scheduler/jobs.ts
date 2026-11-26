@@ -4,13 +4,14 @@ import { getFlags } from '~/server/features'
 import {
   createScheduledInstances,
   expireOverdueInstances,
+  dropWeekRules,
   makeWeekCopies,
 } from '~/server/instances'
 import { rollPeriods } from '~/server/periods'
 import type { Job } from './scheduler'
 
 // The jobs of a tick, in order (#39): periods first, so a cutoff that passed lands before
-// anything else of that instant; then expiry; then new scheduled instances, so a slot born past
+// anything else of that instant; then the week rules (#257); then expiry; then new scheduled instances, so a slot born past
 // its grace is made and expired by the instances job itself (./README.md). With the `weekPlan`
 // switch on (#257) the instances job makes the week's copies instead.
 
@@ -30,6 +31,15 @@ export function schedulerJobs(
             `[periods] started ${p.startsAt.toISOString()} → ${p.cutoffAt.toISOString()} levels ${levels}`,
           )
         }
+      },
+    },
+    {
+      // With the week plan off, week copies lose their day rules for good (#257).
+      name: 'weekRules',
+      run(at) {
+        if (getFlags(db).weekPlan) return
+        const n = dropWeekRules(db, at, log).length
+        if (n > 0) log.info(`[scheduler] week rules dropped: ${String(n)}`)
       },
     },
     {

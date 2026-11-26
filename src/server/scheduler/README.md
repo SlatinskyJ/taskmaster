@@ -20,9 +20,13 @@ Server-side time-driven work (#39, spec §5.3, §5.8). Started by the boot plugi
 
 1. `periods`: `rollPeriods` makes the first period and one for every passed cutoff; logs
    `[periods] started <start> → <cutoff>`. Period defaults are read on every tick.
-2. `expiry`: `expireOverdueInstances` expires open or reserved deadline instances whose grace
-   window has ended (`instance.expired`, actor system).
-3. `instances`: `createScheduledInstances` makes one instance per schedule slot. After downtime
+2. `weekRules` (#257): only while the `weekPlan` switch is off, `dropWeekRules` turns
+   `week_rules` off on every task that has it (`instance.week_rules_dropped`, actor system), so a
+   copy made while the switch was on keeps the old rules for good.
+3. `expiry`: `expireOverdueInstances` expires open or reserved deadline instances whose grace
+   window has ended (`instance.expired`, actor system). With the `weekPlan` switch on also every
+   open or reserved no-deadline week copy whose day is over (its day rules still on, #257).
+4. `instances`: `createScheduledInstances` makes one instance per schedule slot. After downtime
    only the latest missed slot counts; one already past its grace is made and expired at once.
    `template_slots` remembers the last handled slot per template. With the `weekPlan` switch on
    (#257, spec §5.12) it runs `makeWeekCopies` instead: one copy per slot of the running period,
