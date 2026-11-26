@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type * as ButtonModule from '~/components/ui/button'
 import type { Meeting } from '~/server/settlement/functions'
 import type { TaskView } from '~/server/tasks/functions'
-import { pendingWeek, period, settledOk, task, week } from './fixtures'
+import { noWeek, pendingWeek, period, settledOk, task, week } from './fixtures'
 import { cs } from '~/lib/strings'
 import { MeetingBody } from './MeetingScreen'
 import { reduce, START } from './meetingFlow'
@@ -179,7 +179,7 @@ describe('step 3: Plánovat', () => {
       result: { ...settledOk, next: null },
       names,
     })
-    const { html } = render({ period: null, runningCutoffAt: null }, late)
+    const { html } = render(noWeek(), late)
     expect(html).toContain('Tento týden běží dál')
     expect(html).not.toContain('Nový týden')
     expect(html).toContain('Začínají s')
@@ -187,7 +187,7 @@ describe('step 3: Plánovat', () => {
   })
 
   it('nothing to settle shows step 3 only', () => {
-    const { html } = render({ period: null, runningCutoffAt: null })
+    const { html } = render(noWeek())
     expect(html).toContain('Teď není co vyúčtovat')
     expect(html).not.toContain('data-step="done"')
     expect(html).not.toContain('Vyúčtováno')
@@ -196,10 +196,9 @@ describe('step 3: Plánovat', () => {
   })
 
   it('mid-week with the last-day rule: says the week runs, not "nothing to settle" (#211)', () => {
-    const { html } = render({
-      period: null,
-      runningCutoffAt: new Date(Date.UTC(2026, 10, 29, 22, 59)).toISOString(),
-    })
+    const { html } = render(
+      noWeek({ runningCutoffAt: new Date(Date.UTC(2026, 10, 29, 22, 59)).toISOString() }),
+    )
     expect(html).toContain('Týden ještě běží')
     expect(html).toContain('Týden běží do neděle 29. 11. 23:59.')
     expect(html).toContain('Vyúčtovat půjde až v poslední den týdne.')
@@ -209,10 +208,9 @@ describe('step 3: Plánovat', () => {
   })
 
   it('a week ending on Saturday reads in Czech too (#211)', () => {
-    const { html } = render({
-      period: null,
-      runningCutoffAt: new Date(Date.UTC(2026, 10, 28, 22, 59)).toISOString(),
-    })
+    const { html } = render(
+      noWeek({ runningCutoffAt: new Date(Date.UTC(2026, 10, 28, 22, 59)).toISOString() }),
+    )
     expect(html).toContain('Týden běží do soboty 28. 11. 23:59.')
   })
 
