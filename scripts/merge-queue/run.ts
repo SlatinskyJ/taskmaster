@@ -87,6 +87,20 @@ export async function step(gh: Gh, log: Log, markerKey: string): Promise<{ hande
   return { handedOver }
 }
 
+// What the workflow's two jobs run: with a label event (job record) only record; otherwise (job
+// queue) one queue step.
+export async function entry(
+  gh: Gh,
+  log: Log,
+  markerKey: string,
+  env: NodeJS.ProcessEnv,
+): Promise<{ handedOver: number[] }> {
+  const labelEvent = labelEventFromEnv(env)
+  if (!labelEvent) return step(gh, log, markerKey)
+  await record(gh, log, markerKey, labelEvent)
+  return { handedOver: [] }
+}
+
 function labelEventFromEnv(env: NodeJS.ProcessEnv): { pr: number; sha: string } | undefined {
   const pr = env.LABEL_PR ?? ''
   const sha = env.LABEL_SHA ?? ''
@@ -108,11 +122,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const log: Log = (line) => {
     console.log(line)
   }
-  // With a label event (the workflow's record job) only record; otherwise run one queue step.
-  const labelEvent = labelEventFromEnv(process.env)
-  let handedOver: number[] = []
-  if (labelEvent) await record(gh, log, key, labelEvent)
-  else ({ handedOver } = await step(gh, log, key))
+  const { handedOver } = await entry(gh, log, key, process.env)
   // The hand-over comment is posted as Jakub (PAT), so GitHub notifies nobody. A red run does:
   // GitHub mails the failed-run notice, and the annotation names the PRs.
   if (handedOver.length > 0) {

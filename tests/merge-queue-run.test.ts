@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import type { PrFacts } from '../scripts/merge-queue/decide.ts'
 import { approvedMarker, handoffMarker, type Gh } from '../scripts/merge-queue/github.ts'
-import { record, run, step } from '../scripts/merge-queue/run.ts'
+import { entry, record, run, step } from '../scripts/merge-queue/run.ts'
 
 const X = 'a'.repeat(40)
 const Y = 'b'.repeat(40)
@@ -204,6 +204,26 @@ describe('record and step', () => {
     const f = fakeGh({ prs: [] })
     for (let pr = 1; pr <= 10; pr++) await record(f.gh, log, KEY, { pr, sha: X })
     expect(f.comments().filter((b) => b.includes('merge-queue:approved'))).toHaveLength(10)
+  })
+
+  it('entry with a label event only records', async () => {
+    const f = fakeGh({ prs: [facts({ draft: true })] })
+    const r = await entry(f.gh, log, KEY, { LABEL_PR: '9', LABEL_SHA: X })
+    expect(f.calls.map((c) => c.op)).toEqual(['latestLabelEventId', 'comment'])
+    expect(r).toEqual({ handedOver: [] })
+  })
+
+  it('entry without a label event runs one step', async () => {
+    const f = fakeGh({ prs: [facts({ draft: true })] })
+    expect(await entry(f.gh, log, KEY, {})).toEqual({ handedOver: [9] })
+    expect(f.calls.some((c) => c.op === 'latestLabelEventId')).toBe(false)
+  })
+
+  it('entry refuses a malformed label event', async () => {
+    const f = fakeGh({ prs: [] })
+    await expect(entry(f.gh, log, KEY, { LABEL_PR: 'x', LABEL_SHA: X })).rejects.toThrow(
+      'bad LABEL_PR or LABEL_SHA',
+    )
   })
 
   it('step writes no approval', async () => {

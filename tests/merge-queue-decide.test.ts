@@ -65,6 +65,8 @@ describe('entryCheck', () => {
   })
   it('fails a PR from a fork (its author could rewrite an update merge in the web editor)', () => {
     expect(entryCheck(facts({ fromFork: true }))).toEqual({ ok: false, reason: 'PR from a fork' })
+  })
+  it('fails a PR whose base is not main (a stack that is not linked)', () => {
     expect(entryCheck(facts({ baseIsMain: false }))).toEqual({
       ok: false,
       reason: 'base is not main',
