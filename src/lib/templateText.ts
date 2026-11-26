@@ -26,14 +26,21 @@ function clock(hhmm: string): string {
   return hhmm.replace(/^0(\d)/, '$1')
 }
 
+/** A schedule's days: "každý den" for all seven, else Monday first ("Út, Pá"). Úkoly and the
+ * plan table (#258) say the same. */
+export function describeDays(days: readonly number[]): string {
+  const chosen = WEEK_ORDER.filter((d) => days.includes(d))
+  if (chosen.length === WEEK_ORDER.length) return t.everyDay
+  return chosen.map((d) => t.days[d]).join(', ')
+}
+
 export function describeTemplate({
   schedule,
   deadline,
 }: Pick<TemplateSummary, 'schedule' | 'deadline'>): string {
   let text: string = t.onDemand
   if (schedule) {
-    const days = WEEK_ORDER.filter((d) => schedule.days.includes(d)).map((d) => t.days[d])
-    text = days.join(', ')
+    text = describeDays(schedule.days)
     if (schedule.time) text += ` ${t.summary.at} ${clock(schedule.time)}`
   }
   if (deadline) {
