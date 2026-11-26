@@ -1,4 +1,4 @@
-import { NO_TOKEN } from '~/lib/frame'
+import { FRAME_QUERY, NO_TOKEN } from '~/lib/frame'
 import { devPagesAllowed } from '~/server/env/devPages'
 
 // Is this request from a viewer frame, and with which session token? Framework-free: ./http
@@ -26,4 +26,32 @@ export function readFrame(env: NodeJS.ProcessEnv, req: FrameSignals): FrameReque
   if (req.query !== undefined) return { inFrame: true, token: tokenOf(req.query) }
   if (req.fetchDest === 'iframe') return { inFrame: true, token: undefined }
   return { inFrame: false }
+}
+
+/**
+ * A frame's page load that the server redirects (e.g. `/` → `/sprava`) must keep `tmFrame`, or
+ * the frame arrives logged out. The new Location (a path, as the router writes same-origin
+ * redirects), or null to leave it as it is: outside a frame, in production, for header-carrying
+ * requests (server function calls), and for any Location that leaves the site.
+ */
+export function frameRedirectLocation(
+  env: NodeJS.ProcessEnv,
+  req: FrameSignals,
+  requestUrl: string,
+  location: string,
+): string | null {
+  if (!readFrame(env, req).inFrame || req.header !== undefined || req.query === undefined) {
+    return null
+  }
+  let url: URL
+  try {
+    url = new URL(location, requestUrl)
+    if (url.origin !== new URL(requestUrl).origin) return null
+  } catch {
+    return null
+  }
+  // A path starting `//` is read by the browser as another host.
+  if (url.pathname.startsWith('//')) return null
+  url.searchParams.set(FRAME_QUERY, req.query)
+  return url.pathname + url.search + url.hash
 }
