@@ -81,7 +81,7 @@ export function TextDiff({ before, after }: { before: string; after: string }) {
           ) : part.kind === 'added' ? (
             <ins
               key={k}
-              className="rounded-sm bg-state-open/15 text-state-open-text decoration-2 underline-offset-2"
+              className="rounded-sm bg-state-confirmed/15 text-state-confirmed-text decoration-2 underline-offset-2"
             >
               <span className="sr-only">{cs.description.diffAdded} </span>
               {part.text}
