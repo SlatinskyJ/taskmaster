@@ -12,6 +12,7 @@ only on its last day, #211), on: Jakub asked for it to be flipped at merge.
 0032 adds `choreBidding` (bidding on a proposed recurring chore's first price, #209), off.
 0033 adds `openRows` (rows open their task or chore page, #205), off.
 0037 adds `descriptions` (descriptions on tasks and chores, #207), off.
+0038 adds `suggestions` (in-app suggestions, #247), off.
 
 - `flags.ts`: `getFlags(db)`. A switch with no row reads as off; an unknown row is ignored.
 - `functions.ts`: `getFeaturesFn`, signed-in users only. The app shell (`src/routes/_app.tsx`)

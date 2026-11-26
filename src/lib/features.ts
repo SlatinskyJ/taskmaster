@@ -34,6 +34,8 @@ export const FEATURE_KEYS = [
   'openRows',
   /** Descriptions on tasks and chores (#207). */
   'descriptions',
+  /** Suggestions from Profil, sent to GitHub by the admin (#247). */
+  'suggestions',
 ] as const
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number]
@@ -57,6 +59,7 @@ export const NO_FEATURES: Readonly<Features> = {
   choreBidding: false,
   openRows: false,
   descriptions: false,
+  suggestions: false,
 }
 
 /** Every switch on: the full app as designed (UI doc §6). */
@@ -75,4 +78,5 @@ export const ALL_FEATURES: Readonly<Features> = {
   choreBidding: true,
   openRows: true,
   descriptions: true,
+  suggestions: true,
 }

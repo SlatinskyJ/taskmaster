@@ -267,6 +267,13 @@
       "when": 1795688417594,
       "tag": "0037_descriptions_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1795715519313,
+      "tag": "0038_suggestions",
+      "breakpoints": true
     }
   ]
 }
