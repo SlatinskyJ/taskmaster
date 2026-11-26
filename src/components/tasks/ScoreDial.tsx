@@ -3,6 +3,16 @@ import { cn } from '~/lib/utils'
 
 /** Pixels of swipe per point; also the gap between the numbers on the dial. */
 export const DIAL_STEP_PX = 36
+/** The gap once a three-digit number is in the middle or next to it (#190). */
+const WIDE_STEP_PX = 52
+
+/**
+ * The gap for the current value: wider from 99 up, so a three-digit neighbour doesn't run into
+ * the big middle number ("99100101", #190). Scores stop at 999, so two sizes are enough.
+ */
+export function dialStepPx(value: number): number {
+  return String(value + 1).length > 2 ? WIDE_STEP_PX : DIAL_STEP_PX
+}
 /** How many numbers show on each side of the current one. */
 const SIDE = 5
 
@@ -11,19 +21,20 @@ const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(mi
 /**
  * The value after swiping `deltaPx` from where the drag started at `startValue`. Swiping left
  * pulls higher numbers to the middle (like a ruler), so a negative delta adds points.
- * `offset` is the leftover sub-step shift, so the numbers follow the finger smoothly;
- * it is 0 at either end of the range.
+ * `stepPx` is the gap at the start of the drag (`dialStepPx`). `offset` is the leftover
+ * sub-step shift, so the numbers follow the finger smoothly; it is 0 at either end of the range.
  */
 export function dialStep(
   startValue: number,
   deltaPx: number,
   min: number,
   max: number,
+  stepPx: number = DIAL_STEP_PX,
 ): { value: number; offset: number } {
-  const steps = Math.round(-deltaPx / DIAL_STEP_PX)
+  const steps = Math.round(-deltaPx / stepPx)
   const value = clamp(startValue + steps, min, max)
   const atEnd = value !== startValue + steps
-  return { value, offset: atEnd ? 0 : deltaPx + steps * DIAL_STEP_PX }
+  return { value, offset: atEnd ? 0 : deltaPx + steps * stepPx }
 }
 
 /** Keyboard on the dial (WAI-ARIA slider): arrows ±1, Page Up/Down ±5, Home/End to the ends. */
@@ -61,24 +72,28 @@ export function ScoreDial({
   /** Accessible name, e.g. "Body". */
   label: string
 }) {
-  const drag = useRef<{ x: number; value: number } | null>(null)
+  const drag = useRef<{ x: number; value: number; step: number } | null>(null)
   const [offset, setOffset] = useState(0)
-  const [dragging, setDragging] = useState(false)
+  /** The gap of the running drag (null when not dragging). */
+  const [dragStep, setDragStep] = useState<number | null>(null)
 
   function onPointerDown(e: PointerEvent<HTMLDivElement>) {
     e.currentTarget.setPointerCapture(e.pointerId)
-    drag.current = { x: e.clientX, value }
-    setDragging(true)
+    // One gap for the whole drag, also when it crosses 99, so the numbers stay under the finger.
+    const step = dialStepPx(value)
+    drag.current = { x: e.clientX, value, step }
+    setDragStep(step)
   }
   function onPointerMove(e: PointerEvent<HTMLDivElement>) {
     if (!drag.current) return
-    const next = dialStep(drag.current.value, e.clientX - drag.current.x, min, max)
+    const { x, value: start, step } = drag.current
+    const next = dialStep(start, e.clientX - x, min, max, step)
     setOffset(next.offset)
     if (next.value !== value) onChange(next.value)
   }
   function onPointerEnd() {
     drag.current = null
-    setDragging(false)
+    setDragStep(null)
     setOffset(0)
   }
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
@@ -88,6 +103,7 @@ export function ScoreDial({
     onChange(next)
   }
 
+  const step = dragStep ?? dialStepPx(value)
   const numbers: number[] = []
   for (let n = Math.max(min, value - SIDE); n <= Math.min(max, value + SIDE); n++) numbers.push(n)
 
@@ -126,12 +142,12 @@ export function ScoreDial({
               aria-hidden="true"
               className={cn(
                 'absolute top-1/2 grid -translate-1/2 justify-items-center gap-1 num font-bold',
-                !dragging &&
+                dragStep === null &&
                   'transition-[left] duration-200 ease-out motion-reduce:transition-none',
                 distance === 0 ? 'text-points text-ink' : 'text-lg text-muted',
               )}
               style={{
-                left: `calc(50% + ${String((n - value) * DIAL_STEP_PX + offset)}px)`,
+                left: `calc(50% + ${String((n - value) * step + offset)}px)`,
                 opacity: distance === 0 ? 1 : Math.max(0.25, 1 - distance * 0.18),
               }}
             >

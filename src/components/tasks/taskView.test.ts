@@ -273,6 +273,19 @@ describe('taskView', () => {
       expect(sendButton(t, me, 30)).toBeNull()
     }
   })
+  it('a round with a parent counter (#237): who counters and at what price, my bid next to it', () => {
+    const counter = view({
+      status: 'open',
+      score: 18,
+      offeredByName: null,
+      createdByName: 'Máma',
+      rebidding: { offer: 15, offeredBy: { id: 2, name: 'Táta' } },
+    })
+    expect(waitingMeta(counter, STARSI)).toBe('Nabízí Táta')
+    expect(
+      waitingMeta({ ...counter, bids: [{ takerId: 3, name: 'Starší', score: 20 }] }, STARSI),
+    ).toBe('Táta 15 · ty 20')
+  })
   it('row and page texts', () => {
     expect(waitingMeta(view({}), STARSI)).toBe('Nabízí Táta')
     expect(

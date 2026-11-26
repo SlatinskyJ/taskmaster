@@ -59,7 +59,7 @@ function TemplatePage() {
   const proposed = t.status === 'proposed'
   const waiting = proposed ? choreWaitingText(waitingFor, me) : null
   return (
-    <Screen title={t.title} user={user} back="history">
+    <Screen title={t.title} user={user} back="history" fullTitle>
       <Card className="grid gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <StateChip state={chip.state} label={chip.label} />
