@@ -53,6 +53,11 @@ test('the round shows only its own bids, and Táta turns them down', async ({ pa
   await openTask(page, 'tata', ROUND)
   await expect(threadRow(page, /chce 15(?!\d)/)).toHaveCount(1)
   await expect(threadRow(page, /chce 14(?!\d)/)).toHaveCount(0)
+  // Historie keeps every round, each under its own divider (Jakub 2026-11-26).
+  const history = page.getByRole('region', { name: cs.history.title })
+  await expect(history).toContainText(cs.history.round(1))
+  await expect(history).toContainText(cs.history.round(2))
+  await expect(history).toContainText(cs.history.bid(14))
   await page.getByRole('button', { name: cs.bids.turnDown, exact: true }).click()
   await expect(page.getByText(cs.bids.toast.turnedDown, { exact: true })).toBeVisible()
   await expect(page.getByText(cs.state.open, { exact: true }).first()).toBeVisible()
