@@ -133,3 +133,23 @@ test('a double tap on Odeslat sends once', async ({ page }) => {
   await expect(row(page, title)).toHaveCount(1)
   expect(posts).toHaveLength(1)
 })
+
+test('a failed send keeps the sheet open with its error and the typed text', async ({ page }) => {
+  const title = 'Připomínka večer před termínem'
+  await profileAs(page, 'starsi')
+  const sheet = await openSheet(page)
+  const field = sheet.getByLabel(t.titleLabel, { exact: true })
+  await field.fill(title)
+  // Offline: the create request never reaches the server.
+  await page.route(SERVER_FN, async (route) => {
+    if (route.request().method() === 'POST') await route.abort()
+    else await route.continue()
+  })
+  await sheet.getByRole('button', { name: t.send }).click()
+  await expect(sheet.getByRole('alert')).toHaveText(t.errors.generic)
+  await expect(sheet).toBeVisible()
+  await expect(field).toHaveValue(title)
+  await expect(page.getByText(t.sent)).toHaveCount(0)
+  await expect(sheet.getByRole('button', { name: t.send })).toBeEnabled()
+  await page.unroute(SERVER_FN)
+})
