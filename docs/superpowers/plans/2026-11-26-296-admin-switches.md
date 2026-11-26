@@ -48,7 +48,7 @@
 - Modify: `src/server/features/flags.ts`
 - Modify: `src/server/features/functions.ts`
 - Modify: `tests/server-fn-guards.test.ts` (`EXPECTED_ROLES`)
-- Test: `src/server/features/flags.test.ts`, `src/server/features/functions.test.ts` (new, validator only)
+- Test: `src/server/features/flags.test.ts`
 
 **Interfaces:**
 - Produces: `setSwitch(db: Db, adminId: string, key: FeatureKey, enabled: boolean, at: Date): { changed: boolean }` (flags.ts).
@@ -59,11 +59,12 @@
 - [ ] **Step 1: Failing tests in `flags.test.ts`** (`describe('setSwitch')`):
   - `turns a switch on and logs it with the admin as actor`: on `createTestDb()` with an admin user (use the existing test helper that creates users; see other admin tests), `setSwitch(db, admin.id, 'disputes', true, AT)` → `{ changed: true }`; `getFlags(db).disputes === true`; one audit row `['feature.switched', 'user', admin.id, 'feature', 'disputes', AT]` with `before {enabled:false}`, `after {enabled:true}`.
   - `creates the row of a switch with no row`: delete the `weekPlan` row first; `setSwitch(..., 'weekPlan', true, AT)` → row exists with `enabled true`, `before {enabled:false}` logged.
+  - `turns a switch off`: `setSwitch(db, admin.id, 'recurring', false, AT)` → `{ changed: true }`; `getFlags(db)` `toStrictEqual` the migration values with only `recurring` flipped to false; audit `before {enabled:true}`, `after {enabled:false}`, actor the admin.
   - `writes nothing when the switch already has that value`: `setSwitch(..., 'recurring', true, AT)` → `{ changed: false }`, zero new audit rows.
   - `rolls the switch back when the audit write fails`: the `boom` trigger pattern from the existing `setSwitchesIn` test → throws, `getFlags(db).disputes` still false.
   - `parseSwitchInput`: accepts `{ key: 'log', enabled: false }`; throws for `{ key: 'nope', enabled: true }`, `{ key: 'log', enabled: 1 }`, `null`.
 - [ ] **Step 2: Run** `pnpm test src/server/features` → FAIL (`setSwitch` not exported).
-- [ ] **Step 3: Implement** `setSwitch` with `withAudit` (read `getFlags(tx)[key]` inside the change; equal → return `{ changed: false }` with no entry — check how `withAudit` handles "no entry" (empty array); if it can't, open a transaction and call `writeAudit(tx, …)` the way `setSwitchesIn` does). Upsert with `onConflictDoUpdate` as in `setSwitchesIn`. Add `setSwitchFn` and `EXPECTED_ROLES.setSwitchFn = 'admin'`.
+- [ ] **Step 3: Implement.** Extract the per-key write of `setSwitchesIn` (upsert with `onConflictDoUpdate` + its `feature.switched` entry) into a private `writeSwitch(tx, key, before, enabled, actor, at)` and use it from both. `setSwitch` opens `db.transaction` (not `withAudit`: it throws on an empty entry list, `src/server/audit/audit.ts`), reads `getFlags(tx)[key]`, returns `{ changed: false }` when equal, else calls `writeSwitch` with actor `{ kind: 'user', userId: adminId }`. Update the `setSwitchesIn` doc comment: production switches change in Správa, by migration, or by hand. `parseSwitchInput` lives in flags.ts and is tested in flags.test.ts (no `functions.test.ts`). Add `setSwitchFn` and `EXPECTED_ROLES.setSwitchFn = 'admin'`.
 - [ ] **Step 4: Run** `pnpm test src/server/features tests/server-fn-guards.test.ts` → PASS.
 - [ ] **Step 5: Commit** `feat: admin sets a launch switch, audit-logged (#296)`
 
@@ -120,7 +121,8 @@
 - Modify: `e2e/suites.ts` (row `{ name: 'switches', spec: 'switches.spec.ts', seed: 'launch' }` with comment "Its own server: it flips switches for good.")
 
 - [ ] **Step 1: Write the test** `admin turns Zapsat on; a taker gets the tab`:
-  admin logs in → `/sprava`; region `Funkce` has `FEATURE_KEYS.length` switches, all `aria-checked="false"` (seed `launch` turns every switch off). Tap *Zapsat* → dialog → *Zrušit* → still false. Tap again → *Zapnout* → toast, switch `aria-checked="true"` without a reload. Reload → still true. Log out, log in as `starsi` → bottom bar has *Zapsat*.
+  admin logs in → `/sprava`; region `Funkce` has `FEATURE_KEYS.length` switches, all `aria-checked="false"` (seed `launch` turns every switch off). Tap *Zapsat* → dialog → *Zrušit* → still false. Tap again → *Zapnout* → toast, switch `aria-checked="true"` without a reload. Reload → still true. Tap *Zapsat* again → *Vypnout* → reload → `aria-checked="false"`; turn it on again the same way. Log out, log in as `starsi` → bottom bar has *Zapsat*.
+  Fourth test `the admin's own app sees the switch at once`: admin turns *Změna hesla* (`passwordChange`) on, then opens Profil through the avatar link (no reload, no `goto`) → the password form (its first field label from `cs`) is visible. This pins the `forgetFeatures()` call.
   Third test `a giver can't set a switch`: log in as `tata`, call the server function through `page.evaluate` (fetch POST to its URL; see how other e2e specs reach a server function, else drop this test and rely on the guard test plus a unit test of `authorize` for `['admin']`) → 403, switch unchanged.
   Second test `turning Plán týdne off warns about the 15 minutes`: turn `weekPlan` on, then tap again → dialog contains `weekPlanOff`; cancel.
 - [ ] **Step 2: Run** `pnpm e2e switches` (check the script name in package.json) → PASS. Take a 360 px screenshot of the card and of the open dialog for the brief and the UX judge.
