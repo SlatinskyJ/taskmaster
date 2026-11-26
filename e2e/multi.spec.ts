@@ -71,6 +71,8 @@ test('add a device as admin on a tablet, remembered after reload', async ({ page
   await form.getByRole('button', { name: t.confirmAdd, exact: true }).click()
 
   await expect(page.locator('[data-device]')).toHaveCount(4)
+  // The row scrolls sideways: the new device is brought into view.
+  await expect(device(page, 3)).toBeInViewport({ ratio: 0.9 })
   await expect(frameOf(page, 3).getByRole('heading', { name: cs.admin.title })).toBeVisible()
 
   await page.reload()
@@ -213,4 +215,30 @@ test('changing a frame user logs the new user in', async ({ page }) => {
   await openViewer(page)
   await pickUser(page, 2, t.users.admin)
   await expect(frameOf(page, 2).getByRole('heading', { name: cs.admin.title })).toBeVisible()
+})
+
+test('remove every device, then add one again from the empty state', async ({ page }) => {
+  await openViewer(page)
+  for (let left = 3; left > 0; left--) {
+    await device(page, 0).getByRole('button', { name: t.remove, exact: true }).click()
+    await expect(page.locator('[data-device]')).toHaveCount(left - 1)
+  }
+  const empty = page.locator('[data-slot="empty-state"]')
+  await expect(empty.getByText(t.empty, { exact: true })).toBeVisible()
+
+  await empty.getByRole('button', { name: t.add }).click()
+  await page
+    .getByRole('group', { name: t.add })
+    .getByRole('button', { name: t.confirmAdd, exact: true })
+    .click()
+  await expect(page.locator('[data-device]')).toHaveCount(1)
+  await expect(frameOf(page, 0).getByRole('heading', { name: hello('Táta') })).toBeVisible()
+
+  // A new size on an existing frame changes its box (phone 390 wide, tablet 820 at 70 %).
+  const widthOf = async () => (await device(page, 0).boundingBox())?.width ?? 0
+  expect(await widthOf()).toBeCloseTo(390, 0)
+  await device(page, 0).getByRole('combobox', { name: t.size }).click()
+  await page.getByRole('option', { name: t.sizes.tablet, exact: true }).click()
+  await expect.poll(widthOf).toBeCloseTo(574, 0)
+  await expect(frameOf(page, 0).getByRole('heading', { name: hello('Táta') })).toBeVisible()
 })

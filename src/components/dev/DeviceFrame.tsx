@@ -155,15 +155,18 @@ export function DeviceFrame({
             </Button>
           </div>
         </div>
-        <Input
-          key={device.path}
-          aria-label={t.address}
-          defaultValue={device.path}
-          onKeyDown={onKeyDown}
-          spellCheck={false}
-          autoComplete="off"
-          className="text-ellipsis"
-        />
+        <label className="flex items-center gap-2">
+          <span className="text-sm text-muted">{t.address}</span>
+          <Input
+            key={device.path}
+            aria-label={t.address}
+            defaultValue={device.path}
+            onKeyDown={onKeyDown}
+            spellCheck={false}
+            autoComplete="off"
+            className="min-w-0 flex-1 text-ellipsis"
+          />
+        </label>
       </div>
       <div className="relative">
         {active && (

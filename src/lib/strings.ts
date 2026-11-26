@@ -934,7 +934,12 @@ export const cs = {
     empty: 'Žádné zařízení. Přidej první.',
     inHand: 'v ruce',
     remembered: 'Rozložení se pamatuje v tomto prohlížeči.',
-    sizes: { phone: 'Telefon', small: 'Malý telefon', tablet: 'Tablet' },
+    /** Wireframe: the size and, for the tablet, how small it is drawn. */
+    sizes: {
+      phone: 'Telefon · 390×844',
+      small: 'Malý telefon · 360×740',
+      tablet: 'Tablet · 820×1180 (70\u00a0%)',
+    },
     users: { admin: 'Admin', tata: 'Táta', starsi: 'Starší', mladsi: 'Mladší' },
   },
 } as const

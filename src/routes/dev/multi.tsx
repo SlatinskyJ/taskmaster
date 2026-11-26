@@ -103,10 +103,18 @@ function MultiViewer() {
   const iframes = useRef(new Map<string, HTMLIFrameElement>())
   const devicesRef = useRef(devices)
   const inFlight = useRef(new Set<string>())
+  /** A device just added: brought into view once it is on the page (the row scrolls sideways). */
+  const scrollTo = useRef<string | null>(null)
 
   useEffect(() => {
     devicesRef.current = devices
     saveLayout(devices)
+    const id = scrollTo.current
+    if (id === null) return
+    scrollTo.current = null
+    document
+      .querySelector(`[data-device="${id}"]`)
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
   }, [devices])
 
   const update = (id: string, change: (d: Device) => Device) => {
@@ -181,6 +189,7 @@ function MultiViewer() {
 
   const add = (user: DemoLogin, size: SizeKey) => {
     const id = newDeviceId(devicesRef.current)
+    scrollTo.current = id
     setDevices((ds) => [...ds, { id, user, size, path: '/', token: undefined }])
     setStatus((s) => ({ ...s, [id]: { kind: 'loggingIn' } }))
     setAdding(false)
