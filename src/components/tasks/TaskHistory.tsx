@@ -21,6 +21,8 @@ export function TaskHistory({ entries, meId }: { entries: readonly HistoryEntry[
               <Fragment key={e.id}>
                 {round !== undefined && (
                   <li
+                    role="separator"
+                    aria-label={cs.history.round(round)}
                     className="flex items-center gap-2 pt-1 text-meta font-bold text-accent-strong first:pt-0"
                     data-round={round}
                   >

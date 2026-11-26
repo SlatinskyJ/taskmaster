@@ -225,6 +225,8 @@ describe('task page: price, cancel, history (#36)', () => {
     expect(html).toContain('so 21. 11. 10:12 · Táta: zrušeno')
     expect(html).toContain('„Udělá to firma.“')
     expect(html).not.toContain(cs.cancelTask.action)
+    // Never reopened: no round dividers (#212).
+    expect(html).not.toContain('role="separator"')
   })
 
   it('a reopened price: Historie keeps every round, each under its own divider (#212)', () => {
@@ -251,6 +253,7 @@ describe('task page: price, cancel, history (#36)', () => {
     const now = html.indexOf('Mladší: chce 12 b')
     expect(Math.min(one, old, two, now)).toBeGreaterThanOrEqual(0)
     expect(one < old && old < two && two < now).toBe(true)
+    expect(html).toContain(`role="separator" aria-label="${cs.history.round(2)}"`)
   })
 })
 
