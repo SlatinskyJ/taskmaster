@@ -226,6 +226,32 @@ describe('task page: price, cancel, history (#36)', () => {
     expect(html).toContain('„Udělá to firma.“')
     expect(html).not.toContain(cs.cancelTask.action)
   })
+
+  it('a reopened price: Historie keeps every round, each under its own divider (#212)', () => {
+    const line = (id: number, action: HistoryEntry['action'], score: number) => ({
+      id,
+      at: '2026-11-21T09:12:00.000Z',
+      action,
+      by: { id: 4, name: 'Mladší' },
+      score,
+      reservedBy: null,
+      reason: null,
+    })
+    page.history = [
+      line(1, 'task.created', 18),
+      line(2, 'task.bid_placed', 5),
+      line(3, 'task.bidding_reopened', 18),
+      line(4, 'task.bid_placed', 12),
+    ]
+    const html = render(STARSI, reserved)
+    page.history = []
+    const one = html.indexOf(cs.history.round(1))
+    const old = html.indexOf('Mladší: chce 5 b')
+    const two = html.indexOf(cs.history.round(2))
+    const now = html.indexOf('Mladší: chce 12 b')
+    expect(Math.min(one, old, two, now)).toBeGreaterThanOrEqual(0)
+    expect(one < old && old < two && two < now).toBe(true)
+  })
 })
 
 describe('task page: Rozporovat (#46)', () => {
