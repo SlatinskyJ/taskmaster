@@ -48,6 +48,13 @@ export function taskErrorMessage(error: string): string {
       return cs.instances.errors.alreadyOpen
     case 'too_early':
       return cs.instances.errors.tooEarly
+    case 'description_too_long':
+    case 'description_frozen':
+    case 'not_changeable':
+    case 'same_description':
+    case 'no_change':
+    case 'not_involved':
+      return cs.description.errors[error]
     default:
       return cs.login.failed
   }

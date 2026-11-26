@@ -11,6 +11,8 @@ import type { DescriptionServerError, DescriptionTarget } from './rows'
 // Server functions for descriptions (#207), behind the `descriptions` switch. Roles are checked
 // here (guards) and again by the domain rules inside (`not_a_giver`, `not_a_taker`).
 
+export type { DescriptionTarget, WaitingDescription } from './rows'
+
 export type DescriptionOutcome = 'applied' | 'waiting' | 'withdrawn' | 'agreed' | 'declined'
 
 export type DescriptionResult =
