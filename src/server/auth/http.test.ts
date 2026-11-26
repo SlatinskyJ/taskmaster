@@ -16,6 +16,8 @@ interface FakeRequest {
   socketIp: string | undefined
   set: { token: string; expires: Date | undefined }[]
   deleted: number
+  /** Every cookie write and delete, by name with its options, in order. */
+  calls: { op: 'set' | 'delete'; name: string; opts: unknown }[]
   db: Db | undefined
 }
 const req = vi.hoisted((): FakeRequest => ({
@@ -25,13 +27,17 @@ const req = vi.hoisted((): FakeRequest => ({
   socketIp: '10.0.0.2',
   set: [],
   deleted: 0,
+  calls: [],
   db: undefined,
 }))
 vi.mock('@tanstack/react-start/server', () => ({
   getCookie: () => req.cookie,
-  setCookie: (_name: string, token: string, opts: { expires?: Date }) =>
-    req.set.push({ token, expires: opts.expires }),
-  deleteCookie: () => {
+  setCookie: (name: string, token: string, opts: { expires?: Date }) => {
+    req.calls.push({ op: 'set', name, opts })
+    req.set.push({ token, expires: opts.expires })
+  },
+  deleteCookie: (name: string, opts: unknown) => {
+    req.calls.push({ op: 'delete', name, opts })
     req.deleted++
   },
   getRequestHeader: (name: string) => req.headers[name],
@@ -67,6 +73,7 @@ beforeEach(() => {
   req.socketIp = '10.0.0.2'
   req.set = []
   req.deleted = 0
+  req.calls = []
 })
 
 describe('currentUser and the session cookie', () => {
@@ -94,6 +101,49 @@ describe('currentUser and the session cookie', () => {
     req.cookie = 'x'.repeat(43)
     expect(currentUser(T0)).toBeNull()
     expect(req.deleted).toBe(1)
+  })
+})
+
+describe('the session cookie’s attributes', () => {
+  // Script can't read it, it goes over HTTPS only, other sites' links don't carry it on a POST,
+  // and it covers every path: the `__Host-` prefix needs Secure and Path=/ too.
+  const ATTRS = { httpOnly: true, secure: true, sameSite: 'lax', path: '/' }
+
+  it('a login sets it with every attribute and the session expiry', () => {
+    startSession('tok', T0)
+    expect(req.calls).toEqual([
+      { op: 'set', name: '__Host-tm_session', opts: { ...ATTRS, expires: T0 } },
+    ])
+  })
+
+  it('a renewal re-sends it with the same attributes', () => {
+    signedIn()
+    const later = new Date(T0.getTime() + RENEW_AFTER_MS)
+    currentUser(later)
+    expect(req.calls).toEqual([
+      {
+        op: 'set',
+        name: '__Host-tm_session',
+        opts: { ...ATTRS, expires: new Date(later.getTime() + 90 * 24 * 3600 * 1000) },
+      },
+    ])
+  })
+
+  it('a logout and a dead token clear it with the same attributes', () => {
+    endSession()
+    signedIn()
+    req.cookie = 'x'.repeat(43)
+    currentUser(T0)
+    const cleared = { op: 'delete', name: '__Host-tm_session', opts: ATTRS }
+    expect(req.calls).toEqual([cleared, cleared])
+  })
+
+  it('logoutHere with no cookie only clears it', () => {
+    req.db = createTestDb()
+    expect(() => {
+      logoutHere()
+    }).not.toThrow()
+    expect(req.calls).toEqual([{ op: 'delete', name: '__Host-tm_session', opts: ATTRS }])
   })
 })
 

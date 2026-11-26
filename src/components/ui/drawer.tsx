@@ -36,6 +36,36 @@ export function DrawerContent({
   )
 }
 
+/**
+ * A sheet taller than what the phone keyboard leaves (long text, many pills): its body scrolls,
+ * and once the sheet has moved up (vaul follows the keyboard) the focused field is scrolled into
+ * its part of the sheet.
+ */
+const KEYBOARD_SETTLE_MS = 300
+
+function revealField(e: React.FocusEvent) {
+  const el = e.target
+  if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return
+  setTimeout(() => {
+    el.scrollIntoView({ block: 'nearest' })
+  }, KEYBOARD_SETTLE_MS)
+}
+
+/** The sheet's scrolling body: put the form in it, under the header. */
+export function DrawerBody({ className, onFocus, ...props }: ComponentProps<'div'>) {
+  return (
+    <div
+      data-slot="drawer-body"
+      className={cn('-mx-1 min-h-0 overflow-y-auto px-1', className)}
+      onFocus={(e) => {
+        revealField(e)
+        onFocus?.(e)
+      }}
+      {...props}
+    />
+  )
+}
+
 export function DrawerHeader({ className, ...props }: ComponentProps<'div'>) {
   return <div data-slot="drawer-header" className={cn('grid gap-1 pb-3', className)} {...props} />
 }

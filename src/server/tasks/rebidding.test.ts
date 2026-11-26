@@ -13,7 +13,7 @@ import {
 import { taskHistory } from './history'
 import { cancelTask, completeTask, reserveTask } from './lifecycle'
 import { proposeTaskScoreChange } from './scoreChange'
-import { approveTaskOffer, getTaskDetail, listBidsToAnswer } from './tasks'
+import { approveTaskOffer, getTaskDetail, listBidsToAnswer, pendingApprovals } from './tasks'
 import type { Family } from './testing'
 import {
   audits,
@@ -48,6 +48,57 @@ function round(f: Family): number {
 }
 
 const roundRows = (f: Family, id: number) => thread(f.db, id).slice(1)
+
+describe('a round under "Čeká na tebe" (#237)', () => {
+  const waiting = (f: Family, user: number) => pendingApprovals(f.db, user).map((t) => t.id)
+
+  it('a parent counter waits for each brother, never for a parent', () => {
+    const f = family()
+    const id = round(f)
+    must(counterOffer(f.db, f.tata, id, 15, [], T2))
+    expect(waiting(f, f.starsi)).toEqual([id])
+    expect(waiting(f, f.mladsi)).toEqual([id])
+    expect(waiting(f, f.tata)).toEqual([])
+    expect(waiting(f, f.admin)).toEqual([])
+    expect(pendingApprovals(f.db, f.starsi)[0]?.rebidding).toEqual({
+      offer: 15,
+      offeredBy: { id: f.tata, name: 'Táta' },
+    })
+  })
+
+  it('also for a brother who already bid in the round', () => {
+    const f = family()
+    const id = round(f)
+    must(placeBid(f.db, f.starsi, id, 20, T2))
+    must(counterOffer(f.db, f.tata, id, 16, [], T2))
+    expect(waiting(f, f.starsi)).toEqual([id])
+  })
+
+  it("a round with no counter (the opening offer is nobody's) waits for nobody", () => {
+    const f = family()
+    const id = round(f)
+    must(placeBid(f.db, f.starsi, id, 20, T2))
+    expect(waiting(f, f.starsi)).toEqual([])
+    expect(waiting(f, f.mladsi)).toEqual([])
+  })
+
+  it('a yes to the counter ends the round: the row is gone for both brothers', () => {
+    const f = family()
+    const id = round(f)
+    must(counterOffer(f.db, f.tata, id, 15, [], T2))
+    must(approveTaskOffer(f.db, f.mladsi, id, 15, T3))
+    expect(waiting(f, f.starsi)).toEqual([])
+    expect(waiting(f, f.mladsi)).toEqual([])
+  })
+
+  it('a reserved task leaves the list (Rezervovat ends the round)', () => {
+    const f = family()
+    const id = round(f)
+    must(counterOffer(f.db, f.tata, id, 15, [], T2))
+    must(reserveTask(f.db, f.starsi, id, T3))
+    expect(waiting(f, f.mladsi)).toEqual([])
+  })
+})
 
 describe('reopenBidding (#212)', () => {
   it('starts a round: open, same score, marker at the newest row, logged', () => {
