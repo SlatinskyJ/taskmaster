@@ -30,7 +30,7 @@ Read `.claude/skills/pr-review-rounds/judge-contract.md` first. It defines your 
 
 ## Prove a gap with a mutant
 
-A missing test is a claim until a mutant shows a bug that gets through. In a code round, CI mutates the `src/` files the PR changes (job `mutation`, StrykerJS). Read its report; do not edit code or run mutants yourself.
+A missing test is a claim until a mutant shows a bug that gets through. In a code round, CI mutates the `src/` lines the PR adds or changes (job `mutation`, StrykerJS). Read its report; do not edit code or run mutants yourself.
 
 1. Find the job for the PR head: `gh api "repos/SlatinskyJ/taskmaster/commits/<head sha>/check-runs?check_name=mutation" --jq '.check_runs[0] | .id, .status, .conclusion'`. Still running → wait and check again (it can take up to 45 min). Failed or missing → say so in the summary; every gap is then by reading, so a `nit`.
 2. Read the report: `gh api repos/SlatinskyJ/taskmaster/actions/jobs/<id>/logs`, the lines between `=== mutation report ===` and `=== end mutation report ===`. Each line is `<file>:<line>:<column> <mutator>: <original> → <replacement>`; `(no test)` means no test runs that line at all.

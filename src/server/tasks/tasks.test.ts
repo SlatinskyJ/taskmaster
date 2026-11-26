@@ -5,9 +5,12 @@ import { auditLog, tasks, taskScoreApprovals, users } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { updateUser } from '~/server/users/manage'
 import { listPeople } from '~/server/users/people'
+import { prague, setWeekPlan, weekFamily } from '~/server/instances/testing'
+import { reserveTask } from './lifecycle'
 import {
   approveTaskOffer,
   createTask,
+  listBoard,
   listPlanTasks,
   listTasks,
   pendingApprovals,
@@ -374,5 +377,52 @@ describe('resolveProposedTasks (people changed)', () => {
     })
     expect(db.select().from(tasks).get()).toMatchObject({ status: 'proposed' })
     expect(db.select().from(auditLog).all()).toHaveLength(1)
+  })
+})
+
+describe('lists show a week copy from its day (#257)', () => {
+  const WED = prague(12, 2, 9)
+  const WED_DAY = prague(12, 2, 0).toISOString()
+
+  it("listBoard with weekPlanAt: today's copy listed, tomorrow's open copy not, tomorrow's reserved copy listed with planDay", () => {
+    const f = weekFamily()
+    const [mon = 0, tue = 0, wed = 0, thu = 0, fri = 0] = f.day
+    must(reserveTask(f.db, f.starsi, thu, WED, true))
+    const board = listBoard(f.db, { weekPlanAt: WED })
+    // Earlier days' copies still open (the midnight expiry is not run here) stay listed.
+    expect(board.map((t) => t.id)).toEqual([mon, tue, wed, thu])
+    expect(board.find((t) => t.id === thu)?.planDay).toBe(prague(12, 3, 0).toISOString())
+    expect(board.find((t) => t.id === wed)?.planDay).toBe(WED_DAY)
+    expect(board.some((t) => t.id === fri)).toBe(false)
+  })
+
+  it('a copy whose day starts exactly now is listed', () => {
+    const f = weekFamily()
+    const thu = f.day[3] ?? 0
+    const ids = (at: Date) => listBoard(f.db, { weekPlanAt: at }).map((t) => t.id)
+    expect(ids(new Date(prague(12, 3, 0).getTime() - 1))).not.toContain(thu)
+    expect(ids(prague(12, 3, 0))).toContain(thu)
+  })
+
+  it('listTasks / listPlanTasks with weekPlanAt hide later copies; without it they list everything (unchanged)', () => {
+    const f = weekFamily()
+    const [, , wed = 0, thu = 0] = f.day
+    must(reserveTask(f.db, f.starsi, thu, WED, true))
+    for (const list of [listTasks, listPlanTasks]) {
+      const shownNow = list(f.db, { weekPlanAt: WED }).map((t) => t.id)
+      expect(shownNow).toContain(wed)
+      expect(shownNow).not.toContain(thu)
+      expect(list(f.db).map((t) => t.id)).toEqual([...f.day].reverse())
+      expect(list(f.db).every((t) => t.planDay === null)).toBe(true)
+    }
+  })
+
+  it('a copy whose day rules were dropped is listed every day, with no planDay', () => {
+    const f = weekFamily()
+    const thu = f.day[3] ?? 0
+    setWeekPlan(f.db, false)
+    f.db.update(tasks).set({ weekRules: false }).where(eq(tasks.id, thu)).run()
+    const board = listBoard(f.db, { weekPlanAt: WED })
+    expect(board.find((t) => t.id === thu)?.planDay).toBeNull()
   })
 })

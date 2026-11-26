@@ -38,7 +38,7 @@ function openTask(f: Family): number {
 /** Open, then reserved by Starší. */
 function reservedTask(f: Family): number {
   const id = openTask(f)
-  must(reserveTask(f.db, f.starsi, id, T1))
+  must(reserveTask(f.db, f.starsi, id, T1, false))
   return id
 }
 
@@ -129,7 +129,7 @@ describe('when a change is refused', () => {
       error: 'not_agreed',
     })
     const done = openTask(f)
-    must(completeTask(f.db, f.starsi, done, T1))
+    must(completeTask(f.db, f.starsi, done, T1, false))
     expect(proposeTaskScoreChange(f.db, f.tata, done, 20, T2)).toEqual({
       ok: false,
       error: 'score_frozen',
@@ -217,7 +217,7 @@ describe('a change in flight is discarded once the task cannot change score', ()
     const f = family()
     const id = reservedTask(f)
     must(proposeTaskScoreChange(f.db, f.tata, id, 20, T2))
-    must(completeTask(f.db, f.starsi, id, T3))
+    must(completeTask(f.db, f.starsi, id, T3, false))
     expect(changes(f, id)).toEqual([[20, 'discarded']])
     expect(audits(f.db, id).slice(-2)).toEqual(['task.completed', 'task.score_change_discarded'])
     expect(row(f.db, id)?.score).toBe(18)
@@ -301,7 +301,7 @@ describe('a failed audit write rolls everything back', () => {
     const id = reservedTask(f)
     must(proposeTaskScoreChange(f.db, f.tata, id, 20, T2))
     failAuditOn(f.db, 'task.score_change_discarded')
-    expect(() => completeTask(f.db, f.starsi, id, T3)).toThrow(/audit down/)
+    expect(() => completeTask(f.db, f.starsi, id, T3, false)).toThrow(/audit down/)
     expect(row(f.db, id)?.status).toBe('reserved')
     expect(changes(f, id)).toEqual([[20, null]])
   })

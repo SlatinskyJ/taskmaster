@@ -263,7 +263,7 @@ export function settleStaleDescription(tx: Tx, row: TaskRow, actor: Actor, now: 
   const target = { kind: 'task', id: row.id } as const
   const pending = openChange(tx, target)
   if (!pending) return row
-  const what = waitingChangeAfter(toItem(row))
+  const what = waitingChangeAfter(toItem(row, false))
   if (what === 'keep') return row
   const by = actor.kind === 'user' ? actor.userId : null
   if (what === 'apply') {

@@ -27,7 +27,7 @@ import type {
 } from '~/domain'
 import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
-import { toIsoUtc } from '~/domain/dates'
+import { startOfPragueDay, toIsoUtc } from '~/domain/dates'
 import { normaliseTitle, TASK_TITLE_MAX } from '~/lib/taskLimits'
 import { entityLog, writeAudit } from '~/server/audit'
 import type { Actor, Tx } from '~/server/audit'
@@ -134,7 +134,9 @@ export function agree(
     agreed.status === 'reserved' ? { takerId: agreed.takerId, giverId: agreed.giverId } : null
   // A reopened round (#212) agrees an open task; otherwise the task leaves `proposed`.
   const inRound = task.status === 'open'
-  const item = inRound ? markRebidAgreed(toItem(task), bid) : markAgreed(toItem(task), bid)
+  const item = inRound
+    ? markRebidAgreed(toItem(task, false), bid)
+    : markAgreed(toItem(task, false), bid)
   if (!item.ok) throw new Error(`task ${String(task.id)} cannot be agreed: ${item.error}`)
   const offerRound = agreed.score === task.score ? task.offerRound : task.offerRound + 1
   const saved = saveItem(
@@ -405,6 +407,11 @@ export interface TaskView {
    * counters, by nobody) and who countered. `score` stays the agreed score. Else null.
    */
   rebidding: { offer: number; offeredBy: { id: number; name: string } | null } | null
+  /**
+   * A week copy's day (#257, spec §5.12): the UTC instant its Prague day starts, while the
+   * `weekPlan` switch is on and its day rules apply. Else null.
+   */
+  planDay: string | null
 }
 
 export interface ScoreChangeView {
@@ -431,6 +438,17 @@ function namesOf(db: Db | Tx): (id: number) => string {
 /** What a read shows (#207): descriptions only with the `descriptions` switch on. Off by default. */
 export interface TaskViewOpts {
   descriptions?: boolean
+  /**
+   * The `weekPlan` switch on (#257): now. Views carry a copy's day, and the lists hide a copy
+   * whose day is later than today's.
+   */
+  weekPlanAt?: Date
+}
+
+/** A week copy under the day rules whose day is after today's (`weekPlanAt`'s). */
+function laterCopy(row: TaskRow, weekPlanAt: Date | undefined): boolean {
+  if (!weekPlanAt || !row.weekRules || row.planDayAt === null) return false
+  return row.planDayAt > toIsoUtc(startOfPragueDay(weekPlanAt))
 }
 
 function views(db: Db | Tx, rows: TaskRow[], opts: TaskViewOpts = {}): TaskView[] {
@@ -483,6 +501,7 @@ function views(db: Db | Tx, rows: TaskRow[], opts: TaskViewOpts = {}): TaskView[
         offeredBy:
           round.offer.by === null ? null : { id: round.offer.by, name: name(round.offer.by) },
       },
+      planDay: opts.weekPlanAt && t.weekRules ? t.planDayAt : null,
     }
   })
 }
@@ -502,7 +521,7 @@ function scoreChangeView(
     score: change.score,
     proposedBy: named(change.proposedBy),
     approvedBy: change.approvedBy.map(named),
-    waitingFor: oneTimeChangeWaitingFor(toItem(task), change, people).map(named),
+    waitingFor: oneTimeChangeWaitingFor(toItem(task, false), change, people).map(named),
   }
 }
 
@@ -599,7 +618,8 @@ export function listBidsToAnswer(db: Db | Tx, opts: TaskViewOpts = {}): TaskView
 
 /**
  * The work board (taker's Domů until #40): open tasks, and reserved or pending ones, oldest
- * first. The screen splits them into "Moje" and "Volné".
+ * first. The screen splits them into "Moje" and "Volné". With the week plan on (#257) a later
+ * day's copy is listed only once someone reserved it.
  */
 export function listBoard(db: Db | Tx, opts: TaskViewOpts = {}): TaskView[] {
   return views(
@@ -609,7 +629,8 @@ export function listBoard(db: Db | Tx, opts: TaskViewOpts = {}): TaskView[] {
       .from(tasks)
       .where(inArray(tasks.status, ['open', 'reserved', 'done_unconfirmed']))
       .orderBy(asc(tasks.id))
-      .all(),
+      .all()
+      .filter((t) => t.status === 'reserved' || !laterCopy(t, opts.weekPlanAt)),
     opts,
   )
 }
@@ -628,7 +649,10 @@ export function listPendingCompletions(db: Db | Tx, opts: TaskViewOpts = {}): Ta
   )
 }
 
-/** The meeting's plan step (spec §5.9 step 3): tasks that still need something, newest first. */
+/**
+ * The meeting's plan step (spec §5.9 step 3): tasks that still need something, newest first.
+ * With the week plan on (#257) not a later day's copy.
+ */
 export function listPlanTasks(db: Db | Tx, opts: TaskViewOpts = {}): TaskView[] {
   return views(
     db,
@@ -637,14 +661,27 @@ export function listPlanTasks(db: Db | Tx, opts: TaskViewOpts = {}): TaskView[] 
       .from(tasks)
       .where(inArray(tasks.status, ['proposed', 'open', 'reserved']))
       .orderBy(desc(tasks.id))
-      .all(),
+      .all()
+      .filter((t) => !laterCopy(t, opts.weekPlanAt)),
     opts,
   )
 }
 
-/** Every one-time task, newest first (the giver's Úkoly list). */
+/**
+ * Every one-time task, newest first (the giver's Úkoly list). With the week plan on (#257) not a
+ * later day's copy.
+ */
 export function listTasks(db: Db | Tx, opts: TaskViewOpts = {}): TaskView[] {
-  return views(db, db.select().from(tasks).orderBy(desc(tasks.id)).all(), opts)
+  return views(
+    db,
+    db
+      .select()
+      .from(tasks)
+      .orderBy(desc(tasks.id))
+      .all()
+      .filter((t) => !laterCopy(t, opts.weekPlanAt)),
+    opts,
+  )
 }
 
 /**

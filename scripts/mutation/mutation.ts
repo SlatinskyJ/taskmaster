@@ -5,6 +5,8 @@
 export interface PrFile {
   filename: string
   status: string
+  /** Unified diff of the file. GitHub leaves it out (null after our jq) when the diff is too large. */
+  patch?: string | null
 }
 
 export type MutantStatus =
@@ -39,16 +41,52 @@ const GENERATED = 'src/routeTree.gen.ts'
 /** Tests, and test-support modules (`createTestDb()` and friends live in `testing.ts`). */
 const TEST_CODE = /(\.test\.tsx?|\/testing\.ts)$/
 
-/** The added or changed source files of a PR, sorted and unique. Deleted files are left out. */
+/**
+ * Line ranges (1-based, inclusive) of the new file that a unified diff adds or changes.
+ * Touching ranges are joined; lines a hunk only deletes give no range.
+ */
+export function changedLines(patch: string): [number, number][] {
+  const ranges: [number, number][] = []
+  let line = 0
+  for (const row of patch.split('\n')) {
+    const hunk = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(row)
+    if (hunk) {
+      line = Number(hunk[1])
+      continue
+    }
+    if (row.startsWith('+')) {
+      const last = ranges.at(-1)
+      if (last && last[1] >= line - 1) last[1] = Math.max(last[1], line)
+      else ranges.push([line, line])
+      line++
+    } else if (row.startsWith(' ')) line++
+  }
+  return ranges
+}
+
+/**
+ * What Stryker mutates for a PR: the added or changed lines of its source files, as
+ * `file:start-end` (one entry per range), sorted by file then line. A file GitHub sends no
+ * patch for (diff too large) is mutated whole. Deleted files and deletion-only edits are left out.
+ */
 export function mutateTargets(files: readonly PrFile[]): string[] {
-  const targets = new Set<string>()
-  for (const { filename, status } of files) {
+  const whole = new Set<string>()
+  const ranges = new Map<string, [number, number][]>()
+  for (const { filename, status, patch } of files) {
     if (status === 'removed') continue
     if (!/^src\/.*\.tsx?$/.test(filename)) continue
     if (filename === GENERATED || TEST_CODE.test(filename)) continue
-    targets.add(filename)
+    if (patch == null) whole.add(filename)
+    else ranges.set(filename, [...(ranges.get(filename) ?? []), ...changedLines(patch)])
   }
-  return [...targets].sort()
+  const targets: { file: string; start: number; text: string }[] = []
+  for (const file of whole) targets.push({ file, start: 0, text: file })
+  for (const [file, list] of ranges) {
+    if (whole.has(file)) continue
+    for (const [start, end] of list) targets.push({ file, start, text: `${file}:${start}-${end}` })
+  }
+  targets.sort((a, b) => (a.file !== b.file ? (a.file < b.file ? -1 : 1) : a.start - b.start))
+  return [...new Set(targets.map((t) => t.text))]
 }
 
 const SNIPPET_MAX = 80

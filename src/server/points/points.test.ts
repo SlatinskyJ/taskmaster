@@ -30,7 +30,7 @@ function openTask(f: Family, score: number, approvalRequired = true): number {
 
 const doneBy = (f: Family, taker: number, score: number, approvalRequired = true) => {
   const id = openTask(f, score, approvalRequired)
-  must(completeTask(f.db, taker, id, T2))
+  must(completeTask(f.db, taker, id, T2, false))
   return id
 }
 
@@ -86,12 +86,12 @@ describe('takerPoints', () => {
   it('ignores open, reserved, proposed, released and giver-completed tasks', () => {
     const f = family()
     openTask(f, 4)
-    must(reserveTask(f.db, f.starsi, openTask(f, 6), T2))
+    must(reserveTask(f.db, f.starsi, openTask(f, 6), T2, false))
     must(createTask(f.db, f.tata, { title: 'Nabídka', score: 9, approvalRequired: true }, T0))
     const released = openTask(f, 11)
-    must(reserveTask(f.db, f.mladsi, released, T2))
+    must(reserveTask(f.db, f.mladsi, released, T2, false))
     must(releaseTask(f.db, f.mladsi, released, T3))
-    must(completeTask(f.db, f.tata, openTask(f, 13), T2))
+    must(completeTask(f.db, f.tata, openTask(f, 13), T2, false))
     expect(takerPoints(f.db, T3).takers.map((t) => [t.confirmed, t.pending])).toEqual([
       [0, 0],
       [0, 0],

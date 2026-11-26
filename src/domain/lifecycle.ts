@@ -77,11 +77,25 @@ export type ItemState =
 
 export type ItemStatus = ItemState['status']
 
+/**
+ * A week-plan copy's Prague day (spec §5.12): from its first instant (inclusive) to the next
+ * day's first instant (exclusive).
+ */
+export interface CopyDay {
+  startsAt: Date
+  endsAt: Date
+}
+
 export type Item = {
   origin: ItemOrigin
   approvalRequired: boolean
   /** Only instances of deadline templates have one (spec §5.3). */
   deadline: Deadline | null
+  /**
+   * The day of a week-plan copy whose day rules apply (spec §5.12): done only from its day on;
+   * without a deadline, over when its day ends. Null = the old rules.
+   */
+  day: CopyDay | null
 } & ItemState
 
 /** Who acts: a person, or the scheduler (scheduled instances, expiry). */
@@ -101,6 +115,7 @@ export type LifecycleError =
   | 'past_grace'
   | 'no_deadline'
   | 'grace_not_over'
+  | 'before_day'
 
 /** The acting person if they are an active giver. */
 const asGiver = (actor: Actor): Person | null =>
@@ -109,8 +124,10 @@ const asGiver = (actor: Actor): Person | null =>
 const asTaker = (actor: Actor): Person | null =>
   actor.kind === 'person' && isActiveTaker(actor.person) ? actor.person : null
 
-function pastGrace(deadline: Deadline | null, at: Date): boolean {
-  return deadline !== null && at.getTime() >= deadline.graceEndsAt.getTime()
+/** Too late: the grace window is over, or a no-deadline copy's day has ended (spec §5.12). */
+function pastGrace(item: Pick<Item, 'deadline' | 'day'>, at: Date): boolean {
+  if (item.deadline) return at.getTime() >= item.deadline.graceEndsAt.getTime()
+  return item.day !== null && at.getTime() >= item.day.endsAt.getTime()
 }
 
 // ── Creation ─────────────────────────────────────────────────────────────────────────────
@@ -124,26 +141,28 @@ export function createOneTimeItem(
   approvalRequired: boolean = DEFAULT_APPROVAL_REQUIRED,
 ): Result<Item, LifecycleError> {
   if (!asGiver(actor)) return fail('not_a_giver')
-  return ok({ origin: 'one_time', approvalRequired, deadline: null, status: 'proposed' })
+  return ok({ origin: 'one_time', approvalRequired, deadline: null, day: null, status: 'proposed' })
 }
 
 /**
  * A recurring instance is born open at the template score (spec §5.6). `scheduled` is created
  * by the scheduler, `on_demand` by a giver. The caller checks the template is agreed
- * (`canCreateInstances`) and copies its approval flag and deadline.
+ * (`canCreateInstances`) and copies its approval flag and deadline. A week-plan copy also gets
+ * its `day` (spec §5.12).
  */
 export function createInstance(
   actor: Actor,
   origin: 'scheduled' | 'on_demand',
   approvalRequired: boolean,
   deadline: Deadline | null,
+  day: CopyDay | null = null,
 ): Result<Item, LifecycleError> {
   if (origin === 'scheduled' && actor.kind !== 'system') return fail('not_allowed')
   if (origin === 'on_demand' && !asGiver(actor)) return fail('not_a_giver')
   if (deadline && deadline.graceEndsAt.getTime() < deadline.dueAt.getTime()) {
     return fail('invalid_deadline')
   }
-  return ok({ origin, approvalRequired, deadline, status: 'open' })
+  return ok({ origin, approvalRequired, deadline, day, status: 'open' })
 }
 
 /**
@@ -158,6 +177,7 @@ export function selfLog(actor: Actor, at: Date): Result<Item, LifecycleError> {
     origin: 'self_logged',
     approvalRequired: true,
     deadline: null,
+    day: null,
     status: 'done_unconfirmed',
     completion: { completedBy: takerId, completedAt: at, earner: takerId, reservation: null },
   })
@@ -199,7 +219,7 @@ export function reserveItem(item: Item, actor: Actor, at: Date): Result<Item, Li
   const taker = asTaker(actor)
   if (!taker) return fail('not_a_taker')
   if (item.status !== 'open') return fail('wrong_state')
-  if (pastGrace(item.deadline, at)) return fail('past_grace')
+  if (pastGrace(item, at)) return fail('past_grace')
   return ok({
     ...withoutState(item),
     status: 'reserved',
@@ -230,14 +250,16 @@ export function releaseReservation(item: Item, actor: Actor): Result<Item, Lifec
  * - A taker: anyone may do an open item; a reserved one only by its taker. Approval flag on →
  *   done, unconfirmed; off → confirmed.
  * - A giver: closes it with no points and no approval step [call], reserved or not.
- * Too late once the grace window is over.
+ * Too late once the grace window is over. A week-plan copy only from its day on (spec §5.12),
+ * for everyone.
  */
 export function completeItem(item: Item, actor: Actor, at: Date): Result<Item, LifecycleError> {
   const giver = asGiver(actor)
   const person = giver ?? asTaker(actor)
   if (!person) return fail('not_allowed')
   if (item.status !== 'open' && item.status !== 'reserved') return fail('wrong_state')
-  if (pastGrace(item.deadline, at)) return fail('past_grace')
+  if (item.day && at.getTime() < item.day.startsAt.getTime()) return fail('before_day')
+  if (pastGrace(item, at)) return fail('past_grace')
 
   const reservation = item.status === 'reserved' ? item.reservation : null
   const actorId = person.id
@@ -279,12 +301,15 @@ export function rejectCompletion(item: Item, actor: Actor): Result<Item, Lifecyc
 
 // ── Expiry and cancellation ──────────────────────────────────────────────────────────────
 
-/** The scheduler expires an open or reserved deadline item once its grace window is over. */
+/**
+ * The scheduler expires an open or reserved deadline item once its grace window is over, and a
+ * no-deadline week-plan copy once its day is over (spec §5.12).
+ */
 export function expireItem(item: Item, actor: Actor, now: Date): Result<Item, LifecycleError> {
   if (actor.kind !== 'system') return fail('not_allowed')
   if (item.status !== 'open' && item.status !== 'reserved') return fail('wrong_state')
-  if (!item.deadline) return fail('no_deadline')
-  if (!pastGrace(item.deadline, now)) return fail('grace_not_over')
+  if (!item.deadline && !item.day) return fail('no_deadline')
+  if (!pastGrace(item, now)) return fail('grace_not_over')
   return ok({ ...withoutState(item), status: 'expired' })
 }
 
@@ -309,6 +334,11 @@ export function pendingEarner(item: Item): PersonId | null {
   return item.status === 'done_unconfirmed' ? item.completion.earner : null
 }
 
-function withoutState(item: Item): Pick<Item, 'origin' | 'approvalRequired' | 'deadline'> {
-  return { origin: item.origin, approvalRequired: item.approvalRequired, deadline: item.deadline }
+function withoutState(item: Item): Pick<Item, 'origin' | 'approvalRequired' | 'deadline' | 'day'> {
+  return {
+    origin: item.origin,
+    approvalRequired: item.approvalRequired,
+    deadline: item.deadline,
+    day: item.day,
+  }
 }

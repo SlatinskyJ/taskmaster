@@ -49,6 +49,7 @@ const TATA = { id: 2, role: 'giver' } as const
 const STARSI = { id: 3, role: 'taker' } as const
 const MLADSI = { id: 4, role: 'taker' } as const
 const pending: TaskView = {
+  planDay: null,
   id: 1,
   title: 'Vyluxovat celý obývák a chodbu',
   description: null,

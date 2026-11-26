@@ -20,6 +20,7 @@ import {
   suggestions,
   templates,
   thisWeek,
+  weekChores,
 } from './pieces'
 import type { Piece } from './pieces'
 
@@ -87,6 +88,8 @@ export const SEEDS = {
   },
   /** Changing your own password on Profil (#210): the demo people, the switch on. */
   password: { pieces: [], features: ['passwordChange'] },
+  /** The week plan (#257): the week's chore copies, Domů and Zapsat by their day. */
+  weekplan: { pieces: [weekChores, points], features: ['recurring', 'log', 'weekPlan'] },
   /** Suggestions on Profil and Správa (#247): two new, one done, one dismissed. */
   suggestions: { pieces: [suggestions], features: ['suggestions'] },
   /** Previews and dev: everything. */
@@ -110,6 +113,7 @@ export const SEEDS = {
       bootTick,
       // Last, so the other pieces keep their ids (e2e opens pages by id).
       descriptions,
+      weekChores,
       suggestions,
     ],
     features: FEATURE_KEYS,

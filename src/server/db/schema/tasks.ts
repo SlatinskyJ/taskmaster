@@ -102,6 +102,13 @@ export const tasks = sqliteTable(
      * stay but are not part of it. Null = no round. Set only while `status = 'open'`.
      */
     biddingFrom: integer('bidding_from'),
+    /**
+     * A week-plan copy's day (spec §5.12): the UTC instant its Prague day starts. Null = not a
+     * week-plan copy.
+     */
+    planDayAt: text('plan_day_at'),
+    /** The day rules of §5.12 apply to this copy; turned off for good once the switch is off. */
+    weekRules: integer('week_rules', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => [
     check(

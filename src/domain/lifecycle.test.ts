@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Actor, Deadline, Item, ItemStatus, LifecycleError } from './lifecycle'
+import type { Actor, CopyDay, Deadline, Item, ItemStatus, LifecycleError } from './lifecycle'
 import {
   DEFAULT_APPROVAL_REQUIRED,
   SYSTEM,
@@ -95,6 +95,7 @@ describe('creation (spec §5.2, §5.3, §5.5)', () => {
       origin: 'one_time',
       approvalRequired: true,
       deadline: null,
+      day: null,
       status: 'proposed',
     })
     expect(value(createOneTimeItem(DAD, false)).approvalRequired).toBe(false)
@@ -111,6 +112,7 @@ describe('creation (spec §5.2, §5.3, §5.5)', () => {
       origin: 'scheduled',
       approvalRequired: true,
       deadline: bins,
+      day: null,
       status: 'open',
     })
     expect(value(createInstance(DAD, 'on_demand', false, null)).status).toBe('open')
@@ -135,6 +137,7 @@ describe('creation (spec §5.2, §5.3, §5.5)', () => {
       origin: 'self_logged',
       approvalRequired: true,
       deadline: null,
+      day: null,
       status: 'done_unconfirmed',
       completion: { completedBy: older.id, completedAt: T0, earner: older.id, reservation: null },
     })
@@ -250,6 +253,7 @@ describe('complete (spec §5.4, §5.5)', () => {
       origin: 'one_time',
       approvalRequired: true,
       deadline: null,
+      day: null,
       status: 'done_unconfirmed',
       completion: { completedBy: older.id, completedAt: T0, earner: older.id, reservation: null },
     })
@@ -320,6 +324,7 @@ describe('approve and reject (spec §5.5)', () => {
       origin: 'one_time',
       approvalRequired: true,
       deadline: null,
+      day: null,
       status: 'open',
     })
   })
@@ -440,5 +445,95 @@ describe('the grace window edge (spec §5.3)', () => {
     )
     expect(error(completeItem(openInstance(noGrace), OLDER, bins.dueAt))).toBe('past_grace')
     expect(value(expireItem(openInstance(noGrace), SYSTEM, bins.dueAt)).status).toBe('expired')
+  })
+})
+
+describe('a week copy has a day (#257, spec §5.12)', () => {
+  // Thursday 2026-12-03 in Prague (UTC+1): from 2026-12-02T23:00Z to 2026-12-03T23:00Z.
+  const thursday: CopyDay = {
+    startsAt: at('2026-12-02T23:00:00.000Z'),
+    endsAt: at('2026-12-03T23:00:00.000Z'),
+  }
+  const WEDNESDAY_NOON = at('2026-12-02T11:00:00.000Z')
+  const copy = (deadline: Deadline | null = null): Item =>
+    value(createInstance(SYSTEM, 'scheduled', true, deadline, thursday))
+  const ms = (d: Date, n: number) => new Date(d.getTime() + n)
+
+  it('createInstance keeps the day; without one it is null', () => {
+    expect(copy().day).toEqual(thursday)
+    expect(value(createInstance(SYSTEM, 'scheduled', true, null)).day).toBeNull()
+    expect(value(createOneTimeItem(DAD)).day).toBeNull()
+    expect(selfLogged().day).toBeNull()
+  })
+
+  it('the day survives a reservation and a release', () => {
+    const reserved = value(reserveItem(copy(), OLDER, WEDNESDAY_NOON))
+    expect(reserved.day).toEqual(thursday)
+    expect(value(releaseReservation(reserved, OLDER)).day).toEqual(thursday)
+  })
+
+  it("completeItem refuses a copy before its day ('before_day') and accepts it from the day's first minute", () => {
+    expect(error(completeItem(copy(), OLDER, WEDNESDAY_NOON))).toBe('before_day')
+    expect(error(completeItem(copy(), OLDER, ms(thursday.startsAt, -1)))).toBe('before_day')
+    expect(value(completeItem(copy(), OLDER, thursday.startsAt)).status).toBe('done_unconfirmed')
+    const reserved = value(reserveItem(copy(), OLDER, WEDNESDAY_NOON))
+    expect(error(completeItem(reserved, OLDER, WEDNESDAY_NOON))).toBe('before_day')
+  })
+
+  it('completeItem on a copy with day null works any time (old rules)', () => {
+    const old = value(createInstance(SYSTEM, 'scheduled', true, null))
+    expect(value(completeItem(old, OLDER, WEDNESDAY_NOON)).status).toBe('done_unconfirmed')
+    expect(value(completeItem(old, OLDER, at('2026-12-10T12:00:00.000Z'))).status).toBe(
+      'done_unconfirmed',
+    )
+  })
+
+  it("a giver's Hotovo before the day is refused too (before_day)", () => {
+    expect(error(completeItem(copy(), DAD, WEDNESDAY_NOON))).toBe('before_day')
+  })
+
+  it('a wrong state still answers wrong_state before before_day', () => {
+    const done = value(completeItem(copy(), OLDER, thursday.startsAt))
+    expect(error(completeItem(done, OLDER, WEDNESDAY_NOON))).toBe('wrong_state')
+  })
+
+  it('completeItem and reserveItem on a no-deadline copy at day.endsAt - 1 ms work, at day.endsAt are refused (past_grace)', () => {
+    const lastMs = ms(thursday.endsAt, -1)
+    expect(value(completeItem(copy(), OLDER, lastMs)).status).toBe('done_unconfirmed')
+    expect(value(reserveItem(copy(), OLDER, lastMs)).status).toBe('reserved')
+    expect(error(completeItem(copy(), OLDER, thursday.endsAt))).toBe('past_grace')
+    expect(error(reserveItem(copy(), OLDER, thursday.endsAt))).toBe('past_grace')
+  })
+
+  it('a deadline copy after its day but inside its grace window can still be done (bins due 7:00 next morning)', () => {
+    // Due Friday 07:00 Prague, grace until 08:00.
+    const friday7: Deadline = {
+      dueAt: at('2026-12-04T06:00:00.000Z'),
+      graceEndsAt: at('2026-12-04T07:00:00.000Z'),
+    }
+    const early = at('2026-12-04T05:30:00.000Z')
+    expect(value(completeItem(copy(friday7), OLDER, early)).status).toBe('done_unconfirmed')
+    expect(value(reserveItem(copy(friday7), OLDER, early)).status).toBe('reserved')
+    expect(error(completeItem(copy(friday7), OLDER, friday7.graceEndsAt))).toBe('past_grace')
+  })
+
+  it("expireItem expires a no-deadline copy at its day's end, not a minute before ('grace_not_over')", () => {
+    expect(error(expireItem(copy(), SYSTEM, ms(thursday.endsAt, -60_000)))).toBe('grace_not_over')
+    expect(error(expireItem(copy(), SYSTEM, ms(thursday.endsAt, -1)))).toBe('grace_not_over')
+    expect(value(expireItem(copy(), SYSTEM, thursday.endsAt)).status).toBe('expired')
+    const reserved = value(reserveItem(copy(), OLDER, WEDNESDAY_NOON))
+    expect(value(expireItem(reserved, SYSTEM, thursday.endsAt)).status).toBe('expired')
+    expect(error(expireItem(copy(), DAD, thursday.endsAt))).toBe('not_allowed')
+    const old = value(createInstance(SYSTEM, 'scheduled', true, null))
+    expect(error(expireItem(old, SYSTEM, thursday.endsAt))).toBe('no_deadline')
+  })
+
+  it('expireItem on a deadline copy ignores midnight and follows the grace window', () => {
+    const friday7: Deadline = {
+      dueAt: at('2026-12-04T06:00:00.000Z'),
+      graceEndsAt: at('2026-12-04T07:00:00.000Z'),
+    }
+    expect(error(expireItem(copy(friday7), SYSTEM, thursday.endsAt))).toBe('grace_not_over')
+    expect(value(expireItem(copy(friday7), SYSTEM, friday7.graceEndsAt)).status).toBe('expired')
   })
 })

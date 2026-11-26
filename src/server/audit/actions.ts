@@ -78,6 +78,8 @@ export const AUDIT_ACTIONS = [
   'instance.rejected',
   'instance.expired',
   'instance.cancelled',
+  /** The `weekPlan` switch is off: a week copy's day rules are dropped for good (#257). */
+  'instance.week_rules_dropped',
   // Periods and default settings (§5.8)
   'period.created',
   'period.ended',

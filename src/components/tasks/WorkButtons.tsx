@@ -8,7 +8,7 @@ import {
   reserveTaskFn,
   type TaskView,
 } from '~/server/tasks/functions'
-import { canTakeFree, canWorkOn, type Me } from './taskView'
+import { canTakeFree, canWorkOn, laterDay, type Me } from './taskView'
 import { useTaskAction } from './useTaskAction'
 
 export type Run = ReturnType<typeof useTaskAction>['run']
@@ -89,17 +89,20 @@ export function ReserveButton({
  * the task page (#150). `busy` and `run` come from the caller, so a whole board shares one busy
  * state. `wide` (the page): Hotovo is the main action, full width, Uvolnit under it. On a row,
  * ↶ Uvolnit is a 44 px icon button so the name and chip read in full at 360 px (#148).
+ * `canFinish` false (a later day's week copy, #257): only Uvolnit.
  */
 export function WorkButtons({
   task,
   busy,
   run,
   wide = false,
+  canFinish = true,
 }: {
   task: Pick<TaskView, 'id' | 'score'>
   busy: string | null
   run: Run
   wide?: boolean
+  canFinish?: boolean
 }) {
   const releaseKey = `release-${String(task.id)}`
   const done = <DoneButton key="done" task={task} busy={busy} run={run} wide={wide} />
@@ -123,27 +126,26 @@ export function WorkButtons({
       {wide ? cs.work.release : <Undo2 aria-hidden="true" />}
     </Button>
   )
-  return (
-    <div className={wide ? 'grid gap-2' : 'flex gap-2'}>
-      {wide ? [done, release] : [release, done]}
-    </div>
-  )
+  const buttons = canFinish ? (wide ? [done, release] : [release, done]) : [release]
+  return <div className={wide ? 'grid gap-2' : 'flex gap-2'}>{buttons}</div>
 }
 
 /**
  * The task page's work buttons: Hotovo and Uvolnit for the brother who reserved it; on a free
  * task, for a brother, the hint, Rezervovat and Hotovo (mockup TReserve, #195). Else nothing.
+ * A later day's week copy (#257) has no Hotovo yet.
  */
 export function TaskWorkPanel({ task, me }: { task: TaskView; me: Me }) {
   const { busy, run } = useTaskAction()
+  const canFinish = !laterDay(task, new Date())
   if (canTakeFree(task, me))
     return (
       <div className="grid gap-2">
         <p className="text-meta break-words text-muted">{cs.work.reserveHint}</p>
         <ReserveButton task={task} busy={busy} run={run} wide />
-        <DoneButton task={task} busy={busy} run={run} wide />
+        {canFinish && <DoneButton task={task} busy={busy} run={run} wide />}
       </div>
     )
   if (!canWorkOn(task, me)) return null
-  return <WorkButtons task={task} busy={busy} run={run} wide />
+  return <WorkButtons task={task} busy={busy} run={run} wide canFinish={canFinish} />
 }

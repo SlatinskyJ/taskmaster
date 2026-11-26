@@ -89,7 +89,7 @@ describe('reserve and release (spec §5.4)', () => {
   it('a taker reserves an open task; the giver and others cannot take it for points', () => {
     const f = family()
     const id = openTask(f)
-    expect(must(reserveTask(f.db, f.starsi, id, T1))).toMatchObject({
+    expect(must(reserveTask(f.db, f.starsi, id, T1, false))).toMatchObject({
       status: 'reserved',
       reservedBy: f.starsi,
       reservedVia: 'tap',
@@ -97,15 +97,18 @@ describe('reserve and release (spec §5.4)', () => {
     expect(lastAudit(f.db)).toMatchObject({ action: 'task.reserved', actorUserId: f.starsi })
     // A step that does not leave `proposed` closes no thread rows, and says so.
     expect(json(lastAudit(f.db)?.after)).toMatchObject({ accepted: [], closed: [] })
-    expect(reserveTask(f.db, f.mladsi, id, T1)).toEqual({ ok: false, error: 'wrong_state' })
-    expect(completeTask(f.db, f.mladsi, id, T1)).toEqual({ ok: false, error: 'reserved_by_other' })
+    expect(reserveTask(f.db, f.mladsi, id, T1, false)).toEqual({ ok: false, error: 'wrong_state' })
+    expect(completeTask(f.db, f.mladsi, id, T1, false)).toEqual({
+      ok: false,
+      error: 'reserved_by_other',
+    })
   })
 
   it('a giver cannot reserve; the admin cannot either', () => {
     const f = family()
     const id = openTask(f)
-    expect(reserveTask(f.db, f.tata, id, T1)).toEqual({ ok: false, error: 'not_a_taker' })
-    expect(reserveTask(f.db, f.admin, id, T1)).toEqual({ ok: false, error: 'not_a_taker' })
+    expect(reserveTask(f.db, f.tata, id, T1, false)).toEqual({ ok: false, error: 'not_a_taker' })
+    expect(reserveTask(f.db, f.admin, id, T1, false)).toEqual({ ok: false, error: 'not_a_taker' })
   })
 
   it('a proposed task cannot be reserved yet', () => {
@@ -113,19 +116,22 @@ describe('reserve and release (spec §5.4)', () => {
     const task = must(
       createTask(f.db, f.tata, { title: 'Umýt auto', score: 18, approvalRequired: true }, T0),
     )
-    expect(reserveTask(f.db, f.starsi, task.id, T1)).toEqual({ ok: false, error: 'wrong_state' })
+    expect(reserveTask(f.db, f.starsi, task.id, T1, false)).toEqual({
+      ok: false,
+      error: 'wrong_state',
+    })
   })
 
   it('the taker releases his own; another taker may not; a giver may release anyone', () => {
     const f = family()
     const id = openTask(f)
-    must(reserveTask(f.db, f.starsi, id, T1))
+    must(reserveTask(f.db, f.starsi, id, T1, false))
     expect(releaseTask(f.db, f.mladsi, id, T1)).toEqual({ ok: false, error: 'not_allowed' })
     expect(must(releaseTask(f.db, f.starsi, id, T1))).toMatchObject({
       status: 'open',
       reservedBy: null,
     })
-    must(reserveTask(f.db, f.mladsi, id, T1))
+    must(reserveTask(f.db, f.mladsi, id, T1, false))
     expect(must(releaseTask(f.db, f.tata, id, T2))).toMatchObject({ status: 'open' })
     expect(lastAudit(f.db)).toMatchObject({ action: 'task.released', actorUserId: f.tata })
   })
@@ -195,7 +201,7 @@ describe('complete, approve, reject (spec §5.5)', () => {
   it('Hotovo on an open task: pending for that taker, with completed_at', () => {
     const f = family()
     const id = openTask(f)
-    expect(must(completeTask(f.db, f.mladsi, id, T1))).toMatchObject({
+    expect(must(completeTask(f.db, f.mladsi, id, T1, false))).toMatchObject({
       status: 'done_unconfirmed',
       completedBy: f.mladsi,
       earnerId: f.mladsi,
@@ -207,7 +213,7 @@ describe('complete, approve, reject (spec §5.5)', () => {
   it('approval flag off: confirmed straight away', () => {
     const f = family()
     const id = openTask(f, false)
-    expect(must(completeTask(f.db, f.starsi, id, T1))).toMatchObject({
+    expect(must(completeTask(f.db, f.starsi, id, T1, false))).toMatchObject({
       status: 'confirmed',
       earnerId: f.starsi,
     })
@@ -216,7 +222,7 @@ describe('complete, approve, reject (spec §5.5)', () => {
   it('a giver approves: confirmed, points for the taker', () => {
     const f = family()
     const id = openTask(f)
-    must(completeTask(f.db, f.starsi, id, T1))
+    must(completeTask(f.db, f.starsi, id, T1, false))
     expect(approveTask(f.db, f.starsi, id, T2)).toEqual({ ok: false, error: 'not_a_giver' })
     expect(must(approveTask(f.db, f.tata, id, T2))).toMatchObject({
       status: 'confirmed',
@@ -232,7 +238,7 @@ describe('complete, approve, reject (spec §5.5)', () => {
   it('a failed audit write rolls back the approval', () => {
     const f = family()
     const id = openTask(f)
-    must(completeTask(f.db, f.starsi, id, T1))
+    must(completeTask(f.db, f.starsi, id, T1, false))
     failAuditOn(f.db, 'task.approved')
     expect(() => approveTask(f.db, f.tata, id, T2)).toThrow(/audit down/)
     expect(row(f.db, id)).toMatchObject({ status: 'done_unconfirmed', earnerId: f.starsi })
@@ -241,8 +247,8 @@ describe('complete, approve, reject (spec §5.5)', () => {
   it('reject: a reserved task goes back to the same taker, with the reason logged', () => {
     const f = family()
     const id = openTask(f)
-    must(reserveTask(f.db, f.starsi, id, T1))
-    must(completeTask(f.db, f.starsi, id, T1))
+    must(reserveTask(f.db, f.starsi, id, T1, false))
+    must(completeTask(f.db, f.starsi, id, T1, false))
     expect(must(rejectTask(f.db, f.tata, id, '  Ještě je tam prach. ', T2))).toMatchObject({
       status: 'reserved',
       reservedBy: f.starsi,
@@ -259,7 +265,7 @@ describe('complete, approve, reject (spec §5.5)', () => {
   it('reject: an unreserved task goes back to open; no reason is fine', () => {
     const f = family()
     const id = openTask(f)
-    must(completeTask(f.db, f.mladsi, id, T1))
+    must(completeTask(f.db, f.mladsi, id, T1, false))
     expect(must(rejectTask(f.db, f.tata, id, undefined, T2))).toMatchObject({
       status: 'open',
       reservedBy: null,
@@ -270,7 +276,7 @@ describe('complete, approve, reject (spec §5.5)', () => {
   it('a reason of exactly the limit is kept, also when it only fits after trimming', () => {
     const f = family()
     const id = openTask(f)
-    must(completeTask(f.db, f.mladsi, id, T1))
+    must(completeTask(f.db, f.mladsi, id, T1, false))
     const full = 'x'.repeat(REASON_MAX)
     must(rejectTask(f.db, f.tata, id, `  ${full}  `, T2))
     expect(lastAudit(f.db)?.reason).toBe(full)
@@ -279,7 +285,7 @@ describe('complete, approve, reject (spec §5.5)', () => {
   it('reject refuses a reason that is too long, and takers cannot reject', () => {
     const f = family()
     const id = openTask(f)
-    must(completeTask(f.db, f.mladsi, id, T1))
+    must(completeTask(f.db, f.mladsi, id, T1, false))
     expect(rejectTask(f.db, f.tata, id, 'x'.repeat(REASON_MAX + 1), T2)).toEqual({
       ok: false,
       error: 'reason_too_long',
@@ -293,8 +299,8 @@ describe('complete, approve, reject (spec §5.5)', () => {
   it('"Hotovo bez bodů": a giver completes it, closed with no points and no approval', () => {
     const f = family()
     const id = openTask(f)
-    must(reserveTask(f.db, f.starsi, id, T1))
-    expect(must(completeTask(f.db, f.tata, id, T2))).toMatchObject({
+    must(reserveTask(f.db, f.starsi, id, T1, false))
+    expect(must(completeTask(f.db, f.tata, id, T2, false))).toMatchObject({
       status: 'confirmed',
       completedBy: f.tata,
       earnerId: null,
@@ -304,17 +310,17 @@ describe('complete, approve, reject (spec §5.5)', () => {
   it('a confirmed task takes no more steps; an unknown task is not found', () => {
     const f = family()
     const id = openTask(f, false)
-    must(completeTask(f.db, f.starsi, id, T1))
-    expect(completeTask(f.db, f.mladsi, id, T2)).toEqual({ ok: false, error: 'wrong_state' })
+    must(completeTask(f.db, f.starsi, id, T1, false))
+    expect(completeTask(f.db, f.mladsi, id, T2, false)).toEqual({ ok: false, error: 'wrong_state' })
     expect(rejectTask(f.db, f.tata, id, undefined, T2)).toEqual({ ok: false, error: 'wrong_state' })
-    expect(reserveTask(f.db, f.starsi, 999, T2)).toEqual({ ok: false, error: 'not_found' })
+    expect(reserveTask(f.db, f.starsi, 999, T2, false)).toEqual({ ok: false, error: 'not_found' })
   })
 
   it('a refused step writes nothing', () => {
     const f = family()
     const id = openTask(f)
     const before = f.db.select().from(auditLog).all().length
-    reserveTask(f.db, f.tata, id, T1)
+    reserveTask(f.db, f.tata, id, T1, false)
     expect(f.db.select().from(auditLog).all()).toHaveLength(before)
     expect(row(f.db, id)?.status).toBe('open')
   })
@@ -328,12 +334,12 @@ describe('board and approval lists', () => {
     ).id
     const open = openTask(f)
     const reserved = openTask(f)
-    must(reserveTask(f.db, f.starsi, reserved, T1))
+    must(reserveTask(f.db, f.starsi, reserved, T1, false))
     const pending = openTask(f)
-    must(reserveTask(f.db, f.mladsi, pending, T1))
-    must(completeTask(f.db, f.mladsi, pending, T1))
+    must(reserveTask(f.db, f.mladsi, pending, T1, false))
+    must(completeTask(f.db, f.mladsi, pending, T1, false))
     const confirmed = openTask(f, false)
-    must(completeTask(f.db, f.starsi, confirmed, T1))
+    must(completeTask(f.db, f.starsi, confirmed, T1, false))
 
     const board = listBoard(f.db)
     expect(board.map((t) => t.id)).toEqual([open, reserved, pending])
@@ -353,8 +359,8 @@ describe('board and approval lists', () => {
     const later = openTask(f)
     const earlier = openTask(f)
     openTask(f)
-    must(completeTask(f.db, f.starsi, later, T2))
-    must(completeTask(f.db, f.mladsi, earlier, T1))
+    must(completeTask(f.db, f.starsi, later, T2, false))
+    must(completeTask(f.db, f.mladsi, earlier, T1, false))
     expect(listPendingCompletions(f.db).map((t) => [t.id, t.completedBy?.name])).toEqual([
       [earlier, 'Mladší'],
       [later, 'Starší'],
@@ -378,7 +384,7 @@ describe('cancel (spec §5.6 [call])', () => {
     must(cancelTask(f.db, f.tata, open, '   ', T1))
     expect(lastAudit(f.db)).toMatchObject({ action: 'task.cancelled', reason: null })
     const reserved = openTask(f)
-    must(reserveTask(f.db, f.starsi, reserved, T1))
+    must(reserveTask(f.db, f.starsi, reserved, T1, false))
     expect(must(cancelTask(f.db, f.tata, reserved, ' Už to udělala máma. ', T2))).toMatchObject({
       status: 'cancelled',
       reservedBy: null,
@@ -410,7 +416,7 @@ describe('cancel (spec §5.6 [call])', () => {
   it('done, confirmed and cancelled tasks cannot be cancelled', () => {
     const f = family()
     const done = openTask(f)
-    must(completeTask(f.db, f.starsi, done, T1))
+    must(completeTask(f.db, f.starsi, done, T1, false))
     expect(cancelTask(f.db, f.tata, done, undefined, T2)).toEqual({
       ok: false,
       error: 'wrong_state',
@@ -442,16 +448,16 @@ describe('cancel (spec §5.6 [call])', () => {
   it('a cancelled task leaves the board and cannot be done', () => {
     const f = family()
     const id = openTask(f)
-    must(reserveTask(f.db, f.starsi, id, T1))
+    must(reserveTask(f.db, f.starsi, id, T1, false))
     must(cancelTask(f.db, f.tata, id, undefined, T1))
-    expect(completeTask(f.db, f.starsi, id, T2)).toEqual({ ok: false, error: 'wrong_state' })
+    expect(completeTask(f.db, f.starsi, id, T2, false)).toEqual({ ok: false, error: 'wrong_state' })
     expect(listBoard(f.db).map((t) => t.id)).not.toContain(id)
   })
 
   it('a failed audit write rolls the cancel back', () => {
     const f = family()
     const id = openTask(f)
-    must(reserveTask(f.db, f.starsi, id, T1))
+    must(reserveTask(f.db, f.starsi, id, T1, false))
     failAuditOn(f.db, 'task.cancelled')
     expect(() => cancelTask(f.db, f.tata, id, undefined, T2)).toThrow(/audit down/)
     expect(row(f.db, id)).toMatchObject({ status: 'reserved', reservedBy: f.starsi })

@@ -4,9 +4,10 @@ import { writeAudit } from '~/server/audit'
 import { auditLog, tasks } from '~/server/db/schema'
 import type { TaskRow } from '~/server/db/schema'
 import { takerPoints } from '~/server/points'
+import { THU_0005, WED_NOON, weekFamily } from '~/server/instances/testing'
 import { agreedTemplate } from '~/server/templates/testing'
 import { columnsOf, toItem } from './item'
-import { approveTask, completeTask, rejectTask } from './lifecycle'
+import { approveTask, completeTask, rejectTask, releaseTask, reserveTask } from './lifecycle'
 import { rejectionsSince } from './rejections'
 import { proposeTaskScoreChange } from './scoreChange'
 import { getTaskDetail, listBoard, listPendingCompletions } from './tasks'
@@ -56,7 +57,7 @@ describe('toItem / columnsOf on instances', () => {
     must(rejectTask(f.db, f.tata, r.id, undefined, T2))
     const rejected = row(f.db, r.id)
     if (!rejected) throw new Error('missing row')
-    const item = toItem(rejected)
+    const item = toItem(rejected, false)
     expect(item).toMatchObject({
       origin: 'self_logged',
       status: 'rejected',
@@ -73,7 +74,7 @@ describe('toItem / columnsOf on instances', () => {
   it('an expired instance maps both ways with no reservation or completion', () => {
     const f = family()
     const r = instance(f, { status: 'expired' })
-    const item = toItem(r)
+    const item = toItem(r, false)
     expect(item.status).toBe('expired')
     expect(columnsOf(item)).toMatchObject({
       status: 'expired',
@@ -85,7 +86,7 @@ describe('toItem / columnsOf on instances', () => {
   it('an on-demand row with a deadline gives the deadline as dates', () => {
     const f = family()
     const r = instance(f, { dueAt: iso(T2), graceEndsAt: iso(T3) })
-    expect(toItem(r)).toMatchObject({
+    expect(toItem(r, false)).toMatchObject({
       origin: 'on_demand',
       deadline: { dueAt: T2, graceEndsAt: T3 },
     })
@@ -95,7 +96,21 @@ describe('toItem / columnsOf on instances', () => {
     const f = family()
     const r = row(f.db, car(f))
     if (!r) throw new Error('missing row')
-    expect(toItem(r)).toMatchObject({ origin: 'one_time', deadline: null })
+    expect(toItem(r, false)).toMatchObject({ origin: 'one_time', deadline: null })
+  })
+
+  it('a week copy has its day only with dayRules and week_rules both on (#257)', () => {
+    const f = family()
+    const planDayAt = '2026-12-02T23:00:00.000Z'
+    const day = {
+      startsAt: new Date(planDayAt),
+      endsAt: new Date('2026-12-03T23:00:00.000Z'),
+    }
+    const marked = instance(f, { planDayAt, weekRules: true })
+    expect(toItem(marked, true).day).toEqual(day)
+    expect(toItem(marked, false).day).toBeNull()
+    expect(toItem(instance(f, { planDayAt, weekRules: false }), true).day).toBeNull()
+    expect(toItem(instance(f, {}), true).day).toBeNull()
   })
 })
 
@@ -103,9 +118,12 @@ describe('lifecycle on instances', () => {
   it('Hotovo is refused from the end of grace on, allowed 1 ms before', () => {
     const f = family()
     const late = instance(f, { dueAt: iso(T1), graceEndsAt: iso(T2) })
-    expect(completeTask(f.db, f.starsi, late.id, T2)).toEqual({ ok: false, error: 'past_grace' })
+    expect(completeTask(f.db, f.starsi, late.id, T2, false)).toEqual({
+      ok: false,
+      error: 'past_grace',
+    })
     const inTime = instance(f, { dueAt: iso(T1), graceEndsAt: iso(T2) })
-    const done = must(completeTask(f.db, f.starsi, inTime.id, new Date(T2.getTime() - 1)))
+    const done = must(completeTask(f.db, f.starsi, inTime.id, new Date(T2.getTime() - 1), false))
     expect(done.status).toBe('done_unconfirmed')
   })
 
@@ -185,11 +203,41 @@ describe('views and audit reads of instances', () => {
       .set({ status: 'reserved', reservedBy: f.starsi, reservedVia: 'tap', agreedAt: iso(T0) })
       .where(eq(tasks.id, id))
       .run()
-    must(completeTask(f.db, f.starsi, id, T2))
+    must(completeTask(f.db, f.starsi, id, T2, false))
     must(rejectTask(f.db, f.tata, id, 'ještě ne', T3))
     expect(rejectionsSince(f.db, T0).map((r) => [r.taskId, r.closed])).toEqual([
       [id, false],
       [log.id, true],
     ])
+  })
+})
+
+describe('the day rules of a week copy (#257, spec §5.12)', () => {
+  it("Hotovo on Thursday's copy on Wednesday is refused (before_day) with the switch on, and allowed with it off", () => {
+    const f = weekFamily()
+    const thursday = f.day[3] ?? 0
+    expect(completeTask(f.db, f.starsi, thursday, WED_NOON, true)).toEqual({
+      ok: false,
+      error: 'before_day',
+    })
+    expect(row(f.db, thursday)?.status).toBe('open')
+    expect(must(completeTask(f.db, f.starsi, thursday, WED_NOON, false)).status).toBe(
+      'done_unconfirmed',
+    )
+  })
+
+  it("Hotovo on Thursday's copy from Thursday's first minute works with the switch on", () => {
+    const f = weekFamily()
+    const thursday = f.day[3] ?? 0
+    expect(must(completeTask(f.db, f.starsi, thursday, THU_0005, true)).status).toBe(
+      'done_unconfirmed',
+    )
+  })
+
+  it("reserving and releasing Thursday's copy on Wednesday work", () => {
+    const f = weekFamily()
+    const thursday = f.day[3] ?? 0
+    expect(must(reserveTask(f.db, f.starsi, thursday, WED_NOON, true)).status).toBe('reserved')
+    expect(must(releaseTask(f.db, f.starsi, thursday, WED_NOON)).status).toBe('open')
   })
 })

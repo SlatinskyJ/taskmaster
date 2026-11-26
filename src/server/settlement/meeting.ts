@@ -27,6 +27,7 @@ import type { Db } from '~/server/db'
 import { settlements, users } from '~/server/db/schema'
 import type { SettlementRow } from '~/server/db/schema'
 import { getFlags } from '~/server/features'
+import { makeWeekCopies } from '~/server/instances'
 import { endRunningPeriod, getPeriodDefaults, listPeriods } from '~/server/periods'
 import { listPendingCompletions } from '~/server/tasks/tasks'
 import type { TaskView } from '~/server/tasks/tasks'
@@ -277,6 +278,8 @@ export function settlePeriod(
         if (!ended.ok) throw new Refused(ended.error)
         next = ended.value.next
         period = ended.value.ended
+        // The next week starts now: its copies are made with it (#257, spec §5.12).
+        if (getFlags(tx).weekPlan) makeWeekCopies(tx, now)
       }
       return ok({ period, records, next })
     })

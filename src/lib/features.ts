@@ -34,6 +34,8 @@ export const FEATURE_KEYS = [
   'openRows',
   /** Descriptions on tasks and chores (#207). */
   'descriptions',
+  /** Week plan (#257, spec §5.12): week copies and their day rules. */
+  'weekPlan',
   /** Suggestions from Profil, sent to GitHub by the admin (#247). */
   'suggestions',
 ] as const
@@ -59,6 +61,7 @@ export const NO_FEATURES: Readonly<Features> = {
   choreBidding: false,
   openRows: false,
   descriptions: false,
+  weekPlan: false,
   suggestions: false,
 }
 
@@ -78,5 +81,6 @@ export const ALL_FEATURES: Readonly<Features> = {
   choreBidding: true,
   openRows: true,
   descriptions: true,
+  weekPlan: true,
   suggestions: true,
 }

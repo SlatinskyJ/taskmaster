@@ -6,7 +6,7 @@ import type { Db } from '~/server/db'
 import { tasks, templates, templateSlots } from '~/server/db/schema'
 import type { TaskRow, TemplateRow } from '~/server/db/schema'
 import { expireTask } from '~/server/tasks/lifecycle'
-import { deadlineRuleOf, scheduleOf } from '~/server/templates/templates'
+import { deadlineRuleOf, scheduleOf } from '~/server/templates/rules'
 import { insertInstance } from './instances'
 
 // The scheduler's instances job (#39, spec §5.3 origin 1). Each tick looks at every agreed
@@ -86,7 +86,7 @@ function slotFor(tx: Tx, template: TemplateRow, at: Date): TaskRow | null {
     { slotAt },
   )
   if (row.graceEndsAt === null || parseIsoUtc(row.graceEndsAt).getTime() > at.getTime()) return row
-  const expired = expireTask(tx, row.id, at)
+  const expired = expireTask(tx, row.id, at, false)
   if (!expired.ok) throw new Error(`expiry refused: ${expired.error}`)
   return expired.value
 }

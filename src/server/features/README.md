@@ -12,7 +12,10 @@ only on its last day, #211), on: Jakub asked for it to be flipped at merge.
 0032 adds `choreBidding` (bidding on a proposed recurring chore's first price, #209), off.
 0033 adds `openRows` (rows open their task or chore page, #205), off.
 0037 adds `descriptions` (descriptions on tasks and chores, #207), off.
-0038 adds `suggestions` (in-app suggestions, #247), off.
+0039 adds `weekPlan` (a copy for every day of the week, #257), off. Turning it off drops the day
+rules of existing copies on the next scheduler tick, so leave it off for one tick (15 min)
+before turning it on again.
+0040 adds `suggestions` (in-app suggestions, #247), off.
 
 - `flags.ts`: `getFlags(db)`. A switch with no row reads as off; an unknown row is ignored.
 - `functions.ts`: `getFeaturesFn`, signed-in users only. The app shell (`src/routes/_app.tsx`)

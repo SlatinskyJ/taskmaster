@@ -57,6 +57,11 @@ function runStep(
     reason?: string
     /** Further writes that belong to the step, before its audit entry; returns the final row. */
     extra?: (tx: Tx, before: TaskRow, after: TaskRow, people: Person[]) => TaskRow
+    /**
+     * The day rules of a week-plan copy apply (spec §5.12): the `weekPlan` switch, read by the
+     * caller at its entry point. Off by default (old rules).
+     */
+    dayRules?: boolean
   } = {},
 ): Result<TaskRow, LifecycleActionError> {
   return db.transaction((tx) => {
@@ -69,7 +74,7 @@ function runStep(
       if (!person) return fail('not_allowed')
       stepActor = byPerson(person)
     }
-    const next = step(toItem(row), stepActor, now)
+    const next = step(toItem(row, opts.dayRules ?? false), stepActor, now)
     if (!next.ok) return next
     const { row: stepped, accepted, closed } = saveItem(tx, row, next.value, {}, now)
     const extended = opts.extra ? opts.extra(tx, row, stepped, people) : stepped
@@ -124,9 +129,20 @@ function auditView(row: TaskRow) {
   }
 }
 
-/** A taker reserves an open task ("Rezervovat", spec §5.4). */
-export function reserveTask(db: Db | Tx, userId: number, taskId: number, now: Date = new Date()) {
-  return runStep(db, { kind: 'user', userId }, taskId, 'task.reserved', reserveItem, now)
+/**
+ * A taker reserves an open task ("Rezervovat", spec §5.4). `dayRules`: the `weekPlan` switch
+ * (spec §5.12).
+ */
+export function reserveTask(
+  db: Db | Tx,
+  userId: number,
+  taskId: number,
+  now: Date,
+  dayRules: boolean,
+) {
+  return runStep(db, { kind: 'user', userId }, taskId, 'task.reserved', reserveItem, now, {
+    dayRules,
+  })
 }
 
 /**
@@ -154,9 +170,18 @@ export function releaseTask(db: Db, userId: number, taskId: number, now: Date = 
 /**
  * Someone marks the task done ("Hotovo", spec §5.5). A taker: pending if approval is required,
  * else confirmed. A giver ("Hotovo bez bodů"): closed with no points and no approval step.
+ * `dayRules`: the `weekPlan` switch (spec §5.12).
  */
-export function completeTask(db: Db | Tx, userId: number, taskId: number, now: Date = new Date()) {
-  return runStep(db, { kind: 'user', userId }, taskId, 'task.completed', completeItem, now)
+export function completeTask(
+  db: Db | Tx,
+  userId: number,
+  taskId: number,
+  now: Date,
+  dayRules: boolean,
+) {
+  return runStep(db, { kind: 'user', userId }, taskId, 'task.completed', completeItem, now, {
+    dayRules,
+  })
 }
 
 /** A giver approves a pending completion: the points are confirmed (spec §5.5). */
@@ -230,12 +255,14 @@ export function rejectTask(
 
 /**
  * The scheduler expires a deadline instance nobody finished before its grace window ended
- * (spec §5.3, #39). Audited as `instance.expired` by the system.
+ * (spec §5.3, #39), and with `dayRules` (the `weekPlan` switch) a no-deadline week-plan copy
+ * whose day is over (spec §5.12). Audited as `instance.expired` by the system.
  */
 export function expireTask(
   db: Db | Tx,
   taskId: number,
-  now: Date = new Date(),
+  now: Date,
+  dayRules: boolean,
 ): Result<TaskRow, LifecycleActionError> {
   return runStep(
     db,
@@ -244,5 +271,6 @@ export function expireTask(
     'instance.expired',
     (item, _actor, at) => expireItem(item, SYSTEM, at),
     now,
+    { dayRules },
   )
 }

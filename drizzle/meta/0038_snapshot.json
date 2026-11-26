@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "b51294bd-ba51-4309-a79d-a74dc4725963",
+  "id": "c9b83041-6493-4621-aa41-e644e53d694f",
   "prevId": "96e29cda-32f2-44b9-aa35-01ffbdbe236a",
   "tables": {
     "audit_log": {
@@ -1527,6 +1527,21 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "plan_day_at": {
+          "name": "plan_day_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "week_rules": {
+          "name": "week_rules",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
         }
       },
       "indexes": {
@@ -3062,167 +3077,6 @@
         "period_proposals_levels_check": {
           "name": "period_proposals_levels_check",
           "value": "\"period_proposals\".\"lower_level\" >= 1 AND \"period_proposals\".\"lower_level\" <= \"period_proposals\".\"upper_level\""
-        }
-      }
-    },
-    "suggestions": {
-      "name": "suggestions",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "author_id": {
-          "name": "author_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "issue_url": {
-          "name": "issue_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "issue_number": {
-          "name": "issue_number",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "sent_title": {
-          "name": "sent_title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "sent_body": {
-          "name": "sent_body",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "sent_at": {
-          "name": "sent_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "closed_by": {
-          "name": "closed_by",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "closed_at": {
-          "name": "closed_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "suggestions_author_idx": {
-          "name": "suggestions_author_idx",
-          "columns": [
-            "author_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "suggestions_author_id_users_id_fk": {
-          "name": "suggestions_author_id_users_id_fk",
-          "tableFrom": "suggestions",
-          "tableTo": "users",
-          "columnsFrom": [
-            "author_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "suggestions_closed_by_users_id_fk": {
-          "name": "suggestions_closed_by_users_id_fk",
-          "tableFrom": "suggestions",
-          "tableTo": "users",
-          "columnsFrom": [
-            "closed_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "suggestions_status_check": {
-          "name": "suggestions_status_check",
-          "value": "\"suggestions\".\"status\" IN ('new', 'sent', 'done', 'dismissed')"
-        },
-        "suggestions_title_check": {
-          "name": "suggestions_title_check",
-          "value": "length(\"suggestions\".\"title\") BETWEEN 1 AND 120"
-        },
-        "suggestions_description_check": {
-          "name": "suggestions_description_check",
-          "value": "\"suggestions\".\"description\" IS NULL OR length(\"suggestions\".\"description\") BETWEEN 1 AND 2000"
-        },
-        "suggestions_sent_check": {
-          "name": "suggestions_sent_check",
-          "value": "(\"suggestions\".\"issue_url\" IS NULL AND \"suggestions\".\"issue_number\" IS NULL AND \"suggestions\".\"sent_title\" IS NULL AND \"suggestions\".\"sent_body\" IS NULL AND \"suggestions\".\"sent_at\" IS NULL) OR (\"suggestions\".\"issue_url\" IS NOT NULL AND \"suggestions\".\"issue_number\" IS NOT NULL AND \"suggestions\".\"sent_title\" IS NOT NULL AND \"suggestions\".\"sent_body\" IS NOT NULL AND \"suggestions\".\"sent_at\" IS NOT NULL)"
-        },
-        "suggestions_sent_status_check": {
-          "name": "suggestions_sent_status_check",
-          "value": "(\"suggestions\".\"status\" <> 'sent' OR \"suggestions\".\"issue_url\" IS NOT NULL) AND (\"suggestions\".\"status\" NOT IN ('new', 'dismissed') OR \"suggestions\".\"issue_url\" IS NULL)"
-        },
-        "suggestions_closed_check": {
-          "name": "suggestions_closed_check",
-          "value": "(\"suggestions\".\"status\" IN ('done', 'dismissed')) = (\"suggestions\".\"closed_by\" IS NOT NULL AND \"suggestions\".\"closed_at\" IS NOT NULL) AND (\"suggestions\".\"closed_by\" IS NULL) = (\"suggestions\".\"closed_at\" IS NULL)"
         }
       }
     }
