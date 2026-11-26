@@ -1,6 +1,7 @@
 import { eq, sql } from 'drizzle-orm'
-import { describe, expect, it } from 'vitest'
-import { suggestions } from '~/server/db/schema'
+import { describe, expect, expectTypeOf, it } from 'vitest'
+import type { SuggestionStatus } from '~/domain'
+import { SUGGESTION_STATUSES, suggestions } from '~/server/db/schema'
 import { family } from '~/server/tasks/testing'
 
 // The DB backs up the suggestion rules (spec §5.13): never deleted, done and dismissed are final,
@@ -26,6 +27,18 @@ function setup() {
     f.db.update(suggestions).set(set).where(eq(suggestions.id, id)).run()
   return { ...f, insert, update }
 }
+
+describe('SUGGESTION_STATUSES', () => {
+  it('are the domain states, in order', () => {
+    expectTypeOf<(typeof SUGGESTION_STATUSES)[number]>().toEqualTypeOf<SuggestionStatus>()
+    expect(SUGGESTION_STATUSES satisfies readonly SuggestionStatus[]).toEqual([
+      'new',
+      'sent',
+      'done',
+      'dismissed',
+    ])
+  })
+})
 
 describe('suggestions table', () => {
   it('refuses a delete', () => {
