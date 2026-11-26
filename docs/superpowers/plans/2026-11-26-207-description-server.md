@@ -43,7 +43,7 @@ Rulings 1 and 7 are open questions to Jakub (decision cards in the project threa
 3. **Reserved ↔ open while a change waits** (release, reserve): the change stays. Who may OK it follows the task's state at the moment of the answer.
 4. **Instances** are not changeable (`not_changeable`). Their text is a copy from creation.
 5. **Changing back.** A giver who sets the text that is in force while a change waits closes that change as `withdrawn`, and nothing else changes. With no change waiting, the same text is `same_description`.
-6. **Normalising.** `\r\n` and `\r` become `\n`, and the whole text is trimmed. Empty means no description (`null`). The length is counted after normalising, in UTF-16 code units (`String.length`, like the 1000-character limits elsewhere). Control characters other than `\n` and `\t` (U+0000–U+001F, U+007F) are removed first.
+6. **Normalising.** `\r\n` and `\r` become `\n`, and the whole text is trimmed. Empty means no description (`null`). The length is counted after normalising, in UTF-16 code units (`String.length`, like the 1000-character limits elsewhere). Control characters other than `\n` and `\t` (U+0000–U+001F, U+007F) and the bidi controls (U+202A–U+202E, U+2066–U+2069) are removed first.
 7. **A change while proposed resets the agreement** (asked Jakub; recommended). The description is what done means, so yeses and bids given on the old text must not count. A change to a proposed task or template (applied at once) also closes every open bid and starts a new offer round at the same score, with the changing giver as the offerer. For a task that is `closeRows` + `newOfferRound` in `src/server/tasks/bidding.ts`, as `turnDownBids` does; for a template, the same steps as `turnDownTemplateBidsIn` in `src/server/templates/scoreChange.ts`. One audit entry, `*.description_changed`, with `offerRound` and the closed `entryIds` in `before`/`after`. If Jakub picks "keep", these two calls go and the entry loses those keys.
 8. **Stale page on a proposed task or chore.** Every taker sees the new text before he agrees or bids (§5.2). So a taker's yes, pick or bid carries `seenDescription` (the text his page showed, `null` for none). With the switch on, the server compares it with the current description, after normalising, and refuses a mismatch with `offer_changed`. This covers `approveTaskOfferFn`, `acceptOfferFn`, `placeBidFn` and the template yes, accept and bid functions. In this PR the field is optional (a missing field is not checked), so today's screens keep working with the switch on; PR 2 sends it from every one of those screens and makes it required when the switch is on.
 
@@ -96,7 +96,8 @@ Here `pending` is the waiting change's text: `undefined` means no change is wait
     - `'a'.repeat(1000) + '\r\n'` → ok;
     - `'a'.repeat(1001)` → `fail('description_too_long')`;
     - `'a\u0000b\u0007\tc\u007f'` → `ok('ab\tc')`;
-    - `'\u0000'.repeat(5)` → `ok(null)`.
+    - `'\u0000'.repeat(5)` → `ok(null)`;
+    - `'a\u202Eb\u2066c'` → `ok('abc')`.
   - `taskDescriptionRule`:
     - proposed → direct;
     - open → any_taker;
