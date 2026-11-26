@@ -12,6 +12,7 @@ import { levelBadgeClass, levelLabel, weekLabel } from '~/components/period/peri
 import { PointsBar } from '~/components/points/PointsBar'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { StateChip } from '~/components/tasks/StateChip'
+import { taskLink } from '~/components/tasks/rowLink'
 import { TaskRow } from '~/components/tasks/TaskRow'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs'
 import { cs, formatPoints } from '~/lib/strings'
@@ -52,16 +53,19 @@ export function WeekScreen({
   nextWeek,
   disputes = false,
   disputeList = [],
+  links = false,
 }: {
   week: Week
   viewerRole: 'taker' | 'giver'
+  /** The `openRows` switch (#205): each row opens its page. */
+  links?: boolean
   /** Set with the `periodProposals` switch on: the Příští týden card shows. */
   nextWeek?: { pending: boolean }
   /** The `disputes` switch (#46): Rozporovat on locked items, Rozporováno on Historie. */
   disputes?: boolean
   disputeList?: readonly DisputeListEntry[]
 }) {
-  const shared = { viewerRole, disputes, disputeList }
+  const shared = { viewerRole, disputes, disputeList, links }
   return (
     <Tabs defaultValue="this">
       <TabsList>
@@ -86,12 +90,15 @@ export function WeekBody({
   viewerRole,
   disputes = false,
   disputeList = [],
+  links = false,
 }: {
   week: Week
   tab: WeekTab
   viewerRole: 'taker' | 'giver'
   disputes?: boolean
   disputeList?: readonly DisputeListEntry[]
+  /** The `openRows` switch (#205): each row opens its page. */
+  links?: boolean
 }) {
   const named = viewerRole === 'giver'
   if (tab === 'history') {
@@ -121,7 +128,14 @@ export function WeekBody({
       )}
       <ul className="grid gap-3">
         {week.takers.map((t) => (
-          <TakerWeek key={t.id} taker={t} week={week} named={named} disputes={disputes} />
+          <TakerWeek
+            key={t.id}
+            taker={t}
+            week={week}
+            named={named}
+            disputes={disputes}
+            links={links}
+          />
         ))}
       </ul>
     </div>
@@ -133,11 +147,13 @@ function TakerWeek({
   week,
   named,
   disputes,
+  links,
 }: {
   taker: WeekTaker
   week: Week
   named: boolean
   disputes: boolean
+  links: boolean
 }) {
   const levels = week.period?.levels
   return (
@@ -197,6 +213,7 @@ function TakerWeek({
                       meta={itemMeta(item)}
                       detail={rejectionLine(item, named ? taker.name : null)}
                       footer={d && <DisputeControl {...d} mark={item.dispute?.mark ?? null} />}
+                      link={links ? taskLink(item.taskId) : undefined}
                     />
                   </li>
                 )

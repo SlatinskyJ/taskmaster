@@ -12,7 +12,7 @@ import { takerWeek, week } from './fixtures'
 const page = vi.hoisted(() => ({
   data: {},
   user: { id: 3, role: 'taker', displayName: 'Starší' },
-  features: { disputes: false },
+  features: { disputes: false, openRows: false },
 }))
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (opts: Record<string, unknown>) => ({
@@ -23,7 +23,25 @@ vi.mock('@tanstack/react-router', () => ({
   redirect: vi.fn(),
   useRouterState: () => ({ location: { pathname: '/tyden' } }),
   useRouter: () => ({ invalidate: vi.fn() }),
-  Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
+  // With params (a row's page, #205) the href is built, so a test can see where a row goes.
+  Link: ({
+    to,
+    params,
+    children,
+    className,
+  }: {
+    to?: string
+    params?: Record<string, string>
+    children: ReactNode
+    className?: string
+  }) =>
+    params && to ? (
+      <a href={to.replace(/\$(\w+)/g, (_, k: string) => params[k] ?? '')} className={className}>
+        {children}
+      </a>
+    ) : (
+      <a>{children}</a>
+    ),
 }))
 vi.mock('~/server/periods/functions', () => ({
   getProposalsFn: vi.fn(() => Promise.resolve(proposalsView())),
@@ -74,11 +92,11 @@ describe('Týden page', () => {
   it('disputes switch on: Rozporovat on the giver Týden; off: none', () => {
     page.user = { id: 2, role: 'giver', displayName: 'Táta' }
     page.data = { week: week(), proposals: null, disputeList: [] }
-    page.features = { disputes: false }
+    page.features = { disputes: false, openRows: false }
     expect(renderToStaticMarkup(<Page />)).not.toContain(cs.disputes.action)
-    page.features = { disputes: true }
+    page.features = { disputes: true, openRows: false }
     expect(renderToStaticMarkup(<Page />)).toContain(`>${cs.disputes.action}<`)
-    page.features = { disputes: false }
+    page.features = { disputes: false, openRows: false }
   })
 
   it('the Příští týden card shows only with proposals loaded; Návrh čeká while one is open', () => {
@@ -110,5 +128,18 @@ describe('Týden page', () => {
     const html = renderToStaticMarkup(<Page />)
     expect(html).toContain(`>${cs.nav.week}<`)
     expect(html).toContain('>Mladší</p>')
+  })
+})
+
+describe('switch openRows (#205): Co se tento týden stalo rows open their task', () => {
+  it('switch on: each item links to /ukol/<taskId>; off: none', () => {
+    page.user = { id: 2, role: 'giver', displayName: 'Táta' }
+    page.data = { week: week(), proposals: null, disputeList: [] }
+    page.features = { disputes: false, openRows: true }
+    const html = renderToStaticMarkup(<Page />)
+    expect(html).toMatch(/<a href="\/ukol\/11" class="[^"]*after:inset-0[^"]*">Zalít kytky<\/a>/)
+    expect(html).toMatch(/<a href="\/ukol\/12" class="[^"]*after:inset-0[^"]*">Vynést sklo<\/a>/)
+    page.features = { disputes: false, openRows: false }
+    expect(renderToStaticMarkup(<Page />)).not.toContain('after:inset-0')
   })
 })
