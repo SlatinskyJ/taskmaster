@@ -55,7 +55,7 @@ jobs:
         with:
           node-version-file: .nvmrc
       # A fine-grained PAT (secret MERGE_TOKEN: this repository only; Contents, Pull requests
-      # and Issues read and write, Checks read), because work done with GITHUB_TOKEN starts no
+      # and Issues read and write, Metadata read), because work done with GITHUB_TOKEN starts no
       # workflows: CI would not run after an update, nor `deploy prod` after a merge.
       - if: steps.guard.outputs.ready == 'true'
         name: Run one merge-queue step
