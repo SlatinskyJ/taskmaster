@@ -13,22 +13,39 @@ function handOverBody(key: string, pr: PrFacts, reason: string): string {
   return `${handoffMarker(key, pr.number, pr.labelEventId)}\nThe merge-me Action hands this PR over: ${reason}.\n\nRun skill merge-approved-prs for this PR.\n\n${FOOTER}`
 }
 
+type Log = (line: string) => void
+
+// Records Jakub's approval for the labelled commit. The workflow runs this in its own job, one
+// lane per PR, so labelling many PRs at once never drops an approval (the shared queue below
+// keeps only one waiting run).
+export async function record(
+  gh: Gh,
+  log: Log,
+  markerKey: string,
+  labelEvent: { pr: number; sha: string },
+): Promise<void> {
+  const { pr, sha } = labelEvent
+  const labelId = await gh.latestLabelEventId(pr)
+  if (labelId === null) log(`merge-queue: #${pr} has no merge-me label by SlatinskyJ`)
+  else {
+    await gh.comment(pr, approvalBody(markerKey, pr, labelId, sha))
+    log(`merge-queue: #${pr} approved on ${sha}`)
+  }
+}
+
 export async function run(
   gh: Gh,
-  log: (line: string) => void,
+  log: Log,
   markerKey: string,
   labelEvent?: { pr: number; sha: string },
 ): Promise<{ handedOver: number[] }> {
+  if (labelEvent) await record(gh, log, markerKey, labelEvent)
+  return step(gh, log, markerKey)
+}
+
+// One queue step over every labelled PR: hand over, update, merge or wait.
+export async function step(gh: Gh, log: Log, markerKey: string): Promise<{ handedOver: number[] }> {
   const handedOver: number[] = []
-  if (labelEvent) {
-    const { pr, sha } = labelEvent
-    const labelId = await gh.latestLabelEventId(pr)
-    if (labelId === null) log(`merge-queue: #${pr} has no merge-me label by SlatinskyJ`)
-    else {
-      await gh.comment(pr, approvalBody(markerKey, pr, labelId, sha))
-      log(`merge-queue: #${pr} approved on ${sha}`)
-    }
-  }
   const prs = await gh.labelledPrs()
   const byNumber = new Map<number, PrFacts>(prs.map((p) => [p.number, p]))
   const factsOf = (pr: number): PrFacts => {
@@ -88,14 +105,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exit(1)
   }
   const gh = makeGh(token, key, fetch, { repo: process.env.GITHUB_REPOSITORY })
-  const { handedOver } = await run(
-    gh,
-    (line) => {
-      console.log(line)
-    },
-    key,
-    labelEventFromEnv(process.env),
-  )
+  const log: Log = (line) => {
+    console.log(line)
+  }
+  // With a label event (the workflow's record job) only record; otherwise run one queue step.
+  const labelEvent = labelEventFromEnv(process.env)
+  let handedOver: number[] = []
+  if (labelEvent) await record(gh, log, key, labelEvent)
+  else ({ handedOver } = await step(gh, log, key))
   // The hand-over comment is posted as Jakub (PAT), so GitHub notifies nobody. A red run does:
   // GitHub mails the failed-run notice, and the annotation names the PRs.
   if (handedOver.length > 0) {

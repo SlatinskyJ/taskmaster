@@ -2,7 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import type { PrFacts } from '../scripts/merge-queue/decide.ts'
 import { approvedMarker, handoffMarker, type Gh } from '../scripts/merge-queue/github.ts'
-import { run } from '../scripts/merge-queue/run.ts'
+import { record, run, step } from '../scripts/merge-queue/run.ts'
 
 const X = 'a'.repeat(40)
 const Y = 'b'.repeat(40)
@@ -188,6 +188,27 @@ describe('run', () => {
     const f = fakeGh({ prs: [] })
     await run(f.gh, log, KEY)
     expect(f.writes()).toEqual([])
+  })
+})
+
+describe('record and step', () => {
+  it('record writes only the approval and reads no other PR', async () => {
+    const f = fakeGh({ prs: [facts({ number: 7, draft: true }), facts()] })
+    await record(f.gh, log, KEY, { pr: 9, sha: X })
+    expect(f.calls.map((c) => c.op)).toEqual(['latestLabelEventId', 'comment'])
+    expect(f.comments()[0]?.startsWith(approvedMarker(KEY, 9, 501, X))).toBe(true)
+  })
+
+  it('record on ten PRs in a row writes ten approvals', async () => {
+    const f = fakeGh({ prs: [] })
+    for (let pr = 1; pr <= 10; pr++) await record(f.gh, log, KEY, { pr, sha: X })
+    expect(f.comments().filter((b) => b.includes('merge-queue:approved'))).toHaveLength(10)
+  })
+
+  it('step writes no approval', async () => {
+    const f = fakeGh({ prs: [facts({ ci: 'pending' })] })
+    await step(f.gh, log, KEY)
+    expect(f.calls.map((c) => c.op)).toEqual(['labelledPrs'])
   })
 })
 
