@@ -108,6 +108,7 @@ The screens mockup has one row per role. Names are the artboard names.
 | TReserve | Reservation states: open, mine, pending, someone else's | 5.4 |
 | TApprove | Approve a new template, a new one-time task, or a price change | 5.1, 5.2 |
 | TWeek | This week and history; "Rozporovat" on locked items | 5.8, 5.9, 5.11 |
+| Plan | Week plan table, chores × days, landscape; tap a free cell to reserve (givers see it too and open a copy from it) | 5.12 |
 | TDispute | Dispute drawer: what, current value, reason | 5.11 |
 
 ### 7.2 Giver
@@ -127,7 +128,7 @@ The screens mockup has one row per role. Names are the artboard names.
 |---|---|---|
 | M1Pending | Approve or reject everything pending before the cutoff; step 2 stays locked until it is empty | 5.9 step 1 |
 | M2Settle | Per taker: total, level reached, points deducted, carry-over; confirm | 5.9 step 2 |
-| M3Plan | Open tasks for the coming week, optional proposal for the week after | 5.9 step 3 |
+| M3Plan | Open tasks and the week plan table for the coming week, optional proposal for the week after | 5.9 step 3, 5.12 |
 
 ### 7.4 Login and profile
 | Screen | What it does | Spec |
