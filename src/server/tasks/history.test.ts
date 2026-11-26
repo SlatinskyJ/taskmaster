@@ -14,7 +14,7 @@ describe('task history', () => {
     must(placeBid(f.db, f.starsi, id, 25, T1))
     must(counterOffer(f.db, f.tata, id, 20, [], T2))
     must(acceptOffer(f.db, f.starsi, id, 20, T2))
-    must(completeTask(f.db, f.starsi, id, T3))
+    must(completeTask(f.db, f.starsi, id, T3, false))
     const history = getTaskDetail(f.db, id)?.history ?? []
     expect(history.map((h) => [h.action, h.by?.name ?? null, h.score])).toEqual([
       ['task.created', 'Táta', 18],

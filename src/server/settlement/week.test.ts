@@ -71,7 +71,7 @@ const approveAll = (f: F) =>
 /** A reserved task Starší does at `at` and Táta rejects at `at` + 1 min. */
 function rejected(f: F, score: number, at: Date, reason?: string) {
   const id = reservedTask(f, f.starsi, score)
-  must(completeTask(f.db, f.starsi, id, at))
+  must(completeTask(f.db, f.starsi, id, at, false))
   must(rejectTask(f.db, f.tata, id, reason, plus(at, 60_000)))
   return id
 }
@@ -355,7 +355,7 @@ describe('getWeek dispute marks (#46)', () => {
   it('a rejected row is keyed by its entry: its mark and the confirmed row of the same task stay apart', () => {
     const f = week()
     const id = rejected(f, 4, plus(SAT, H), 'Znovu.')
-    must(completeTask(f.db, f.starsi, id, plus(SAT, 2 * H)))
+    must(completeTask(f.db, f.starsi, id, plus(SAT, 2 * H), false))
     must(approveTask(f.db, f.tata, id, plus(SAT, 2 * H)))
     const items = () => getWeek(f.db, starsi(f), at).takers[0]?.items ?? []
     const rejectedRow = () => items().find((i) => i.status === 'rejected')
@@ -370,7 +370,7 @@ describe('getWeek dispute marks (#46)', () => {
   it('a confirmed row disputed leaves the rejected row of the same task unmarked', () => {
     const f = week()
     const id = rejected(f, 4, plus(SAT, H))
-    must(completeTask(f.db, f.starsi, id, plus(SAT, 2 * H)))
+    must(completeTask(f.db, f.starsi, id, plus(SAT, 2 * H), false))
     must(approveTask(f.db, f.tata, id, plus(SAT, 2 * H)))
     must(openDisputeIn(f.db, f.starsi, { kind: 'completion', id }, 'x', at))
     const items = getWeek(f.db, starsi(f), at).takers[0]?.items ?? []

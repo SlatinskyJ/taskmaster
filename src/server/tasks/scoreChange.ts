@@ -70,7 +70,7 @@ export function proposeTaskScoreChange(
     }
     const pending = openChangeOf(tx, taskId)
     const proposal = proposeOneTimeScoreChange(
-      toItem(task),
+      toItem(task, false),
       task.score,
       pending,
       people,
@@ -106,7 +106,7 @@ export function approveTaskScoreChange(
     const { task, people } = loaded
     const change = answeredChange(tx, taskId, changeId)
     if (!change.ok) return change
-    const result = approveOneTimeScoreChange(toItem(task), change.value, people, userId)
+    const result = approveOneTimeScoreChange(toItem(task, false), change.value, people, userId)
     if (!result.ok) return result
     insertApproval(tx, changeId, userId, now)
     const actor = { kind: 'user', userId } as const
@@ -125,7 +125,7 @@ export function approveTaskScoreChange(
     const giverId =
       task.reservedVia === 'bid' ? oneTimeChangeGiver(result.value.change, people) : null
     const set = giverId === null ? { score } : { score, reservedGiverId: giverId }
-    const { row } = saveItem(tx, task, toItem(task), { set }, now)
+    const { row } = saveItem(tx, task, toItem(task, false), { set }, now)
     closeChange(tx, changeId, 'agreed', userId, now)
     writeAudit(tx, {
       actor,
@@ -158,7 +158,7 @@ export function declineTaskScoreChange(
     const { task, people } = loaded
     const change = answeredChange(tx, taskId, changeId)
     if (!change.ok) return change
-    const result = declineOneTimeScoreChange(toItem(task), change.value, people, userId)
+    const result = declineOneTimeScoreChange(toItem(task, false), change.value, people, userId)
     if (!result.ok) return result
     closeChange(tx, changeId, result.value, userId, now)
     writeAudit(tx, {
@@ -187,7 +187,7 @@ export function discardStaleChange(
   now: Date,
 ): number | null {
   const change = openChangeOf(tx, row.id)
-  if (!change || resolveOneTimeChange(toItem(row), change, people)) return null
+  if (!change || resolveOneTimeChange(toItem(row, false), change, people)) return null
   closeChange(tx, change.id, 'discarded', actor.kind === 'user' ? actor.userId : null, now)
   writeAudit(tx, {
     actor,

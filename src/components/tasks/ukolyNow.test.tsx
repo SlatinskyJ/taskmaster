@@ -76,6 +76,7 @@ const template = (over: Partial<TemplateView>): TemplateView => ({
 })
 
 const instance: TaskView = {
+  planDay: null,
   id: 9,
   title: 'Vynést koše',
   description: null,

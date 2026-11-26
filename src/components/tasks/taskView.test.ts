@@ -9,8 +9,10 @@ import {
   canWorkOn,
   changeAnswer,
   changeHint,
+  dayLabel,
   detailMeta,
   instanceMeta,
+  laterDay,
   lowestText,
   myBid,
   refuseButton,
@@ -29,6 +31,7 @@ import type { BidAction, BidCall } from './taskView'
 // Every decision the bidding screens make (#34). Components only render what these return.
 
 const view = (over: Partial<TaskView>): TaskView => ({
+  planDay: null,
   id: 1,
   title: 'Vyluxovat celý obývák a chodbu',
   description: null,
@@ -425,6 +428,43 @@ describe('waitingOnTakers (GHome "Čeká na kluky", #41)', () => {
   })
 })
 
+describe('instanceMeta on a later week copy (#257)', () => {
+  const base = {
+    status: 'open' as const,
+    origin: 'scheduled' as const,
+    dueAt: null,
+    graceEndsAt: null,
+    createdAt: '2026-11-26T18:16:00.000Z',
+  }
+  const now = new Date('2026-11-26T18:20:00.000Z')
+
+  it("says the copy's day, not when it was made", () => {
+    expect(instanceMeta({ ...base, planDay: '2026-11-26T23:00:00.000Z' }, now)).toBe(
+      'na pá 27. 11.',
+    )
+  })
+
+  it("today's copy keeps the usual line", () => {
+    expect(instanceMeta({ ...base, planDay: '2026-11-25T23:00:00.000Z' }, now)).toBe(
+      'dnes 19:16 · podle rozvrhu',
+    )
+  })
+
+  it('a later copy with a deadline says its day and its due time', () => {
+    const due = { dueAt: '2026-11-28T06:00:00.000Z', graceEndsAt: '2026-11-28T07:00:00.000Z' }
+    expect(instanceMeta({ ...base, ...due, planDay: '2026-11-26T23:00:00.000Z' }, now)).toBe(
+      'na pá 27. 11. · do so 7:00',
+    )
+  })
+
+  it("today's copy with a deadline keeps only its due time", () => {
+    const due = { dueAt: '2026-11-28T06:00:00.000Z', graceEndsAt: '2026-11-28T07:00:00.000Z' }
+    expect(instanceMeta({ ...base, ...due, planDay: '2026-11-25T23:00:00.000Z' }, now)).toBe(
+      'do so 7:00',
+    )
+  })
+})
+
 describe('instanceMeta (#38)', () => {
   const now = new Date('2026-11-24T17:00:00.000Z') // Tue 18:00 Prague
   it('a deadline instance: its due time', () => {
@@ -642,5 +682,25 @@ describe('taker calls carry the text the page showed (#207)', () => {
       score: 22,
       seenDescription: description,
     })
+  })
+})
+
+describe("a week copy's day (#257)", () => {
+  // Thursday 2026-12-03 Prague starts 2026-12-02T23:00Z.
+  const THURSDAY = '2026-12-02T23:00:00.000Z'
+  const WEDNESDAY = '2026-12-01T23:00:00.000Z'
+  const wedNoon = new Date('2026-12-02T11:00:00.000Z')
+
+  it("laterDay / dayLabel: Thursday's day on Wednesday → true, 'Čt'; today's → false", () => {
+    expect(laterDay({ planDay: THURSDAY }, wedNoon)).toBe(true)
+    expect(dayLabel(THURSDAY)).toBe('Čt')
+    expect(laterDay({ planDay: WEDNESDAY }, wedNoon)).toBe(false)
+    expect(dayLabel(WEDNESDAY)).toBe('St')
+  })
+
+  it('no day is never later; the day is later until its first instant', () => {
+    expect(laterDay({ planDay: null }, wedNoon)).toBe(false)
+    expect(laterDay({ planDay: THURSDAY }, new Date(Date.parse(THURSDAY) - 1))).toBe(true)
+    expect(laterDay({ planDay: THURSDAY }, new Date(THURSDAY))).toBe(false)
   })
 })

@@ -23,6 +23,7 @@ vi.mock('~/server/tasks/functions', () => ({
 vi.mock('@tanstack/react-router', () => ({ useRouter: () => ({ invalidate: vi.fn() }) }))
 
 const done: TaskView = {
+  planDay: null,
   id: 7,
   title: 'Vyluxovat celý obývák a chodbu',
   description: null,

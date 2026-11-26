@@ -4,10 +4,12 @@ import { fromPragueWallTime } from './dates'
 import {
   MAX_DUE_DAY_OFFSET,
   MAX_GRACE_MINUTES,
+  copyDay,
   instanceDeadline,
   latestSlot,
   slotOutcome,
   validateTemplateDefinition,
+  weekSlots,
 } from './templates'
 
 const SIX_PM = { hour: 18, minute: 0 }
@@ -216,5 +218,143 @@ describe('slotOutcome (#39, spec §5.3)', () => {
 
   it('with a deadline an open instance does not block', () => {
     expect(slotOutcome({ ...base, deadline: rule, hasOpenInstance: true })).toBe('make')
+  })
+})
+
+describe('copyDay (#257)', () => {
+  it('2026-11-29 (DST-free) 21:00 → starts 00:00, ends next 00:00 Prague; 2026-10-25 day is 25 h long', () => {
+    expect(copyDay(prague(2026, 11, 29, 21))).toEqual({
+      startsAt: new Date('2026-11-28T23:00:00.000Z'),
+      endsAt: new Date('2026-11-29T23:00:00.000Z'),
+    })
+    const dst = copyDay(prague(2026, 10, 25, 18))
+    expect(dst).toEqual({
+      startsAt: new Date('2026-10-24T22:00:00.000Z'),
+      endsAt: new Date('2026-10-25T23:00:00.000Z'),
+    })
+    expect(dst.endsAt.getTime() - dst.startsAt.getTime()).toBe(25 * 3_600_000)
+  })
+
+  it('the first instant of a day is that day, the last millisecond before it is the day before', () => {
+    const midnight = prague(2026, 12, 3, 0)
+    expect(copyDay(midnight).startsAt).toEqual(midnight)
+    expect(copyDay(new Date(midnight.getTime() - 1)).endsAt).toEqual(midnight)
+  })
+})
+
+describe('weekSlots (#257, spec §5.12)', () => {
+  const tueFri = { days: [2, 5] as Weekday[], time: SIX_PM }
+  const daily = { days: [0, 1, 2, 3, 4, 5, 6] as Weekday[], time: SIX_PM }
+  const iso = (ds: Date[]) => ds.map((d) => d.toISOString())
+  const monday = prague(2026, 11, 30, 0)
+  const nextMonday = prague(2026, 12, 7, 0)
+  const lastFriday = prague(2026, 11, 27, 18)
+
+  it('Mon 10:00, schedule Tue+Fri 18:00, until next Mon 00:00 → [Tue 18:00, Fri 18:00]', () => {
+    expect(
+      iso(
+        weekSlots({
+          schedule: tueFri,
+          from: monday,
+          lastSlotAt: lastFriday,
+          at: prague(2026, 11, 30, 10),
+          until: nextMonday,
+        }),
+      ),
+    ).toEqual(iso([prague(2026, 12, 1, 18), prague(2026, 12, 4, 18)]))
+  })
+
+  it('after two days down (at Thu 10:00, lastSlotAt last Fri) → only the latest past slot plus every future one', () => {
+    expect(
+      iso(
+        weekSlots({
+          schedule: daily,
+          from: monday,
+          lastSlotAt: lastFriday,
+          at: prague(2026, 12, 3, 10),
+          until: nextMonday,
+        }),
+      ),
+    ).toEqual(
+      iso([
+        prague(2026, 12, 2, 18),
+        prague(2026, 12, 3, 18),
+        prague(2026, 12, 4, 18),
+        prague(2026, 12, 5, 18),
+        prague(2026, 12, 6, 18),
+      ]),
+    )
+  })
+
+  it('nothing at or before lastSlotAt, nothing before from, nothing at or after until', () => {
+    const base = { schedule: daily, from: monday, lastSlotAt: null, at: monday }
+    // until exactly at Wednesday's slot: Wednesday is not made (half-open).
+    expect(iso(weekSlots({ ...base, until: prague(2026, 12, 2, 18) }))).toEqual(
+      iso([prague(2026, 11, 30, 18), prague(2026, 12, 1, 18)]),
+    )
+    // lastSlotAt exactly Tuesday's slot: Tuesday is not made again.
+    expect(
+      iso(
+        weekSlots({ ...base, lastSlotAt: prague(2026, 12, 1, 18), until: prague(2026, 12, 3, 0) }),
+      ),
+    ).toEqual(iso([prague(2026, 12, 2, 18)]))
+    // from after Monday's slot: Monday is not made; from exactly at a slot: it is.
+    expect(
+      iso(weekSlots({ ...base, from: prague(2026, 11, 30, 18, 1), until: prague(2026, 12, 2, 0) })),
+    ).toEqual(iso([prague(2026, 12, 1, 18)]))
+    expect(
+      iso(weekSlots({ ...base, from: prague(2026, 11, 30, 18), until: prague(2026, 12, 1, 0) })),
+    ).toEqual(iso([prague(2026, 11, 30, 18)]))
+  })
+
+  it('a slot exactly at `at` counts as past: it is the catch-up slot', () => {
+    expect(
+      iso(
+        weekSlots({
+          schedule: daily,
+          from: monday,
+          lastSlotAt: null,
+          at: prague(2026, 12, 1, 18),
+          until: prague(2026, 12, 3, 0),
+        }),
+      ),
+    ).toEqual(iso([prague(2026, 12, 1, 18), prague(2026, 12, 2, 18)]))
+  })
+
+  it('no time = the start of the Prague day; empty when nothing is left', () => {
+    const tue = { days: [2] as Weekday[], time: null }
+    expect(
+      iso(
+        weekSlots({ schedule: tue, from: monday, lastSlotAt: null, at: monday, until: nextMonday }),
+      ),
+    ).toEqual(iso([prague(2026, 12, 1, 0)]))
+    expect(
+      weekSlots({
+        schedule: tue,
+        from: monday,
+        lastSlotAt: prague(2026, 12, 1, 0),
+        at: monday,
+        until: nextMonday,
+      }),
+    ).toEqual([])
+  })
+
+  it('across the DST change (week of 2026-10-19, ends 2026-10-26 00:00): an 18:00 daily slot is 18:00 Prague every day, including Sunday 2026-10-25 (25-hour day)', () => {
+    const slots = weekSlots({
+      schedule: daily,
+      from: prague(2026, 10, 19, 0),
+      lastSlotAt: null,
+      at: prague(2026, 10, 19, 0),
+      until: prague(2026, 10, 26, 0),
+    })
+    expect(iso(slots)).toEqual([
+      '2026-10-19T16:00:00.000Z',
+      '2026-10-20T16:00:00.000Z',
+      '2026-10-21T16:00:00.000Z',
+      '2026-10-22T16:00:00.000Z',
+      '2026-10-23T16:00:00.000Z',
+      '2026-10-24T16:00:00.000Z',
+      '2026-10-25T17:00:00.000Z',
+    ])
   })
 })

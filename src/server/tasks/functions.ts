@@ -6,7 +6,7 @@ import { TASK_SCORE_MAX } from '~/lib/taskLimits'
 import { getDb } from '~/server/db'
 import type { TaskRow } from '~/server/db/schema'
 import type { ThreadEntry } from '~/server/threadEntry'
-import type { TaskDetail, TaskError, TaskView } from './tasks'
+import type { TaskDetail, TaskError, TaskView, TaskViewOpts } from './tasks'
 
 export type { TaskDetail, TaskError, TaskView, ThreadEntry }
 export type { HistoryEntry } from './history'
@@ -178,8 +178,14 @@ interface Seen extends SeenText {
   score: number
 }
 
-/** The switch, as the views take it: descriptions are shown only with it on. */
-const shown = (db: Db) => ({ descriptions: getFlags(db).descriptions })
+/**
+ * The switches, as the views take them: descriptions are shown only with `descriptions` on; a
+ * week copy's day only with `weekPlan` on (#257), and the lists hide later days' copies.
+ */
+export const shown = (db: Db, now: Date = new Date()): TaskViewOpts => {
+  const flags = getFlags(db)
+  return { descriptions: flags.descriptions, weekPlanAt: flags.weekPlan ? now : undefined }
+}
 
 /** A giver creates a one-time task with an offer (spec §5.2); a description needs the switch. */
 export function createTaskHandler(
@@ -374,10 +380,30 @@ export const listPendingCompletionsFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver')])
   .handler((): TaskView[] => listPendingCompletions(getDb(), shown(getDb())))
 
+/** Rezervovat; with the `weekPlan` switch on a week copy's day rules apply (#257). */
+export function reserveTaskHandler(
+  db: Db,
+  userId: number,
+  data: { taskId: number },
+  now: Date,
+): LifecycleActionResult {
+  return done(reserveTask(db, userId, data.taskId, now, getFlags(db).weekPlan))
+}
+
+/** Hotovo; with the `weekPlan` switch on a week copy's day rules apply (#257). */
+export function completeTaskHandler(
+  db: Db,
+  userId: number,
+  data: { taskId: number },
+  now: Date,
+): LifecycleActionResult {
+  return done(completeTask(db, userId, data.taskId, now, getFlags(db).weekPlan))
+}
+
 export const reserveTaskFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('taker')])
   .validator(parseTaskId)
-  .handler(({ data, context }) => done(reserveTask(getDb(), context.user.id, data.taskId)))
+  .handler(({ data, context }) => reserveTaskHandler(getDb(), context.user.id, data, new Date()))
 
 export const releaseTaskFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver', 'taker')])
@@ -388,7 +414,7 @@ export const releaseTaskFn = createServerFn({ method: 'POST' })
 export const completeTaskFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver', 'taker')])
   .validator(parseTaskId)
-  .handler(({ data, context }) => done(completeTask(getDb(), context.user.id, data.taskId)))
+  .handler(({ data, context }) => completeTaskHandler(getDb(), context.user.id, data, new Date()))
 
 export const approveTaskFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver')])

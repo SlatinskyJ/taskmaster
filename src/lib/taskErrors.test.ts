@@ -21,6 +21,7 @@ describe('taskErrorMessage', () => {
     ['no_bids', 'Zatím nikdo nic nenabídl.'],
     ['no_bid', 'Nejdřív nabídni svou cenu.'],
     ['past_grace', 'Termín už prošel, tohle už nejde.'],
+    ['before_day', 'Tohle je naplánované na jiný den. Hotovo jde až ten den.'],
     ['score_changed', 'Cena se mezitím změnila, podívej se znovu.'],
     ['already_open', 'Tenhle úkol už je zadaný. Najdeš ho na Domů.'],
     ['too_early', 'Tohle už patří do minulého týdne.'],

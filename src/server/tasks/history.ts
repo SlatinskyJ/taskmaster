@@ -36,13 +36,20 @@ function field(after: string | null, key: string): unknown {
 const safeInt = (v: unknown): number | null =>
   typeof v === 'number' && Number.isSafeInteger(v) ? v : null
 
+/**
+ * Entries that are not a line of the history: dropping a copy's day rules (#257) is nobody's
+ * step on the task.
+ */
+const NOT_SHOWN: readonly AuditAction[] = ['instance.week_rules_dropped']
+
 /** The task's entries, oldest first. `name` turns a user id into a display name. */
 export function taskHistory(
   db: Db | Tx,
   taskId: number,
   name: (id: number) => string,
 ): HistoryEntry[] {
-  return entityLog(db, 'task', taskId).map((e) => {
+  const shown = entityLog(db, 'task', taskId).filter((e) => !NOT_SHOWN.includes(e.action))
+  return shown.map((e) => {
     const reserved = e.action === 'task.agreed' ? safeInt(field(e.after, 'reservedBy')) : null
     return {
       id: e.id,

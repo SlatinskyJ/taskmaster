@@ -84,6 +84,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'fonts', spec: 'fonts.spec.ts', seed: 'demo' },
   // Viewer frames (#265) and the CSRF check: logs in and out, so its own server.
   { name: 'frames', spec: 'frames.spec.ts', seed: 'family' },
+  // Week chore copies (#257): Domů and Zapsat by the copy's day. Read-only.
+  { name: 'weekcopies', spec: 'week-copies.spec.ts', seed: 'weekplan' },
   // The multi-user viewer (#265): logs frames in and out and proposes tasks, so its own server.
   // `week`: the boys' Týden tab is on.
   { name: 'multi', spec: 'multi.spec.ts', seed: 'week' },
