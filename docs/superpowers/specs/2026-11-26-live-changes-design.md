@@ -166,9 +166,9 @@ missing is not.
   Domů 4–5, Úkoly 2–3, Zapsat 1, task page 2–3, chore page 2–3, Týden 2–3, Příští / Výchozí
   týden 2, Profil 1–2, Schůzka about 7 (the week, tasks, proposals and each boy's points),
   Správa about 10 (people, settings, disputes, suggestions, corrections and each boy's points).
-  The builder recounts from the code; the limit is **twice the largest screen's count** (about
-  20 today), checked by a test over every screen, so a new screen that grows past it fails CI
-  rather than being refused in use. A boy's or Mum's account adds a topic per person on the
+  The builder recounts from the code; the limit is **50 topics per stream** (Jakub
+  2026-11-26; first twice the largest screen, about 20), checked by a test over every screen;
+  past it that screen gets no banner and the server logs it. A boy's or Mum's account adds a topic per person on the
   screens that list everyone, which the 2× covers.
 - **Streams per login:** a login is one device (a phone, the PWA, a browser), and each open tab
   holds one stream. In practice that is one or two. The limit is 3 per session **[call]**; when

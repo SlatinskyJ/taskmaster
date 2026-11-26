@@ -6,6 +6,8 @@ import type { Db } from '~/server/db'
 import { getDb } from '~/server/db'
 import { auditLog } from '~/server/db/schema'
 import { getFlags } from '~/server/features'
+import { ROLES } from '~/domain/parties'
+import type { UserRole } from '~/server/db/schema'
 import { isTopic, TOPIC_LIMIT } from './topics'
 import type { Topic } from './topics'
 
@@ -23,6 +25,8 @@ export interface LiveSub {
 
 export interface Subscription {
   userId: number
+  /** The role the viewer had when the data was read: the stream refuses it under another. */
+  role: UserRole
   topics: Topic[]
   asOf: number
 }
@@ -34,10 +38,13 @@ function mac(key: string, payload: string): Buffer {
   return createHmac('sha256', key).update(payload).digest()
 }
 
-/** `base64url(JSON {u, t, a}).base64url(HMAC-SHA256)`. Throws on a topic list a screen got wrong. */
+const isRole = (v: unknown): v is UserRole =>
+  typeof v === 'string' && (ROLES as readonly string[]).includes(v)
+
+/** `base64url(JSON {u, r, t, a}).base64url(HMAC-SHA256)`. Throws on a topic list a screen got wrong. */
 export function signSubscription(
   key: string,
-  userId: number,
+  user: { id: number; role: UserRole },
   topics: readonly Topic[],
   asOf: number,
 ): string {
@@ -45,9 +52,9 @@ export function signSubscription(
     throw new Error(`live: ${String(topics.length)} topics, at most ${String(TOPIC_LIMIT)}`)
   }
   for (const t of topics) if (!isTopic(t)) throw new Error(`live: not a topic: ${String(t)}`)
-  const payload = Buffer.from(JSON.stringify({ u: userId, t: topics, a: asOf })).toString(
-    'base64url',
-  )
+  const payload = Buffer.from(
+    JSON.stringify({ u: user.id, r: user.role, t: topics, a: asOf }),
+  ).toString('base64url')
   return `${payload}.${mac(key, payload).toString('base64url')}`
 }
 
@@ -66,14 +73,15 @@ export function readSubscription(key: string, token: string): Subscription | nul
     return null
   }
   if (data === null || typeof data !== 'object') return null
-  const { u, t, a } = data as Record<string, unknown>
-  if (!isId(u, 1) || !isId(a, 0) || !Array.isArray(t) || t.length > TOPIC_LIMIT) return null
+  const { u, r, t, a } = data as Record<string, unknown>
+  if (!isId(u, 1) || !isRole(r) || !isId(a, 0) || !Array.isArray(t) || t.length > TOPIC_LIMIT)
+    return null
   const topics: Topic[] = []
   for (const s of t) {
     if (typeof s !== 'string' || !isTopic(s)) return null
     topics.push(s)
   }
-  return { userId: u, topics, asOf: a }
+  return { userId: u, role: r, topics, asOf: a }
 }
 
 /** The newest audit id now (0 for an empty log). */
@@ -95,7 +103,7 @@ export function liveSubscriptionIn(
 ): LiveSub | null {
   if (!key || !getFlags(db).liveChanges) return null
   const asOf = newestAuditId(db)
-  return { token: signSubscription(key, user.id, topics, asOf), asOf }
+  return { token: signSubscription(key, user, topics, asOf), asOf }
 }
 
 /**

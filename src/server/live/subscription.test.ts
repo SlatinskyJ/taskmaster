@@ -27,6 +27,7 @@ vi.mock('~/server/auth/http', () => ({ sessionToken: () => req.token }))
 const A = 'session-token-a'
 const B = 'session-token-b'
 const starsi: CurrentUser = { id: 3, username: 'starsi', displayName: 'Starší', role: 'taker' }
+const T3 = { id: 3, role: 'taker' } as const
 const many = (n: number): Topic[] =>
   Array.from({ length: n }, (_, i) => `task:${String(i + 1)}` as Topic)
 
@@ -35,38 +36,55 @@ afterEach(() => {
 })
 
 /** Edits a token's payload (keeping its signature). */
-function editPayload(token: string, edit: (p: { u: number; t: string[]; a: number }) => void) {
-  const [payload = '', sig = ''] = token.split('.')
-  const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
-    u: number
-    t: string[]
-    a: number
-  }
+interface Payload {
+  u: number
+  r?: string
+  t: string[]
+  a: number
+}
+
+function decode(token: string): Payload {
+  const [payload = ''] = token.split('.')
+  return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as Payload
+}
+
+function editPayload(token: string, edit: (p: Payload) => void) {
+  const [, sig = ''] = token.split('.')
+  const data = decode(token)
   edit(data)
   return `${Buffer.from(JSON.stringify(data)).toString('base64url')}.${sig}`
 }
 
+/** Edits a token's payload and signs it again with the right key: only the edit is wrong. */
+function resign(key: string, token: string, edit: (p: Payload) => void) {
+  const data = decode(token)
+  edit(data)
+  const payload = Buffer.from(JSON.stringify(data)).toString('base64url')
+  return `${payload}.${createHmac('sha256', key).update(payload).digest('base64url')}`
+}
+
 describe('signSubscription / readSubscription', () => {
   it('round trip returns the same user, topics and asOf', () => {
-    const token = signSubscription(A, 3, ['week', 'points:3'], 41)
+    const token = signSubscription(A, T3, ['week', 'points:3'], 41)
     expect(readSubscription(A, token)).toEqual({
       userId: 3,
+      role: 'taker',
       topics: ['week', 'points:3'],
       asOf: 41,
     })
   })
 
   it("a token signed with session A's key is null under session B's key", () => {
-    expect(readSubscription(B, signSubscription(A, 3, ['week'], 1))).toBeNull()
+    expect(readSubscription(B, signSubscription(A, T3, ['week'], 1))).toBeNull()
   })
 
   it('an edited payload (one more topic) is null', () => {
-    const token = editPayload(signSubscription(A, 3, ['week'], 1), (p) => p.t.push('disputes'))
+    const token = editPayload(signSubscription(A, T3, ['week'], 1), (p) => p.t.push('disputes'))
     expect(readSubscription(A, token)).toBeNull()
   })
 
   it('an edited user or asOf is null', () => {
-    const token = signSubscription(A, 3, ['week'], 10)
+    const token = signSubscription(A, T3, ['week'], 10)
     expect(
       readSubscription(
         A,
@@ -83,26 +101,60 @@ describe('signSubscription / readSubscription', () => {
 
   it('a token with an unknown topic string is null', () => {
     // Signed by hand: signSubscription itself refuses one.
-    const payload = Buffer.from(JSON.stringify({ u: 3, t: ['period:1'], a: 1 })).toString(
-      'base64url',
-    )
-    const good = signSubscription(A, 3, ['week'], 1)
+    const payload = Buffer.from(
+      JSON.stringify({ u: 3, r: 'taker', t: ['period:1'], a: 1 }),
+    ).toString('base64url')
+    const good = signSubscription(A, T3, ['week'], 1)
     const sig = createHmac('sha256', A).update(payload).digest('base64url')
     expect(readSubscription(A, `${payload}.${sig}`)).toBeNull()
     expect(readSubscription(A, good)).not.toBeNull()
-    expect(() => signSubscription(A, 3, ['period:1' as Topic], 1)).toThrow('not a topic')
+    expect(() => signSubscription(A, T3, ['period:1' as Topic], 1)).toThrow('not a topic')
   })
 
   it('garbage is null', () => {
-    for (const t of ['', '.', 'a.b', 'a.b.c', `${signSubscription(A, 3, ['week'], 1)}x`]) {
+    for (const t of ['', '.', 'a.b', 'a.b.c', `${signSubscription(A, T3, ['week'], 1)}x`]) {
       expect(readSubscription(A, t), t).toBeNull()
     }
   })
 
-  it('exactly TOPIC_LIMIT (20) topics signs; 21 topics: signSubscription throws', () => {
-    expect(TOPIC_LIMIT).toBe(20)
-    expect(readSubscription(A, signSubscription(A, 3, many(20), 1))?.topics).toHaveLength(20)
-    expect(() => signSubscription(A, 3, many(21), 1)).toThrow('21 topics')
+  it('exactly TOPIC_LIMIT (50) topics signs; 51 topics: signSubscription throws', () => {
+    expect(TOPIC_LIMIT).toBe(50)
+    expect(readSubscription(A, signSubscription(A, T3, many(50), 1))?.topics).toHaveLength(50)
+    expect(() => signSubscription(A, T3, many(51), 1)).toThrow('51 topics')
+  })
+
+  it('signs the role: payload keys are exactly u, r, t, a', () => {
+    const p = decode(signSubscription(A, T3, ['week'], 1))
+    expect(Object.keys(p)).toEqual(['u', 'r', 't', 'a'])
+    expect(p.r).toBe('taker')
+  })
+
+  it('a payload without a role or with an unknown role reads as null', () => {
+    const token = signSubscription(A, T3, ['week'], 1)
+    expect(
+      readSubscription(
+        A,
+        resign(A, token, () => undefined),
+      ),
+    ).not.toBeNull()
+    expect(
+      readSubscription(
+        A,
+        resign(A, token, (p) => delete p.r),
+      ),
+    ).toBeNull()
+    expect(
+      readSubscription(
+        A,
+        resign(A, token, (p) => (p.r = 'king')),
+      ),
+    ).toBeNull()
+    expect(
+      readSubscription(
+        A,
+        resign(A, token, (p) => (p.r = 'giver')),
+      )?.role,
+    ).toBe('giver')
   })
 })
 
@@ -141,6 +193,7 @@ describe('liveSubscription', () => {
     expect(sub?.asOf).toBe(2)
     expect(readSubscription(A, sub?.token ?? '')).toEqual({
       userId: 3,
+      role: 'taker',
       topics: ['week', 'points:3'],
       asOf: 2,
     })

@@ -35,7 +35,8 @@ to. Over-firing is accepted; a miss is not.
 ## Subscribing (data functions, PR 2)
 
 A data function returns, next to its data, `liveSubscription(user, topics)`: a token signed
-with the request's session token (HMAC-SHA256) and `asOf`, the newest audit id. Call it
+with the request's session token (HMAC-SHA256) and `asOf`, the newest audit id. The token
+carries the viewer's id and role (`{ u, r, t, a }`). Call it
 **before** the function's reads, or in the same synchronous block, so a change committed during
 an `await` is never between `asOf` and the data (an early `asOf` only over-fires). Only issue a
 topic the function checked the viewer may read: the stream trusts what the server signed.
@@ -46,9 +47,12 @@ topic the function checked the viewer may read: the stream trusts what the serve
 core in `stream.ts`); a viewer frame adds `tmFrame`. `Last-Event-ID`, when sent, wins over
 `since`, and the start is never older than the tokens' smallest `asOf`.
 
-- 404 switch off; 401 no session, no token, or any token that fails or is another user's; 400
-  more than `TOPIC_LIMIT` (20) distinct topics, no `tab`, or a `since` / `Last-Event-ID` that
-  is not a non-negative integer; 503 the hub is full; else 200 `text/event-stream`.
+- 404 switch off; 401 no session, no token, or any token that fails, is another user's or was
+  signed for another role of this user (a parent made a boy, or the reverse); 400 more than
+  `TOPIC_LIMIT` (50) distinct topics, no `tab`, or a `since` / `Last-Event-ID` that is not a
+  non-negative integer; 503 the hub is full; else 200 `text/event-stream`. A 400 for the topic
+  count is logged (`[live] stream refused: <n> topics, limit 50, role <role>`, the server log;
+  no ids, tokens or key): that screen gets no banner.
 - Body: the catch-up from the audit log (at most 100 changes; more become one
   `event: overflow`, whose id is the newest one), then live events as
   `id: <id>\ndata: <LiveEvent JSON>\n\n`.
