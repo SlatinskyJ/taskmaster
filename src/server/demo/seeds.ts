@@ -13,6 +13,7 @@ import {
   negotiation,
   pastWeek,
   pastWeekScheduled,
+  planTable,
   points,
   priceChange,
   proposals,
@@ -89,6 +90,8 @@ export const SEEDS = {
   password: { pieces: [], features: ['passwordChange'] },
   /** The week plan (#257): the week's chore copies, Domů and Zapsat by their day. */
   weekplan: { pieces: [weekChores, points], features: ['recurring', 'log', 'weekPlan'] },
+  /** The plan table on Týden (#258): four chores, yesterday's and today's copies in each state. */
+  plantable: { pieces: [planTable], features: ['recurring', 'week', 'weekPlan'] },
   /** Previews and dev: everything. */
   demo: {
     pieces: [
@@ -111,6 +114,7 @@ export const SEEDS = {
       // Last, so the other pieces keep their ids (e2e opens pages by id).
       descriptions,
       weekChores,
+      planTable,
     ],
     features: FEATURE_KEYS,
   },

@@ -14,6 +14,7 @@ import {
 import type { Family } from '~/server/tasks/testing'
 import { T0, family, must } from '~/server/tasks/testing'
 import { approveTemplateScore, createTemplate } from '~/server/templates'
+import { weekPlanHandler } from './functions'
 import { createOnDemandInstance, selfLogInstance } from './instances'
 import { MON, MON_10, WED_NOON, copiesOf, prague, setWeekPlan, weekFamily } from './testing'
 import { makeWeekCopies } from './weekCopies'
@@ -368,5 +369,20 @@ describe('getWeekPlan (#258, spec §5.12)', () => {
       'person',
     ])
     expect(Object.keys(reserved?.person ?? {})).toEqual(['id', 'name'])
+  })
+})
+
+describe('weekPlanHandler (#258)', () => {
+  it('switch off answers feature_off', () => {
+    const f = weekFamily()
+    setWeekPlan(f.db, false)
+    expect(weekPlanHandler(f.db, MON_10)).toEqual({ error: 'feature_off' })
+  })
+
+  it('switch on: the table, the same for a taker and a giver (the function takes no viewer)', () => {
+    const f = weekFamily()
+    must(reserveTask(f.db, f.mladsi, f.day[1] ?? 0, MON_10, true))
+    expect(weekPlanHandler(f.db, MON_10)).toEqual(getWeekPlan(f.db, MON_10))
+    expect(weekPlanHandler.length).toBe(2)
   })
 })
