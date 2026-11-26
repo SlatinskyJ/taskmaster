@@ -43,7 +43,7 @@ export function UserSelect({
         onChange(v as DemoLogin)
       }}
     >
-      <SelectTrigger aria-label={t.user} className="w-auto min-w-0 flex-1">
+      <SelectTrigger aria-label={t.user} className="w-auto min-w-26 flex-1">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -71,7 +71,11 @@ export function SizeSelect({
         onChange(v as SizeKey)
       }}
     >
-      <SelectTrigger aria-label={t.size} className="w-auto min-w-0 flex-1">
+      <SelectTrigger
+        aria-label={t.size}
+        // min-w-max: the size and its dimensions are never cut; the buttons wrap instead.
+        className="w-auto min-w-max flex-1 text-sm whitespace-nowrap"
+      >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
