@@ -40,6 +40,7 @@ export function DisputeForm({
         <span className={sectionLabelClass}>{cs.disputes.reasonLabel}</span>
         <Textarea
           name="reason"
+          className="max-h-48 overflow-y-auto"
           required
           maxLength={DISPUTE_REASON_MAX}
           value={reason}

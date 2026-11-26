@@ -59,6 +59,7 @@ export function DismissForm({
         <span className={sectionLabelClass}>{t.noteLabel}</span>
         <Textarea
           name="note"
+          className="max-h-48 overflow-y-auto"
           required
           maxLength={DISPUTE_NOTE_MAX}
           value={note}
