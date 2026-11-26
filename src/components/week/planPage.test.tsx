@@ -91,6 +91,8 @@ describe('Plán týdne route (#258)', () => {
     const html = renderToStaticMarkup(<plan.component />)
     expect(html).toContain(`>${cs.plan.title}<`)
     expect(html).toContain('href="/tyden"')
+    // Sideways, the screen takes the phone's width, so every day fits.
+    expect(html).toContain('landscape:max-w-3xl')
     expect(html).toContain('29. 11. – 6. 12.')
     expect(html).toContain('aria-label="Prostřít stůl k večeři, St: volné, rezervovat"')
   })

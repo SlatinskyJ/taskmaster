@@ -23,7 +23,7 @@ export function PlanPage() {
   const { user } = Route.useRouteContext()
   const data = Route.useLoaderData()
   return (
-    <Screen title={cs.plan.title} user={user} back="/tyden">
+    <Screen title={cs.plan.title} user={user} back="/tyden" wide>
       {'error' in data ? (
         <Card>
           <p className="font-bold text-muted">{cs.tasks.errors.notAllowed}</p>
