@@ -56,8 +56,8 @@ describe('normaliseDescription', () => {
   })
   it('removes control characters except LF and TAB, and the bidi controls', () => {
     expect(normaliseDescription('a\u0000b\u0007\tc\u007f')).toEqual(ok('ab\tc'))
-    expect(normaliseDescription('a‮b⁦c')).toEqual(ok('abc'))
-    expect(normaliseDescription('x\u0008\u000B\u001B\u001F\u007F‪⁩y')).toEqual(ok('xy'))
+    expect(normaliseDescription('a\u202Eb\u2066c')).toEqual(ok('abc'))
+    expect(normaliseDescription('x\u0008\u000B\u001B\u001F\u007F\u202A\u2069y')).toEqual(ok('xy'))
     expect(normaliseDescription('a b c⁰')).toEqual(ok('a b c⁰'))
   })
 })

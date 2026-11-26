@@ -32,7 +32,7 @@ export type DescriptionRule =
 // C0 controls except TAB (U+0009) and LF (U+000A), DEL, and the bidi embeddings, overrides and
 // isolates: text shown to children keeps no hidden characters (ruling 6).
 // eslint-disable-next-line no-control-regex
-const HIDDEN = /[\u0000-\u0008\u000B-\u001F\u007F‪-‮⁦-⁩]/g
+const HIDDEN = /[\u0000-\u0008\u000B-\u001F\u007F\u202A-\u202E\u2066-\u2069]/g
 
 /**
  * The stored form of a description: line breaks as LF, hidden characters removed, the whole

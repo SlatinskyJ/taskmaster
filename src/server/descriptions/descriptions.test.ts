@@ -5,11 +5,12 @@ import {
   descriptionChanges,
   taskScoreApprovals,
   taskThread,
+  tasks,
   templates,
 } from '~/server/db/schema'
 import { createOnDemandInstance, selfLogInstance } from '~/server/instances/instances'
 import { acceptLowestTaskBid, acceptOffer, placeBid, reopenBidding } from '~/server/tasks/bidding'
-import { completeTask, releaseTask, reserveTask } from '~/server/tasks/lifecycle'
+import { cancelTask, completeTask, releaseTask, reserveTask } from '~/server/tasks/lifecycle'
 import { approveTaskOffer, createTask } from '~/server/tasks/tasks'
 import type { Family } from '~/server/tasks/testing'
 import {
@@ -28,7 +29,11 @@ import {
 import { acceptOfferOnTemplate, bidOnTemplate } from '~/server/templates/scoreChange'
 import { approveTemplateScore, createTemplate } from '~/server/templates/templates'
 import { agreedTemplate, templateAudits } from '~/server/templates/testing'
-import { answerDescriptionChange, changeDescriptionOf } from './descriptions'
+import {
+  answerDescriptionChange,
+  changeDescriptionOf,
+  settleStaleDescription,
+} from './descriptions'
 import { waitingDescriptionOf } from './rows'
 
 const task = (id: number) => ({ kind: 'task', id }) as const
@@ -256,6 +261,37 @@ describe('an agreed task: the change waits for a taker (spec §5.2)', () => {
     const entry = lastOf(f, id, 'task.description_change_discarded')
     expect(json(entry?.after)).toEqual({ changeId: changes(f)[0]?.id, description: 'new' })
     expect(audits(f.db, id).at(-1)).toBe('task.description_change_discarded')
+  })
+
+  it('a cancel discards the change, closed by the cancelling parent (#252 review)', () => {
+    const f = family()
+    const id = openCar(f)
+    must(changeDescriptionOf(f.db, task(id), f.tata, 'new', T1))
+    must(cancelTask(f.db, f.tata, id, undefined, T2))
+    expect(row(f.db, id)).toMatchObject({ status: 'cancelled', description: 'old' })
+    expect(changes(f)[0]).toMatchObject({ closedAs: 'discarded', closedBy: f.tata })
+    const actions = audits(f.db, id)
+    expect(actions.slice(actions.indexOf('task.cancelled'))).toEqual([
+      'task.cancelled',
+      'task.description_change_discarded',
+    ])
+  })
+
+  it('a system step (the scheduler) discards with closedBy null and a system entry', () => {
+    // No public path puts a change on an item that can expire (instances are not changeable),
+    // so the system branch is run at the settle step itself, on a task that ended.
+    const f = family()
+    const id = openCar(f)
+    must(changeDescriptionOf(f.db, task(id), f.tata, 'new', T1))
+    f.db.update(tasks).set({ status: 'expired' }).where(eq(tasks.id, id)).run()
+    const ended = row(f.db, id)
+    if (!ended) throw new Error('no row')
+    f.db.transaction((tx) => settleStaleDescription(tx, ended, { kind: 'system' }, T2))
+    expect(changes(f)[0]).toMatchObject({ closedAs: 'discarded', closedBy: null })
+    expect(lastOf(f, id, 'task.description_change_discarded')).toMatchObject({
+      actorUserId: null,
+    })
+    expect(row(f.db, id)?.description).toBe('old')
   })
 
   it('a second change replaces the first; an OK of the replaced one is offer_changed', () => {
@@ -593,5 +629,43 @@ describe('rollback: a failed audit write leaves nothing behind', () => {
           )
     expect(run).toThrow(/audit down/)
     expect({ task: row(f.db, id), changes: changes(f) }).toEqual(before)
+  })
+  it('withdrawn: back to the text in force', () => {
+    const f = family()
+    const id = openCar(f)
+    must(changeDescriptionOf(f.db, task(id), f.tata, 'new', T1))
+    const before = { task: row(f.db, id), changes: changes(f) }
+    failAuditOn(f.db, 'task.description_change_withdrawn')
+    expect(() => changeDescriptionOf(f.db, task(id), f.tata, 'old', T2)).toThrow(/audit down/)
+    expect({ task: row(f.db, id), changes: changes(f) }).toEqual(before)
+  })
+
+  it('applied on release back to proposed: the release rolls back too', () => {
+    const f = family()
+    const id = must(
+      createTask(
+        f.db,
+        f.tata,
+        { title: 'Umýt auto', score: 18, approvalRequired: true, description: 'old' },
+        T0,
+      ),
+    ).id
+    must(placeBid(f.db, f.mladsi, id, 22, T0))
+    must(acceptLowestTaskBid(f.db, f.tata, id, 22, [f.mladsi], T1))
+    must(changeDescriptionOf(f.db, task(id), f.tata, 'new', T1))
+    const before = { task: row(f.db, id), changes: changes(f), log: audits(f.db, id) }
+    failAuditOn(f.db, 'task.description_changed')
+    expect(() => releaseTask(f.db, f.mladsi, id, T2)).toThrow(/audit down/)
+    expect({ task: row(f.db, id), changes: changes(f), log: audits(f.db, id) }).toEqual(before)
+  })
+
+  it('discarded on completion: the completion rolls back too', () => {
+    const f = family()
+    const id = openCar(f)
+    must(changeDescriptionOf(f.db, task(id), f.tata, 'new', T1))
+    const before = { task: row(f.db, id), changes: changes(f), log: audits(f.db, id) }
+    failAuditOn(f.db, 'task.description_change_discarded')
+    expect(() => completeTask(f.db, f.starsi, id, T2)).toThrow(/audit down/)
+    expect({ task: row(f.db, id), changes: changes(f), log: audits(f.db, id) }).toEqual(before)
   })
 })
