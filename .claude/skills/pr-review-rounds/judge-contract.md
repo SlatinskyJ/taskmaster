@@ -7,8 +7,8 @@ Every judge follows this file. Your own judge skill only defines your **lane**.
 - PR number, branch, base branch, the **phase** (`plan` or `code`) and the **round number** (1 to 5)
 - **Panel**: the list of judges on this PR
 - Plan phase: the path of the plan file and the issue number
-- Code phase: link to the PR brief (artifact); the UX judge also gets a folder of 360 px screenshots
-- The spec: `docs/superpowers/specs/2026-11-16-taskmaster-design.md`
+- Code phase: link to the PR brief (artifact); the UX judge also gets the folder of screenshots (393 px screens, plus 360 px shots of rows with long names)
+- The spec: `docs/superpowers/specs/2026-11-16-taskmaster-design.md`. Read only the sections your lane needs (your skill names them) and the ones the plan, issue or brief cites. For anything else, `grep` the spec for the term and read that section. Never read it whole: it is about 10k tokens, and every judge pays it every round.
 - Round 2+: your own earlier findings, the builder's replies, and the commit SHA you last reviewed
 - **Findings file**: `<folder>/<judge>.json`, a path outside the repo. Your review goes there, not to GitHub (see Output).
 
@@ -43,7 +43,7 @@ git diff --name-only origin/<base>...HEAD -- docs/superpowers/plans/
 gh api 'repos/SlatinskyJ/taskmaster/pulls/<n>/reviews?per_page=100' --jq '[.[].body|split("\n")[]|select(test("^\\[Judge: \\w+\\] Plan round"))|capture("^\\[Judge: (?<j>\\w+)\\] Plan round (?<r>\\d) — (?<v>\\w+)")]|group_by(.j)|map(max_by(.r))|.[]|"\(.j) \(.v)"'
 ```
 
-A judge that joined the panel only for the code phase has no line in check 2; that is fine. Check 2 is skipped when the PR body says `Plan: none (ad-hoc)` or `Plan: none (Dependabot)` and has no `Closes #` line.
+A judge that joined the panel only for the code phase has no line in check 2; that is fine. Check 2 is skipped when the PR body says `Plan: none (ad-hoc)` or `Plan: none (Dependabot)` and has no `Closes #` line, or says `Plan: none (small, …)` (the Architecture judge checks that claim).
 
 Check 2 reads every line of every review body: one combined review holds a verdict line for each judge.
 
@@ -55,7 +55,7 @@ A check fails → write no findings file and review nothing. Return `<Name> roun
 
 1. Read the PR branch: `git fetch origin <branch>`, then `git diff origin/<base>...origin/<branch>` and `git show origin/<branch>:<file>`. Read any other file you need to judge impact and blast radius.
 2. **Round 1:** review the whole diff, inside your lane.
-3. **Round 2+:** review only (a) whether each of your open findings is fixed, and (b) the diff since the commit you last reviewed. Nothing else.
+3. **Round 2+:** review only (a) whether each of your open findings is fixed, and (b) the diff since the commit you last reviewed. Nothing else. The builder may send the new round to you as a message in the same agent (you still have the spec, your skill and the diff you read): don't reread them, `git fetch` and read `git diff <last sha>..origin/<branch>`.
 4. **Caused by this PR:** a finding must come from lines this PR adds or changes, or from existing code that this PR now breaks or misuses. Anything else is `pre-existing`.
 5. **Lane:** a problem in another judge's lane goes to that judge. If that judge is on the panel, leave it out. If not, include it and tag it `(lane: <judge>)`.
 6. **Answered findings:** if the builder answered "won't fix" with a reason, raise it again only with new evidence (a new failure scenario, or new code). Without new evidence, either accept the answer, or reply on the thread with `escalate` and one sentence on why.
