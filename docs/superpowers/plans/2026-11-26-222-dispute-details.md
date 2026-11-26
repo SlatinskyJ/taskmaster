@@ -12,20 +12,20 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-16-taskmaster-design.md` §5.11 (disputes: the admin decides open disputes), UI doc §7.5 ADisputes. Jakub's decision (2026-11-26, project thread): "the admin opens the real task and chore pages read-only, not a detail sheet on Správa".
 
-**Size:** about 150 changed lines outside tests.
+**Size:** about 180 changed lines outside tests.
 
 ## Global Constraints
 
 - Czech UI text only in `src/lib/strings.ts`; code and identifiers in English.
 - No rule change: the admin is no party (spec §5.11). The admin reads; every write stays giver/taker only on the server (unchanged middlewares on every write function).
-- Behind the `disputes` launch switch: with it off Správa has no Sporné card, so no link exists.
+- Behind the `disputes` launch switch, end to end: with it off Správa has no Sporné card, the admin's `beforeLoad` on both pages redirects to Správa, and both read functions refuse the admin (`ForbiddenError`). The admin's access exists only while the switch is on (Architecture r1).
 - Screens may import only `~/server/<module>/functions` (ESLint).
 - 44 px taps (`min-h-tap`), `motion-reduce:` on any transition.
 
 ## Decisions (plan rulings)
 
 1. **Which items link.** `task_score`, `completion`, `rejection` → `/ukol/$taskId` (a rejection through its rejection's `taskId`); `template_score` → `/sablona/$templateId`. `settlement` and `adjustment` have no page an admin can open today (Týden is per viewer; an adjustment has no page): their card stays as it is, no link. A `follow-up` issue tracks "a settlement's week view for the admin", linked in the brief. (The issue lets the plan decide.)
-2. **Read-only means no actions, not a separate mode.** The pages already show actions only to a giver or taker who may act; the admin matches none. The plan adds no `readOnly` prop; tests pin that an admin render has no button but ← (and no Rozporovat).
+2. **Read-only means no actions, not a separate mode.** The pages already show actions only to a giver or taker who may act. One exception: `DisputeControl` shows Rozporovat to anyone without an open mark, and the admin gets no marks. So each route renders it only when `features.disputes && user.role !== 'admin'` (one gate per route, not inside the shared component). The plan adds no `readOnly` prop; tests render the admin with every launch switch on and pin no action button and no Rozporovat (navigation links such as ← and a chore copy's "Opakovaný úkol" stay).
 3. **No dispute marks for the admin.** The loaders call `getItemMarkFn` (giver/taker only) only for a giver or taker, so the admin's page loads; Rozporovat is a party's action.
 4. **Admin's back goes to Správa.** `back="history"` already goes back in app history; a cold page's fallback is Domů, which redirects the admin to Správa (`guardScreen`). No change.
 5. **A missing item** (deleted target, `page: null`) gives no link, so no 404 from Správa.
@@ -59,19 +59,21 @@
 ### Task 2: The admin may read the task and chore pages
 
 **Files:**
-- Modify: `src/lib/nav.ts` (`SCREEN_ROLES['/ukol/$taskId']`, `['/sablona/$templateId']` gain `'admin'`)
-- Modify: `src/server/tasks/functions.ts` (`getTaskDetailFn` middleware `requireRole('giver','taker','admin')`)
+- Modify: `src/lib/screenGuard.ts`: `guardDisputeReader(role, path, disputesOn)`: the admin passes only when `disputesOn`, else redirect to Správa; other roles go through `guardScreen` as today. `SCREEN_ROLES` is unchanged (the admin is not listed, so the nav matrix stays).
+- Modify: `src/server/tasks/functions.ts` (`getTaskDetailFn` middleware `requireRole('giver','taker','admin')`; its handler throws `ForbiddenError` for the admin when `!getFlags(getDb()).disputes`)
 - Modify: `src/server/templates/functions.ts` (`getTemplateDetailFn` the same) and `src/server/templates/templates.ts` (`getTemplateDetail`: admin allowed, sees a proposed chore)
-- Modify: `src/routes/_app/ukol/$taskId.tsx`, `src/routes/_app/sablona/$templateId.tsx` (marks only when `context.user.role !== 'admin'`)
-- Test: `src/lib/nav.test.ts`, `tests/server-fn-guards.test.ts`, `src/server/templates/templates.test.ts`, `src/components/tasks/taskPage.test.tsx`, `src/components/templates/templatePage.test.tsx`
+- Modify: `src/routes/_app/ukol/$taskId.tsx`, `src/routes/_app/sablona/$templateId.tsx` (`beforeLoad` uses `guardDisputeReader(…, context.features.disputes)`; marks only when `context.user.role !== 'admin'`; `DisputeControl` only when `features.disputes && user.role !== 'admin'`)
+- Test: `src/lib/screenGuard.test.ts`, `tests/server-fn-guards.test.ts`, `src/server/tasks/functions.test.ts`, `src/server/templates/functions.test.ts`, `src/server/templates/templates.test.ts`, `src/components/tasks/taskPage.test.tsx`, `src/components/templates/templatePage.test.tsx`
 
 - [ ] **Step 1: Failing tests.**
-  - nav: `canSee('admin', '/ukol/$taskId')` and `'/sablona/$templateId'` true; every other admin row unchanged (the matrix test).
+  - screenGuard: admin + switch on → no redirect on both paths; admin + switch off → redirect to Správa; giver/taker unchanged either way.
   - guards: the two read functions list `admin` among allowed roles; every write function in the guards table still refuses `admin` (existing rows, unchanged).
+  - read functions: `getTaskDetailFn`/`getTemplateDetailFn` handler as admin with `disputes` off → `ForbiddenError`; on → the detail.
   - templates: `getTemplateDetail(db, proposedId, adminId)` and `(activeId, adminId)` return the detail.
-  - pages: render the task page (open, reserved, done-unconfirmed, confirmed) and the chore page (proposed, active, with a price change) with `me = {role:'admin'}`: the only `<button`/link-button is ← ; no Rezervovat, Hotovo, Souhlasím, Schválit, Zrušit, Změnit cenu, Rozporovat; the history list is there.
+  - pages: render the task page (open, reserved, done-unconfirmed, confirmed) and the chore page (proposed, active, with a price change) with `me = {role:'admin'}` and **every launch switch on** (`disputes`, `approveAnywhere`, `openRows`, `reopenBidding`, `bidRefusals`): no `<button` at all; no Rezervovat, Hotovo, Souhlasím, Schválit, Zrušit, Změnit cenu, nor `cs.disputes.action`; the history list is there. Allowed links: ← and the chore copy's "Opakovaný úkol" link. The same render as a taker with `disputes` on still shows `cs.disputes.action` (the gate bites only the admin).
+  - loaders: with `disputes` on and `context.user.role: 'admin'`, the task loader (confirmed task) and the chore loader (active chore) call `getItemMarkFn` zero times; as a taker, as today.
 - [ ] **Step 2:** run them, expect FAIL.
-- [ ] **Step 3:** make the changes above. If a page shows an action to the admin, gate that component on `me.role !== 'admin'` (record which in the brief).
+- [ ] **Step 3:** make the changes above. If a page shows any other action to the admin, gate that component on `me.role !== 'admin'` in the route (record which in the brief).
 - [ ] **Step 4:** run, expect PASS; `pnpm typecheck`.
 - [ ] **Step 5:** commit.
 
@@ -82,18 +84,19 @@
 - Modify: `src/lib/strings.ts` (`cs.admin.disputes.openFor(what, name)`: "Otevřít: {what} – {name}", the link's accessible name)
 - Test: `src/components/admin/disputesCard.test.tsx`
 
-- [ ] **Step 1: Failing test:** an entry with `page: {kind:'task', id: 7}` renders one `<a href="/ukol/7"` stretched over the card (`after:absolute after:inset-0`) whose name is the `what` line; the buttons sit in a `relative z-10` wrapper; `{kind:'template', id: 4}` → `/sablona/4`; `page: null` renders no `<a` and the card markup exactly as before (byte pin of today's markup).
+- [ ] **Step 1: Failing test:** an entry with `page: {kind:'task', id: 7}` renders one `<a href="/ukol/7"` stretched over the card (`after:absolute after:inset-0`) on the bold item-name line, with `aria-label` = `cs.admin.disputes.openFor(what, name)` (pinned exactly); the buttons sit in a `relative z-10` wrapper; `{kind:'template', id: 4}` → `/sablona/4`; `page: null` renders no `<a` and the card markup exactly as before (byte pin of today's markup).
 - [ ] **Step 2:** run, expect FAIL.
-- [ ] **Step 3:** `li` gets `relative`; the `what` line becomes a `Link` with the #205 stretched-link classes (`focus-visible` ring on the card, `active:after:bg-current/5`, `motion-reduce:` not needed: no transition); the button row wraps in `relative z-10`.
+- [ ] **Step 3:** `li` gets `relative`; the bold item-name line becomes a `Link` with the #205 stretched-link classes (`focus-visible` ring on the card, `active:after:bg-current/5`, `motion-reduce:` not needed: no transition); the button row wraps in `relative z-10`.
 - [ ] **Step 4:** run, expect PASS.
 - [ ] **Step 5:** commit.
 
 ### Task 4: e2e, screenshots
 
 **Files:**
-- Modify: `e2e/disputes.spec.ts` (or the admin spec that opens Sporné; it already has open disputes on its seed)
+- Modify: `e2e/disputes.spec.ts` (or the admin spec that opens Sporné)
+- Modify: `src/server/demo/pieces.ts` (`disputes` piece: one more open dispute, a `template_score` on an active chore, so Sporné has a chore card) and its pin in `src/server/demo/suites.test.ts` / `demo.test.ts`
 
-- [ ] **Step 1:** e2e: admin on Správa taps a task dispute card → `/ukol/<id>`, heading is the task, no Rezervovat/Hotovo/Rozporovat buttons, ← goes back to Správa; taps a chore dispute → `/sablona/<id>`; Ponechat on a card opens the dialog and stays on Správa.
+- [ ] **Step 1:** e2e: admin on Správa taps a task dispute card → `/ukol/<id>`, heading is the task, no Rezervovat/Hotovo/Rozporovat buttons, ← goes back to Správa; taps the chore dispute → `/sablona/<id>`, heading is the chore's name and its history list is visible (not an error page), no Rozporovat; Ponechat on a card opens the dialog and stays on Správa.
 - [ ] **Step 2:** run the suite, expect PASS; full `pnpm test && pnpm typecheck && pnpm lint && pnpm build`.
-- [ ] **Step 3:** screenshots (360×800 for UX, 393×852 for the brief): Správa Sporné with a long title, the task page and the chore page as admin.
+- [ ] **Step 3:** screenshots (360×800 for UX, 393×852 for the brief): Správa Sporné with a long title wrapping inside the link, a linked card next to an unlinked one (settlement), the card's focus ring; as admin: a confirmed task's page, a rejection's task page, an active chore and a proposed chore.
 - [ ] **Step 4:** commit.
