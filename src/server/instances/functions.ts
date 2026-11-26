@@ -1,6 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import { requireRole } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
+import { liveRead, serveLive } from '~/server/live'
 import type { TaskRow } from '~/server/db/schema'
 import type { Result } from '~/domain/result'
 import { parseTemplateId } from '~/server/templates/parse'
@@ -44,10 +45,15 @@ export const selfLogFn = createServerFn({ method: 'POST' })
   )
 
 /** Zapsat: a tile per agreed template, and the "Kdy?" times open now. */
+export const loggableTemplatesRead = liveRead({
+  read: (db, _viewer, _arg: undefined, now) => ({
+    tiles: listLoggableTemplates(db, now),
+    choices: logChoicesAt(db, now),
+  }),
+  // The tiles are agreed chores; a tile's state follows its copies (tasks).
+  topics: () => ['templates', 'tasks'] as const,
+})
+
 export const listLoggableTemplatesFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('taker')])
-  .handler(() => {
-    const db = getDb()
-    const now = new Date()
-    return { tiles: listLoggableTemplates(db, now), choices: logChoicesAt(db, now) }
-  })
+  .handler(({ context }) => serveLive(loggableTemplatesRead, context.user, undefined))

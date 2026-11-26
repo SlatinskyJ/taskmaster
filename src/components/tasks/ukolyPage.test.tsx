@@ -10,7 +10,7 @@ import { listTemplatesFn } from '~/server/templates/functions'
 import type { TemplateView } from '~/server/templates/functions'
 
 // The Úkoly loader's live subscriptions, in call order (#299).
-const LIVE = ['listTasksFn']
+const LIVE = ['listTasksFn', 'listTemplatesFn']
 
 // Úkoly itself (#41), rendered statically through its route: one-time tasks grouped by state.
 // Lives here, not in src/routes, because the router generator treats every file there as a route.
@@ -64,7 +64,7 @@ const { Route } = await import('~/routes/_app/ukoly/index')
 describe('Úkoly loader (#299)', () => {
   it('returns the tasks, the chores and the live subscriptions in call order', async () => {
     vi.mocked(listTasksFn).mockResolvedValueOnce(withMarker('listTasksFn', []))
-    vi.mocked(listTemplatesFn).mockResolvedValueOnce([])
+    vi.mocked(listTemplatesFn).mockResolvedValueOnce(withMarker('listTemplatesFn', []))
     const loader = (Route as unknown as { loader: () => Promise<unknown> }).loader
     expect(await loader()).toEqual({ list: [], templates: [], live: LIVE.map(marker) })
   })

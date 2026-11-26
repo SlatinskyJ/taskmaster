@@ -23,6 +23,12 @@ import {
 } from './parse'
 import { approveTemplateScore, createTemplate } from './templates'
 import { threadRows } from './testing'
+import {
+  pendingTemplateApprovalsRead,
+  pendingTemplatePriceChangesRead,
+  templateDetailRead,
+  templatesRead,
+} from './functions'
 
 const VALID = {
   title: 'Vynést koše',
@@ -387,5 +393,84 @@ describe("the admin reads a chore's page only while disputes is on (#222)", () =
     expect(templateDetailHandler(f.db, admin(f), { templateId: id })).toEqual(
       templateDetailHandler(f.db, { id: f.tata, role: 'giver' }, { templateId: id }),
     )
+  })
+})
+
+describe('topics (#299)', () => {
+  const as = (id: number, role: 'giver' | 'taker' | 'admin') => ({
+    id,
+    username: role,
+    displayName: role,
+    role,
+  })
+  const setFlag = (f: ReturnType<typeof family>, key: string, enabled: boolean) =>
+    f.db.update(featureFlags).set({ enabled }).where(eq(featureFlags.key, key)).run()
+  const proposed = (f: ReturnType<typeof family>) =>
+    must(
+      createTemplate(
+        f.db,
+        f.tata,
+        { title: 'Zalít kytky', score: 2, approvalRequired: true, schedule: null, deadline: null },
+        T0,
+      ),
+    ).id
+
+  it('the chore list: a giver holds templates and templates:proposed, a taker templates', () => {
+    const f = family()
+    expect(templatesRead.topics(as(f.tata, 'giver'), [], f.db)).toEqual([
+      'templates',
+      'templates:proposed',
+    ])
+    expect(templatesRead.topics(as(f.starsi, 'taker'), [], f.db)).toEqual(['templates'])
+  })
+
+  it("a taker's waiting proposed chores: templates:proposed, no per-row topics", () => {
+    const f = family()
+    const id = proposed(f)
+    const starsi = as(f.starsi, 'taker')
+    const rows = pendingTemplateApprovalsRead.read(f.db, starsi, undefined, T0)
+    expect(rows.map((r) => r.id)).toEqual([id])
+    expect(pendingTemplateApprovalsRead.topics(starsi, rows, f.db)).toEqual(['templates:proposed'])
+    expect(pendingTemplateApprovalsRead.topics(as(f.tata, 'giver'), [], f.db)).toEqual([
+      'templates:proposed',
+    ])
+  })
+
+  it("a giver's price changes: templates:proposed only with choreBidding", () => {
+    const f = family()
+    const tata = as(f.tata, 'giver')
+    setFlag(f, 'choreBidding', false)
+    expect(pendingTemplatePriceChangesRead.topics(tata, [], f.db)).toEqual(['templates'])
+    setFlag(f, 'choreBidding', true)
+    expect(pendingTemplatePriceChangesRead.topics(tata, [], f.db)).toEqual([
+      'templates',
+      'templates:proposed',
+    ])
+    expect(pendingTemplatePriceChangesRead.topics(as(f.starsi, 'taker'), [], f.db)).toEqual([
+      'templates',
+    ])
+  })
+
+  it('the chore page: template:<id> for whoever loads it', () => {
+    const f = family()
+    setFlag(f, 'disputes', true)
+    const id = proposed(f)
+    must(approveTemplateScore(f.db, f.starsi, id, 2, T0))
+    for (const viewer of [as(f.tata, 'giver'), as(f.starsi, 'taker'), as(f.admin, 'admin')]) {
+      const detail = templateDetailRead.read(f.db, viewer, { templateId: id }, T0)
+      expect(templateDetailRead.topics(viewer, detail, f.db)).toEqual([`template:${String(id)}`])
+    }
+  })
+
+  it('a proposed chore a taker may not load: getTemplateDetail is null, no topics', () => {
+    const f = family()
+    setFlag(f, 'openRows', false)
+    setFlag(f, 'choreBidding', false)
+    const id = proposed(f)
+    const starsi = as(f.starsi, 'taker')
+    const detail = templateDetailRead.read(f.db, starsi, { templateId: id }, T0)
+    expect(detail).toBeNull()
+    expect(templateDetailRead.topics(starsi, detail, f.db)).toEqual([])
+    expect(templateDetailRead.read(f.db, as(f.tata, 'giver'), { templateId: 999 }, T0)).toBeNull()
   })
 })

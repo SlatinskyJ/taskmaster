@@ -89,20 +89,32 @@ const points = vi.hoisted(() => ({
     }[],
   },
 }))
-vi.mock('~/server/descriptions/functions', () => ({
-  listDescriptionChangesWaitingFn: vi.fn(() => Promise.resolve(['descriptionChanges'])),
-}))
+vi.mock('~/server/descriptions/functions', async () => {
+  const { withMarker: m } = await import('~/lib/liveSubs.testing')
+  return {
+    listDescriptionChangesWaitingFn: vi.fn(() =>
+      Promise.resolve(m('listDescriptionChangesWaitingFn', ['descriptionChanges'])),
+    ),
+  }
+})
 vi.mock('~/server/periods/functions', () => ({
   getProposalsFn: vi.fn(() => Promise.resolve('proposals')),
 }))
 vi.mock('~/server/points/functions', () => ({
   getPointsFn: vi.fn(() => Promise.resolve(['points'])),
 }))
-vi.mock('~/server/templates/functions', () => ({
-  listPendingTemplateApprovalsFn: vi.fn(() => Promise.resolve(['waitingTemplates'])),
-  listPendingTemplatePriceChangesFn: vi.fn(() => Promise.resolve(['priceChanges'])),
-  listTemplatesFn: vi.fn(() => Promise.resolve(['recurring'])),
-}))
+vi.mock('~/server/templates/functions', async () => {
+  const { withMarker: m } = await import('~/lib/liveSubs.testing')
+  return {
+    listPendingTemplateApprovalsFn: vi.fn(() =>
+      Promise.resolve(m('listPendingTemplateApprovalsFn', ['waitingTemplates'])),
+    ),
+    listPendingTemplatePriceChangesFn: vi.fn(() =>
+      Promise.resolve(m('listPendingTemplatePriceChangesFn', ['priceChanges'])),
+    ),
+    listTemplatesFn: vi.fn(() => Promise.resolve(m('listTemplatesFn', ['recurring']))),
+  }
+})
 
 const { Route } = await import('~/routes/_app/index')
 
@@ -335,9 +347,18 @@ describe('Domů points (#40)', () => {
 })
 
 // The live subscriptions each role's Domů returns (#299), in call order.
-const TAKER_LIVE = ['listPendingApprovalsFn', 'listScoreChangesWaitingFn', 'listBoardFn']
+const TAKER_LIVE = [
+  'listPendingApprovalsFn',
+  'listPendingTemplateApprovalsFn',
+  'listPendingTemplatePriceChangesFn',
+  'listScoreChangesWaitingFn',
+  'listBoardFn',
+  'listTemplatesFn',
+]
 const GIVER_LIVE = [
   'listPendingApprovalsFn',
+  'listPendingTemplateApprovalsFn',
+  'listPendingTemplatePriceChangesFn',
   'listScoreChangesWaitingFn',
   'listPendingCompletionsFn',
   'listBidsToAnswerFn',
@@ -371,7 +392,14 @@ describe('Domů loader', () => {
 
   it('descriptions (#207 ruling 6): a brother gets his waiting changes only with the switch on', async () => {
     expect((await load('taker')).descriptionChanges).toEqual([])
-    expect((await load('taker', false, true)).descriptionChanges).toEqual(['descriptionChanges'])
+    const on = await load('taker', false, true)
+    expect(on.descriptionChanges).toEqual(['descriptionChanges'])
+    // Its subscription comes after the task price changes, before the board.
+    expect(on.live).toEqual(
+      [...TAKER_LIVE.slice(0, 4), 'listDescriptionChangesWaitingFn', ...TAKER_LIVE.slice(4)].map(
+        marker,
+      ),
+    )
     expect((await load('giver', false, true)).descriptionChanges).toEqual([])
   })
 

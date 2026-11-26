@@ -36,7 +36,8 @@ export const Route = createFileRoute('/_app/ukoly/')({
   loader: async () => {
     const live = liveSubs()
     const list = live.take(await listTasksFn())
-    return { list, templates: await listTemplatesFn(), live: live.all() }
+    const templates = live.take(await listTemplatesFn())
+    return { list, templates, live: live.all() }
   },
   component: Tasks,
 })
