@@ -6,12 +6,19 @@ import { SectionLabel } from '~/components/shell/SectionLabel'
 import { ApprovePanel } from '~/components/tasks/ApproveControls'
 import { BidPanel } from '~/components/tasks/BidPanel'
 import { BidThread } from '~/components/tasks/BidThread'
+import { ReopenBidding } from '~/components/tasks/ReopenBidding'
 import { CancelTask } from '~/components/tasks/CancelTask'
 import { ScoreChangePanel } from '~/components/tasks/ScoreChangePanel'
 import { StateChip } from '~/components/tasks/StateChip'
 import { TaskHistory } from '~/components/tasks/TaskHistory'
 import { TaskWorkPanel } from '~/components/tasks/WorkButtons'
-import { detailMeta, instanceMeta, taskChipState, waitingText } from '~/components/tasks/taskView'
+import {
+  detailMeta,
+  instanceMeta,
+  roundLines,
+  taskChipState,
+  waitingText,
+} from '~/components/tasks/taskView'
 import { buttonVariants } from '~/components/ui/button'
 import { Card } from '~/components/ui/card'
 import { parseIdParam } from '~/lib/idParam'
@@ -72,6 +79,11 @@ function TaskPage() {
           {meta && <span className="text-meta text-muted">{meta}</span>}
           {due && <span className="text-meta text-muted">{due}</span>}
         </div>
+        {roundLines(task).map((line) => (
+          <p key={line} className="text-meta text-muted">
+            {line}
+          </p>
+        ))}
         {task.status === 'proposed' && (
           <p className="text-meta text-muted">
             {cs.bids.agreed}: {task.approvedBy.map((name) => `${name} ✓`).join(', ')}
@@ -114,16 +126,21 @@ function TaskPage() {
           rebid={features.reopenBidding}
         />
       )}
+      {oneTime && <ReopenBidding task={task} me={me} on={features.reopenBidding} />}
       <CancelTask task={task} me={me} />
       {/* ...and nothing to negotiate, so no empty thread heading. */}
       {oneTime && (
         <section className="grid gap-2" aria-labelledby="thread-label">
           <SectionLabel id="thread-label">{cs.bids.thread}</SectionLabel>
-          <BidThread entries={thread} me={user.id} />
+          <BidThread
+            entries={thread}
+            me={user.id}
+            empty={task.rebidding ? cs.rebid.noEntries : undefined}
+          />
         </section>
       )}
       <BidPanel
-        key={`${String(task.score)}-${String(thread.length)}`}
+        key={`${String(task.score)}-${String(task.rebidding?.offer)}-${String(thread.length)}`}
         task={task}
         me={me}
         refusals={features.bidRefusals}

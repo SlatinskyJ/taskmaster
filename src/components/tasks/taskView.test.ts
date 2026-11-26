@@ -14,6 +14,8 @@ import {
   lowestText,
   myBid,
   refuseButton,
+  reopenButton,
+  roundLines,
   sendButton,
   taskChipState,
   threadTime,
@@ -22,6 +24,7 @@ import {
   waitingOnTakers,
   waitingText,
 } from './taskView'
+import type { BidAction, BidCall } from './taskView'
 
 // Every decision the bidding screens make (#34). Components only render what these return.
 
@@ -49,9 +52,25 @@ const view = (over: Partial<TaskView>): TaskView => ({
   createdAt: '2026-11-17T10:00:00.000Z',
   waitingFor: [],
   scoreChange: null,
+  rebidding: null,
   ...over,
 })
 const b = (takerId: number, name: string, score: number) => ({ takerId, name, score })
+/** A call by its action, with plain data (a turn-down of one bid, a counter at no bid). */
+const call = (action: BidAction): BidCall => {
+  switch (action) {
+    case 'acceptLowestTaskBid':
+    case 'counterOffer':
+      return { action, data: { taskId: 1, score: 18, bidders: [] } }
+    case 'withdrawBid':
+    case 'reopenBidding':
+      return { action, data: { taskId: 1 } }
+    case 'turnDownBids':
+      return { action, data: { taskId: 1, bids: [{ takerId: 3, score: 25 }] } }
+    default:
+      return { action, data: { taskId: 1, score: 18 } }
+  }
+}
 const low = (score: number, ...bidders: { id: number; name: string }[]) => ({ score, bidders })
 
 describe('taskView', () => {
@@ -240,8 +259,8 @@ describe('taskView', () => {
     expect(refuseButton(t, ADMIN, true)).toBeNull()
   })
   it('refusal toasts', () => {
-    expect(toastFor('withdrawBid', 'proposed', STARSI)).toBe('Nabídka stažena')
-    expect(toastFor('turnDownBids', 'proposed', TATA)).toBe('Nabídky odmítnuty')
+    expect(toastFor(call('withdrawBid'), 'proposed', STARSI, false)).toBe('Nabídka stažena')
+    expect(toastFor(call('turnDownBids'), 'proposed', TATA, false)).toBe('Nabídky odmítnuty')
   })
   it('nothing to do once agreed, or for the admin', () => {
     for (const [t, me] of [
@@ -278,13 +297,13 @@ describe('taskView', () => {
   })
   it('toasts: mine, agreed, approved, sent', () => {
     expect([
-      toastFor('acceptOffer', 'reserved', STARSI),
-      toastFor('acceptLowestTaskBid', 'reserved', TATA),
-      toastFor('approveOffer', 'open', STARSI),
-      toastFor('approveOffer', 'proposed', TATA),
-      toastFor('placeBid', 'proposed', STARSI),
-      toastFor('counterOffer', 'proposed', TATA),
-      toastFor('counterOffer', 'open', TATA),
+      toastFor(call('acceptOffer'), 'reserved', STARSI, false),
+      toastFor(call('acceptLowestTaskBid'), 'reserved', TATA, false),
+      toastFor(call('approveOffer'), 'open', STARSI, false),
+      toastFor(call('approveOffer'), 'proposed', TATA, false),
+      toastFor(call('placeBid'), 'proposed', STARSI, false),
+      toastFor(call('counterOffer'), 'proposed', TATA, false),
+      toastFor(call('counterOffer'), 'open', TATA, false),
     ]).toEqual([
       'Domluveno, úkol je tvůj',
       'Domluveno',
@@ -452,5 +471,140 @@ describe('instanceMeta (#38)', () => {
     expect(
       instanceMeta(view({ status: 'done_unconfirmed', origin: 'self_logged', templateId: 1 }), now),
     ).toBeUndefined()
+  })
+})
+
+describe('a reopened round (#212)', () => {
+  const STARSI = { id: 3, role: 'taker' } as const
+  const TATA = { id: 2, role: 'giver' } as const
+  const ADMIN = { id: 1, role: 'admin' } as const
+  const tata = { id: 2, name: 'Táta' }
+  /** An open one-time task agreed at 18, in a round with this offer and these bids. */
+  const round = (
+    offer: number,
+    offeredBy: { id: number; name: string } | null,
+    bids: TaskView['bids'] = [],
+    lastBids: TaskView['lastBids'] = [],
+  ) =>
+    view({
+      status: 'open',
+      offeredByName: null,
+      approvedBy: [],
+      approverIds: [],
+      bids,
+      lastBids,
+      lowest: bids[0]
+        ? { score: bids[0].score, bidders: [{ id: bids[0].takerId, name: bids[0].name }] }
+        : null,
+      rebidding: { offer, offeredBy },
+    })
+
+  it('the chip says Vyjednává se; a plain open task stays open', () => {
+    expect(taskChipState(round(18, null))).toBe('negotiating')
+    expect(taskChipState(view({ status: 'open' }))).toBe('open')
+  })
+  it('no counter: a brother has nothing to say yes to', () => {
+    expect(bidButtons(round(18, null), STARSI)).toEqual([])
+  })
+  it('a counter: Souhlasím and Beru za send the counter, not the agreed score', () => {
+    const [approve] = bidButtons(round(16, tata), STARSI)
+    expect(approve).toMatchObject({
+      action: 'approveOffer',
+      data: { taskId: 1, score: 16 },
+      hint: cs.rebid.approveHint(16),
+    })
+    expect(approve?.hint).toBe('Platí nová cena 16 b. Úkol zůstane volný.')
+    const mine = bidButtons(round(16, tata, [b(3, 'Starší', 15)]), STARSI)
+    expect(mine.map((x) => [x.action, x.data])).toEqual([
+      ['acceptOffer', { taskId: 1, score: 16 }],
+      ['approveOffer', { taskId: 1, score: 16 }],
+    ])
+    expect(mine[0]?.label).toBe(cs.bids.take(16))
+  })
+  it('a bid: the current offer and his last bid are greyed out', () => {
+    expect(sendButton(round(16, tata), STARSI, 16)?.disabled).toBe(true)
+    expect(sendButton(round(16, tata), STARSI, 18)?.disabled).toBe(false)
+    const again = sendButton(round(16, tata, [], [{ takerId: 3, score: 15 }]), STARSI, 15)
+    expect(again).toMatchObject({ action: 'placeBid', disabled: true, hint: cs.bids.sameAgainHint })
+  })
+  it('a parent counters, or accepts the lowest bid', () => {
+    expect(sendButton(round(18, null), TATA, 17)?.action).toBe('counterOffer')
+    expect(bidButtons(round(18, null, [b(4, 'Mladší', 15)]), TATA)).toEqual([
+      expect.objectContaining({
+        action: 'acceptLowestTaskBid',
+        data: { taskId: 1, score: 15, bidders: [4] },
+      }),
+    ])
+  })
+  it('a parent turns a round down only with bids (Jakub 2026-11-25)', () => {
+    expect(refuseButton(round(18, null), TATA, true)).toBeNull()
+    expect(refuseButton(round(18, null, [b(4, 'Mladší', 15)]), TATA, true)).toMatchObject({
+      label: cs.bids.turnDown,
+      hint: cs.rebid.turnDownHint(18),
+      data: { taskId: 1, bids: [{ takerId: 4, score: 15 }] },
+    })
+    expect(refuseButton(round(18, null), TATA, false)).toBeNull()
+  })
+  it('a brother or admin gets no button in a round nobody bid in', () => {
+    expect(refuseButton(round(18, null), STARSI, true)).toBeNull()
+    expect(refuseButton(round(18, null), ADMIN, true)).toBeNull()
+  })
+  it('reopen: a free agreed one-time task, any brother or parent, switch on', () => {
+    const free = view({ status: 'open', offeredByName: null, approvedBy: [], approverIds: [] })
+    for (const me of [TATA, STARSI]) {
+      expect(reopenButton(free, me, true)).toMatchObject({
+        action: 'reopenBidding',
+        data: { taskId: 1 },
+        label: cs.rebid.reopen,
+        hint: cs.rebid.reopenHint(18),
+      })
+    }
+    const change = {
+      id: 5,
+      score: 20,
+      proposedBy: tata,
+      approvedBy: [tata],
+      waitingFor: [],
+    } as unknown as TaskView['scoreChange']
+    for (const [t, me, on] of [
+      [free, ADMIN, true],
+      [free, STARSI, false],
+      [round(18, null), STARSI, true],
+      [{ ...free, scoreChange: change }, STARSI, true],
+      [{ ...free, status: 'reserved' as const }, STARSI, true],
+      [view({}), STARSI, true],
+      [{ ...free, status: 'confirmed' as const }, STARSI, true],
+      [{ ...free, origin: 'on_demand' as const }, STARSI, true],
+    ] as const) {
+      expect(reopenButton(t, me, on)).toBeNull()
+    }
+  })
+  it('header lines: the counter, then the agreed score that still applies', () => {
+    expect(roundLines(round(16, tata))).toEqual(['Táta nabízí 16 b', cs.taskPrice.oldStays(18)])
+    expect(roundLines(round(18, null))).toEqual([cs.taskPrice.oldStays(18)])
+    expect(roundLines(view({ status: 'open' }))).toEqual([])
+  })
+  it('toasts in a round: the call decides, as the task stays open', () => {
+    const turnDown = (bids: { takerId: number; score: number }[]): BidCall => ({
+      action: 'turnDownBids',
+      data: { taskId: 1, bids },
+    })
+    const counter = (bidders: number[]): BidCall => ({
+      action: 'counterOffer',
+      data: { taskId: 1, score: 15, bidders },
+    })
+    expect(toastFor(turnDown([{ takerId: 4, score: 15 }]), 'open', TATA, true)).toBe(
+      cs.bids.toast.turnedDown,
+    )
+    expect(toastFor(call('reopenBidding'), 'open', STARSI, false)).toBe(cs.rebid.toast.reopened)
+    expect(toastFor(call('placeBid'), 'open', STARSI, true)).toBe(cs.bids.toast.sent)
+    expect(toastFor(call('withdrawBid'), 'open', STARSI, true)).toBe(cs.bids.toast.withdrawn)
+    expect(toastFor(counter([]), 'open', TATA, true)).toBe(cs.bids.toast.sent)
+    expect(toastFor(counter([4]), 'reserved', TATA, true)).toBe(cs.bids.toast.agreed)
+    expect(toastFor(call('acceptOffer'), 'reserved', STARSI, true)).toBe(cs.bids.toast.agreedMine)
+    expect(toastFor(call('approveOffer'), 'open', STARSI, true)).toBe(cs.bids.toast.agreed)
+    // Not in a round: as before.
+    expect(toastFor(call('placeBid'), 'proposed', STARSI, false)).toBe(cs.bids.toast.sent)
+    expect(toastFor(call('approveOffer'), 'proposed', STARSI, false)).toBe(cs.tasks.approved)
   })
 })

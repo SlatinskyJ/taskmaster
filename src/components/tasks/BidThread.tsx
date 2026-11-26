@@ -15,8 +15,20 @@ function who(entry: ThreadEntry, me: number): string {
   return mine ? cs.bids.youWant : `${entry.by.name} ${cs.bids.wants}`
 }
 
-/** Every offer and bid of a task, oldest first (spec §5.2: every bid and counter is visible). */
-export function BidThread({ entries, me }: { entries: readonly ThreadEntry[]; me: number }) {
+/**
+ * Every offer and bid of a task's latest negotiation, oldest first (spec §5.2: every bid and
+ * counter is visible; earlier rounds are not, #212). `empty`: a line for a round with none yet.
+ */
+export function BidThread({
+  entries,
+  me,
+  empty,
+}: {
+  entries: readonly ThreadEntry[]
+  me: number
+  empty?: string
+}) {
+  if (entries.length === 0 && empty) return <p className="text-meta text-muted">{empty}</p>
   return (
     <ol className="grid gap-1.5">
       {entries.map((entry) => {

@@ -30,6 +30,7 @@ import {
   placeBid,
   proposeTaskScoreChange,
   rejectTask,
+  reopenBidding,
   reserveTask,
 } from '~/server/tasks'
 import { approveTemplateScoreIn, createTemplateIn } from '~/server/templates/templates'
@@ -81,6 +82,22 @@ export const negotiation: Piece = (ctx) => {
   const vacuum = offer(ctx, 'Vyluxovat celý obývák a chodbu', 8)
   step('bid 10', placeBid(tx, id('starsi'), vacuum.id, 10, now))
   step('take 8', acceptOffer(tx, id('starsi'), vacuum.id, 8, now))
+}
+
+/**
+ * #212: "Vynést staré věci na půdu", agreed at 12 by Mladší's yes after Starší bid 14 (that row
+ * is an earlier round, hidden on screen), now in a round Starší reopened, with Mladší's bid 15.
+ * "Zamést chodník před domem", free at 6, never reopened: the reopen button.
+ */
+export const rebidding: Piece = (ctx) => {
+  const { tx, id, now } = ctx
+  const attic = offer(ctx, 'Vynést staré věci na půdu', 12)
+  step('bid 14', placeBid(tx, id('starsi'), attic.id, 14, now))
+  step('agree 12', approveTaskOffer(tx, id('mladsi'), attic.id, 12, now))
+  step('reopen', reopenBidding(tx, id('starsi'), attic.id, now))
+  step('bid 15', placeBid(tx, id('mladsi'), attic.id, 15, now))
+  const terrace = offer(ctx, 'Zamést chodník před domem', 6)
+  step('agree 6', approveTaskOffer(tx, id('starsi'), terrace.id, 6, now))
 }
 
 /** #36: an open task at 10 with Táta's new price 12 waiting for the brothers. */
@@ -162,6 +179,32 @@ export const templates: Piece = ({ tx, id, now }) => {
   const what = (verb: string) => `${verb} "${dishes.title}"`
   step(what('bid on'), bidOnTemplateIn(tx, id('mladsi'), dishes.id, 5, now))
   step(what('offer on'), counterOnTemplateIn(tx, id('tata'), dishes.id, 4, now))
+}
+
+/**
+ * #209: two chores Táta proposed, open for bids with `choreBidding` on. "Vynést kompost" at 10 with
+ * no bids, "Zalít kytky" at 4 with Starší's bid 6 and Mladší's bid 7.
+ */
+export const choreBidding: Piece = ({ tx, id, now }) => {
+  const on = { choreBidding: true }
+  const make = (title: string, score: number) =>
+    step(
+      `template "${title}"`,
+      createTemplateIn(
+        tx,
+        id('tata'),
+        { title, score, approvalRequired: true, schedule: null, deadline: null },
+        now,
+      ),
+    )
+  make('Vynést kompost', 10)
+  const plants = make('Zalít kytky', 4)
+  for (const [who, score] of [
+    ['starsi', 6],
+    ['mladsi', 7],
+  ] as const) {
+    step(`bid on "${plants.title}"`, bidOnTemplateIn(tx, id(who), plants.id, score, now, on))
+  }
 }
 
 const HOUR = 3_600_000

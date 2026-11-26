@@ -285,6 +285,18 @@ export const cs = {
       turnedDown: 'Nabídky odmítnuty',
     },
   },
+  /** Reopening bidding on a free one-time task (#212, spec §5.2). Bidding words reuse `bids`. */
+  rebid: {
+    reopen: 'Vyjednat novou cenu',
+    reopenHint: (score: number) =>
+      `Dokud se nedomluvíte, platí ${String(score)} b. Kdo úkol mezitím vezme, vyjednávání ukončí.`,
+    approveHint: (score: number) => `Platí nová cena ${String(score)} b. Úkol zůstane volný.`,
+    /** Header line in a round with a parent's counter: "Táta nabízí 16 b". */
+    offer: (name: string, score: number) => `${name} nabízí ${String(score)} b`,
+    turnDownHint: (score: number) => `Všechny nabídky se uzavřou. Dál platí ${String(score)} b.`,
+    noEntries: 'Zatím žádná nabídka.',
+    toast: { reopened: 'Vyjednávání otevřeno' },
+  },
   /**
    * Score change of an agreed recurring template (spec §5.1): its price page and ways in. The
    * stepper, send button and hints reuse `bids`.
@@ -304,6 +316,9 @@ export const cs = {
     acceptBid: (score: number, names: string) => `Přijmout ${String(score)} (${names})`,
     /** Under every accept: only instances made later take the new score (§5.1). */
     acceptHint: 'Nové úkoly budou za tolik bodů.',
+    /** A proposed chore's first price (#209): its page header, and under every yes. */
+    proposedNow: (score: number) => `Návrh: ${String(score)} b.`,
+    firstAgreeHint: (score: number) => `Úkol začne platit za ${String(score)} b.`,
   },
   /** Reserve, release, done, approve, reject (spec §5.4–§5.5). */
   work: {
@@ -399,6 +414,8 @@ export const cs = {
     bidsTurnedDown: 'nabídky odmítnuty',
     biddingReopened: 'nové vyjednávání o ceně',
     biddingClosed: 'vyjednávání skončilo',
+    /** A divider in Historie once a price was reopened (#212): "2. vyjednávání o ceně". */
+    round: (n: number) => `${String(n)}. vyjednávání o ceně`,
     approved: (n: number) => `souhlas s ${String(n)} b`,
     agreed: (n: number) => `domluveno za ${String(n)} b`,
     agreedReserved: (n: number, name: string) => `domluveno za ${String(n)} b · rezervace: ${name}`,

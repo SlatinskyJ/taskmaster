@@ -7,7 +7,7 @@ import type { TaskView } from '~/server/tasks/functions'
 import { callBid } from './bidCalls'
 import { ScoreStepper } from './ScoreStepper'
 import type { BidCall, Me } from './taskView'
-import { bidButtons, myBid, refuseButton, sendButton, toastFor } from './taskView'
+import { bidButtons, myBid, offerScore, refuseButton, sendButton, toastFor } from './taskView'
 import { useTaskAction } from './useTaskAction'
 
 /** A turn-down refused as stale means a bid came in, not that the price moved. */
@@ -16,7 +16,7 @@ function turnDownError(error: string): string {
 }
 
 /**
- * What a person can do on a proposed task's page (spec §5.2): the yes buttons, each with its
+ * What a person can do on a proposed task's page, or in a reopened round (#212) (spec §5.2): the yes buttons, each with its
  * outcome right under it (no dialog: the hint says what happens), then a new number on the
  * stepper. A brother bids; a parent makes a new offer, or on a brother's number accepts it.
  * Renders nothing once the task is agreed.
@@ -33,7 +33,7 @@ export function BidPanel({
 }) {
   const { busy, run } = useTaskAction()
   const mine = myBid(task, me)
-  const [value, setValue] = useState(mine ?? task.score)
+  const [value, setValue] = useState(mine ?? offerScore(task))
   const refuse = refuseButton(task, me, refusals)
   const yes = refuse ? [...bidButtons(task, me), refuse] : bidButtons(task, me)
   const send = sendButton(task, me, value)
@@ -43,7 +43,7 @@ export function BidPanel({
     void run(
       key,
       () => callBid(call),
-      (r) => toastFor(call.action, r.status, me),
+      (r) => toastFor(call, r.status, me, task.rebidding !== null),
       call.action === 'turnDownBids' ? { errorMessage: turnDownError } : {},
     )
   }

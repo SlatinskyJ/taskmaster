@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { approveOutcome, approveTemplate } from '~/components/templates/actions'
-import { priceMeta } from '~/components/templates/priceView'
+import { myTemplateBid, priceMeta, templateChip } from '~/components/templates/priceView'
 import { Button, buttonVariants } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
 import { templateDetail } from '~/lib/templateText'
@@ -94,6 +94,35 @@ export function WaitingForYou({
     )
   }
 
+  function answerLink(t: TemplateView, label: string) {
+    return (
+      <Link
+        to="/sablona/$templateId"
+        params={{ templateId: String(t.id) }}
+        className={buttonVariants({ variant: 'ghost' })}
+      >
+        {label}
+      </Link>
+    )
+  }
+
+  /**
+   * A proposed chore's approval: Souhlasím, and with first-price bidding (#209) a way to the
+   * page like a Návrh: Jiná cena next to it, or only Otevřít once he has a bid.
+   */
+  function templateActions(t: TemplateView) {
+    const key = `template-${String(t.id)}`
+    const yes = approveButton(key, () => approveTemplate(t))
+    if (!t.bidding) return yes
+    if (myTemplateBid(t, me) !== null) return answerLink(t, cs.bids.open)
+    return (
+      <div className="flex flex-col items-stretch gap-1.5">
+        {yes}
+        {answerLink(t, cs.bids.otherPriceShort)}
+      </div>
+    )
+  }
+
   function pageLink(task: TaskView, label: string) {
     return (
       <Link
@@ -120,7 +149,7 @@ export function WaitingForYou({
             void action.run(
               key,
               () => callBid(approve),
-              (r) => toastFor(approve.action, r.status, me),
+              (r) => toastFor(approve, r.status, me, false),
             )
           }}
         >
@@ -153,11 +182,11 @@ export function WaitingForYou({
           <li key={`template-${String(t.id)}`}>
             <TaskRow
               name={t.title}
-              state="proposed"
+              state={templateChip(t).state}
               points={t.score}
-              meta={cs.templates.recurringMeta}
+              meta={(t.bidding && priceMeta(t, me)) ?? cs.templates.recurringMeta}
               detail={templateDetail(t)}
-              action={approveButton(`template-${String(t.id)}`, () => approveTemplate(t))}
+              action={templateActions(t)}
               link={links ? templateLink(t.id) : undefined}
             />
           </li>
@@ -169,15 +198,7 @@ export function WaitingForYou({
               state="negotiating"
               points={t.score}
               meta={priceMeta(t, me)}
-              action={
-                <Link
-                  to="/sablona/$templateId"
-                  params={{ templateId: String(t.id) }}
-                  className={buttonVariants({ variant: 'ghost' })}
-                >
-                  {cs.bids.answer}
-                </Link>
-              }
+              action={answerLink(t, cs.bids.answer)}
               link={links ? templateLink(t.id) : undefined}
             />
           </li>

@@ -59,7 +59,11 @@ function TemplatePage() {
           <StateChip state={chip.state} label={chip.label} />
           <span className="num text-title font-bold">{t.score}</span>
           <span className="text-meta text-muted">
-            {proposed ? cs.templatePrice.proposed(t.score) : cs.templatePrice.now(t.score)}
+            {t.bidding
+              ? cs.templatePrice.proposedNow(t.score)
+              : proposed
+                ? cs.templatePrice.proposed(t.score)
+                : cs.templatePrice.now(t.score)}
           </span>
         </div>
         {proposed && <p className="text-meta text-muted">{cs.templatePrice.startsWhenAll}</p>}
@@ -69,10 +73,13 @@ function TemplatePage() {
           <p className="text-meta text-muted">{cs.templatePrice.futureOnly}</p>
         )}
         {waiting && <p className="font-bold break-words">{waiting}</p>}
-        {proposed && waitingFor.some((p) => p.id === user.id) && <AgreeToChore template={t} />}
+        {/* With first-price bidding (#209) the price panel below has Souhlasím. */}
+        {proposed && !t.bidding && waitingFor.some((p) => p.id === user.id) && (
+          <AgreeToChore template={t} />
+        )}
         {dispute && <DisputeControl {...dispute} mark={disputeMark} lead />}
       </Card>
-      {!proposed && (
+      {(!proposed || t.bidding) && (
         <section className="grid gap-2" aria-labelledby="history-label">
           <SectionLabel id="history-label">{cs.templatePrice.history}</SectionLabel>
           {thread.length === 0 ? (

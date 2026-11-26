@@ -5,6 +5,7 @@ import { ApprovableRow } from './ApproveControls'
 import { taskLink } from './rowLink'
 import { groupTasks } from './taskGroups'
 import { lowestText, taskChipState } from './taskView'
+import { TaskLink } from './TaskLink'
 import { TaskRow } from './TaskRow'
 import type { Run } from './WorkButtons'
 
@@ -13,12 +14,15 @@ export function TaskGroups({
   list,
   meta,
   action,
+  linked = () => false,
   approve,
   links = false,
 }: {
   list: readonly TaskView[]
   meta: (t: TaskView) => string | undefined
   action: (t: TaskView) => ReactNode
+  /** Rows whose name links to the task page (#212: free tasks with reopenBidding on); not with `links`, whose whole row does. */
+  linked?: (t: TaskView) => boolean
   /**
    * ✓ / ✕ on done work waiting for a parent (#206). The whole row is swapped for ApprovableRow,
    * not just its action, because the reason form opens under the row, outside TaskRow. Its meta
@@ -40,7 +44,7 @@ export function TaskGroups({
               <ApprovableRow task={t} {...approve} links={links} />
             ) : (
               <TaskRow
-                name={t.title}
+                name={!links && linked(t) ? <TaskLink id={t.id} title={t.title} /> : t.title}
                 state={taskChipState(t)}
                 points={t.score}
                 meta={meta(t)}

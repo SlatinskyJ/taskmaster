@@ -32,3 +32,27 @@ test('a parent’s bar is Domů / Úkoly, and Nový úkol creates a one-time tas
   await expect(page).toHaveURL(/\/ukoly$/)
   await expect(page.getByText('Zamést terasu po bouřce')).toBeVisible()
 })
+
+test('reopening bidding stays hidden with its switch off (#212)', async ({ page }) => {
+  await passwordLogin(page, 'starsi')
+  // Domů: the free row's name is no link (it links only with the switch on).
+  const row = page.getByRole('listitem').filter({ hasText: 'Umýt okna v obýváku i v ložnici' })
+  await expect(row).toBeVisible()
+  await expect(row.getByRole('link')).toHaveCount(0)
+  // The page itself: task 9 of the `launch` seed (negotiation's 3 tasks, then points' 6).
+  await page.goto('/ukol/9')
+  await expect(page.getByRole('heading', { name: 'Umýt okna v obýváku i v ložnici' })).toBeVisible()
+  await expect(page.getByRole('button', { name: cs.taskPrice.change })).toBeVisible()
+  await expect(page.getByRole('button', { name: cs.rebid.reopen })).toHaveCount(0)
+})
+
+test('a parent’s Úkoly row has no task link with the switch off (#212)', async ({ page }) => {
+  await passwordLogin(page, 'tata')
+  await expect(page).toHaveURL(/\/$/)
+  await bottomBar(page).getByRole('link', { name: cs.nav.tasks }).click()
+  const parentRow = page
+    .getByRole('listitem')
+    .filter({ hasText: 'Umýt okna v obýváku i v ložnici' })
+  await expect(parentRow).toBeVisible()
+  await expect(parentRow.getByRole('link')).toHaveCount(0)
+})
