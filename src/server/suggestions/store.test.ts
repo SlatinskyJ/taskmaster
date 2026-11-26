@@ -151,6 +151,8 @@ describe('closeSuggestionIn', () => {
       before: JSON.stringify({ status: 'new' }),
       after: JSON.stringify({ status }),
       reason: null,
+      // Created and closed in one synchronous test run: one change (#299), keyed by the creation.
+      changeId: entries(f).find((e) => e.action === 'suggestion.created')?.id,
     })
   })
 

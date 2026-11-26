@@ -26,6 +26,11 @@ export const auditLog = sqliteTable(
     /** JSON: the values after the change, or the action's payload. */
     after: text('after'),
     reason: text('reason'),
+    /**
+     * Groups the entries of one change (#299, ~/server/audit README): null on a change's first
+     * entry, that entry's id on every later one. A change's key is `change_id ?? id`.
+     */
+    changeId: integer('change_id'),
   },
   (t) => [
     index('audit_log_entity_idx').on(t.entityType, t.entityId),

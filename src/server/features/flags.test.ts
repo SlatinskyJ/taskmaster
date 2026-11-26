@@ -13,7 +13,7 @@ describe('NO_FEATURES and ALL_FEATURES', () => {
 })
 
 describe('getFlags', () => {
-  it('reads the values the migrations leave: on since the release (0022), disputes off (0024), settleLastDay on (0027), passwordChange off (0028), bidRefusals off (0029), approveAnywhere off (0030), reopenBidding off (0031), choreBidding off (0032), openRows off (0033), descriptions off (0037), weekPlan off (0039), suggestions off (0040)', () => {
+  it('reads the values the migrations leave: on since the release (0022), disputes off (0024), settleLastDay on (0027), passwordChange off (0028), bidRefusals off (0029), approveAnywhere off (0030), reopenBidding off (0031), choreBidding off (0032), openRows off (0033), descriptions off (0037), weekPlan off (0039), suggestions off (0040), liveChanges off (0041)', () => {
     expect(getFlags(createTestDb())).toEqual({
       recurring: true,
       log: true,
@@ -31,6 +31,7 @@ describe('getFlags', () => {
       descriptions: false,
       weekPlan: false,
       suggestions: false,
+      liveChanges: false,
     })
     expect(
       createTestDb()
@@ -57,6 +58,7 @@ describe('getFlags', () => {
       descriptions: false,
       weekPlan: false,
       suggestions: false,
+      liveChanges: false,
     })
   })
 
@@ -87,6 +89,7 @@ describe('getFlags', () => {
       descriptions: true,
       weekPlan: true,
       suggestions: true,
+      liveChanges: true,
     })
   })
 
@@ -105,6 +108,7 @@ describe('getFlags', () => {
       descriptions: false,
       weekPlan: false,
       suggestions: false,
+      liveChanges: false,
     })
   })
 
