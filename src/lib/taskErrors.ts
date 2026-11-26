@@ -36,6 +36,8 @@ export function taskErrorMessage(error: string): string {
       return cs.tasks.errors.noBids
     case 'no_bid':
       return cs.tasks.errors.noBid
+    case 'bidding_open':
+      return cs.tasks.errors.biddingOpen
     case 'reason_too_long':
       return cs.tasks.errors.reasonTooLong(REASON_MAX)
     case 'past_grace':
@@ -70,6 +72,8 @@ export function scoreChangeErrorMessage(error: string): string {
       return cs.taskPrice.errors.notAgreed
     case 'not_changeable':
       return cs.tasks.errors.gone
+    case 'bidding_instead':
+      return cs.taskPrice.errors.biddingInstead
     default:
       return taskErrorMessage(error)
   }

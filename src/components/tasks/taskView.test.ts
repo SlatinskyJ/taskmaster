@@ -351,6 +351,13 @@ describe('price change (#36)', () => {
     }
   })
 
+  it('canProposeChange with reopenBidding on: open tasks rebid instead, reserved keep it', () => {
+    const open = { status: 'open' as const, reservedBy: null, scoreChange: null }
+    expect(canProposeChange(open, TATA, true)).toBe(false)
+    expect(canProposeChange(open, MLADSI, true)).toBe(false)
+    expect(canProposeChange({ ...reserved, scoreChange: null }, TATA, true)).toBe(true)
+  })
+
   it('changeAnswer: proposer withdraws, who it waits for answers, others nothing', () => {
     expect(changeAnswer({ scoreChange: change }, TATA)).toBe('withdraw')
     expect(changeAnswer({ scoreChange: change }, STARSI)).toBe('answer')

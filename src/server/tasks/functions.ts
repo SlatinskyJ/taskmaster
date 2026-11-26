@@ -30,6 +30,7 @@ import {
   acceptOffer,
   counterOffer,
   placeBid,
+  reopenBidding,
   turnDownBids,
   withdrawBid,
 } from './bidding'
@@ -247,6 +248,26 @@ export const turnDownBidsFn = createServerFn({ method: 'POST' })
   .validator(parseTurnDown)
   .handler(({ data, context }) => turnDownBidsHandler(getDb(), context.user.id, data, new Date()))
 
+// ── Reopening bidding on an open task (#212, behind the `reopenBidding` switch) ───────────
+
+const reopenOn = (db: Db) => getFlags(db).reopenBidding
+
+/** A brother or a parent reopens bidding on an open one-time task. */
+export function reopenBiddingHandler(
+  db: Db,
+  userId: number,
+  data: { taskId: number },
+  now: Date,
+): RefusalResult {
+  if (!reopenOn(db)) return OFF
+  return answered(reopenBidding(db, userId, data.taskId, now))
+}
+
+export const reopenBiddingFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('giver', 'taker')])
+  .validator(parseTaskId)
+  .handler(({ data, context }) => reopenBiddingHandler(getDb(), context.user.id, data, new Date()))
+
 /** A task with its negotiation thread. */
 export const getTaskDetailFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
@@ -332,12 +353,26 @@ function changed(result: Result<TaskRow, ScoreChangeError>): ScoreChangeActionRe
   return result.ok ? { ok: true, id: result.value.id, status: result.value.status } : result
 }
 
-/** Open: any party; reserved: its taker or a giver. */
+/**
+ * "Jiná cena". Open: any party; reserved: its taker or a giver. With `reopenBidding` on,
+ * reopening bidding replaces it on open one-time tasks (spec §5.2 [call], #212).
+ */
+export function proposeTaskScoreChangeHandler(
+  db: Db,
+  userId: number,
+  data: { taskId: number; score: number },
+  now: Date,
+): ScoreChangeActionResult {
+  return changed(
+    proposeTaskScoreChange(db, userId, data.taskId, data.score, now, { rebid: reopenOn(db) }),
+  )
+}
+
 export const proposeTaskScoreChangeFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver', 'taker')])
   .validator(parseChangeProposal)
   .handler(({ data, context }) =>
-    changed(proposeTaskScoreChange(getDb(), context.user.id, data.taskId, data.score)),
+    proposeTaskScoreChangeHandler(getDb(), context.user.id, data, new Date()),
   )
 
 export const approveTaskScoreChangeFn = createServerFn({ method: 'POST' })

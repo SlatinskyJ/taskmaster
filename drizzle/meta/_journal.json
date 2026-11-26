@@ -222,8 +222,15 @@
     {
       "idx": 31,
       "version": "6",
-      "when": 1795617844209,
-      "tag": "0031_open_rows_switch",
+      "when": 1795617826508,
+      "tag": "0031_reopen_bidding",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1795683824708,
+      "tag": "0032_open_rows_switch",
       "breakpoints": true
     }
   ]

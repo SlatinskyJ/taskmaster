@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { AgreementError, OneTimeAgreement } from './agreement'
-import { approveOneTimeOffer, createOneTimeTask, resolveOneTime } from './agreement'
+import {
+  approveOneTimeOffer,
+  createOneTimeTask,
+  isAgreedOneTime,
+  reopenOneTimeBidding,
+  resolveOneTime,
+} from './agreement'
 import {
   acceptLowestBid,
   acceptOneTimeOffer,
@@ -520,5 +526,123 @@ describe('turnDownOneTimeBids (Jakub 2026-11-24)', () => {
   it('an agreed task is not proposed', () => {
     const agreed = value(approveOneTimeOffer(carWash(), family, OLDER))
     expect(error(turnDownOneTimeBids(agreed, family, DAD, []))).toBe('not_proposed')
+  })
+})
+
+// ── A reopened round on an open task (#212, spec §5.2 "Reopening bidding") ──────────────
+
+describe('in a reopened round (#212)', () => {
+  // Umýt auto agreed at 30, open; a round reopened by Older.
+  const openCar = (): OneTimeAgreement => value(approveOneTimeOffer(carWash(), family, OLDER))
+  const round = (people: Person[] = family) => value(reopenOneTimeBidding(openCar(), people, OLDER))
+  const rebidding = (t: OneTimeAgreement) => {
+    if (t.status !== 'rebidding') throw new Error(`expected rebidding, got ${t.status}`)
+    return t
+  }
+
+  it('reopening keeps the agreed score; the offer is that score, by nobody, no bids', () => {
+    expect(round()).toEqual({
+      status: 'rebidding',
+      score: 30,
+      offer: { score: 30, by: null },
+      book: EMPTY_BOOK,
+      lastBids: [],
+    })
+    expect(value(reopenOneTimeBidding(openCar(), family, DAD)).status).toBe('rebidding')
+  })
+  it('reopen refusals', () => {
+    expect(error(reopenOneTimeBidding(round(), family, OLDER))).toBe('bidding_open')
+    expect(error(reopenOneTimeBidding(carWash(), family, OLDER))).toBe('not_agreed')
+    const reserved: OneTimeAgreement = {
+      status: 'reserved',
+      score: 30,
+      takerId: OLDER,
+      giverId: DAD,
+    }
+    expect(error(reopenOneTimeBidding(reserved, family, OLDER))).toBe('not_changeable')
+    expect(error(reopenOneTimeBidding(openCar(), family, JAKUB))).toBe('not_a_party')
+  })
+  it('bids follow the same-number rule of the round', () => {
+    const t = rebidding(bid(round(), OLDER, 25))
+    expect(t.book.bids).toEqual([{ by: OLDER, score: 25 }])
+    expect(t.status).toBe('rebidding')
+    expect(error(placeOneTimeBid(round(), family, OLDER, 30))).toBe('same_score')
+    const withdrawn = value(withdrawOneTimeBid(t, family, OLDER))
+    expect(rebidding(withdrawn).book.bids).toEqual([])
+    expect(error(placeOneTimeBid(withdrawn, family, OLDER, 25))).toBe('same_score')
+    const countered = value(counterOneTimeOffer(withdrawn, family, DAD, 20, []))
+    expect(rebidding(bid(countered, OLDER, 25)).book.bids).toEqual([{ by: OLDER, score: 25 }])
+  })
+  it('a counter is the giver side offer; the agreed score stays', () => {
+    const t = rebidding(value(counterOneTimeOffer(bid(round(), OLDER, 25), family, DAD, 20, [])))
+    expect(t).toMatchObject({ score: 30, offer: { score: 20, by: DAD }, lastBids: [] })
+    expect(error(counterOneTimeOffer(t, family, DAD, 20, []))).toBe('same_score')
+  })
+  it('a counter at a bid accepts it', () => {
+    const t = bid(round(), OLDER, 25)
+    expect(value(counterOneTimeOffer(t, family, DAD, 25, [OLDER]))).toEqual({
+      status: 'reserved',
+      score: 25,
+      takerId: OLDER,
+      giverId: DAD,
+    })
+  })
+  it('accepting needs a giver side offer; a bidder accepts the counter → reserved', () => {
+    const t = bid(round(), OLDER, 25)
+    expect(error(acceptOneTimeOffer(t, family, OLDER, 30))).toBe('no_offer')
+    const countered = value(counterOneTimeOffer(t, family, DAD, 20, []))
+    expect(error(acceptOneTimeOffer(countered, family, OLDER, 22))).toBe('offer_changed')
+    expect(value(acceptOneTimeOffer(countered, family, OLDER, 20))).toEqual({
+      status: 'reserved',
+      score: 20,
+      takerId: OLDER,
+      giverId: DAD,
+    })
+  })
+  it("a brother's yes to the counter opens the task at it; a giver can't say yes", () => {
+    expect(error(approveOneTimeOffer(round(), family, YOUNGER))).toBe('no_offer')
+    const countered = value(counterOneTimeOffer(round(), family, DAD, 20, []))
+    expect(value(approveOneTimeOffer(countered, family, YOUNGER))).toEqual({
+      status: 'open',
+      score: 20,
+    })
+    expect(error(approveOneTimeOffer(countered, withMum, MUM))).toBe('not_a_taker')
+  })
+  it('the lowest bid: one → reserved, a tie → open', () => {
+    const one = bid(bid(round(), OLDER, 25), YOUNGER, 27)
+    expect(value(acceptLowestBid(one, family, DAD, 25, [OLDER]))).toMatchObject({
+      status: 'reserved',
+      score: 25,
+      takerId: OLDER,
+    })
+    const tie = bid(bid(round(), OLDER, 25), YOUNGER, 25)
+    expect(value(acceptLowestBid(tie, family, DAD, 25, [OLDER, YOUNGER]))).toEqual({
+      status: 'open',
+      score: 25,
+    })
+  })
+  it('a turn-down ends the round at the agreed score; with no bids it is refused (Jakub 2026-11-25)', () => {
+    expect(error(turnDownOneTimeBids(round(), family, DAD, []))).toBe('no_bids')
+    const countered = value(counterOneTimeOffer(round(), family, DAD, 20, []))
+    expect(error(turnDownOneTimeBids(countered, family, DAD, []))).toBe('no_bids')
+    const t = bid(round(), OLDER, 25)
+    expect(error(turnDownOneTimeBids(t, family, DAD, []))).toBe('offer_changed')
+    expect(value(turnDownOneTimeBids(t, family, DAD, [{ by: OLDER, score: 25 }]))).toEqual({
+      status: 'open',
+      score: 30,
+    })
+    expect(error(turnDownOneTimeBids(t, family, OLDER, []))).toBe('not_a_giver')
+  })
+  it('resolve drops bids of people who no longer take part, the round stays', () => {
+    const t = bid(round(), OLDER, 25)
+    expect(resolveOneTime(t, deactivate(family, OLDER))).toMatchObject({
+      status: 'rebidding',
+      book: EMPTY_BOOK,
+    })
+  })
+  it('isAgreedOneTime: open and reserved only', () => {
+    expect(isAgreedOneTime(round())).toBe(false)
+    expect(isAgreedOneTime(carWash())).toBe(false)
+    expect(isAgreedOneTime(openCar())).toBe(true)
   })
 })

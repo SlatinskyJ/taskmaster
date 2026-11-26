@@ -119,6 +119,7 @@ export const cs = {
       sameScore: 'Tohle číslo už platí. Zvol jiné.',
       noBids: 'Zatím nikdo nic nenabídl.',
       noBid: 'Nejdřív nabídni svou cenu.',
+      biddingOpen: 'Teď se o ceně vyjednává. Obnov stránku.',
       templateNotAgreed: 'Tenhle opakovaný úkol ještě není domluvený.',
     },
   },
@@ -368,6 +369,8 @@ export const cs = {
     errors: {
       notInvolved: 'Tohle rozhodují jiní.',
       changePending: 'O nové ceně se už jedná. Obnov stránku.',
+      /** `reopenBidding` on: an open task's price changes through a new round (#212). */
+      biddingInstead: 'Cenu volného úkolu teď změníš novým vyjednáváním.',
       noChange: 'Návrh už neplatí. Obnov stránku.',
       scoreFrozen: 'Úkol je hotový, cenu už měnit nejde.',
       notAgreed: 'Úkol se zase vyjednává. Obnov stránku.',
@@ -394,6 +397,8 @@ export const cs = {
     bidAccepted: (n: number) => `přijato ${String(n)} b`,
     bidWithdrawn: 'nabídka stažena',
     bidsTurnedDown: 'nabídky odmítnuty',
+    biddingReopened: 'nové vyjednávání o ceně',
+    biddingClosed: 'vyjednávání skončilo',
     approved: (n: number) => `souhlas s ${String(n)} b`,
     agreed: (n: number) => `domluveno za ${String(n)} b`,
     agreedReserved: (n: number, name: string) => `domluveno za ${String(n)} b · rezervace: ${name}`,

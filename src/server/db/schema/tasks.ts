@@ -91,6 +91,12 @@ export const tasks = sqliteTable(
     /** An instance's deadline (spec §5.3): due, and the end of the grace window. Both or neither. */
     dueAt: text('due_at'),
     graceEndsAt: text('grace_ends_at'),
+    /**
+     * A reopened bidding round on an open one-time task (#212): the newest `task_thread` id of the
+     * task when the round started (0 if none). Thread rows above it belong to the round; older rows
+     * stay but are not part of it. Null = no round. Set only while `status = 'open'`.
+     */
+    biddingFrom: integer('bidding_from'),
   },
   (t) => [
     check(

@@ -32,11 +32,20 @@ const errors = { errorMessage: scoreChangeErrorMessage }
  * Souhlasím / Nesouhlasím for those people or Stáhnout návrh for the proposer (Jakub
  * 2026-11-21). Without one: "Změnit cenu" for those who may propose, which opens a drawer.
  */
-export function ScoreChangePanel({ task, me }: { task: TaskView; me: Me }) {
+export function ScoreChangePanel({
+  task,
+  me,
+  rebid = false,
+}: {
+  task: TaskView
+  me: Me
+  /** The `reopenBidding` switch (#212): no "Změnit cenu" on an open task. */
+  rebid?: boolean
+}) {
   const { busy, run } = useTaskAction()
   const [open, setOpen] = useState(false)
   if (task.scoreChange) return <PendingChange task={task} me={me} busy={busy} run={run} />
-  if (!canProposeChange(task, me)) return null
+  if (!canProposeChange(task, me, rebid)) return null
   return (
     <>
       <Button

@@ -106,7 +106,14 @@ function TaskPage() {
       {features.approveAnywhere && <ApprovePanel task={task} me={me} />}
       <TaskWorkPanel task={task} me={me} />
       {/* An instance's score is fixed when it is made (spec §4, #38): no price change. */}
-      {oneTime && <ScoreChangePanel key={`price-${String(task.score)}`} task={task} me={me} />}
+      {oneTime && (
+        <ScoreChangePanel
+          key={`price-${String(task.score)}`}
+          task={task}
+          me={me}
+          rebid={features.reopenBidding}
+        />
+      )}
       <CancelTask task={task} me={me} />
       {/* ...and nothing to negotiate, so no empty thread heading. */}
       {oneTime && (

@@ -27,6 +27,7 @@ export const FEATURE_KEYS = [
   /** Approve done work from the task page and Úkoly; Ke schválení first on a parent's Domů
    * (#206). */
   'approveAnywhere',
+  'reopenBidding',
   /** Rows open their task or chore page (#205). */
   'openRows',
 ] as const
@@ -48,6 +49,7 @@ export const NO_FEATURES: Readonly<Features> = {
   passwordChange: false,
   bidRefusals: false,
   approveAnywhere: false,
+  reopenBidding: false,
   openRows: false,
 }
 
@@ -63,5 +65,6 @@ export const ALL_FEATURES: Readonly<Features> = {
   passwordChange: true,
   bidRefusals: true,
   approveAnywhere: true,
+  reopenBidding: true,
   openRows: true,
 }
