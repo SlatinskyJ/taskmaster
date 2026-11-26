@@ -55,23 +55,32 @@
 - [ ] **Step 4:** Rerun → PASS.
 - [ ] **Step 5: Failing parse and handler tests:**
   - parse: `seenStatusOf({})` → `{}`; `{ seenStatus: 'proposed' }` → `{ seenStatus: 'proposed' }`; `'active'` likewise; `'done'`, `1`, `null` → throws. `parseSeenScore` and `parseSeenApproval` carry it through; `parseSeenApproval` still refuses what `parseApproval` refuses.
-  - `functions.test.ts`: `counterTemplateScoreHandler(db, tata, { templateId, score: 6, seenStatus: 'proposed' }, now)` on a chore that went active → `{ ok: false, error: 'offer_changed' }` (proves the handler passes it on); one more for `bidTemplateScoreHandler`.
+  - `functions.test.ts`, one per handler, each on a chore that went active after the call's page was drawn, each `{ ok: false, error: 'offer_changed' }` and nothing written: `counterTemplateScoreHandler(db, tata, { templateId, score: 6, seenStatus: 'proposed' }, now)`, `bidTemplateScoreHandler` (Mladší, 7), `acceptTemplateBidHandler` (Táta, the lowest bid he saw), `acceptTemplateOfferHandler` (a brother who bid, the offer he saw). Each proves its handler passes `seenStatus` on.
 - [ ] **Step 6:** Rerun → FAIL. Implement `seenStatusOf`, `parseSeenApproval`, the handler opts, and the two validators. Rerun → PASS.
 - [ ] **Step 7:** `pnpm typecheck && pnpm lint && pnpm vitest run src/server/templates` → green. Commit `Refuse a first-price call whose chore status moved (server)`.
+
+`approveTemplateScoreFn` (Souhlasím) is not one of these four: it goes through `approveTemplateScoreIn`, which already refuses an active chore (`not_proposed`). It would accept `seenStatus` through `parseSeenScore` and ignore it; the client never sends it there (Task 2).
 
 ### Task 2: The chore page sends the status it showed
 
 **Files:**
-- Modify: `src/components/templates/priceView.ts` (`firstPriceButtons`, `priceButtons`, `firstPriceSend`, `priceSend`: every bid, counter, acceptBid and acceptOffer `data` gets `seenStatus: t.status`)
+- Modify: `src/components/templates/priceView.ts` (`firstPriceButtons`, `priceButtons`, `firstPriceSend`, `priceSend`: every bid, counter, acceptBid and acceptOffer `data` gets `seenStatus: t.status`; the taker's `approve` data does not; the `priceToast` comment that says a late call "runs as a score change" now says it is refused as `offer_changed`)
+- Test (e2e): `e2e/chore-bidding.spec.ts` (new last test, through the real routes and server functions)
 - Modify: `src/components/templates/priceCalls.ts` only if its data types need the field
 - Test: the existing `priceView` unit test file (`src/components/templates/*priceView*.test.ts`)
 
 **Interfaces:**
 - Consumes: `seenStatus` accepted by the four server functions (Task 1).
 
-- [ ] **Step 1: Failing tests:** for a proposed chore, the taker's approve button data and send data, and the giver's accept-bid button and counter send data, each `toMatchObject({ seenStatus: 'proposed' })`; for an active chore with a change, the same four `{ seenStatus: 'active' }`. Existing exact-equality expectations on `data` are updated to include the field (not loosened).
+- [ ] **Step 1: Failing tests:** for a proposed chore, the taker's bid send data, the giver's accept-bid button data and counter send data each `toMatchObject({ seenStatus: 'proposed' })`, and the taker's approve button data has no `seenStatus` key; for an active chore with a change, the taker's accept-offer button and bid send, the giver's accept-bid button and counter send, each `{ seenStatus: 'active' }`. Existing exact-equality expectations on `data` are updated to include the field (not loosened).
 - [ ] **Step 2:** Run → FAIL. Add the field. Run → PASS.
 - [ ] **Step 3:** `pnpm typecheck && pnpm lint && pnpm test` → green. Commit `Chore page sends the status it showed with each price call`.
-- [ ] **Step 4:** Existing e2e suites that use these buttons still pass: `pnpm build && pnpm e2e --project chores --project chorechange --project recurring --project rows`.
+- [ ] **Step 4: e2e, the #243 case end to end** (last test in `e2e/chore-bidding.spec.ts`, `chores` seed, after the two existing tests; "Zalít kytky" is then proposed at 4 with its bids closed): `'Táta's counter at a bid is refused once a brother agreed the chore meanwhile (#243)'`.
+  - Mladší (page A) bids 6 on "Zalít kytky" from its page.
+  - Táta (page B) opens "Zalít kytky" and sees Mladší's bid 6; he steps the number to 6 so the send button reads `cs.templatePrice.acceptBid(6, 'Mladší')`, and does not tap yet.
+  - Starší (page C) taps Souhlasím on "Zalít kytky" on his Domů → `cs.tasks.approved`; the chore is active at 4.
+  - Táta taps the send button on page B → `cs.tasks.errors.offerChanged` is visible; after `page.reload()` the page shows `cs.templatePrice.now(4)`, and no `Přijmout` button or open price change.
+  - Without Task 1 this test fails (the counter opens a price change at 6), which proves the field travels through the real validators of `counterTemplateScoreFn`.
+- [ ] **Step 5:** Run it and the suites that use these buttons: `pnpm build && pnpm e2e --project chores --project chorechange --project recurring --project rows` → green. Commit.
 
 No screen changes: the refused call already toasts `cs.tasks.errors.offerChanged` and reloads (`#242`). No `preview` label.
