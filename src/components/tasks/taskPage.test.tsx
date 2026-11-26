@@ -263,7 +263,9 @@ describe('task page: price, cancel, history (#36)', () => {
     expect(html).toContain('zrušeno')
     expect(html).toContain('„Udělá to firma.“')
     // The time is in the markup, hidden until a tap (#248).
-    expect(html).toMatch(/<p id="history-time-1" hidden=""[^>]*>so 21\. 11\. 10:12<\/p>/)
+    expect(html).toMatch(
+      /<div id="history-time-1" aria-hidden="true"[^>]*><div[^>]*><p[^>]*>so 21\. 11\. 10:12<\/p>/,
+    )
     expect(html).not.toContain(cs.cancelTask.action)
     // Never reopened: no round dividers (#212).
     expect(html).not.toContain('role="separator"')
@@ -292,7 +294,8 @@ describe('task page: price, cancel, history (#36)', () => {
     const two = html.indexOf(cs.history.round(2))
     const now = html.indexOf('chce 12 b')
     expect(Math.min(one, old, two, now)).toBeGreaterThanOrEqual(0)
-    expect(one < old && old < two && two < now).toBe(true)
+    // Newest on top: round 2 and its bid first, round 1 below (Jakub 2026-11-26 20:01).
+    expect(two < now && now < one && one < old).toBe(true)
     expect(html).toContain(`role="separator" aria-label="${cs.history.round(2)}"`)
   })
 
@@ -326,7 +329,8 @@ describe('task page: price, cancel, history (#36)', () => {
     ]
     const html = render(STARSI, reserved)
     page.history = []
-    const [mine, theirs] = historyLis(html)
+    // Newest on top: Táta's answer first.
+    const [theirs, mine] = historyLis(html)
     expect(mine).toContain('items-start')
     expect(mine).toContain('bg-ink')
     expect(mine).toContain('chce 6 b')
@@ -356,7 +360,9 @@ describe('task page: price, cancel, history (#36)', () => {
     expect(note).toMatch(
       /<button type="button" aria-expanded="false" aria-controls="history-time-7"[^>]*>.*prošlo/,
     )
-    expect(note).toMatch(/<p id="history-time-7" hidden=""[^>]*>so 21\. 11\. 10:12<\/p>/)
+    expect(note).toMatch(
+      /<div id="history-time-7" aria-hidden="true"[^>]*><div[^>]*><p[^>]*>so 21\. 11\. 10:12<\/p>/,
+    )
   })
 })
 

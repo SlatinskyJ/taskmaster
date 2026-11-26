@@ -138,18 +138,9 @@ describe('historyItems (#248)', () => {
       ],
       4,
     )
+    // Newest on top (Jakub 2026-11-26 20:01).
     expect(items).toEqual([
-      {
-        kind: 'bubble',
-        id: 1,
-        side: 'theirs',
-        name: 'Táta',
-        text: 'nový úkol za 8 b',
-        reason: null,
-        time: 'so 21. 11. 10:12',
-        joinAbove: false,
-        joinBelow: false,
-      },
+      { kind: 'note', id: 3, text: 'prošlo', reason: null, time: 'so 21. 11. 10:12' },
       {
         kind: 'bubble',
         id: 2,
@@ -161,7 +152,17 @@ describe('historyItems (#248)', () => {
         joinAbove: false,
         joinBelow: false,
       },
-      { kind: 'note', id: 3, text: 'prošlo', reason: null, time: 'so 21. 11. 10:12' },
+      {
+        kind: 'bubble',
+        id: 1,
+        side: 'theirs',
+        name: 'Táta',
+        text: 'nový úkol za 8 b',
+        reason: null,
+        time: 'so 21. 11. 10:12',
+        joinAbove: false,
+        joinBelow: false,
+      },
     ])
   })
 
@@ -175,15 +176,15 @@ describe('historyItems (#248)', () => {
       4,
     )
     expect(shape(items)).toEqual([
-      { id: 1, side: 'theirs', name: 'Táta', above: false, below: true },
+      { id: 3, side: 'theirs', name: 'Táta', above: false, below: true },
       { id: 2, side: 'theirs', name: null, above: true, below: true },
-      { id: 3, side: 'theirs', name: null, above: true, below: false },
+      { id: 1, side: 'theirs', name: null, above: true, below: false },
     ])
     // My own run joins the same way, with no name.
     expect(shape(historyItems([entry({ id: 1 }), entry({ id: 2 }), entry({ id: 3 })], 2))).toEqual([
-      { id: 1, side: 'mine', name: null, above: false, below: true },
+      { id: 3, side: 'mine', name: null, above: false, below: true },
       { id: 2, side: 'mine', name: null, above: true, below: true },
-      { id: 3, side: 'mine', name: null, above: true, below: false },
+      { id: 1, side: 'mine', name: null, above: true, below: false },
     ])
   })
 
@@ -193,24 +194,24 @@ describe('historyItems (#248)', () => {
     expect(
       shape(historyItems([tata(1), entry({ id: 2, ...by(6, 'Kristýna-Magdaléna') }), tata(3)], 4)),
     ).toEqual([
-      { id: 1, side: 'theirs', name: 'Táta', above: false, below: false },
-      { id: 2, side: 'theirs', name: 'Kristýna-Magdaléna', above: false, below: false },
       { id: 3, side: 'theirs', name: 'Táta', above: false, below: false },
+      { id: 2, side: 'theirs', name: 'Kristýna-Magdaléna', above: false, below: false },
+      { id: 1, side: 'theirs', name: 'Táta', above: false, below: false },
     ])
     expect(
       shape(
         historyItems([tata(1), entry({ id: 2, action: 'instance.expired', by: null }), tata(3)], 4),
       ),
     ).toEqual([
-      { id: 1, side: 'theirs', name: 'Táta', above: false, below: false },
-      { note: 2 },
       { id: 3, side: 'theirs', name: 'Táta', above: false, below: false },
+      { note: 2 },
+      { id: 1, side: 'theirs', name: 'Táta', above: false, below: false },
     ])
     expect(shape(historyItems([tata(1), tata(2, 'task.bidding_reopened')], 4))).toEqual([
-      { round: 1 },
-      { id: 1, side: 'theirs', name: 'Táta', above: false, below: false },
       { round: 2 },
       { id: 2, side: 'theirs', name: 'Táta', above: false, below: false },
+      { round: 1 },
+      { id: 1, side: 'theirs', name: 'Táta', above: false, below: false },
     ])
   })
 
@@ -220,12 +221,12 @@ describe('historyItems (#248)', () => {
       5,
     )
     expect(shape(items)).toEqual([
-      { id: 1, side: 'theirs', name: 'Táta', above: false, below: false },
       { id: 2, side: 'mine', name: null, above: false, below: false },
+      { id: 1, side: 'theirs', name: 'Táta', above: false, below: false },
     ])
   })
 
-  it('rounds: a divider item before each round start, only once reopened', () => {
+  it('rounds: newest round on top, each under its divider, newest entry first; only once reopened', () => {
     const entries = [
       entry({ id: 1 }),
       entry({ id: 2, action: 'task.bid_placed', ...by(3, 'Starší') }),
@@ -233,10 +234,12 @@ describe('historyItems (#248)', () => {
       entry({ id: 4, action: 'task.bid_placed', ...by(3, 'Starší') }),
     ]
     const items = historyItems(entries, 3)
-    expect(items.map((i) => (i.kind === 'round' ? `${i.key}:${String(i.round)}` : i.kind))).toEqual(
-      ['round-1:1', 'bubble', 'bubble', 'round-2:2', 'bubble', 'bubble'],
-    )
-    expect(historyItems(entries.slice(0, 2), 3).map((i) => i.kind)).toEqual(['bubble', 'bubble'])
+    expect(
+      items.map((i) => (i.kind === 'round' ? `${i.key}:${String(i.round)}` : `id${String(i.id)}`)),
+    ).toEqual(['round-2:2', 'id4', 'id3', 'round-1:1', 'id2', 'id1'])
+    expect(historyItems(entries.slice(0, 2), 3).map((i) => i.kind !== 'round' && i.id)).toEqual([
+      2, 1,
+    ])
     expect(historyItems([], 3)).toEqual([])
   })
 

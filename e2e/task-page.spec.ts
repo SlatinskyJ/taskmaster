@@ -40,7 +40,8 @@ test('saying no, agreeing to a new price, and cancelling a task', async ({ page 
     name: cs.history.changeDeclined(12),
     exact: true,
   })
-  const other = history(page).getByRole('button').first()
+  // The oldest entry, at the bottom (newest first).
+  const other = history(page).getByRole('button').last()
   const bubbleTime = await bubble.getAttribute('aria-controls')
   const otherTime = await other.getAttribute('aria-controls')
   expect(bubbleTime).toMatch(/^history-time-\d+$/)

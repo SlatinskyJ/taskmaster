@@ -131,44 +131,57 @@ type Bubble = Extract<HistoryItem, { kind: 'bubble' }>
 
 /**
  * The history as layout items (#248, Jakub 2026-11-26): my entries a bubble on the left, everyone
- * else's on the right, the system's a centred note, a divider before each bidding round. Bubbles
- * by the same person in a row are a run; a round, a note or another person ends it.
+ * else's on the right, the system's a centred note. Newest on top (Jakub 2026-11-26 20:01): the
+ * latest bidding round first, each under its divider, newest entry first within it. Bubbles by the
+ * same person in a row are a run; a round, a note or another person ends it.
  */
 export function historyItems(entries: readonly HistoryEntry[], meId: number): HistoryItem[] {
   const rounds = historyRounds(entries)
-  const items: HistoryItem[] = []
-  // The last bubble, while the run can still go on, and whose it is.
-  let last: { bubble: Bubble; byId: number } | null = null
+  // Oldest first, split where a round starts; a history never reopened is one group with no round.
+  const groups: { round: number | undefined; entries: HistoryEntry[] }[] = []
+  let current: { round: number | undefined; entries: HistoryEntry[] } | undefined
   for (const e of entries) {
     const round = rounds.get(e.id)
-    if (round !== undefined) {
-      items.push({ kind: 'round', key: `round-${String(round)}`, round })
+    if (!current || round !== undefined) {
+      current = { round, entries: [] }
+      groups.push(current)
+    }
+    current.entries.push(e)
+  }
+  const items: HistoryItem[] = []
+  // The bubble above, while the run can still go on, and whose it is.
+  let last: { bubble: Bubble; byId: number } | null = null
+  for (const group of groups.reverse()) {
+    if (group.round !== undefined) {
+      items.push({ kind: 'round', key: `round-${String(group.round)}`, round: group.round })
       last = null
     }
-    const text = historyText(e, meId)
-    const reason = historyReason(e)
-    const time = historyTime(e.at)
-    if (!e.by) {
-      items.push({ kind: 'note', id: e.id, text, reason, time })
-      last = null
-      continue
+    for (const e of [...group.entries].reverse()) {
+      const text = historyText(e, meId)
+      const reason = historyReason(e)
+      const time = historyTime(e.at)
+      if (!e.by) {
+        items.push({ kind: 'note', id: e.id, text, reason, time })
+        last = null
+        continue
+      }
+      const mine = e.by.id === meId
+      const joinAbove = last?.byId === e.by.id
+      if (last && joinAbove) last.bubble.joinBelow = true
+      const bubble: Bubble = {
+        kind: 'bubble',
+        id: e.id,
+        side: mine ? 'mine' : 'theirs',
+        name: mine || joinAbove ? null : e.by.name,
+        text,
+        reason,
+        time,
+        joinAbove,
+        joinBelow: false,
+      }
+      items.push(bubble)
+      last = { bubble, byId: e.by.id }
     }
-    const mine = e.by.id === meId
-    const joinAbove = last?.byId === e.by.id
-    if (last && joinAbove) last.bubble.joinBelow = true
-    const bubble: Bubble = {
-      kind: 'bubble',
-      id: e.id,
-      side: mine ? 'mine' : 'theirs',
-      name: mine || joinAbove ? null : e.by.name,
-      text,
-      reason,
-      time,
-      joinAbove,
-      joinBelow: false,
-    }
-    items.push(bubble)
-    last = { bubble, byId: e.by.id }
   }
   return items
 }

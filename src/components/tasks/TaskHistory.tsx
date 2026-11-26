@@ -7,7 +7,7 @@ import type { HistoryEntry } from '~/server/tasks/functions'
 import { historyItems } from './historyText'
 
 /**
- * Everything that happened to the task, oldest first (#36, mockup GTask "Historie"), as chat
+ * Everything that happened to the task, newest first (#36, mockup GTask "Historie"), as chat
  * bubbles (#248, Jakub 2026-11-26): mine on the left and dark, everyone else's on the right, the
  * system's a centred note. The time shows under an entry after a tap, a second tap hides it.
  */
@@ -44,14 +44,20 @@ export function TaskHistory({ entries, meId }: { entries: readonly HistoryEntry[
               )
             }
             const shown = open.has(item.id)
+            // Slides open under the entry on a tap, and shut again (Jakub 2026-11-26 20:01).
             const time = (
-              <p
+              <div
                 id={timeId(item.id)}
-                hidden={!shown}
-                className="px-1.5 text-xs font-medium text-muted"
+                aria-hidden={!shown}
+                className={cn(
+                  'grid transition-[grid-template-rows,opacity] duration-300 ease-out motion-reduce:transition-none',
+                  shown ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+                )}
               >
-                {item.time}
-              </p>
+                <div className="min-h-0 overflow-hidden">
+                  <p className="px-1.5 pt-0.5 text-xs font-medium text-muted">{item.time}</p>
+                </div>
+              </div>
             )
             if (item.kind === 'note') {
               return (
@@ -82,13 +88,13 @@ export function TaskHistory({ entries, meId }: { entries: readonly HistoryEntry[
               <li
                 key={item.id}
                 className={cn(
-                  'flex flex-col gap-0.5',
+                  'flex flex-col',
                   mine ? 'items-start' : 'items-end',
                   item.joinAbove ? 'mt-[3px]' : 'mt-3.5 first:mt-0',
                 )}
               >
                 {item.name && (
-                  <span className="max-w-[80%] px-1.5 text-right text-xs font-extrabold break-words text-muted">
+                  <span className="mb-0.5 max-w-[80%] px-1.5 text-right text-xs font-extrabold break-words text-muted">
                     {item.name}
                   </span>
                 )}
