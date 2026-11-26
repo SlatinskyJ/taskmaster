@@ -35,6 +35,7 @@ export function RecurringList({
           return (
             <li key={t.id}>
               <TaskRow
+                described={t.description !== null}
                 name={t.title}
                 state={chip.state}
                 stateLabel={chip.label}

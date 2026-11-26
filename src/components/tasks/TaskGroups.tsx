@@ -44,6 +44,7 @@ export function TaskGroups({
               <ApprovableRow task={t} {...approve} links={links} />
             ) : (
               <TaskRow
+                described={t.description !== null}
                 name={!links && linked(t) ? <TaskLink id={t.id} title={t.title} /> : t.title}
                 state={taskChipState(t)}
                 points={t.score}

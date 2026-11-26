@@ -90,3 +90,36 @@ export function waitingDescriptionOf(
     waitingForNames: ids.map((id) => names.get(id) ?? ''),
   }
 }
+
+/** A waiting change on Domů "Čeká na tebe" (ruling 6): the item it is on, for a page link. */
+export interface DescriptionWaitingRow {
+  target: DescriptionTarget
+  name: string
+  score: number
+  changeId: number
+}
+
+/** Every open change whose OK may come from `userId`, oldest first. */
+export function listDescriptionChangesWaiting(
+  db: Db | Tx,
+  userId: number,
+): DescriptionWaitingRow[] {
+  const open = db
+    .select()
+    .from(descriptionChanges)
+    .where(isNull(descriptionChanges.closedAt))
+    .orderBy(descriptionChanges.id)
+    .all()
+  const rows: DescriptionWaitingRow[] = []
+  for (const change of open) {
+    const target: DescriptionTarget =
+      change.taskId !== null
+        ? { kind: 'task', id: change.taskId }
+        : { kind: 'template', id: change.templateId ?? 0 }
+    const waiting = waitingDescriptionOf(db, target)
+    const loaded = load(db, target)
+    if (!waiting?.waitingFor.includes(userId) || !loaded) continue
+    rows.push({ target, name: loaded.row.title, score: loaded.row.score, changeId: change.id })
+  }
+  return rows
+}

@@ -206,6 +206,7 @@ export function ApprovableRow({
   return (
     <div className="grid gap-2">
       <TaskRow
+        described={task.description !== null}
         name={task.title}
         state="pending"
         points={task.score}

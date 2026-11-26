@@ -368,6 +368,7 @@ function StepPlan({
             <li key={t.id}>
               <Link to="/ukol/$taskId" params={{ taskId: String(t.id) }} className="block">
                 <TaskRow
+                  described={t.description !== null}
                   name={t.title}
                   state={taskChipState(t)}
                   points={t.score}

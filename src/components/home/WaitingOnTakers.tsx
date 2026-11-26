@@ -31,6 +31,7 @@ export function WaitingOnTakers({
         {items.map((task) => (
           <li key={task.id}>
             <TaskRow
+              described={task.description !== null}
               name={task.title}
               state={taskChipState(task)}
               points={task.score}

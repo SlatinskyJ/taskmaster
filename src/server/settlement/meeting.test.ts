@@ -2,7 +2,7 @@ import { asc, eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import type { Db } from '~/server/db'
-import { auditLog, periods, settlements, users } from '~/server/db/schema'
+import { auditLog, featureFlags, periods, settlements, tasks, users } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { listPeriods, rollPeriods, savePeriodDefaults } from '~/server/periods'
 import { failAuditOn, family, json, must } from '~/server/tasks/testing'
@@ -74,6 +74,28 @@ describe('getMeeting', () => {
       ],
     })
     expect(m.period && m.pending.map((t) => t.id)).toEqual([pending])
+  })
+
+  it('pending items carry their description only with the switch on (#207)', () => {
+    const f = example()
+    const id = doneTask(f, {
+      score: 8,
+      completedAt: plus(MEETING, -60_000),
+      earner: f.mladsi,
+      status: 'done_unconfirmed',
+    })
+    f.db.update(tasks).set({ description: 'I kufr.' }).where(eq(tasks.id, id)).run()
+    const first = () => {
+      const m = getMeeting(f.db, MEETING, false)
+      return m.period ? m.pending[0]?.description : 'no period'
+    }
+    expect(first()).toBeNull()
+    f.db
+      .update(featureFlags)
+      .set({ enabled: true })
+      .where(eq(featureFlags.key, 'descriptions'))
+      .run()
+    expect(first()).toBe('I kufr.')
   })
 
   it('pending boundary at the period end', () => {

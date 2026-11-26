@@ -33,6 +33,7 @@ const EXPECTED_ROLES: Record<string, string> = {
   createTaskFn: 'giver',
   changeDescriptionFn: 'giver',
   answerDescriptionFn: 'taker',
+  listDescriptionChangesWaitingFn: 'taker',
   createInstanceFn: 'giver',
   selfLogFn: 'taker',
   listLoggableTemplatesFn: 'taker',

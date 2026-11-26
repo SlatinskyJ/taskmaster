@@ -7,6 +7,7 @@ import { myTemplateBid, priceMeta, templateChip } from '~/components/templates/p
 import { Button, buttonVariants } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
 import { templateDetail } from '~/lib/templateText'
+import type { DescriptionWaitingRow } from '~/server/descriptions/functions'
 import type { ProposalKind } from '~/server/periods/functions'
 import type { TaskView } from '~/server/tasks/functions'
 import type { TemplateView } from '~/server/templates/functions'
@@ -15,7 +16,11 @@ import type { Me } from './taskView'
 import { bidButtons, myBid, taskChipState, toastFor, waitingMeta } from './taskView'
 import { taskLink, templateLink } from './rowLink'
 import { TaskRow } from './TaskRow'
+import type { RowLink } from './rowLink'
 import { useTaskAction } from './useTaskAction'
+
+const targetLink = (t: DescriptionWaitingRow['target']): RowLink =>
+  t.kind === 'task' ? taskLink(t.id) : templateLink(t.id)
 
 /**
  * "Čeká na tebe" (UI doc §6 [call]: always at the top of Domů): new task offers and new
@@ -26,13 +31,16 @@ import { useTaskAction } from './useTaskAction'
  * link "Jiná cena" to the page; with my bid only "Otevřít", because picking between "Beru" and
  * "Souhlasím" needs both hints, which a row has no room for.
  * A price change of an agreed template (#138) waiting for this person's side links to its page;
- * so does a new price of an agreed one-time task waiting for this person (#36).
+ * so does a new price of an agreed one-time task waiting for this person (#36), and a new
+ * description waiting for his OK (#207 ruling 6). A proposed item with a description links to its
+ * page ("Přečíst a souhlasit") instead of Souhlasím, so he reads the text first (ruling 1).
  */
 export function WaitingForYou({
   items,
   templates = [],
   priceChanges,
   taskPriceChanges,
+  descriptionChanges,
   proposals = [],
   me,
   links = false,
@@ -43,6 +51,8 @@ export function WaitingForYou({
   priceChanges: readonly TemplateView[]
   /** Required too: one-time tasks whose new price waits for this person (#36). */
   taskPriceChanges: readonly TaskView[]
+  /** Required too: description changes waiting for this brother's OK (#207). */
+  descriptionChanges: readonly DescriptionWaitingRow[]
   /** Proposals for next week or the default week waiting for this person (#43). */
   proposals?: readonly ProposalKind[]
   me: Me
@@ -58,6 +68,7 @@ export function WaitingForYou({
     templates.length +
     priceChanges.length +
     taskPriceChanges.length +
+    descriptionChanges.length +
     proposals.length
   if (count === 0) return null
 
@@ -111,6 +122,7 @@ export function WaitingForYou({
    * page like a Návrh: Jiná cena next to it, or only Otevřít once he has a bid.
    */
   function templateActions(t: TemplateView) {
+    if (t.description !== null) return answerLink(t, cs.description.readAndAgree)
     const key = `template-${String(t.id)}`
     const yes = approveButton(key, () => approveTemplate(t))
     if (!t.bidding) return yes
@@ -136,6 +148,7 @@ export function WaitingForYou({
   }
 
   function taskActions(task: TaskView) {
+    if (task.description !== null) return pageLink(task, cs.description.readAndAgree)
     const approve = bidButtons(task, me).find((b) => b.key === 'approve')
     if (myBid(task, me) !== null || !approve) return pageLink(task, cs.bids.open)
     const key = `task-${String(task.id)}`
@@ -169,6 +182,7 @@ export function WaitingForYou({
         {items.map((task) => (
           <li key={`task-${String(task.id)}`}>
             <TaskRow
+              described={task.description !== null}
               name={task.title}
               state={taskChipState(task)}
               points={task.score}
@@ -181,6 +195,7 @@ export function WaitingForYou({
         {templates.map((t) => (
           <li key={`template-${String(t.id)}`}>
             <TaskRow
+              described={t.description !== null}
               name={t.title}
               state={templateChip(t).state}
               points={t.score}
@@ -194,6 +209,7 @@ export function WaitingForYou({
         {priceChanges.map((t) => (
           <li key={`price-${String(t.id)}`}>
             <TaskRow
+              described={t.description !== null}
               name={t.title}
               state="negotiating"
               points={t.score}
@@ -206,12 +222,30 @@ export function WaitingForYou({
         {taskPriceChanges.map((t) => (
           <li key={`task-price-${String(t.id)}`}>
             <TaskRow
+              described={t.description !== null}
               name={t.title}
               state="negotiating"
               points={t.score}
               meta={cs.taskPrice.rowMeta(t.score, t.scoreChange?.score ?? t.score)}
               action={pageLink(t, cs.bids.answer)}
               link={links ? taskLink(t.id) : undefined}
+            />
+          </li>
+        ))}
+        {descriptionChanges.map((c) => (
+          <li key={`description-${c.target.kind}-${String(c.target.id)}`}>
+            <TaskRow
+              name={c.name}
+              state="negotiating"
+              points={c.score}
+              meta={cs.description.homeRow}
+              described
+              action={
+                <Link {...targetLink(c.target)} className={buttonVariants({ variant: 'ghost' })}>
+                  {cs.bids.answer}
+                </Link>
+              }
+              link={links ? targetLink(c.target) : undefined}
             />
           </li>
         ))}

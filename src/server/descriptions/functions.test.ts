@@ -27,6 +27,7 @@ import { changeDescriptionOf } from './descriptions'
 import {
   answerDescriptionHandler,
   changeDescriptionHandler,
+  descriptionChangesWaitingHandler,
   parseDescriptionAnswer,
   parseDescriptionChange,
 } from './functions'
@@ -314,5 +315,56 @@ describe('parsers', () => {
         'Invalid input',
       )
     }
+  })
+})
+
+describe('Domů: waiting description changes (ruling 6)', () => {
+  it('a reserved task lists only for the reserver; an open task and a chore for every brother', () => {
+    const f = family()
+    on(f)
+    const reserved = car(f)
+    must(approveTaskOffer(f.db, f.starsi, reserved, 18, T0))
+    must(reserveTask(f.db, f.starsi, reserved, T0))
+    must(changeDescriptionOf(f.db, { kind: 'task', id: reserved }, f.tata, 'Jen obývák.', T1))
+    const open = car(f)
+    must(approveTaskOffer(f.db, f.mladsi, open, 18, T0))
+    must(changeDescriptionOf(f.db, { kind: 'task', id: open }, f.tata, 'I chodba.', T1))
+    const chore = agreedTemplate(f)
+    must(changeDescriptionOf(f.db, { kind: 'template', id: chore }, f.tata, 'Hrnce ručně.', T1))
+    const names = (id: number) => descriptionChangesWaitingHandler(f.db, id).map((r) => r.target)
+    expect(names(f.starsi)).toEqual([
+      { kind: 'task', id: reserved },
+      { kind: 'task', id: open },
+      { kind: 'template', id: chore },
+    ])
+    expect(names(f.mladsi)).toEqual([
+      { kind: 'task', id: open },
+      { kind: 'template', id: chore },
+    ])
+    const [first] = descriptionChangesWaitingHandler(f.db, f.starsi)
+    expect(Object.keys(first ?? {}).sort()).toEqual(['changeId', 'name', 'score', 'target'])
+  })
+
+  it("a closed change and a parent's view list nothing", () => {
+    const f = family()
+    on(f)
+    const id = car(f)
+    must(approveTaskOffer(f.db, f.mladsi, id, 18, T0))
+    must(changeDescriptionOf(f.db, { kind: 'task', id }, f.tata, 'I chodba.', T1))
+    expect(descriptionChangesWaitingHandler(f.db, f.tata)).toEqual([])
+    const change = getTaskDetail(f.db, id, { descriptions: true })?.descriptionChange
+    const answer = { target: { kind: 'task', id } as const, changeId: change?.id ?? 0, yes: false }
+    expect(answerDescriptionHandler(f.db, f.starsi, answer, T2).ok).toBe(true)
+    expect(descriptionChangesWaitingHandler(f.db, f.starsi)).toEqual([])
+  })
+
+  it('switch off: nothing', () => {
+    const f = family()
+    on(f)
+    const id = car(f)
+    must(approveTaskOffer(f.db, f.mladsi, id, 18, T0))
+    must(changeDescriptionOf(f.db, { kind: 'task', id }, f.tata, 'I chodba.', T1))
+    setFlag(f, 'descriptions', false)
+    expect(descriptionChangesWaitingHandler(f.db, f.starsi)).toEqual([])
   })
 })

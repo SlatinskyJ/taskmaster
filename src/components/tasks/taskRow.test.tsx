@@ -32,6 +32,7 @@ const PLAIN_FOOTER =
 const row = (link?: ReturnType<typeof taskLink>, footer?: ReactNode) =>
   renderToStaticMarkup(
     <TaskRow
+      described={false}
       name="Umýt okna"
       state="open"
       points={5}
@@ -64,5 +65,15 @@ describe('TaskRow link (#205)', () => {
     expect(row(taskLink(7), <button>F</button>)).toContain(
       '<div class="relative z-10"><button>F</button></div>',
     )
+  })
+})
+
+describe('TaskRow described (#207)', () => {
+  it('one icon after the name, read as "Má popis"', () => {
+    const html = renderToStaticMarkup(
+      <TaskRow described name="Umýt okna" state="open" points={5} />,
+    )
+    expect(html.match(/role="img"/g)).toHaveLength(1)
+    expect(html).toMatch(/Umýt okna<svg[^>]*role="img"[^>]*aria-label="Má popis"/)
   })
 })

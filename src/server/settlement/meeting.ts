@@ -26,6 +26,7 @@ import type { Actor, Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { settlements, users } from '~/server/db/schema'
 import type { SettlementRow } from '~/server/db/schema'
+import { getFlags } from '~/server/features'
 import { endRunningPeriod, getPeriodDefaults, listPeriods } from '~/server/periods'
 import { listPendingCompletions } from '~/server/tasks/tasks'
 import type { TaskView } from '~/server/tasks/tasks'
@@ -136,7 +137,7 @@ function preview(
   now: Date,
 ): Result<Preview, SettlementError> {
   const end = isRunning(target, now) ? now : periodEnd(target)
-  const pending = listPendingCompletions(db).filter(
+  const pending = listPendingCompletions(db, { descriptions: getFlags(db).descriptions }).filter(
     (t) => t.completedAt !== null && t.completedAt < toIsoUtc(end),
   )
   const entries = ledgerEntries(db, end)

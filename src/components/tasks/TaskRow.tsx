@@ -1,5 +1,7 @@
 import { Link } from '@tanstack/react-router'
+import { NotebookText } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { cs } from '~/lib/strings'
 import type { ItemStateKey } from '~/lib/strings'
 import { cn } from '~/lib/utils'
 import type { RowLink } from './rowLink'
@@ -28,6 +30,7 @@ export function TaskRow({
   action,
   footer,
   link,
+  described,
   className,
 }: {
   name: ReactNode
@@ -45,6 +48,11 @@ export function TaskRow({
   footer?: ReactNode
   /** The row's page; tapping the card opens it (#205). */
   link?: RowLink
+  /**
+   * The item has a description (#207): a small icon after the name; the text itself is only on
+   * the page. Required, so no list forgets it.
+   */
+  described: boolean
   className?: string
 }) {
   const card = 'relative rounded-card border-l-4 bg-surface py-2.5 pr-2.5 pl-3 shadow-sticker'
@@ -62,6 +70,13 @@ export function TaskRow({
             </Link>
           ) : (
             name
+          )}
+          {described && (
+            <NotebookText
+              role="img"
+              aria-label={cs.description.hasIcon}
+              className="ml-1 inline size-4 align-[-2px] text-muted"
+            />
           )}
         </div>
         {/* Chip and meta sit side by side when they fit, else the meta wraps under the chip; an
