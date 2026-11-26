@@ -42,6 +42,15 @@ export function sendDescription(
   return run(() => fn({ data: { ...target, description: text } }))
 }
 
+/** Ruling 7: a parent takes a waiting change back by sending the text in force ('' for none). */
+export function takeBackDescription(
+  target: DescriptionTarget,
+  inForce: string | null,
+  fn: ChangeCall,
+): Promise<DescriptionCallResult<'applied' | 'waiting' | 'withdrawn'>> {
+  return sendDescription(target, inForce ?? '', fn)
+}
+
 /** A brother's yes or no to the waiting change his page showed. */
 export function answerDescription(
   target: DescriptionTarget,
@@ -67,4 +76,12 @@ export function canEditDescription(item: EditableItem, me: Me): boolean {
     item.origin === 'one_time' &&
     (item.status === 'proposed' || item.status === 'open' || item.status === 'reserved')
   )
+}
+
+/** What the edit sheet opens with: the waiting text if a change waits ('' for a removal), else the text in force. */
+export function sheetStart(
+  text: string | null,
+  change: { description: string | null } | null,
+): string {
+  return change ? (change.description ?? '') : (text ?? '')
 }

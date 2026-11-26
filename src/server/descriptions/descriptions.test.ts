@@ -158,6 +158,7 @@ describe('an agreed task: the change waits for a taker (spec §5.2)', () => {
       proposedBy: f.tata,
       createdAt: T1.toISOString(),
       waitingFor: [f.starsi, f.mladsi],
+      waitingForNames: ['Starší', 'Mladší'],
     })
     const changeId = waiting?.id ?? 0
     expect(answerDescriptionChange(f.db, task(id), f.mladsi, changeId, true, T2)).toEqual({
@@ -193,6 +194,7 @@ describe('an agreed task: the change waits for a taker (spec §5.2)', () => {
     must(changeDescriptionOf(f.db, task(id), f.tata, 'new', T1))
     const waiting = waitingDescriptionOf(f.db, task(id))
     expect(waiting?.waitingFor).toEqual([f.starsi])
+    expect(waiting?.waitingForNames).toEqual(['Starší'])
     const changeId = waiting?.id ?? 0
     expect(answerDescriptionChange(f.db, task(id), f.mladsi, changeId, true, T2)).toEqual({
       ok: false,

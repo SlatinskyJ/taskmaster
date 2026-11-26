@@ -112,6 +112,7 @@ describe('switch on', () => {
       proposedBy: f.tata,
       createdAt: T1.toISOString(),
       waitingFor: [f.starsi, f.mladsi],
+      waitingForNames: ['Starší', 'Mladší'],
     })
     const answer = { target, changeId: change?.id ?? 0, yes: true }
     expect(answerDescriptionHandler(f.db, f.mladsi, answer, T2)).toStrictEqual({
