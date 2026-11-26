@@ -765,7 +765,7 @@ export const cs = {
       turnOffTitle: (name: string) => `Vypnout ${name}?`,
       forFamily: 'Změna platí pro celou rodinu.',
       /** Turning weekPlan off drops the copies' day rules on the next scheduler tick (15 min). */
-      weekPlanOff: 'Než ji znovu zapneš, nech ji aspoň 15 minut vypnutou.',
+      weekPlanOff: 'Než ho znovu zapneš, nech ho aspoň 15 minut vypnutý.',
       confirmOn: 'Zapnout',
       confirmOff: 'Vypnout',
       saving: 'Ukládám…',
