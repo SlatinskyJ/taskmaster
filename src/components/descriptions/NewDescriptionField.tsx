@@ -18,6 +18,7 @@ export function NewDescriptionField({
         name="description"
         maxLength={DESCRIPTION_MAX}
         rows={4}
+        className="max-h-48 overflow-y-auto"
         value={value}
         aria-describedby="description-hint"
         onChange={(e) => {

@@ -82,6 +82,23 @@ describe('e2e seeds (#183)', () => {
     ])
   })
 
+  it('descriptions (#207): e2e/descriptions.spec.ts opens tasks 1 and 2 and chore 1', () => {
+    const db = seeded('descriptions')
+    expect(getFlags(db)).toEqual({
+      ...NO_FEATURES,
+      descriptions: true,
+      openRows: true,
+      recurring: true,
+    })
+    const byId = new Map(listTasks(db).map((t) => [t.id, t]))
+    expect([byId.get(1)?.title, byId.get(1)?.status]).toEqual(['Uklidit kolárnu', 'proposed'])
+    expect([byId.get(2)?.title, byId.get(2)?.status]).toEqual(['Odnést krabice do sklepa', 'open'])
+    const tpl = db.select().from(templates).all()
+    expect(tpl.map((t) => [t.id, t.title, t.status])).toEqual([
+      [1, 'Utřít prach v pokoji', 'active'],
+    ])
+  })
+
   it('approve (#206): only the approveAnywhere switch on; e2e/approve.spec.ts opens tasks 6 and 3', () => {
     const db = seeded('approve')
     expect(getFlags(db)).toEqual({ ...NO_FEATURES, approveAnywhere: true })

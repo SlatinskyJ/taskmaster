@@ -112,7 +112,7 @@ test('/login: Czech letters in app fonts', async ({ page }) => {
 
 const SCREENS = [
   ['/', cs.work.toApprove],
-  ['/ukoly', cs.work.doneSelf],
+  ['/ukoly', cs.tasks.groupProposed],
   ['/tyden', cs.proposals.title],
   ['/schuzka', cs.meeting.steps[0]],
   ['/profil', cs.profile.title],
@@ -141,7 +141,7 @@ test('Týden history: digits Fredoka, words Baloo 2', async ({ page }) => {
 
 test('headings Baloo 2, numbers Fredoka', async ({ page }) => {
   await login(page)
-  await ready(page, '/ukoly', cs.work.doneSelf)
+  await ready(page, '/ukoly', cs.tasks.groupProposed)
   const [heading] = await scanFonts(page, 'h1')
   expect(families(heading)).toEqual([expect.stringMatching(/Baloo/)])
   const number = (await scanFonts(page, 'main')).find((s) => s.isNum && /^[0-9]+$/.test(s.text))

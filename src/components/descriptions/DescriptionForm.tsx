@@ -36,6 +36,7 @@ export function DescriptionForm({
           name="description"
           maxLength={DESCRIPTION_MAX}
           rows={6}
+          className="max-h-48 overflow-y-auto"
           value={text}
           onChange={(e) => {
             onText(e.target.value)
