@@ -55,7 +55,7 @@ Each state has a dot colour and a text colour. Text colours are darkened to reac
 State is shown in three places, the same way everywhere: a **chip** (rounded pill, dot + label, background 15 % of the dot colour), a **4 px stripe** on the left edge of a row, and the points colour where it applies.
 
 ### 2.3 Type, shape, spacing
-- **Fredoka** (500–700) for headings and all numbers (tabular figures). **Nunito** (500–800) for body text.
+- **Baloo 2** (500–800) for headings, buttons, tabs and titles. **Fredoka** (500–700) for all numbers (tabular figures); Fredoka has no `ě č ř ů ť ď ň`, so a Czech letter next to a number falls back to Baloo 2. **Nunito** (500–800) for body text. (Jakub 2026-11-26, #246: Fredoka drew Czech letters in a system font.)
 - Sizes: page title 26 px, row name 15 px, meta 13 px, chip 11 px, big points 40 px+.
 - Radius 16 px for cards, 12 px for buttons, full pill for chips and avatars.
 - Shadow: a flat `0 2px 0 shadow`, no blur. No gradients except the pending stripes.
