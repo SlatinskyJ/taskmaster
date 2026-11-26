@@ -86,7 +86,7 @@ function slotFor(tx: Tx, template: TemplateRow, at: Date): TaskRow | null {
     { slotAt },
   )
   if (row.graceEndsAt === null || parseIsoUtc(row.graceEndsAt).getTime() > at.getTime()) return row
-  const expired = expireTask(tx, row.id, at)
+  const expired = expireTask(tx, row.id, at, false)
   if (!expired.ok) throw new Error(`expiry refused: ${expired.error}`)
   return expired.value
 }

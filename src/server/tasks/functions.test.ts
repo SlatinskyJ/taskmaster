@@ -215,7 +215,7 @@ describe('the reopenBidding switch (#212)', () => {
       ok: false,
       error: 'bidding_instead',
     })
-    must(reserveTask(f.db, f.starsi, id, T1))
+    must(reserveTask(f.db, f.starsi, id, T1, false))
     expect(proposeTaskScoreChangeHandler(f.db, f.starsi, data, T2)).toEqual({
       ok: true,
       id,

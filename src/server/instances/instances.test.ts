@@ -123,8 +123,8 @@ describe('createOnDemandInstance ("+ Teď")', () => {
     const strict = must(createOnDemandInstance(f.db, f.tata, binsTemplate(f, true), T1))
     const loose = must(createOnDemandInstance(f.db, f.tata, binsTemplate(f, false), T1))
     expect([strict.approvalRequired, loose.approvalRequired]).toEqual([true, false])
-    expect(must(completeTask(f.db, f.starsi, strict.id, T1)).status).toBe('done_unconfirmed')
-    expect(must(completeTask(f.db, f.starsi, loose.id, T1)).status).toBe('confirmed')
+    expect(must(completeTask(f.db, f.starsi, strict.id, T1, false)).status).toBe('done_unconfirmed')
+    expect(must(completeTask(f.db, f.starsi, loose.id, T1, false)).status).toBe('confirmed')
   })
 
   it('only a giver may: a taker and the admin are refused, nothing written', () => {
@@ -219,7 +219,7 @@ describe('selfLogInstance (Zapsat)', () => {
       ok: false,
       error: 'already_open',
     })
-    must(reserveTask(f.db, f.starsi, open.id, T1))
+    must(reserveTask(f.db, f.starsi, open.id, T1, false))
     expect(selfLogInstance(f.db, f.mladsi, tpl, 3, T1)).toEqual({
       ok: false,
       error: 'already_open',
@@ -227,7 +227,7 @@ describe('selfLogInstance (Zapsat)', () => {
     expect([taskRows(f).length, auditRows(f).length]).toEqual([1, audits + 1])
     // Another chore is fine; so is this one once the board copy is done.
     expect(must(selfLogInstance(f.db, f.mladsi, other, 4, T1)).status).toBe('done_unconfirmed')
-    must(completeTask(f.db, f.starsi, open.id, T1))
+    must(completeTask(f.db, f.starsi, open.id, T1, false))
     expect(must(selfLogInstance(f.db, f.mladsi, tpl, 3, T2)).status).toBe('done_unconfirmed')
   })
 

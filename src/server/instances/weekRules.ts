@@ -8,9 +8,10 @@ import { tasks } from '~/server/db/schema'
 // The `weekPlan` switch turned off drops the day rules for good (#257, spec §5.12 "copies made
 // before the flip keep the old rules"): the scheduler's `weekRules` job turns `week_rules` off
 // on every task that has it, whatever its status (a done copy a giver rejects later comes back
-// under the old rules). `plan_day_at` stays, so the copy keeps its day for display. So on → off
-// → on never brings the rules back to a copy made in an earlier on-spell. One transaction per
-// task, with its audit entry (`instance.week_rules_dropped`, actor system).
+// under the old rules). `plan_day_at` stays, so the copy keeps its day for display. The drop
+// needs one tick (15 min) with the switch off: on → off → on inside one tick leaves the rules on
+// the earlier copies. One transaction per task, with its audit entry
+// (`instance.week_rules_dropped`, actor system).
 
 /** Drops the day rules of every marked task; returns the ids it dropped. Never throws. */
 export function dropWeekRules(

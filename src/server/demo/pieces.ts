@@ -173,7 +173,7 @@ export const points: Piece = (ctx) => {
   }
   const done = (title: string, score: number, taker: string, confirm: boolean) => {
     const taskId = agreed(title, score)
-    step(`done "${title}"`, completeTask(tx, id(taker), taskId, now))
+    step(`done "${title}"`, completeTask(tx, id(taker), taskId, now, false))
     if (confirm) step(`approve "${title}"`, approveTask(tx, id('tata'), taskId, now))
   }
   done('Vynést tříděný odpad', 15, 'starsi', true)
@@ -277,8 +277,8 @@ function doChore(ctx: SeedContext, by: string, title: string, score: number, at:
     createTask(tx, id('tata'), { title, score, approvalRequired: true }, at),
   )
   step(`agree ${what}`, approveTaskOffer(tx, id(by), made.id, score, at))
-  step(`reserve ${what}`, reserveTask(tx, id(by), made.id, at))
-  step(`done ${what}`, completeTask(tx, id(by), made.id, at))
+  step(`reserve ${what}`, reserveTask(tx, id(by), made.id, at, false))
+  step(`done ${what}`, completeTask(tx, id(by), made.id, at, false))
   return made.id
 }
 

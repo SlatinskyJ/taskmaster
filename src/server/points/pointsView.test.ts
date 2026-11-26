@@ -8,7 +8,7 @@ import { pointsView } from './points'
 function confirmed(f: Family, taker: number, score: number) {
   const id = must(createTask(f.db, f.tata, { title: 'Úkol', score, approvalRequired: true }, T0)).id
   must(approveTaskOffer(f.db, taker, id, score, T1))
-  must(completeTask(f.db, taker, id, T2))
+  must(completeTask(f.db, taker, id, T2, false))
   must(approveTask(f.db, f.tata, id, T3))
 }
 

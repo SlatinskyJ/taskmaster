@@ -11,9 +11,10 @@ import { rollPeriods } from '~/server/periods'
 import type { Job } from './scheduler'
 
 // The jobs of a tick, in order (#39): periods first, so a cutoff that passed lands before
-// anything else of that instant; then the week rules (#257); then expiry; then new scheduled instances, so a slot born past
-// its grace is made and expired by the instances job itself (./README.md). With the `weekPlan`
-// switch on (#257) the instances job makes the week's copies instead.
+// anything else of that instant; then the week rules (#257); then expiry; then new scheduled
+// instances, so a slot born past its grace is made and expired by the instances job itself
+// (./README.md). With the `weekPlan` switch on (#257) the instances job makes the week's copies
+// instead.
 
 /** `defaults` is read on every tick, so a change of the family's period settings applies. */
 export function schedulerJobs(

@@ -50,7 +50,10 @@ describe('expireTask', () => {
   it('refuses before the grace window ends; the row is unchanged', () => {
     const f = family()
     const id = bins(f)
-    expect(expireTask(f.db, id, before(GRACE_END))).toEqual({ ok: false, error: 'grace_not_over' })
+    expect(expireTask(f.db, id, before(GRACE_END), false)).toEqual({
+      ok: false,
+      error: 'grace_not_over',
+    })
     expect(row(f.db, id)?.status).toBe('open')
     expect(audits(f, 'instance.expired')).toHaveLength(0)
   })
@@ -58,7 +61,7 @@ describe('expireTask', () => {
   it('expires an open instance when grace ends, audited by the system', () => {
     const f = family()
     const id = bins(f)
-    expect(must(expireTask(f.db, id, GRACE_END)).status).toBe('expired')
+    expect(must(expireTask(f.db, id, GRACE_END, false)).status).toBe('expired')
     const [entry, ...more] = audits(f, 'instance.expired')
     expect(more).toHaveLength(0)
     expect([entry?.actorKind, entry?.actorUserId, entry?.entityType, entry?.entityId]).toEqual([
@@ -78,8 +81,8 @@ describe('expireTask', () => {
   it('expires a reserved one and clears the reservation', () => {
     const f = family()
     const id = bins(f)
-    must(reserveTask(f.db, f.starsi, id, T1))
-    const r = must(expireTask(f.db, id, GRACE_END))
+    must(reserveTask(f.db, f.starsi, id, T1, false))
+    const r = must(expireTask(f.db, id, GRACE_END, false))
     expect([r.status, r.reservedBy]).toEqual(['expired', null])
   })
 
@@ -87,7 +90,7 @@ describe('expireTask', () => {
     const f = family()
     const id = bins(f)
     failAuditOn(f.db, 'instance.expired')
-    expect(() => expireTask(f.db, id, GRACE_END)).toThrow(/audit down/)
+    expect(() => expireTask(f.db, id, GRACE_END, false)).toThrow(/audit down/)
     expect(row(f.db, id)?.status).toBe('open')
   })
 })
@@ -98,14 +101,14 @@ describe('expireOverdueInstances', () => {
     const tpl = binsTemplate(f)
     const a = bins(f, tpl)
     const b = bins(f, tpl)
-    must(reserveTask(f.db, f.mladsi, b, T1))
+    must(reserveTask(f.db, f.mladsi, b, T1, false))
     const later = must(
       createOnDemandInstance(f.db, f.tata, tpl, new Date('2026-11-18T10:00:00.000Z')),
     ).id
     const pending = bins(f, tpl)
-    must(completeTask(f.db, f.starsi, pending, T1))
+    must(completeTask(f.db, f.starsi, pending, T1, false))
     const confirmed = bins(f, tpl)
-    must(completeTask(f.db, f.tata, confirmed, T1))
+    must(completeTask(f.db, f.tata, confirmed, T1, false))
     const noDeadline = must(createOnDemandInstance(f.db, f.tata, agreedTemplate(f), T1)).id
 
     expect(expireOverdueInstances(f.db, GRACE_END)).toEqual([a, b])
@@ -178,6 +181,7 @@ describe('midnight expiry of week copies (#257, spec §5.12)', () => {
     ])
     expect(row(f.db, old)).toMatchObject({ status: 'open', weekRules: false, planDayAt: null })
     expect(log.info).toHaveBeenCalledWith('[scheduler] expiry: 1')
+    expect(log.error).not.toHaveBeenCalled()
     const entry = f.db
       .select()
       .from(auditLog)

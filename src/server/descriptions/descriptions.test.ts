@@ -195,7 +195,7 @@ describe('an agreed task: the change waits for a taker (spec §5.2)', () => {
   it('reserved: only the reserver may answer', () => {
     const f = family()
     const id = openCar(f)
-    must(reserveTask(f.db, f.starsi, id, T1))
+    must(reserveTask(f.db, f.starsi, id, T1, false))
     must(changeDescriptionOf(f.db, task(id), f.tata, 'new', T1))
     const waiting = waitingDescriptionOf(f.db, task(id))
     expect(waiting?.waitingFor).toEqual([f.starsi])
@@ -212,7 +212,7 @@ describe('an agreed task: the change waits for a taker (spec §5.2)', () => {
   it('reserved, then released: the change stays and any taker may OK it (ruling 3)', () => {
     const f = family()
     const id = openCar(f)
-    must(reserveTask(f.db, f.starsi, id, T1))
+    must(reserveTask(f.db, f.starsi, id, T1, false))
     must(changeDescriptionOf(f.db, task(id), f.tata, 'new', T1))
     must(releaseTask(f.db, f.starsi, id, T2))
     const changeId = waitingDescriptionOf(f.db, task(id))?.id ?? 0
@@ -255,7 +255,7 @@ describe('an agreed task: the change waits for a taker (spec §5.2)', () => {
     const f = family()
     const id = openCar(f)
     must(changeDescriptionOf(f.db, task(id), f.tata, 'new', T1))
-    must(completeTask(f.db, f.starsi, id, T2))
+    must(completeTask(f.db, f.starsi, id, T2, false))
     expect(row(f.db, id)?.description).toBe('old')
     expect(changes(f)[0]).toMatchObject({ closedAs: 'discarded', closedBy: f.starsi })
     const entry = lastOf(f, id, 'task.description_change_discarded')
@@ -378,7 +378,7 @@ describe('who and what may change', () => {
       ok: false,
       error: 'not_changeable',
     })
-    must(completeTask(f.db, f.starsi, id, T2))
+    must(completeTask(f.db, f.starsi, id, T2, false))
     expect(changeDescriptionOf(f.db, task(id), f.tata, 'x', T3)).toEqual({
       ok: false,
       error: 'description_frozen',
@@ -517,7 +517,7 @@ describe('templates (spec §5.1)', () => {
     must(changeDescriptionOf(f.db, tpl(id), f.tata, 'new', T1))
     const early = must(createOnDemandInstance(f.db, f.tata, id, T1))
     expect(early.description).toBeNull()
-    must(completeTask(f.db, f.starsi, early.id, T1))
+    must(completeTask(f.db, f.starsi, early.id, T1, false))
     const changeId = changes(f)[0]?.id ?? 0
     must(answerDescriptionChange(f.db, tpl(id), f.starsi, changeId, true, T2))
     const late = must(createOnDemandInstance(f.db, f.tata, id, T2))
@@ -525,7 +525,7 @@ describe('templates (spec §5.1)', () => {
     expect(json(lastOf(f, late.id, 'instance.created')?.after)).toMatchObject({
       description: 'new',
     })
-    must(completeTask(f.db, f.starsi, late.id, T2))
+    must(completeTask(f.db, f.starsi, late.id, T2, false))
     const logged = must(selfLogInstance(f.db, f.mladsi, id, 3, T3))
     expect(json(lastOf(f, logged.id, 'instance.self_logged')?.after)).toMatchObject({
       description: 'new',
@@ -665,7 +665,7 @@ describe('rollback: a failed audit write leaves nothing behind', () => {
     must(changeDescriptionOf(f.db, task(id), f.tata, 'new', T1))
     const before = { task: row(f.db, id), changes: changes(f), log: audits(f.db, id) }
     failAuditOn(f.db, 'task.description_change_discarded')
-    expect(() => completeTask(f.db, f.starsi, id, T2)).toThrow(/audit down/)
+    expect(() => completeTask(f.db, f.starsi, id, T2, false)).toThrow(/audit down/)
     expect({ task: row(f.db, id), changes: changes(f), log: audits(f.db, id) }).toEqual(before)
   })
 })

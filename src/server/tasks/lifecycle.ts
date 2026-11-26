@@ -137,8 +137,8 @@ export function reserveTask(
   db: Db | Tx,
   userId: number,
   taskId: number,
-  now: Date = new Date(),
-  dayRules = false,
+  now: Date,
+  dayRules: boolean,
 ) {
   return runStep(db, { kind: 'user', userId }, taskId, 'task.reserved', reserveItem, now, {
     dayRules,
@@ -176,8 +176,8 @@ export function completeTask(
   db: Db | Tx,
   userId: number,
   taskId: number,
-  now: Date = new Date(),
-  dayRules = false,
+  now: Date,
+  dayRules: boolean,
 ) {
   return runStep(db, { kind: 'user', userId }, taskId, 'task.completed', completeItem, now, {
     dayRules,
@@ -261,8 +261,8 @@ export function rejectTask(
 export function expireTask(
   db: Db | Tx,
   taskId: number,
-  now: Date = new Date(),
-  dayRules = false,
+  now: Date,
+  dayRules: boolean,
 ): Result<TaskRow, LifecycleActionError> {
   return runStep(
     db,

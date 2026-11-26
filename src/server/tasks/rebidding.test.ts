@@ -157,7 +157,7 @@ describe('reopenBidding (#212)', () => {
       error: 'bidding_instead',
     })
     expect(audits(f.db, id)).not.toContain('task.score_change_proposed')
-    must(reserveTask(f.db, f.starsi, id, T1))
+    must(reserveTask(f.db, f.starsi, id, T1, false))
     expect(proposeTaskScoreChange(f.db, f.starsi, id, 20, T2, { rebid: true }).ok).toBe(true)
   })
 
@@ -184,7 +184,7 @@ describe('a round ends when the task leaves open (#212 [call])', () => {
     const f = family()
     const id = round(f)
     must(placeBid(f.db, f.mladsi, id, 12, T2))
-    must(reserveTask(f.db, f.starsi, id, T3))
+    must(reserveTask(f.db, f.starsi, id, T3, false))
     expect(row(f.db, id)).toMatchObject({ status: 'reserved', score: 18, biddingFrom: null })
     expect(roundRows(f, id)).toEqual([['taker', f.mladsi, 12, 'closed']])
     expect(audits(f.db, id).slice(-2)).toEqual(['task.reserved', 'task.bidding_closed'])
@@ -195,7 +195,7 @@ describe('a round ends when the task leaves open (#212 [call])', () => {
     const f = family()
     const id = round(f)
     must(placeBid(f.db, f.mladsi, id, 12, T2))
-    must(completeTask(f.db, f.starsi, id, T3))
+    must(completeTask(f.db, f.starsi, id, T3, false))
     expect(row(f.db, id)).toMatchObject({ status: 'done_unconfirmed', biddingFrom: null })
     expect(roundRows(f, id)).toEqual([['taker', f.mladsi, 12, 'closed']])
     expect(audits(f.db, id).slice(-2)).toEqual(['task.completed', 'task.bidding_closed'])
@@ -216,7 +216,7 @@ describe('a round ends when the task leaves open (#212 [call])', () => {
   it('a reservation without a round logs no bidding_closed', () => {
     const f = family()
     const id = openCar(f)
-    must(reserveTask(f.db, f.starsi, id, T3))
+    must(reserveTask(f.db, f.starsi, id, T3, false))
     expect(audits(f.db, id).at(-1)).toBe('task.reserved')
   })
 
@@ -224,7 +224,7 @@ describe('a round ends when the task leaves open (#212 [call])', () => {
     const f = family()
     const id = round(f)
     failAuditOn(f.db, 'task.bidding_closed')
-    expect(() => reserveTask(f.db, f.starsi, id, T3)).toThrow(/audit down/)
+    expect(() => reserveTask(f.db, f.starsi, id, T3, false)).toThrow(/audit down/)
     expect(row(f.db, id)).toMatchObject({ status: 'open', biddingFrom: 1 })
   })
 })
@@ -399,7 +399,7 @@ describe('a giver turns a round down (#212)', () => {
   it('the history names the reopen and the end', () => {
     const f = family()
     const id = round(f)
-    must(reserveTask(f.db, f.starsi, id, T2))
+    must(reserveTask(f.db, f.starsi, id, T2, false))
     const actions = taskHistory(f.db, id, String).map((e) => e.action)
     expect(actions.slice(-3)).toEqual([
       'task.bidding_reopened',

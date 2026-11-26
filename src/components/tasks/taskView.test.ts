@@ -436,6 +436,20 @@ describe('instanceMeta on a later week copy (#257)', () => {
       'dnes 19:16 · podle rozvrhu',
     )
   })
+
+  it('a later copy with a deadline says its day and its due time', () => {
+    const due = { dueAt: '2026-11-28T06:00:00.000Z', graceEndsAt: '2026-11-28T07:00:00.000Z' }
+    expect(instanceMeta({ ...base, ...due, planDay: '2026-11-26T23:00:00.000Z' }, now)).toBe(
+      'na pá 27. 11. · do so 7:00',
+    )
+  })
+
+  it("today's copy with a deadline keeps only its due time", () => {
+    const due = { dueAt: '2026-11-28T06:00:00.000Z', graceEndsAt: '2026-11-28T07:00:00.000Z' }
+    expect(instanceMeta({ ...base, ...due, planDay: '2026-11-25T23:00:00.000Z' }, now)).toBe(
+      'do so 7:00',
+    )
+  })
 })
 
 describe('instanceMeta (#38)', () => {

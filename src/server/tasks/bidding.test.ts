@@ -417,7 +417,7 @@ describe('acceptLowestTaskBid (the giver side accepts the lowest open bid)', () 
       { status: 'open', score: 22, reservedBy: null },
     )
     expect(thread(f.db, id).map((e) => e[3])).toEqual(['closed', 'accepted', 'accepted', 'closed'])
-    expect(must(reserveTask(f.db, f.mladsi, id, T3))).toMatchObject({
+    expect(must(reserveTask(f.db, f.mladsi, id, T3, false))).toMatchObject({
       status: 'reserved',
       reservedVia: 'tap',
     })
@@ -528,7 +528,7 @@ describe("a bidder's yes picks (Jakub 2026-11-18, spec PR #133)", () => {
       ['taker', f.starsi, 25, 'closed'],
       ['giver', f.tata, 20, 'accepted'],
     ])
-    expect(must(reserveTask(f.db, f.mladsi, id, T3))).toMatchObject({
+    expect(must(reserveTask(f.db, f.mladsi, id, T3, false))).toMatchObject({
       status: 'reserved',
       reservedBy: f.mladsi,
       reservedVia: 'tap',
@@ -561,7 +561,10 @@ describe('first agreement wins (spec §5.2; issue "Done when")', () => {
     expect(approveTaskOffer(f.db, f.starsi, id, 22, T3)).toEqual(gone)
     expect(counterOffer(f.db, f.tata, id, 30, [], T3)).toEqual(gone)
     expect(acceptLowestTaskBid(f.db, f.tata, id, 22, [f.mladsi], T3)).toEqual(gone)
-    expect(completeTask(f.db, f.starsi, id, T3)).toEqual({ ok: false, error: 'reserved_by_other' })
+    expect(completeTask(f.db, f.starsi, id, T3, false)).toEqual({
+      ok: false,
+      error: 'reserved_by_other',
+    })
     expect(f.db.select().from(auditLog).all()).toHaveLength(before)
     expect(thread(f.db, id)).toHaveLength(3)
   })

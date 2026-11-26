@@ -382,14 +382,19 @@ export function instanceMeta(
 ): string | undefined {
   // The Prošlo chip says it all; "po termínu" beside it would say it twice.
   if (task.status === 'expired') return undefined
-  // A week copy for a later day (#257) says its day, not when it was made.
-  if (task.dueAt === null && task.planDay != null && laterDay({ planDay: task.planDay }, now)) {
+  const due =
+    task.dueAt !== null && task.graceEndsAt !== null
+      ? formatDue(task.dueAt, task.graceEndsAt, now)
+      : undefined
+  // A week copy for a later day (#257) says its day (and its due time), not when it was made.
+  if (task.planDay != null && laterDay({ planDay: task.planDay }, now)) {
     const { weekday, day, month } = toPragueWallTime(parseIsoUtc(task.planDay))
-    return cs.instances.plannedFor(`${cs.weekdays[weekday]} ${String(day)}. ${String(month)}.`)
+    const planned = cs.instances.plannedFor(
+      `${cs.weekdays[weekday]} ${String(day)}. ${String(month)}.`,
+    )
+    return due === undefined ? planned : `${planned} · ${due}`
   }
-  if (task.dueAt !== null && task.graceEndsAt !== null) {
-    return formatDue(task.dueAt, task.graceEndsAt, now)
-  }
+  if (due !== undefined) return due
   if (task.origin === 'on_demand') return cs.instances.onDemandAt(formatPragueTime(task.createdAt))
   if (task.origin === 'scheduled') return cs.instances.scheduledAt(formatSince(task.createdAt, now))
   return undefined

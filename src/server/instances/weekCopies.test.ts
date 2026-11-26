@@ -152,6 +152,19 @@ describe('makeWeekCopies (#257, spec §5.12)', () => {
     expect(expiry.map((e) => [e.actorKind, e.entityId])).toEqual([['system', String(rows[0]?.id)]])
   })
 
+  it('after downtime a missed deadline copy whose day is over but whose grace is not stays open (Tuesday bins due Wednesday 7:00, first tick Wednesday 6:00)', () => {
+    const f = week()
+    const tpl = chore(f, { title: 'Vynést koše', days: TUE_FRI, deadline: NEXT_MORNING })
+    const wed6 = prague(12, 2, 6)
+    const made = run(f, wed6)
+    expect(made.map((r) => [r.planDayAt, r.status, r.dueAt])).toEqual([
+      [iso(prague(12, 1, 0)), 'open', iso(prague(12, 2, 7))],
+      [iso(prague(12, 4, 0)), 'open', iso(prague(12, 5, 7))],
+    ])
+    expect(rowsOf(f, tpl)).toHaveLength(2)
+    expect(lastSlot(f, tpl)).toBe(iso(prague(12, 4, 18)))
+  })
+
   it('a slot exactly at `at` counts as past: it is the catch-up slot; a slot exactly at `at` + 14 days is not made', () => {
     const f = week(MON, 21)
     const tpl = chore(f)

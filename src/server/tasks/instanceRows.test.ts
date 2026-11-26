@@ -118,9 +118,12 @@ describe('lifecycle on instances', () => {
   it('Hotovo is refused from the end of grace on, allowed 1 ms before', () => {
     const f = family()
     const late = instance(f, { dueAt: iso(T1), graceEndsAt: iso(T2) })
-    expect(completeTask(f.db, f.starsi, late.id, T2)).toEqual({ ok: false, error: 'past_grace' })
+    expect(completeTask(f.db, f.starsi, late.id, T2, false)).toEqual({
+      ok: false,
+      error: 'past_grace',
+    })
     const inTime = instance(f, { dueAt: iso(T1), graceEndsAt: iso(T2) })
-    const done = must(completeTask(f.db, f.starsi, inTime.id, new Date(T2.getTime() - 1)))
+    const done = must(completeTask(f.db, f.starsi, inTime.id, new Date(T2.getTime() - 1), false))
     expect(done.status).toBe('done_unconfirmed')
   })
 
@@ -200,7 +203,7 @@ describe('views and audit reads of instances', () => {
       .set({ status: 'reserved', reservedBy: f.starsi, reservedVia: 'tap', agreedAt: iso(T0) })
       .where(eq(tasks.id, id))
       .run()
-    must(completeTask(f.db, f.starsi, id, T2))
+    must(completeTask(f.db, f.starsi, id, T2, false))
     must(rejectTask(f.db, f.tata, id, 'ještě ne', T3))
     expect(rejectionsSince(f.db, T0).map((r) => [r.taskId, r.closed])).toEqual([
       [id, false],

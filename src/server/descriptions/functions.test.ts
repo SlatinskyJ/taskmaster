@@ -134,7 +134,7 @@ describe('switch on', () => {
     on(f)
     const id = car(f)
     must(approveTaskOffer(f.db, f.starsi, id, 18, T0))
-    must(reserveTask(f.db, f.mladsi, id, T1))
+    must(reserveTask(f.db, f.mladsi, id, T1, false))
     const target = { kind: 'task', id } as const
     changeDescriptionHandler(f.db, f.tata, { target, description: 'x' }, T1)
     expect(getTaskDetail(f.db, id, { descriptions: true })?.descriptionChange?.waitingFor).toEqual([
@@ -324,7 +324,7 @@ describe('Domů: waiting description changes (ruling 6)', () => {
     on(f)
     const reserved = car(f)
     must(approveTaskOffer(f.db, f.starsi, reserved, 18, T0))
-    must(reserveTask(f.db, f.starsi, reserved, T0))
+    must(reserveTask(f.db, f.starsi, reserved, T0, false))
     must(changeDescriptionOf(f.db, { kind: 'task', id: reserved }, f.tata, 'Jen obývák.', T1))
     const open = car(f)
     must(approveTaskOffer(f.db, f.mladsi, open, 18, T0))
