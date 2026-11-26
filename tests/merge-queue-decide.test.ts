@@ -20,6 +20,7 @@ function facts(over: Partial<PrFacts> = {}): PrFacts {
     fromFork: false,
     baseIsMain: true,
     stack: null,
+    lower: 'none',
     behind: false,
     handedOver: false,
     ...over,
@@ -186,7 +187,7 @@ describe('nextActions: stacks', () => {
   it('a PR on a lower PR (out of the stack) waits for it; the lower one lands', () => {
     const prs = [facts({ number: 10 }), facts({ number: 11, baseIsMain: false })]
     expect(nextActions(prs)).toEqual([
-      { kind: 'wait', pr: 11, for: 'its lower PR' },
+      { kind: 'wait', pr: 11, for: 'its lower PR to merge' },
       { kind: 'merge', pr: 10, sha: A },
     ])
   })
@@ -199,5 +200,24 @@ describe('nextActions: stacks', () => {
     expect(nextActions(prs).filter((a) => a.kind === 'merge')).toEqual([
       { kind: 'merge', pr: 9, sha: A },
     ])
+  })
+})
+
+describe('nextActions: labelled on a lower PR', () => {
+  it('hands over when its lower PR changed after the label or it was not up to date', () => {
+    expect(entryCheck(facts({ lower: 'bad' }))).toEqual({
+      ok: false,
+      reason: 'its lower PR changed after the label, or it was not up to date with it',
+    })
+  })
+
+  it('waits, even on main, while its lower PR is still open (a manual retarget)', () => {
+    expect(nextActions([facts({ lower: 'pending' })])).toEqual([
+      { kind: 'wait', pr: 9, for: 'its lower PR to merge' },
+    ])
+  })
+
+  it('lands once its lower PR merged on the recorded head', () => {
+    expect(nextActions([facts({ lower: 'ok' })])).toEqual([{ kind: 'merge', pr: 9, sha: A }])
   })
 })

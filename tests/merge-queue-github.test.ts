@@ -333,6 +333,7 @@ describe('labelledPrs', () => {
         ci: 'green',
         unresolvedThreads: 0,
         stack: null,
+        lower: 'none',
         behind: false,
         handedOver: false,
       },
@@ -371,7 +372,7 @@ describe('labelledPrs', () => {
   it('accepts an approved marker with a valid HMAC from any author', async () => {
     const [pr] = await factsOf({
       comments: [
-        comment(`<!-- merge-queue:approved ${A} ${hmac(`approved:9:${LABEL_ID}:${A}`)} -->`),
+        comment(`<!-- merge-queue:approved ${A} - ${hmac(`approved:9:${LABEL_ID}:${A}:-`)} -->`),
       ],
     })
     expect(pr).toMatchObject({ approvedSha: A, headIsApproved: true })
@@ -379,7 +380,7 @@ describe('labelledPrs', () => {
 
   it('ignores an approved marker with a wrong HMAC', async () => {
     const [pr] = await factsOf({
-      comments: [comment(`<!-- merge-queue:approved ${A} ${'0'.repeat(64)} -->`)],
+      comments: [comment(`<!-- merge-queue:approved ${A} - ${'0'.repeat(64)} -->`)],
     })
     expect(pr).toMatchObject({ approvedSha: null, headIsApproved: false })
   })
@@ -593,6 +594,15 @@ describe('writes', () => {
     expect(await makeGh('t', KEY, impl).updateBranch(9, A)).toBe('ok')
   })
 
+  it('unstack posts the PRs to the stack unstack endpoint', async () => {
+    const { impl, calls } = fakeFetch({
+      [`POST ${R}/stacks/3/unstack`]: { status: 200, body: {} },
+    })
+    await makeGh('t', KEY, impl).unstack(3, [10, 11])
+    expect(calls[0]).toMatchObject({ method: 'POST', body: { pull_requests: [10, 11] } })
+    expect(calls[0]?.url).toContain('/stacks/3/unstack')
+  })
+
   it('merge squashes on the given sha', async () => {
     const { impl, calls } = fakeFetch({
       [`PUT ${R}/pulls/9/merge`]: { status: 200, body: { merged: true } },
@@ -644,8 +654,51 @@ describe('labelledPrs: stack', () => {
     await expect(stackWith({ status: 200, body: { stacks: [] } })).rejects.toThrow(
       'unexpected answer',
     )
+    const one = { number: 2, open: true, pull_requests: [{ number: 9, state: 'open' }] }
+    await expect(stackWith({ status: 200, body: [one, { ...one, number: 4 }] })).rejects.toThrow(
+      'unexpected answer',
+    )
     await expect(stackWith({ status: 200, body: [{ open: true }] })).rejects.toThrow(
       'unexpected answer',
     )
+  })
+})
+
+describe('labelledPrs: labelled on a lower PR', () => {
+  const LOW = 'c'.repeat(40)
+  async function lowerWith(compare: string, owners: unknown[]) {
+    const routes = world({ comments: [comment(approvedMarker(KEY, 9, LABEL_ID, A, LOW))] })
+    routes[`GET ${R}/compare/${LOW}...${A}`] = { status: 200, body: { status: compare } }
+    routes[`GET ${R}/commits/${LOW}/pulls`] = { status: 200, body: owners }
+    const { impl } = fakeFetch(routes)
+    const [pr] = await makeGh('t', KEY, impl, { now: () => NOW }).labelledPrs()
+    return pr?.lower
+  }
+  const lowerPr = (over: object) => ({
+    number: 8,
+    state: 'closed',
+    merged_at: '2026-11-26T10:00:00Z',
+    head: { sha: LOW },
+    ...over,
+  })
+  it('ok when it contained the lower head and the lower PR merged on it', async () => {
+    expect(await lowerWith('ahead', [lowerPr({}), lowerPr({ number: 9, head: { sha: A } })])).toBe(
+      'ok',
+    )
+  })
+  it('bad when it did not contain the lower head (stale on an older lower commit)', async () => {
+    expect(await lowerWith('diverged', [lowerPr({})])).toBe('bad')
+  })
+  it('pending while the lower PR is open on that head', async () => {
+    expect(await lowerWith('ahead', [lowerPr({ state: 'open', merged_at: null })])).toBe('pending')
+  })
+  it('bad when the lower PR merged on another head, or closed without merging', async () => {
+    expect(await lowerWith('ahead', [lowerPr({ head: { sha: B } })])).toBe('bad')
+    expect(await lowerWith('ahead', [lowerPr({ merged_at: null })])).toBe('bad')
+  })
+  it('a marker whose lower head was changed does not verify', async () => {
+    const forged = approvedMarker(KEY, 9, LABEL_ID, A, LOW).replace(LOW, '-')
+    const [pr] = await factsOf({ comments: [comment(forged)] })
+    expect(pr?.approvedSha).toBeNull()
   })
 })

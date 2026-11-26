@@ -5,8 +5,14 @@ import { pathToFileURL } from 'node:url'
 import { nextActions, type PrFacts } from './decide.ts'
 import { FOOTER, LABEL, approvedMarker, handoffMarker, makeGh, type Gh } from './github.ts'
 
-function approvalBody(key: string, pr: number, labelEventId: number, sha: string): string {
-  return `${approvedMarker(key, pr, labelEventId, sha)}\nThe merge-me Action recorded \`merge-me\` on commit ${sha}. It lands this PR on that commit only, after updating it with \`main\` if needed.\n\n${FOOTER}`
+function approvalBody(
+  key: string,
+  pr: number,
+  labelEventId: number,
+  sha: string,
+  lower: string | null,
+): string {
+  return `${approvedMarker(key, pr, labelEventId, sha, lower)}\nThe merge-me Action recorded \`merge-me\` on commit ${sha}. It lands this PR on that commit only, after updating it with \`main\` if needed.\n\n${FOOTER}`
 }
 
 function handOverBody(key: string, pr: PrFacts, reason: string): string {
@@ -14,6 +20,12 @@ function handOverBody(key: string, pr: PrFacts, reason: string): string {
 }
 
 type Log = (line: string) => void
+/** A label event: the PR, its head, and the head of the lower PR it sits on (null on main). */
+export interface LabelEvent {
+  pr: number
+  sha: string
+  lower: string | null
+}
 
 // Records Jakub's approval for the labelled commit. The workflow runs this in its own job, one
 // lane per PR, so labelling many PRs at once never drops an approval (the shared queue below
@@ -22,13 +34,13 @@ export async function record(
   gh: Gh,
   log: Log,
   markerKey: string,
-  labelEvent: { pr: number; sha: string },
+  labelEvent: LabelEvent,
 ): Promise<void> {
-  const { pr, sha } = labelEvent
+  const { pr, sha, lower } = labelEvent
   const labelId = await gh.latestLabelEventId(pr)
   if (labelId === null) log(`merge-queue: #${pr} has no merge-me label by SlatinskyJ`)
   else {
-    await gh.comment(pr, approvalBody(markerKey, pr, labelId, sha))
+    await gh.comment(pr, approvalBody(markerKey, pr, labelId, sha, lower))
     log(`merge-queue: #${pr} approved on ${sha}`)
   }
 }
@@ -37,7 +49,7 @@ export async function run(
   gh: Gh,
   log: Log,
   markerKey: string,
-  labelEvent?: { pr: number; sha: string },
+  labelEvent?: LabelEvent,
 ): Promise<{ handedOver: number[] }> {
   if (labelEvent) await record(gh, log, markerKey, labelEvent)
   return step(gh, log, markerKey)
@@ -126,14 +138,19 @@ export async function entry(
   return { handedOver: [] }
 }
 
-function labelEventFromEnv(env: NodeJS.ProcessEnv): { pr: number; sha: string } | undefined {
+function labelEventFromEnv(env: NodeJS.ProcessEnv): LabelEvent | undefined {
   const pr = env.LABEL_PR ?? ''
   const sha = env.LABEL_SHA ?? ''
+  const baseRef = env.LABEL_BASE_REF ?? ''
+  const baseSha = env.LABEL_BASE_SHA ?? ''
   if (pr === '' && sha === '') return undefined
-  if (!/^\d+$/.test(pr) || !/^[0-9a-f]{40}$/.test(sha)) {
-    throw new Error(`bad LABEL_PR or LABEL_SHA: ${JSON.stringify({ pr, sha })}`)
+  const isSha = (v: string) => /^[0-9a-f]{40}$/.test(v)
+  if (!/^\d+$/.test(pr) || !isSha(sha) || baseRef === '' || !isSha(baseSha)) {
+    throw new Error(
+      `bad LABEL_PR, LABEL_SHA, LABEL_BASE_REF or LABEL_BASE_SHA: ${JSON.stringify({ pr, sha, baseRef, baseSha })}`,
+    )
   }
-  return { pr: Number(pr), sha }
+  return { pr: Number(pr), sha, lower: baseRef === 'main' ? null : baseSha }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

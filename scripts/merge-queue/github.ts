@@ -14,14 +14,25 @@ function verify(key: string, text: string, mac: string): boolean {
   const got = Buffer.from(mac, 'hex')
   return got.length === want.length && timingSafeEqual(got, want)
 }
-/** Signed for one label event, so a marker copied after a re-label does not verify. */
-export function approvedMarker(key: string, pr: number, labelEventId: number, sha: string): string {
-  return `<!-- merge-queue:approved ${sha} ${sign(key, `approved:${pr}:${labelEventId}:${sha}`)} -->`
+/**
+ * Signed for one label event, so a marker copied after a re-label does not verify. `lower` is
+ * the head of the PR this one sat on when Jakub labelled it (its base branch's tip), or null
+ * when its base was main.
+ */
+export function approvedMarker(
+  key: string,
+  pr: number,
+  labelEventId: number,
+  sha: string,
+  lower: string | null = null,
+): string {
+  const l = lower ?? '-'
+  return `<!-- merge-queue:approved ${sha} ${l} ${sign(key, `approved:${pr}:${labelEventId}:${sha}:${l}`)} -->`
 }
 export function handoffMarker(key: string, pr: number, labelEventId: number): string {
   return `<!-- merge-queue:handoff ${sign(key, `handoff:${pr}:${labelEventId}`)} -->`
 }
-const APPROVED_RE = /<!-- merge-queue:approved ([0-9a-f]{40}) ([0-9a-f]{64}) -->/
+const APPROVED_RE = /<!-- merge-queue:approved ([0-9a-f]{40}) ([0-9a-f]{40}|-) ([0-9a-f]{64}) -->/
 const HANDOFF_RE = /<!-- merge-queue:handoff ([0-9a-f]{64}) -->/
 export const FOOTER = '---\n_Posted by the merge-me Action_'
 export const LABEL = 'merge-me'
@@ -252,6 +263,26 @@ export function makeGh(
     return { number: s.number, openPrs }
   }
 
+  // The PR sat on a lower PR when Jakub labelled it. Its diff then showed only its own changes
+  // against that lower PR's head, so it may land only if it contained that head and the lower
+  // PR merged on exactly that commit; otherwise code he never saw (say, removed from the lower
+  // PR later) could come back with the update merge.
+  async function lowerState(
+    pr: number,
+    lower: string,
+    approved: string,
+  ): Promise<PrFacts['lower']> {
+    const { status } = await getJson<{ status: string }>(`${base}/compare/${lower}...${approved}`)
+    if (status !== 'ahead' && status !== 'identical') return 'bad'
+    const prs = await getJson<
+      { number: number; merged_at: string | null; state: string; head: { sha: string } }[]
+    >(`${base}/commits/${lower}/pulls`)
+    const owner = prs.find((p) => p.number !== pr && p.head.sha === lower)
+    if (!owner) return 'bad'
+    if (owner.merged_at) return 'ok'
+    return owner.state === 'open' ? 'pending' : 'bad'
+  }
+
   function qualifyingLabel(events: IssueEvent[]): IssueEvent | undefined {
     return events.findLast(
       (e) => e.event === 'labeled' && e.label?.name === LABEL && e.actor?.login === JAKUB,
@@ -268,12 +299,20 @@ export function makeGh(
     )
     let handedOver = false
     let approvedSha: string | null = null
+    let approvedLower: string | null = null
     for (const c of since) {
       const h = HANDOFF_RE.exec(c.body ?? '')
       if (h?.[1] && verify(markerKey, `handoff:${pr}:${label.id}`, h[1])) handedOver = true
       const a = APPROVED_RE.exec(c.body ?? '')
-      if (a?.[1] && a[2] && verify(markerKey, `approved:${pr}:${label.id}:${a[1]}`, a[2]))
+      if (
+        a?.[1] &&
+        a[2] &&
+        a[3] &&
+        verify(markerKey, `approved:${pr}:${label.id}:${a[1]}:${a[2]}`, a[3])
+      ) {
         approvedSha = a[1]
+        approvedLower = a[2] === '-' ? null : a[2]
+      }
     }
     const detail = await getJson<PullDetail>(`${base}/pulls/${pr}`)
     const needsJakubAfterLabel =
@@ -299,6 +338,7 @@ export function makeGh(
       ci: 'pending',
       unresolvedThreads: 0,
       stack: null,
+      lower: 'none',
       behind: false,
       handedOver,
     }
@@ -311,6 +351,7 @@ export function makeGh(
     facts.ci = requiredCi(await required(), check_runs)
     facts.unresolvedThreads = await unresolvedThreads(pr)
     facts.stack = await stackOf(pr)
+    if (approvedLower) facts.lower = await lowerState(pr, approvedLower, approvedSha)
     // Not mergeable_state: GitHub computes it lazily and answers 'unknown' right after a push.
     const { behind_by } = await getJson<{ behind_by: number }>(
       `${base}/compare/main...${detail.head.sha}`,

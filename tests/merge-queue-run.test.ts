@@ -25,6 +25,7 @@ function facts(over: Partial<PrFacts> = {}): PrFacts {
     ci: 'green',
     unresolvedThreads: 0,
     stack: null,
+    lower: 'none',
     behind: false,
     handedOver: false,
     ...over,
@@ -87,7 +88,7 @@ const log = (line: string) => {
 describe('run', () => {
   it('records the approval for the labelled commit first, whatever the head is now', async () => {
     const f = fakeGh({ prs: [facts({ headSha: Y, approvedSha: X, headIsApproved: false })] })
-    await run(f.gh, log, KEY, { pr: 9, sha: X })
+    await run(f.gh, log, KEY, { pr: 9, sha: X, lower: null })
     const first = f.writes()[0]
     expect(first?.op).toBe('comment')
     expect(first?.args[0]).toBe(9)
@@ -104,7 +105,7 @@ describe('run', () => {
         marked = true
       },
     })
-    await run(f.gh, log, KEY, { pr: 9, sha: X })
+    await run(f.gh, log, KEY, { pr: 9, sha: X, lower: null })
     expect(f.calls.map((c) => c.op).slice(0, 3)).toEqual([
       'latestLabelEventId',
       'comment',
@@ -115,7 +116,7 @@ describe('run', () => {
 
   it('writes no approval when the PR has no qualifying label event', async () => {
     const f = fakeGh({ prs: [], labelId: null })
-    await run(f.gh, log, KEY, { pr: 9, sha: X })
+    await run(f.gh, log, KEY, { pr: 9, sha: X, lower: null })
     expect(f.writes()).toEqual([])
   })
 
@@ -201,20 +202,25 @@ describe('run', () => {
 describe('record and step', () => {
   it('record writes only the approval and reads no other PR', async () => {
     const f = fakeGh({ prs: [facts({ number: 7, draft: true }), facts()] })
-    await record(f.gh, log, KEY, { pr: 9, sha: X })
+    await record(f.gh, log, KEY, { pr: 9, sha: X, lower: null })
     expect(f.calls.map((c) => c.op)).toEqual(['latestLabelEventId', 'comment'])
     expect(f.comments()[0]?.startsWith(approvedMarker(KEY, 9, 501, X))).toBe(true)
   })
 
   it('record on ten PRs in a row writes ten approvals', async () => {
     const f = fakeGh({ prs: [] })
-    for (let pr = 1; pr <= 10; pr++) await record(f.gh, log, KEY, { pr, sha: X })
+    for (let pr = 1; pr <= 10; pr++) await record(f.gh, log, KEY, { pr, sha: X, lower: null })
     expect(f.comments().filter((b) => b.includes('merge-queue:approved'))).toHaveLength(10)
   })
 
   it('entry with a label event only records', async () => {
     const f = fakeGh({ prs: [facts({ draft: true })] })
-    const r = await entry(f.gh, log, KEY, { LABEL_PR: '9', LABEL_SHA: X })
+    const r = await entry(f.gh, log, KEY, {
+      LABEL_PR: '9',
+      LABEL_SHA: X,
+      LABEL_BASE_REF: 'main',
+      LABEL_BASE_SHA: Y,
+    })
     expect(f.calls.map((c) => c.op)).toEqual(['latestLabelEventId', 'comment'])
     expect(r).toEqual({ handedOver: [] })
   })
@@ -225,11 +231,42 @@ describe('record and step', () => {
     expect(f.calls.some((c) => c.op === 'latestLabelEventId')).toBe(false)
   })
 
+  it('entry records the lower PR head for a PR on another branch, none on main', async () => {
+    const f = fakeGh({ prs: [] })
+    await entry(f.gh, log, KEY, {
+      LABEL_PR: '9',
+      LABEL_SHA: X,
+      LABEL_BASE_REF: '41-low',
+      LABEL_BASE_SHA: Y,
+    })
+    await entry(f.gh, log, KEY, {
+      LABEL_PR: '9',
+      LABEL_SHA: X,
+      LABEL_BASE_REF: 'main',
+      LABEL_BASE_SHA: Y,
+    })
+    const [onLower, onMain] = f.comments()
+    expect(onLower?.startsWith(approvedMarker(KEY, 9, 501, X, Y))).toBe(true)
+    expect(onMain?.startsWith(approvedMarker(KEY, 9, 501, X, null))).toBe(true)
+  })
+
+  it('entry refuses a label event without its base', async () => {
+    const f = fakeGh({ prs: [] })
+    await expect(entry(f.gh, log, KEY, { LABEL_PR: '9', LABEL_SHA: X })).rejects.toThrow(
+      'bad LABEL_PR',
+    )
+  })
+
   it('entry refuses a malformed label event', async () => {
     const f = fakeGh({ prs: [] })
-    await expect(entry(f.gh, log, KEY, { LABEL_PR: 'x', LABEL_SHA: X })).rejects.toThrow(
-      'bad LABEL_PR or LABEL_SHA',
-    )
+    await expect(
+      entry(f.gh, log, KEY, {
+        LABEL_PR: 'x',
+        LABEL_SHA: X,
+        LABEL_BASE_REF: 'main',
+        LABEL_BASE_SHA: Y,
+      }),
+    ).rejects.toThrow('bad LABEL_PR, LABEL_SHA')
   })
 
   it('step writes no approval', async () => {

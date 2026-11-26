@@ -27,6 +27,11 @@ export interface PrFacts {
   /** The open GitHub stack this PR is in, with the stack's open PRs; null when not stacked. */
   stack: { number: number; openPrs: number[] } | null
   behind: boolean
+  /**
+   * When labelled on a lower PR: 'ok' = it contained that PR's head and that PR merged on it;
+   * 'pending' = that PR is still open on that head; 'bad' = anything else. 'none' = labelled on main.
+   */
+  lower: 'none' | 'ok' | 'pending' | 'bad'
   /** A hand-over marker signed for the latest qualifying label exists. */
   handedOver: boolean
 }
@@ -48,6 +53,12 @@ export function entryCheck(pr: PrFacts): { ok: true } | { ok: false; reason: str
   if (pr.fromFork) return { ok: false, reason: 'PR from a fork' }
   if (pr.needsJakubAfterLabel) return { ok: false, reason: 'open question (needs-jakub)' }
   if (!pr.headIsApproved) return { ok: false, reason: 'new commits after the label' }
+  if (pr.lower === 'bad') {
+    return {
+      ok: false,
+      reason: 'its lower PR changed after the label, or it was not up to date with it',
+    }
+  }
   if (pr.ci === 'red') return { ok: false, reason: 'CI red' }
   if (pr.unresolvedThreads > 0) {
     const n = pr.unresolvedThreads
@@ -85,13 +96,13 @@ export function nextActions(prs: PrFacts[]): Action[] {
       unstacked.add(s.number)
     }
   }
-  const landable = passing.filter((pr) => pr.baseIsMain && !pr.stack)
+  const landable = passing.filter((pr) => pr.baseIsMain && !pr.stack && pr.lower !== 'pending')
   for (const pr of passing) {
     if (!landable.includes(pr) && !(pr.stack && unstacked.has(pr.stack.number))) {
       actions.push({
         kind: 'wait',
         pr: pr.number,
-        for: pr.stack ? 'its whole stack' : 'its lower PR',
+        for: pr.stack ? 'its whole stack' : 'its lower PR to merge',
       })
     }
   }

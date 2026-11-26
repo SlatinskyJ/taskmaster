@@ -66,6 +66,8 @@ jobs:
           MERGE_MARKER_KEY: ${{ secrets.MERGE_MARKER_KEY }}
           LABEL_PR: ${{ github.event.pull_request.number }}
           LABEL_SHA: ${{ github.event.pull_request.head.sha }}
+          LABEL_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          LABEL_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: node scripts/merge-queue/run.ts
 
   queue:
