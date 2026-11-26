@@ -412,6 +412,9 @@ export const cs = {
   /** A task's history (#36, GTask): "so 21. 11. 10:12 · Táta: nový úkol za 8 b". */
   history: {
     title: 'Historie',
+    /** The rail beside Historie says the newest entry is on top (#248, Jakub 2026-11-26). */
+    now: 'Teď',
+    newestFirst: 'Nejnovější nahoře',
     you: 'ty',
     created: (n: number) => `nový úkol za ${String(n)} b`,
     countered: (n: number) => `nabídka ${String(n)} b`,

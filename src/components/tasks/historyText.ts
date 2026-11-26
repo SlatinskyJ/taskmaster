@@ -2,8 +2,9 @@ import { parseIsoUtc, toPragueWallTime } from '~/domain/dates'
 import { cs } from '~/lib/strings'
 import type { HistoryEntry } from '~/server/tasks/functions'
 
-// One line of a task's history (#36, GTask): "so 21. 11. 10:12 · Táta: nový úkol za 8 b".
-// Framework-free, so the same text renders on the server and in the browser.
+// A task's history (#36, GTask "Historie") as chat bubbles (#248): the phrase of each entry, the
+// time shown on a tap, and the layout list. Framework-free, so the same text renders on the server
+// and in the browser.
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
@@ -14,7 +15,8 @@ export function historyTime(iso: string): string {
   return `${day} ${String(t.day)}. ${String(t.month)}. ${pad(t.hour)}:${pad(t.minute)}`
 }
 
-function phrase(e: HistoryEntry, meId: number): string {
+/** The phrase without time or name: "chce 12 b". */
+export function historyText(e: HistoryEntry, meId: number): string {
   const h = cs.history
   const n = e.score ?? 0
   switch (e.action) {
@@ -88,13 +90,6 @@ function phrase(e: HistoryEntry, meId: number): string {
   }
 }
 
-/** The line without the reason; the reason, when set, goes on its own line (`historyReason`). */
-export function historyLine(e: HistoryEntry, meId: number): string {
-  const who = e.by ? (e.by.id === meId ? cs.history.you : e.by.name) : null
-  const what = phrase(e, meId)
-  return `${historyTime(e.at)} · ${who ? `${who}: ${what}` : what}`
-}
-
 export function historyReason(e: HistoryEntry): string | null {
   return e.reason ? `„${e.reason}“` : null
 }
@@ -113,4 +108,80 @@ export function historyRounds(entries: readonly HistoryEntry[]): ReadonlyMap<num
     if (e.action === 'task.bidding_reopened') starts.set(e.id, starts.size + 1)
   }
   return starts
+}
+
+export type HistoryItem =
+  | { kind: 'round'; key: string; round: number }
+  | { kind: 'note'; id: number; text: string; reason: string | null; time: string }
+  | {
+      kind: 'bubble'
+      id: number
+      side: 'mine' | 'theirs'
+      /** Shown above the bubble: only on theirs, only on the first bubble of a run. */
+      name: string | null
+      text: string
+      reason: string | null
+      time: string
+      /** The item above / below is a bubble by the same person (a run). */
+      joinAbove: boolean
+      joinBelow: boolean
+    }
+
+type Bubble = Extract<HistoryItem, { kind: 'bubble' }>
+
+/**
+ * The history as layout items (#248, Jakub 2026-11-26): my entries a bubble on the left, everyone
+ * else's on the right, the system's a centred note. Newest on top (Jakub 2026-11-26 20:01): the
+ * latest bidding round first, each under its divider, newest entry first within it. Bubbles by the
+ * same person in a row are a run; a round, a note or another person ends it.
+ */
+export function historyItems(entries: readonly HistoryEntry[], meId: number): HistoryItem[] {
+  const rounds = historyRounds(entries)
+  // Oldest first, split where a round starts; a history never reopened is one group with no round.
+  const groups: { round: number | undefined; entries: HistoryEntry[] }[] = []
+  let current: { round: number | undefined; entries: HistoryEntry[] } | undefined
+  for (const e of entries) {
+    const round = rounds.get(e.id)
+    if (!current || round !== undefined) {
+      current = { round, entries: [] }
+      groups.push(current)
+    }
+    current.entries.push(e)
+  }
+  const items: HistoryItem[] = []
+  // The bubble above, while the run can still go on, and whose it is.
+  let last: { bubble: Bubble; byId: number } | null = null
+  for (const group of groups.reverse()) {
+    if (group.round !== undefined) {
+      items.push({ kind: 'round', key: `round-${String(group.round)}`, round: group.round })
+      last = null
+    }
+    for (const e of [...group.entries].reverse()) {
+      const text = historyText(e, meId)
+      const reason = historyReason(e)
+      const time = historyTime(e.at)
+      if (!e.by) {
+        items.push({ kind: 'note', id: e.id, text, reason, time })
+        last = null
+        continue
+      }
+      const mine = e.by.id === meId
+      const joinAbove = last?.byId === e.by.id
+      if (last && joinAbove) last.bubble.joinBelow = true
+      const bubble: Bubble = {
+        kind: 'bubble',
+        id: e.id,
+        side: mine ? 'mine' : 'theirs',
+        name: mine || joinAbove ? null : e.by.name,
+        text,
+        reason,
+        time,
+        joinAbove,
+        joinBelow: false,
+      }
+      items.push(bubble)
+      last = { bubble, byId: e.by.id }
+    }
+  }
+  return items
 }
