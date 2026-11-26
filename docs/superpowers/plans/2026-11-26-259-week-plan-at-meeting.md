@@ -34,7 +34,7 @@
 **Protected areas:**
 - No DB schema, migration, audit, `src/domain`, auth, scheduler, CI or dependency change. `src/domain/dates.ts` is used, not changed.
 - It adds keys to the Czech strings module (`src/lib/strings.ts`), a protected shared module. So it is **not** a small PR, and it keeps this plan and the plan rounds.
-- It changes the meeting read (`getMeeting`, §5.9) with one new read-only field. That is server code, not the §5 domain layer, but it sits next to settlement. So the panel should include the **Rules** judge, in addition to Tests, UX and Architecture.
+- It changes the meeting read (`getMeeting`, §5.9) with one new read-only field. That is server code, not the §5 domain layer, but it sits next to settlement. So the panel should include the **Rules** judge, in addition to Tests, UX and Architecture. It also changes what a server function returns (`getMeetingFn` gains `settledToday`), so **Security** joins the code-phase panel (pr-review-rounds §2).
 
 ## Decisions
 
@@ -139,7 +139,7 @@
   - `answer` and `failed` always clear `busy`, but set `plan` or `failed` only when `e.base === s.base`.
   - `refreshView` returns `{ plan: loaded, busy, failed: false }` when `s.base !== loaded`, otherwise `{ plan: s.plan ?? loaded, busy, failed }`.
   - Compare by identity: every loader run returns a new object.
-- Produces, in `meetingFlow.ts`: `planShown(step: MeetingStep, settledToday: boolean, weekPlan: PlanAnswer | null): boolean`. It is true only for `step === 3`, `settledToday`, and a `weekPlan` that is a `WeekPlan` (not `null`, not `feature_off`). `MeetingScreen` passes the plan from `refreshView`, so a `feature_off` answer to Obnovit hides the block and makes the screen narrow too.
+- Produces, in `meetingFlow.ts`: `planShown(step: MeetingStep, settledToday: boolean, weekPlan: PlanAnswer | null): boolean`. It is true only for `step === 3`, `settledToday`, and a `weekPlan` that is a `WeekPlan` (not `null`, not `feature_off`). `MeetingScreen` passes the plan from `refreshView`, so a `feature_off` answer to Obnovit hides the block and makes the screen narrow too. To pin that wiring, `planRefresh.ts` also exports `meetingPlanView(step: MeetingStep, settledToday: boolean, state: RefreshState, loaded: PlanAnswer | null): { view: RefreshView | null; shown: boolean }` (it calls `refreshView` then `planShown` on `view.plan`); `MeetingScreen` uses it as is.
 
 - [ ] **Step 1: Write the failing tests** (fixtures: `planFixture()`; distinct plans `a`, `b`, `c`):
   - `before any refresh the loader plan shows`.
@@ -152,6 +152,7 @@
   - `a thrown fetch dispatches failed, and the next call fetches again`: `[sending, failed]`, nothing thrown. The second call fetches (count 2) and dispatches `[sending, answer(a, b)]`.
   - `two consecutive taps: the second tap's answer shows`: the real reducer as dispatch, a fetch resolving `b` then `c`, and `await refreshTap(refresh, a)()` twice → `refreshView(state, a).plan === c`, `busy` false.
   - `planShown`: `(3, true, a)` true. False for `(1, true, a)`, `(2, true, a)`, `(3, false, a)` (Jakub 2026-11-26: not on a day without a settlement), `(3, true, null)` and `(3, true, { error: 'feature_off' })`.
+  - `meetingPlanView: an Obnovit answered feature_off hides the block although the loader had a plan`: `loaded = a`, state after `sending(a)`, `answer(a, { error: 'feature_off' })` → `shown` false. And with `answer(a, b)` → `shown` true and `view.plan === b`.
 - [ ] **Step 2: Run** `pnpm test src/components/meeting`. Expected: FAIL.
 - [ ] **Step 3: Implement** them.
 - [ ] **Step 4: Run** again. Expected: PASS. Then `pnpm mutation --mutate src/components/meeting/planRefresh.ts src/components/meeting/meetingFlow.ts`.
@@ -174,7 +175,7 @@
   ```
 - `MeetingBody` gets `weekPlan?: ReactNode` and passes it to `StepPlan`. `StepPlan` renders it **after** the open-tasks list (or its empty state) and **before** "+ Nový úkol" / "Ukončit schůzku".
 - `MeetingScreen` gets `weekPlan?: PlanAnswer | null` (the loader's), `viewerId: number` and `frame?: (body: ReactNode, wide: boolean) => ReactNode` (default `(body) => body`). It holds `useReducer(refreshReduce, REFRESH_START)` and `createRefresh(() => getWeekPlanFn(), dispatch)` in `useMemo`.
-  - With `loaded = weekPlan`, it computes `view = refreshView(state, loaded)` (only when `loaded` is non-null) and `shown = planShown(stepOf(meeting, ui), meeting.settledToday, view?.plan ?? null)`.
+  - With `loaded = weekPlan`, it computes `{ view, shown } = meetingPlanView(stepOf(meeting, ui), meeting.settledToday, state, loaded)`.
   - It returns `frame(<MeetingBody … weekPlan={shown ? <MeetingWeekPlanView {...view} viewerId={viewerId} onRefresh={refreshTap(refresh, loaded)} /> : undefined} />, shown)`.
 - Strings (`cs.meeting`): `refresh: 'Obnovit'`, `planHint: 'Kluci si dny rezervují v Týdnu na svých telefonech. Pak klepni na Obnovit.'`, `refreshFailed: 'Plán se nepodařilo načíst. Zkus to znovu.'`. The title reuses `cs.plan.title`.
 
