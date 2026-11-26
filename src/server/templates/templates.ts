@@ -509,7 +509,8 @@ export function getTemplateDetail(
   const row = db.select().from(templates).where(eq(templates.id, templateId)).get()
   if (!row) return null
   const viewer = findPerson(listPeople(db), viewerId)
-  if (viewer?.role !== 'giver' && viewer?.role !== 'taker') return null
+  // The admin too (#222: a Sporné card opens it); getTemplateDetailFn checks the switch.
+  if (!viewer) return null
   const takerMay = opts.choreBidding || openRows
   if (row.status === 'proposed' && viewer.role === 'taker' && !takerMay) return null
   const [template] = views(db, [row], opts)

@@ -11,7 +11,7 @@ import { TemplatePricePanel } from '~/components/templates/TemplatePricePanel'
 import { priceMeta, templateChip } from '~/components/templates/priceView'
 import { Card } from '~/components/ui/card'
 import { parseIdParam } from '~/lib/idParam'
-import { guardScreen } from '~/lib/screenGuard'
+import { guardDisputeReader } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { templateDetail } from '~/lib/templateText'
 import { getItemMarkFn } from '~/server/disputes/functions'
@@ -23,7 +23,8 @@ import { getTemplateDetailFn } from '~/server/templates/functions'
 // its proposed score, who it waits for and Souhlasím; it has no price history yet.
 export const Route = createFileRoute('/_app/sablona/$templateId')({
   beforeLoad: ({ context }) => {
-    guardScreen(context.user.role, '/sablona/$templateId')
+    // The admin reads it while disputes is on (#222: Sporné on Správa); never acts on it.
+    guardDisputeReader(context.user.role, '/sablona/$templateId', context.features.disputes)
   },
   loader: async ({ params, context }) => {
     const templateId = parseIdParam(params.templateId)
@@ -35,7 +36,9 @@ export const Route = createFileRoute('/_app/sablona/$templateId')({
     if (!detail) throw notFound()
     // Rozporovat (#46): the score's mark, only with the switch on and once active.
     const mark =
-      context.features.disputes && detail.template.status === 'active'
+      context.features.disputes &&
+      context.user.role !== 'admin' &&
+      detail.template.status === 'active'
         ? await getItemMarkFn({ data: { kind: 'template_score', id: detail.template.id } })
         : null
     return { ...detail, disputeMark: mark && 'error' in mark ? null : mark }
@@ -46,7 +49,8 @@ export const Route = createFileRoute('/_app/sablona/$templateId')({
 function TemplatePage() {
   const { user, features } = Route.useRouteContext()
   const { template: t, thread, waitingFor, disputeMark } = Route.useLoaderData()
-  const dispute = features.disputes ? templateDispute(t) : null
+  // Rozporovat is a party's action (#222): the admin reads the page only.
+  const dispute = features.disputes && user.role !== 'admin' ? templateDispute(t) : null
   const me = { id: user.id, role: user.role }
   const chip = templateChip(t)
   const meta = priceMeta(t, me)

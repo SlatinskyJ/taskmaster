@@ -1,5 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
-import { requireRole } from '~/server/auth/guards'
+import { ForbiddenError, requireRole } from '~/server/auth/guards'
+import type { Role } from '~/domain'
 import type { Result } from '~/domain/result'
 import type { Db } from '~/server/db'
 import { getDb } from '~/server/db'
@@ -173,18 +174,21 @@ export const turnDownTemplateBidsFn = createServerFn({ method: 'POST' })
   )
 
 /** A template's price page: the template and every offer and bid, or null (not found). */
+/** The admin reads it only while `disputes` is on (#222); every write stays giver or taker. */
+export function templateDetailHandler(
+  db: Db,
+  viewer: { id: number; role: Role },
+  data: { templateId: number },
+): TemplateDetail | null {
+  const flags = getFlags(db)
+  if (viewer.role === 'admin' && !flags.disputes) throw new ForbiddenError()
+  return getTemplateDetail(db, data.templateId, viewer.id, bidding(db), flags.openRows)
+}
+
 export const getTemplateDetailFn = createServerFn({ method: 'GET' })
-  .middleware([requireRole('giver', 'taker')])
+  .middleware([requireRole('giver', 'taker', 'admin')])
   .validator(parseTemplateId)
-  .handler(({ data, context }): TemplateDetail | null =>
-    getTemplateDetail(
-      getDb(),
-      data.templateId,
-      context.user.id,
-      bidding(getDb()),
-      getFlags(getDb()).openRows,
-    ),
-  )
+  .handler(({ data, context }) => templateDetailHandler(getDb(), context.user, data))
 
 /** "Čeká na tebe": agreed templates whose score change waits for this person's side. */
 export const listPendingTemplatePriceChangesFn = createServerFn({ method: 'GET' })

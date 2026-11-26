@@ -9,7 +9,7 @@ import type { HistoryEntry, TaskView } from '~/server/tasks/functions'
 // every file there as a route.
 interface PageUser {
   id: number
-  role: 'taker' | 'giver'
+  role: 'taker' | 'giver' | 'admin'
   displayName: string
 }
 const page = vi.hoisted(() => {
@@ -285,14 +285,14 @@ describe('task page: Rozporovat (#46)', () => {
   }
   type Loader = (a: {
     params: { taskId: string }
-    context: { features: { disputes: boolean } }
+    context: { features: { disputes: boolean }; user: { role: string } }
   }) => Promise<{ disputeMarks: Record<string, unknown> }>
-  const load = (task: TaskView, disputes: boolean) => {
+  const load = (task: TaskView, disputes: boolean, role = 'giver') => {
     page.task = task
     vi.mocked(getItemMarkFn).mockClear()
     return (Route as unknown as { loader: Loader }).loader({
       params: { taskId: String(task.id) },
-      context: { features: { disputes } },
+      context: { features: { disputes }, user: { role } },
     })
   }
   const on = (task: TaskView) => {
@@ -310,6 +310,11 @@ describe('task page: Rozporovat (#46)', () => {
       [{ data: { kind: 'task_score', id: 1 } }],
       [{ data: { kind: 'completion', id: 1 } }],
     ])
+  })
+
+  it('loader, switch on: the admin reads no mark, not even on a confirmed task (#222)', async () => {
+    expect((await load(confirmed, true, 'admin')).disputeMarks).toEqual({})
+    expect(getItemMarkFn).not.toHaveBeenCalled()
   })
 
   it('loader: switch off or a proposed task reads nothing', async () => {
@@ -431,5 +436,99 @@ describe('task page: reopened bidding (#212)', () => {
     const html = render(TATA, round(null))
     expect(html).not.toContain(cs.bids.turnDown)
     expect(html).toContain(cs.rebid.noEntries)
+  })
+})
+
+describe('task page: the admin reads it, never acts (#222)', () => {
+  const ADMIN = { id: 1, role: 'admin', displayName: 'Admin' } as const
+  const STARSI = { id: 3, role: 'taker', displayName: 'Starší' } as const
+  const chain = (task: Partial<TaskView>): TaskView => ({ ...reserved, ...task })
+  const copy = chain({ status: 'open', reservedBy: null, origin: 'scheduled', templateId: 4 })
+  const confirmedTask = chain({
+    status: 'confirmed',
+    completedBy: { id: 3, name: 'Starší' },
+    completedAt: '2026-11-21T09:00:00.000Z',
+    earnerId: 3,
+  })
+  const states: [string, TaskView][] = [
+    ['proposed', { ...reserved, status: 'proposed', reservedBy: null, approvedBy: ['Táta'] }],
+    ['open', { ...reserved, status: 'open', reservedBy: null }],
+    ['reserved', reserved],
+    [
+      'done, unconfirmed',
+      {
+        ...reserved,
+        status: 'done_unconfirmed',
+        completedBy: { id: 3, name: 'Starší' },
+        earnerId: 3,
+      },
+    ],
+    [
+      'confirmed',
+      {
+        ...reserved,
+        status: 'confirmed',
+        completedBy: { id: 3, name: 'Starší' },
+        completedAt: '2026-11-21T09:00:00.000Z',
+        earnerId: 3,
+      },
+    ],
+    [
+      'a chore copy',
+      { ...reserved, status: 'open', reservedBy: null, origin: 'scheduled', templateId: 4 },
+    ],
+  ]
+  const allOn = (run: () => string) => {
+    Object.assign(page, { disputes: true, reopen: true, approveAnywhere: true, openRows: true })
+    page.history = [
+      {
+        id: 1,
+        at: '2026-11-21T09:12:00.000Z',
+        action: 'task.created',
+        by: { id: 2, name: 'Táta' },
+        score: 8,
+        reservedBy: null,
+        reason: null,
+      },
+    ]
+    try {
+      return run()
+    } finally {
+      Object.assign(page, {
+        disputes: false,
+        reopen: false,
+        approveAnywhere: false,
+        openRows: false,
+      })
+      page.history = []
+    }
+  }
+
+  it.each(states)('%s, every switch on: no button, no action, the history is there', (_, task) => {
+    const html = allOn(() => render(ADMIN, task))
+    expect(html).toContain('Vyluxovat celý obývák a chodbu')
+    expect(html).not.toContain('<button')
+    for (const label of [
+      cs.disputes.action,
+      cs.work.reserve,
+      // Not cs.work.done: a confirmed task's chip says Hotovo too; no <button covers it.
+      cs.work.release,
+      cs.work.approve,
+      cs.work.reject,
+      cs.cancelTask.action,
+      cs.tasks.approve,
+    ]) {
+      expect(html).not.toContain(`>${label}<`)
+    }
+    expect(html).toContain(cs.history.title)
+  })
+
+  it('a chore copy keeps its link to the chore (navigation, not an action)', () => {
+    const html = allOn(() => render(ADMIN, copy))
+    expect(html).toContain(`<a href="/sablona/4">${cs.tasks.chorePageLink}</a>`)
+  })
+
+  it('the same switches for a brother still show Rozporovat: the gate bites only the admin', () => {
+    expect(allOn(() => render(STARSI, confirmedTask))).toContain(`>${cs.disputes.action}<`)
   })
 })

@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { featureFlags } from '~/server/db/schema'
+import { ForbiddenError } from '~/server/auth/guards'
 import { family, must, T0, T1, T2 } from '~/server/tasks/testing'
 import {
   acceptTemplateBidHandler,
@@ -8,6 +9,7 @@ import {
   bidTemplateScoreHandler,
   counterTemplateScoreHandler,
   turnDownTemplateBidsHandler,
+  templateDetailHandler,
   withdrawTemplateBidHandler,
 } from './functions'
 import { parseApproval, parseNewTemplate, parseTemplateId, parseTemplateTurnDown } from './parse'
@@ -253,5 +255,31 @@ describe('Nechci and turn-down handlers on a price change (#232, switch bidRefus
       ['giver', f.tata, 9, 'replaced'],
       ['giver', f.tata, 9, null],
     ])
+  })
+})
+
+describe("the admin reads a chore's page only while disputes is on (#222)", () => {
+  const withDisputes = (enabled: boolean) => {
+    const f = family()
+    f.db.update(featureFlags).set({ enabled }).where(eq(featureFlags.key, 'disputes')).run()
+    const input = { title: 'Vynést koš', score: 4, approvalRequired: true }
+    const id = must(
+      createTemplate(f.db, f.tata, { ...input, schedule: null, deadline: null }, T0),
+    ).id
+    return { f, id }
+  }
+  const admin = (f: ReturnType<typeof family>) => ({ id: f.admin, role: 'admin' as const })
+  it('off: the admin is refused; a giver still reads it', () => {
+    const { f, id } = withDisputes(false)
+    expect(() => templateDetailHandler(f.db, admin(f), { templateId: id })).toThrow(ForbiddenError)
+    expect(
+      templateDetailHandler(f.db, { id: f.tata, role: 'giver' }, { templateId: id })?.template.id,
+    ).toBe(id)
+  })
+  it('on: the admin reads a proposed chore, the same as a giver', () => {
+    const { f, id } = withDisputes(true)
+    expect(templateDetailHandler(f.db, admin(f), { templateId: id })).toEqual(
+      templateDetailHandler(f.db, { id: f.tata, role: 'giver' }, { templateId: id }),
+    )
   })
 })

@@ -396,7 +396,7 @@ describe('reads', () => {
     expect(pendingTemplateApprovals(db, starsi, on)[0]?.bidding?.lowest).toBe(6)
   })
 
-  it("a brother opens a proposed chore's page only with choreBidding on; an admin never (#209)", () => {
+  it("a brother opens a proposed chore's page only with choreBidding on; an admin always (#209, #222)", () => {
     const { db, admin, tata, starsi } = family()
     const { id } = must(createTemplate(db, tata, BINS, T0))
     const on = { choreBidding: true, bidRefusals: false }
@@ -405,7 +405,8 @@ describe('reads', () => {
       getTemplateDetail(db, id, starsi, { choreBidding: false, bidRefusals: false }),
     ).toBeNull()
     expect(getTemplateDetail(db, id, starsi, on)?.template.id).toBe(id)
-    expect(getTemplateDetail(db, id, admin, on)).toBeNull()
+    // disputes gates the admin in getTemplateDetailFn, not here.
+    expect(getTemplateDetail(db, id, admin)?.template.id).toBe(id)
   })
 
   it("a parent's Vyjednávání takes a proposed chore with bids only with the switch on (#209)", () => {
@@ -521,12 +522,13 @@ describe('template detail (price page)', () => {
     expect(getTemplateDetail(db, id, starsi)?.template.status).toBe('active')
   })
 
-  it('the admin gets null, proposed or agreed', () => {
+  it("the admin reads it, proposed or agreed, as a giver does (#222; the switch is the server function's)", () => {
     const { db, admin, tata, starsi } = family()
     const id = must(createTemplate(db, tata, DISHES, T0)).id
-    expect(getTemplateDetail(db, id, admin)).toBeNull()
+    expect(getTemplateDetail(db, id, admin)).toEqual(getTemplateDetail(db, id, tata))
     must(approveTemplateScore(db, starsi, id, DISHES.score, T0))
-    expect(getTemplateDetail(db, id, admin)).toBeNull()
+    expect(getTemplateDetail(db, id, admin)).toEqual(getTemplateDetail(db, id, tata))
+    expect(getTemplateDetail(db, id, admin)?.template.status).toBe('active')
   })
 
   it('waitingFor: both brothers until one agrees, then nobody; Máma never (Táta’s yes is the givers’)', () => {

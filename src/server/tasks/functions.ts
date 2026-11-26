@@ -1,5 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
-import { requireRole } from '~/server/auth/guards'
+import { ForbiddenError, requireRole } from '~/server/auth/guards'
+import type { Role } from '~/domain'
 import type { Result } from '~/domain/result'
 import { TASK_SCORE_MAX } from '~/lib/taskLimits'
 import { getDb } from '~/server/db'
@@ -268,11 +269,23 @@ export const reopenBiddingFn = createServerFn({ method: 'POST' })
   .validator(parseTaskId)
   .handler(({ data, context }) => reopenBiddingHandler(getDb(), context.user.id, data, new Date()))
 
-/** A task with its negotiation thread. */
+/**
+ * A task with its negotiation thread. The admin reads it only while `disputes` is on (#222:
+ * Sporné on Správa opens it); every write on the page stays giver or taker only.
+ */
+export function taskDetailHandler(
+  db: Db,
+  viewer: { id: number; role: Role },
+  data: { taskId: number },
+): TaskDetail | null {
+  if (viewer.role === 'admin' && !getFlags(db).disputes) throw new ForbiddenError()
+  return getTaskDetail(db, data.taskId)
+}
+
 export const getTaskDetailFn = createServerFn({ method: 'GET' })
-  .middleware([requireRole('giver', 'taker')])
+  .middleware([requireRole('giver', 'taker', 'admin')])
   .validator(parseTaskId)
-  .handler(({ data }): TaskDetail | null => getTaskDetail(getDb(), data.taskId))
+  .handler(({ data, context }) => taskDetailHandler(getDb(), context.user, data))
 
 /** Proposed tasks with bids waiting for a giver. */
 export const listBidsToAnswerFn = createServerFn({ method: 'GET' })
