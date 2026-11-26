@@ -35,6 +35,7 @@ import { waitingDescriptionOf } from '~/server/descriptions/rows'
 import type { WaitingDescription } from '~/server/descriptions/rows'
 import type { ThreadEntry } from '~/server/threadEntry'
 import { listPeople } from '~/server/users/people'
+import { maskToDays } from './rules'
 import { closeThread, lastBids, markBidsFrom, openRows, threadOf } from './thread'
 
 // Recurring templates and their first score agreement (spec §5.1, §5.3). The rules live in
@@ -58,12 +59,6 @@ export interface NewTemplate {
 
 const daysToMask = (days: readonly Weekday[]) =>
   days.reduce<number>((mask, d) => mask | (1 << d), 0)
-
-function maskToDays(mask: number): Weekday[] {
-  const days: Weekday[] = []
-  for (let d = 0; d <= 6; d++) if (mask & (1 << d)) days.push(d as Weekday)
-  return days
-}
 
 const pad = (n: number) => String(n).padStart(2, '0')
 const toHhMm = (t: ClockTime) => `${pad(t.hour)}:${pad(t.minute)}`
@@ -422,19 +417,7 @@ const nameMap = (db: Db | Tx) =>
       .map((u) => [u.id, u.name]),
   )
 
-/** The stored schedule as the domain's `TemplateSchedule`, or null when there is none. */
-export function scheduleOf(row: TemplateRow): TemplateSchedule | null {
-  if (row.scheduleDays === 0) return null
-  const [hour = 0, minute = 0] = (row.scheduleTime ?? '').split(':').map(Number)
-  return { days: maskToDays(row.scheduleDays), time: row.scheduleTime ? { hour, minute } : null }
-}
-
-/** A template row's deadline rule for the domain (`dueTime` is stored as "HH:MM"), or null. */
-export function deadlineRuleOf(row: TemplateRow): DeadlineRule | null {
-  if (row.dueDayOffset === null || row.dueTime === null || row.graceMinutes === null) return null
-  const [hour = 0, minute = 0] = row.dueTime.split(':').map(Number)
-  return { dayOffset: row.dueDayOffset, due: { hour, minute }, graceMinutes: row.graceMinutes }
-}
+export { deadlineRuleOf, scheduleOf } from './rules'
 
 /**
  * The launch switches a read or an action follows. Off by default. `choreBidding` (#209): bidding

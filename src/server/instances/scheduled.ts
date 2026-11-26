@@ -6,7 +6,7 @@ import type { Db } from '~/server/db'
 import { tasks, templates, templateSlots } from '~/server/db/schema'
 import type { TaskRow, TemplateRow } from '~/server/db/schema'
 import { expireTask } from '~/server/tasks/lifecycle'
-import { deadlineRuleOf, scheduleOf } from '~/server/templates/templates'
+import { deadlineRuleOf, scheduleOf } from '~/server/templates/rules'
 import { insertInstance } from './instances'
 
 // The scheduler's instances job (#39, spec §5.3 origin 1). Each tick looks at every agreed

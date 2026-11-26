@@ -20,7 +20,7 @@ import type { Db } from '~/server/db'
 import { tasks, templates } from '~/server/db/schema'
 import type { TaskRow, TemplateRow } from '~/server/db/schema'
 import { columnsOf } from '~/server/tasks/item'
-import { deadlineRuleOf } from '~/server/templates/templates'
+import { deadlineRuleOf } from '~/server/templates/rules'
 import { listPeople } from '~/server/users/people'
 
 // Instances of an agreed template made by a person (#38, spec §5.3): a giver's "+ Teď" (on
