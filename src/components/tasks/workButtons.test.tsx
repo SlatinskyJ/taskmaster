@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ButtonModule from '~/components/ui/button'
@@ -48,7 +49,23 @@ vi.mock('~/server/tasks/functions', () => ({
   releaseTaskFn: vi.fn(),
   reserveTaskFn: vi.fn(),
 }))
-vi.mock('@tanstack/react-router', () => ({ useRouter: () => ({ invalidate: vi.fn() }) }))
+vi.mock('@tanstack/react-router', () => ({
+  useRouter: () => ({ invalidate: vi.fn() }),
+  // A plain anchor with the route's real path, so a row's link can be checked.
+  Link: ({
+    params,
+    children,
+    className,
+  }: {
+    params: { taskId: string }
+    children: ReactNode
+    className?: string
+  }) => (
+    <a href={`/ukol/${params.taskId}`} className={className}>
+      {children}
+    </a>
+  ),
+}))
 
 const STARSI = { id: 3, role: 'taker' } as const
 const MLADSI = { id: 4, role: 'taker' } as const
@@ -77,6 +94,7 @@ const view = (over: Partial<TaskView>): TaskView => ({
   createdAt: '2026-11-17T10:00:00.000Z',
   waitingFor: [],
   scoreChange: null,
+  rebidding: null,
   ...over,
 })
 
@@ -106,10 +124,37 @@ describe('TaskWorkPanel (task page)', () => {
     for (const [task, me] of [
       [view({}), MLADSI],
       [view({}), TATA],
-      [view({ status: 'open', reservedBy: null }), STARSI],
+      // A free task: Rezervovat is a brother's (#195), never a parent's.
+      [view({ status: 'open', reservedBy: null }), TATA],
+      [view({ status: 'proposed', reservedBy: null }), STARSI],
+      [view({ status: 'done_unconfirmed' }), STARSI],
     ] as const) {
       expect(renderToStaticMarkup(<TaskWorkPanel task={task} me={me} />)).toBe('')
     }
+  })
+
+  it('a brother on a free task: the hint, Rezervovat, then Hotovo, full width (#195)', () => {
+    const html = renderToStaticMarkup(
+      <TaskWorkPanel task={view({ status: 'open', reservedBy: null })} me={STARSI} />,
+    )
+    const at = (s: string) => html.indexOf(s)
+    expect(at(cs.work.reserveHint)).toBeGreaterThan(-1)
+    expect(at(cs.work.reserveHint)).toBeLessThan(at(`>${cs.work.reserve}<`))
+    expect(at(`>${cs.work.reserve}<`)).toBeLessThan(at(`>${cs.work.done}<`))
+    expect(html).not.toContain(cs.work.release)
+    expect(count(html, 'w-full')).toBe(2)
+  })
+
+  it('Rezervovat on the page reserves this task, toast reserved', () => {
+    renderToStaticMarkup(
+      <TaskWorkPanel task={view({ status: 'open', reservedBy: null })} me={STARSI} />,
+    )
+    action.pressed.get(cs.work.reserve)?.onClick?.({})
+    const [key, fn, success] = lastRun()
+    expect(key).toBe('reserve-1')
+    void fn()
+    expect(reserveTaskFn).toHaveBeenCalledWith({ data: { taskId: 1 } })
+    expect(success({ ok: true, status: 'reserved' })).toBe(cs.work.toast.reserved)
   })
 
   it('Hotovo sends this task to completeTaskFn with confetti, toast by status', () => {
@@ -223,6 +268,34 @@ describe('TakerBoard Volné row (Domů, #40)', () => {
     renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
     expect(action.pressed.get(cs.work.reserve)?.disabled).toBe(true)
     expect(action.pressed.get(cs.work.done)?.disabled).toBe(true)
+  })
+})
+
+describe('TakerBoard Volné row in reopened bidding (#212)', () => {
+  it('with the switch on a free one-time task links to its page; off, plain name', () => {
+    const open = view({ status: 'open', reservedBy: null })
+    const on = renderToStaticMarkup(<TakerBoard items={[open]} me={3} rebid />)
+    expect(on).toMatch(/<a[^>]*href="\/ukol\/1"[^>]*>Vyluxovat/)
+    // The link is a full tap target, not one line of text.
+    expect(on).toMatch(/<a[^>]*class="[^"]*min-h-tap[^"]*"[^>]*>Vyluxovat/)
+    const off = renderToStaticMarkup(<TakerBoard items={[open]} me={3} />)
+    expect(off).not.toContain('href="/ukol/1"')
+  })
+  it('a free chore copy stays a plain name with the switch on', () => {
+    const chore = view({ status: 'open', reservedBy: null, origin: 'on_demand', templateId: 1 })
+    expect(renderToStaticMarkup(<TakerBoard items={[chore]} me={3} rebid />)).not.toContain(
+      'href="/ukol/1"',
+    )
+  })
+  it('a round shows Vyjednává se on the row', () => {
+    const open = view({
+      status: 'open',
+      reservedBy: null,
+      rebidding: { offer: 6, offeredBy: null },
+    })
+    expect(renderToStaticMarkup(<TakerBoard items={[open]} me={3} rebid />)).toContain(
+      cs.state.negotiating,
+    )
   })
 })
 

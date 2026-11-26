@@ -68,6 +68,7 @@ const template = (over: Partial<TemplateView>): TemplateView => ({
   approvedBy: [],
   schedule: null,
   deadline: null,
+  bidding: null,
   change: null,
   ...over,
 })
@@ -96,6 +97,7 @@ const instance: TaskView = {
   createdAt: '2026-11-24T17:00:00.000Z',
   waitingFor: [],
   scoreChange: null,
+  rebidding: null,
 }
 
 function render(templates: TemplateView[], list: TaskView[] = []) {

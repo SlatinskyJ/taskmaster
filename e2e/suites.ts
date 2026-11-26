@@ -36,6 +36,10 @@ export const SUITES: readonly Suite[] = [
   { name: 'bids', spec: 'bid-refusals.spec.ts', seed: 'bids' },
   // Its own server: it approves and rejects for good (#206).
   { name: 'approve', spec: 'approve.spec.ts', seed: 'approve' },
+  // Its own server: a round changes the task for good (#212).
+  { name: 'rebid', spec: 'rebidding.spec.ts', seed: 'rebid' },
+  // Its own server: it reserves and agrees for good (#205).
+  { name: 'rows', spec: 'rows.spec.ts', seed: 'rows' },
   { name: 'week', spec: 'week.spec.ts', seed: 'week' },
   // Its own server: settling changes the week for good.
   { name: 'meeting', spec: 'meeting.spec.ts', seed: 'week' },
@@ -43,6 +47,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'default-week', spec: 'default-week.spec.ts', seed: 'week' },
   // Its own server: it adds instances and approves a log.
   { name: 'recurring', spec: 'recurring.spec.ts', seed: 'recurring' },
+  // Its own server: bids, Nechci and the turn-down change the chores for good (#209).
+  { name: 'chores', spec: 'chore-bidding.spec.ts', seed: 'chores' },
   // Its own server: the scheduled and expired rows of #39.
   { name: 'scheduler', spec: 'scheduler.spec.ts', seed: 'scheduler' },
   // Its own server: the proposals change for good.

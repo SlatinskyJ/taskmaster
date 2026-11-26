@@ -28,6 +28,10 @@ export const FEATURE_KEYS = [
    * (#206). */
   'approveAnywhere',
   'reopenBidding',
+  /** Bidding on a proposed recurring chore's first price (#209). */
+  'choreBidding',
+  /** Rows open their task or chore page (#205). */
+  'openRows',
 ] as const
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number]
@@ -48,6 +52,8 @@ export const NO_FEATURES: Readonly<Features> = {
   bidRefusals: false,
   approveAnywhere: false,
   reopenBidding: false,
+  choreBidding: false,
+  openRows: false,
 }
 
 /** Every switch on: the full app as designed (UI doc §6). */
@@ -63,4 +69,6 @@ export const ALL_FEATURES: Readonly<Features> = {
   bidRefusals: true,
   approveAnywhere: true,
   reopenBidding: true,
+  choreBidding: true,
+  openRows: true,
 }

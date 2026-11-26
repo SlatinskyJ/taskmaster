@@ -33,6 +33,7 @@ function WeekPage() {
         week={week}
         viewerRole={giver ? 'giver' : 'taker'}
         disputes={features.disputes}
+        links={features.openRows}
         disputeList={disputeList && !('error' in disputeList) ? disputeList : []}
         nextWeek={
           proposals && !('error' in proposals)

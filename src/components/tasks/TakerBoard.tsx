@@ -1,22 +1,35 @@
-import { Bookmark } from 'lucide-react'
 import { EmptyState } from '~/components/EmptyState'
 import { SectionLabel } from '~/components/shell/SectionLabel'
-import { Button } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
-import { reserveTaskFn, type TaskView } from '~/server/tasks/functions'
-import { canWorkOn, instanceMeta } from './taskView'
+import type { TaskView } from '~/server/tasks/functions'
+import { taskLink } from './rowLink'
+import { TaskLink } from './TaskLink'
+import { canWorkOn, instanceMeta, taskChipState } from './taskView'
 import { TaskRow } from './TaskRow'
 import { useTaskAction } from './useTaskAction'
-import { DoneButton, WorkButtons } from './WorkButtons'
+import { DoneButton, ReserveButton, WorkButtons } from './WorkButtons'
 
 /**
  * A taker's work on Domů (UI doc §7.1): "Moje" (reserved by me, or done and waiting for
  * approval) and "Volné" (open). An open task can be marked done without reserving it (spec
  * §5.4, #40). On both rows the main action, Hotovo, keeps its label and the other one is a
  * 44 px icon button (↶ Uvolnit on "Moje", Rezervovat on "Volné"), so a long name and the chip
- * read in full at 360 px (mockup Main, #148). The task page keeps both labelled.
+ * read in full at 360 px (mockup Main, #148). The task page keeps both labelled. With `rebid`
+ * (switch `reopenBidding`, #212) a free one-time task's name links to its page, where a brother
+ * reopens or answers the bidding.
  */
-export function TakerBoard({ items, me }: { items: readonly TaskView[]; me: number }) {
+export function TakerBoard({
+  items,
+  me,
+  rebid = false,
+  links = false,
+}: {
+  items: readonly TaskView[]
+  me: number
+  rebid?: boolean
+  /** The `openRows` switch (#205): each row opens its page (then no separate name link). */
+  links?: boolean
+}) {
   const { busy, run } = useTaskAction()
   const now = new Date()
   const mine = items.filter(
@@ -39,9 +52,15 @@ export function TakerBoard({ items, me }: { items: readonly TaskView[]; me: numb
                     points={t.score}
                     meta={instanceMeta(t, now)}
                     action={<WorkButtons task={t} busy={busy} run={run} />}
+                    link={links ? taskLink(t.id) : undefined}
                   />
                 ) : (
-                  <TaskRow name={t.title} state="pending" points={t.score} />
+                  <TaskRow
+                    name={t.title}
+                    state="pending"
+                    points={t.score}
+                    link={links ? taskLink(t.id) : undefined}
+                  />
                 )}
               </li>
             ))}
@@ -57,32 +76,23 @@ export function TakerBoard({ items, me }: { items: readonly TaskView[]; me: numb
             {free.map((t) => (
               <li key={t.id}>
                 <TaskRow
-                  name={t.title}
-                  state="open"
+                  name={
+                    !links && rebid && t.origin === 'one_time' ? (
+                      <TaskLink id={t.id} title={t.title} />
+                    ) : (
+                      t.title
+                    )
+                  }
+                  state={taskChipState(t)}
                   points={t.score}
                   meta={instanceMeta(t, now)}
                   action={
                     <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={cs.work.reserve}
-                        title={cs.work.reserve}
-                        disabled={busy !== null}
-                        aria-busy={busy === `reserve-${String(t.id)}`}
-                        onClick={() => {
-                          void run(
-                            `reserve-${String(t.id)}`,
-                            () => reserveTaskFn({ data: { taskId: t.id } }),
-                            () => cs.work.toast.reserved,
-                          )
-                        }}
-                      >
-                        <Bookmark aria-hidden="true" />
-                      </Button>
+                      <ReserveButton task={t} busy={busy} run={run} />
                       <DoneButton task={t} busy={busy} run={run} />
                     </div>
                   }
+                  link={links ? taskLink(t.id) : undefined}
                 />
               </li>
             ))}

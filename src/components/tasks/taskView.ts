@@ -23,6 +23,7 @@ export type BidCall =
     }
   | { action: 'withdrawBid'; data: { taskId: number } }
   | { action: 'turnDownBids'; data: { taskId: number; bids: { takerId: number; score: number }[] } }
+  | { action: 'reopenBidding'; data: { taskId: number } }
 export type BidAction = BidCall['action']
 
 export type BidButton = BidCall & {
@@ -34,8 +35,22 @@ export type BidButton = BidCall & {
 
 export type SendButton = BidCall & { label: string; hint: string; disabled: boolean }
 
-/** The chip: a proposed task someone bid on is "Vyjednává se"; done but unconfirmed is pending. */
-export function taskChipState(task: Pick<TaskView, 'status' | 'bids'>): ItemStateKey {
+/** A proposed task, or an open one in a reopened round (#212): there is something to bid on. */
+export function negotiating(task: Pick<TaskView, 'status' | 'rebidding'>): boolean {
+  return task.status === 'proposed' || task.rebidding !== null
+}
+
+/** The score a yes or a bid answers: a round's current offer, else the task's score. */
+export function offerScore(task: Pick<TaskView, 'score' | 'rebidding'>): number {
+  return task.rebidding?.offer ?? task.score
+}
+
+/**
+ * The chip: a proposed task someone bid on is "Vyjednává se", as is a reopened round (#212);
+ * done but unconfirmed is pending.
+ */
+export function taskChipState(task: Pick<TaskView, 'status' | 'bids' | 'rebidding'>): ItemStateKey {
+  if (task.rebidding) return 'negotiating'
   if (task.status === 'proposed') return task.bids.length > 0 ? 'negotiating' : 'proposed'
   if (task.status === 'done_unconfirmed') return 'pending'
   return task.status
@@ -44,6 +59,11 @@ export function taskChipState(task: Pick<TaskView, 'status' | 'bids'>): ItemStat
 /** Hotovo and Uvolnit (spec §5.4, §5.5): only the brother who reserved the task. */
 export function canWorkOn(task: Pick<TaskView, 'status' | 'reservedBy'>, me: Me): boolean {
   return me.role === 'taker' && task.status === 'reserved' && task.reservedBy?.id === me.id
+}
+
+/** Rezervovat and Hotovo on a free task's page (spec §5.4, #195): a brother, on an open task. */
+export function canTakeFree(task: Pick<TaskView, 'status'>, me: Me): boolean {
+  return me.role === 'taker' && task.status === 'open'
 }
 
 /** ✓ Schválit / ✕ Zamítnout (spec §5.5, #206): a parent, on done work not yet confirmed. */
@@ -62,9 +82,12 @@ function names(list: readonly { name: string }[]): string {
 
 /** The yes buttons, top to bottom (spec §5.2: a bidder's yes picks). */
 export function bidButtons(task: TaskView, me: Me): BidButton[] {
-  if (task.status !== 'proposed') return []
-  const offer = { taskId: task.id, score: task.score }
+  if (!negotiating(task)) return []
+  const round = task.rebidding
+  const offer = { taskId: task.id, score: offerScore(task) }
   if (me.role === 'taker') {
+    // A round's opening offer is nobody's: taking it at that price is Rezervovat (#212).
+    if (round?.offeredBy === null) return []
     if (task.approverIds.includes(me.id)) return []
     const bid = myBid(task, me)
     const approve: BidButton = {
@@ -72,7 +95,7 @@ export function bidButtons(task: TaskView, me: Me): BidButton[] {
       action: 'approveOffer',
       data: offer,
       label: cs.tasks.approve,
-      hint: cs.bids.approveHint,
+      hint: round ? cs.rebid.approveHint(round.offer) : cs.bids.approveHint,
       variant: bid === null ? 'ok' : 'ghost',
     }
     if (bid === null) return [approve]
@@ -80,7 +103,7 @@ export function bidButtons(task: TaskView, me: Me): BidButton[] {
       key: 'take',
       action: 'acceptOffer',
       data: offer,
-      label: cs.bids.take(task.score),
+      label: cs.bids.take(offer.score),
       hint: cs.bids.takeHint,
       variant: 'ok',
     }
@@ -113,17 +136,18 @@ function acceptTexts(score: number, bidders: readonly { name: string }[]) {
  * brothers bid, accepts their bids (decision 8b).
  */
 export function sendButton(task: TaskView, me: Me, value: number): SendButton | null {
-  if (task.status !== 'proposed') return null
+  if (!negotiating(task)) return null
+  const current = offerScore(task)
   const data = { taskId: task.id, score: value }
   if (me.role === 'taker') {
     // Same number (Jakub 2026-11-24): his previous bid only after the offer changed.
-    const again = value !== task.score && value === lastBid(task, me)
+    const again = value !== current && value === lastBid(task, me)
     return {
       action: 'placeBid',
       data,
       label: cs.bids.send,
       hint: again ? cs.bids.sameAgainHint : cs.bids.bidHint,
-      disabled: value === task.score || again,
+      disabled: value === current || again,
     }
   }
   if (me.role !== 'giver') return null
@@ -136,7 +160,7 @@ export function sendButton(task: TaskView, me: Me, value: number): SendButton | 
     action: 'counterOffer',
     data: { ...data, bidders: at.map((p) => p.id) },
     ...texts,
-    disabled: value === task.score,
+    disabled: value === current,
   }
 }
 
@@ -151,7 +175,8 @@ function lastBid(task: TaskView, me: Me): number | null {
  * refused, not dropped unseen.
  */
 export function refuseButton(task: TaskView, me: Me, on: boolean): BidButton | null {
-  if (!on || task.status !== 'proposed') return null
+  if (!on || !negotiating(task)) return null
+  const round = task.rebidding !== null
   if (me.role === 'taker' && myBid(task, me) !== null) {
     return {
       key: 'refuse',
@@ -171,11 +196,38 @@ export function refuseButton(task: TaskView, me: Me, on: boolean): BidButton | n
         bids: task.bids.map((b) => ({ takerId: b.takerId, score: b.score })),
       },
       label: cs.bids.turnDown,
-      hint: cs.bids.turnDownHint(task.score),
+      hint: round ? cs.rebid.turnDownHint(task.score) : cs.bids.turnDownHint(task.score),
       variant: 'ghost',
     }
   }
   return null
+}
+
+/**
+ * "Vyjednat novou cenu" (#212, switch `reopenBidding`): a free, agreed one-time task with no
+ * round and no price change in flight; any brother or parent.
+ */
+export function reopenButton(task: TaskView, me: Me, on: boolean): BidButton | null {
+  if (!on || task.origin !== 'one_time' || task.status !== 'open') return null
+  if (task.rebidding !== null || task.scoreChange !== null) return null
+  if (me.role !== 'giver' && me.role !== 'taker') return null
+  return {
+    key: 'reopen',
+    action: 'reopenBidding',
+    data: { taskId: task.id },
+    label: cs.rebid.reopen,
+    hint: cs.rebid.reopenHint(task.score),
+    variant: 'ghost',
+  }
+}
+
+/** The header lines of a round: who countered, and that the agreed score still applies. */
+export function roundLines(task: Pick<TaskView, 'score' | 'rebidding'>): string[] {
+  const round = task.rebidding
+  if (!round) return []
+  const by = round.offeredBy
+  const counter = by ? [cs.rebid.offer(by.name, round.offer)] : []
+  return [...counter, cs.taskPrice.oldStays(task.score)]
 }
 
 /** A "Čeká na tebe" row's short line: who offers, and my bid next to it. */
@@ -235,12 +287,29 @@ export function threadTime(iso: string): string {
 }
 
 /** The toast after a bidding action succeeded, from the status the server returned. */
-export function toastFor(action: BidAction, status: TaskView['status'], me: Me): string {
-  if (status === 'reserved' && me.role === 'taker') return cs.bids.toast.agreedMine
+/**
+ * The toast after a bidding action succeeded. `round`: the task was in a reopened round when
+ * tapped (#212); it stays open whether agreed or not, so the call decides, not the status.
+ */
+export function toastFor(
+  call: BidCall,
+  status: TaskView['status'],
+  me: Me,
+  round: boolean,
+): string {
+  if (call.action === 'reopenBidding') return cs.rebid.toast.reopened
+  if (call.action === 'turnDownBids') return cs.bids.toast.turnedDown
+  const mine = status === 'reserved' && me.role === 'taker'
+  if (round) {
+    if (call.action === 'placeBid') return cs.bids.toast.sent
+    if (call.action === 'withdrawBid') return cs.bids.toast.withdrawn
+    if (call.action === 'counterOffer' && call.data.bidders.length === 0) return cs.bids.toast.sent
+    return mine ? cs.bids.toast.agreedMine : cs.bids.toast.agreed
+  }
+  if (mine) return cs.bids.toast.agreedMine
   if (status === 'open' || status === 'reserved') return cs.bids.toast.agreed
-  if (action === 'approveOffer') return cs.tasks.approved
-  if (action === 'withdrawBid') return cs.bids.toast.withdrawn
-  if (action === 'turnDownBids') return cs.bids.toast.turnedDown
+  if (call.action === 'approveOffer') return cs.tasks.approved
+  if (call.action === 'withdrawBid') return cs.bids.toast.withdrawn
   return cs.bids.toast.sent
 }
 

@@ -1,4 +1,4 @@
-import { createFileRoute, notFound } from '@tanstack/react-router'
+import { createFileRoute, Link, notFound } from '@tanstack/react-router'
 import { DisputeControl } from '~/components/disputes/DisputeControl'
 import { taskDisputes } from '~/components/disputes/disputeProps'
 import { Screen } from '~/components/shell/Screen'
@@ -6,12 +6,20 @@ import { SectionLabel } from '~/components/shell/SectionLabel'
 import { ApprovePanel } from '~/components/tasks/ApproveControls'
 import { BidPanel } from '~/components/tasks/BidPanel'
 import { BidThread } from '~/components/tasks/BidThread'
+import { ReopenBidding } from '~/components/tasks/ReopenBidding'
 import { CancelTask } from '~/components/tasks/CancelTask'
 import { ScoreChangePanel } from '~/components/tasks/ScoreChangePanel'
 import { StateChip } from '~/components/tasks/StateChip'
 import { TaskHistory } from '~/components/tasks/TaskHistory'
 import { TaskWorkPanel } from '~/components/tasks/WorkButtons'
-import { detailMeta, instanceMeta, taskChipState, waitingText } from '~/components/tasks/taskView'
+import {
+  detailMeta,
+  instanceMeta,
+  roundLines,
+  taskChipState,
+  waitingText,
+} from '~/components/tasks/taskView'
+import { buttonVariants } from '~/components/ui/button'
 import { Card } from '~/components/ui/card'
 import { parseIdParam } from '~/lib/idParam'
 import { guardScreen } from '~/lib/screenGuard'
@@ -22,8 +30,8 @@ import { getTaskDetailFn } from '~/server/tasks/functions'
 
 // One task's page (#34): TTask for a brother, GBid / GTask for a parent (UI doc §7). The state,
 // what this person can do now (bid; Hotovo and Uvolnit for the brother who has the task, #150;
-// a new price, a giver's cancel, #36), the bid thread and the task's history. Reserve stays
-// on Domů.
+// a new price, a giver's cancel, #36; Rezervovat on a free task, #195), the bid thread and the
+// task's history. A chore's copy links to its chore (#205).
 export const Route = createFileRoute('/_app/ukol/$taskId')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/ukol/$taskId')
@@ -63,7 +71,7 @@ function TaskPage() {
   const waiting = waitingText(task, me)
   const oneTime = task.origin === 'one_time'
   return (
-    <Screen title={task.title} user={user} back="/">
+    <Screen title={task.title} user={user} back="history">
       <Card className="grid gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <StateChip state={taskChipState(task)} />
@@ -71,6 +79,11 @@ function TaskPage() {
           {meta && <span className="text-meta text-muted">{meta}</span>}
           {due && <span className="text-meta text-muted">{due}</span>}
         </div>
+        {roundLines(task).map((line) => (
+          <p key={line} className="text-meta text-muted">
+            {line}
+          </p>
+        ))}
         {task.status === 'proposed' && (
           <p className="text-meta text-muted">
             {cs.bids.agreed}: {task.approvedBy.map((name) => `${name} ✓`).join(', ')}
@@ -81,6 +94,15 @@ function TaskPage() {
               </>
             )}
           </p>
+        )}
+        {features.openRows && task.templateId !== null && (
+          <Link
+            to="/sablona/$templateId"
+            params={{ templateId: String(task.templateId) }}
+            className={buttonVariants({ variant: 'ghost' })}
+          >
+            {cs.tasks.chorePageLink}
+          </Link>
         )}
         {features.disputes &&
           taskDisputes(task, user.role === 'giver').map((d) => (
@@ -104,16 +126,21 @@ function TaskPage() {
           rebid={features.reopenBidding}
         />
       )}
+      {oneTime && <ReopenBidding task={task} me={me} on={features.reopenBidding} />}
       <CancelTask task={task} me={me} />
       {/* ...and nothing to negotiate, so no empty thread heading. */}
       {oneTime && (
         <section className="grid gap-2" aria-labelledby="thread-label">
           <SectionLabel id="thread-label">{cs.bids.thread}</SectionLabel>
-          <BidThread entries={thread} me={user.id} />
+          <BidThread
+            entries={thread}
+            me={user.id}
+            empty={task.rebidding ? cs.rebid.noEntries : undefined}
+          />
         </section>
       )}
       <BidPanel
-        key={`${String(task.score)}-${String(thread.length)}`}
+        key={`${String(task.score)}-${String(task.rebidding?.offer)}-${String(thread.length)}`}
         task={task}
         me={me}
         refusals={features.bidRefusals}

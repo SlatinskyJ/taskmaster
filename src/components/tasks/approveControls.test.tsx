@@ -46,6 +46,7 @@ const done: TaskView = {
   createdAt: '2026-11-17T10:00:00.000Z',
   waitingFor: [],
   scoreChange: null,
+  rebidding: null,
 }
 const TATA = { id: 2, role: 'giver' } as const
 const STARSI = { id: 3, role: 'taker' } as const

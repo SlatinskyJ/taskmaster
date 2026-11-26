@@ -41,6 +41,8 @@ describe('navItems (UI doc §6)', () => {
       bidRefusals: false,
       approveAnywhere: false,
       reopenBidding: false,
+      choreBidding: false,
+      openRows: false,
     })
     expect(navItems('taker', only('log')).map((i) => i.key)).toEqual(['home', 'log'])
     expect(navItems('taker', only('week')).map((i) => i.key)).toEqual(['home', 'week'])

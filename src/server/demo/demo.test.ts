@@ -86,6 +86,16 @@ describe('the demo seed (previews)', () => {
       ['task.score_approved', 'user'],
       ['task.agreed', 'user'],
       ['task.score_change_proposed', 'user'],
+      // #212: the attic agreed after Starší's bid, reopened, Mladší bids; the terrace agreed.
+      ['task.created', 'user'],
+      ['task.bid_placed', 'user'],
+      ['task.score_approved', 'user'],
+      ['task.agreed', 'user'],
+      ['task.bidding_reopened', 'user'],
+      ['task.bid_placed', 'user'],
+      ['task.created', 'user'],
+      ['task.score_approved', 'user'],
+      ['task.agreed', 'user'],
       ['task.created', 'user'],
       ['task.score_approved', 'user'],
       ['task.agreed', 'user'],
@@ -153,12 +163,14 @@ describe('the demo seed (previews)', () => {
       ['Vyndat myčku', 'rejected'], // #38 Zapsat, Starší
       ['Vynést papír', 'confirmed'], // #44
       ['Vynést sklo a plasty do kontejneru', 'reserved'], // #45, rejected
+      ['Vynést staré věci na půdu', 'open'], // #212, in a round
       ['Vynést tříděný odpad', 'confirmed'], // #40
       ['Vynést tříděný', 'done_unconfirmed'], // #44
       ['Vysát auto', 'confirmed'], // #44
       ['Vytřít podlahu v kuchyni', 'done_unconfirmed'], // #40
       ['Vytřít podlahu', 'confirmed'], // #45
       ['Zalít kytky', 'done_unconfirmed'], // #44
+      ['Zamést chodník před domem', 'open'], // #212
       ['Zamést terasu', 'confirmed'], // #44
     ])
   })
@@ -210,6 +222,8 @@ describe('the demo seed (previews)', () => {
       ['Nakrmit rybičky', 1], // #39 boot tick
       ['Nachystat tašku do školy', 2], // #38 + Teď
       ['Umýt okna v obýváku i v ložnici', 5],
+      ['Zamést chodník před domem', 6], // #212, never reopened
+      ['Vynést staré věci na půdu', 12], // #212, in a round
       ['Shrabat listí na zahradě', 10],
       ['Vyměnit kočce vodu', 1], // #39
     ])
@@ -230,7 +244,7 @@ describe('the demo seed (previews)', () => {
     expect(getFlags(db)).toEqual({ ...ALL_FEATURES, week: false })
   })
 
-  it('adds five templates (#37, #38, #39): one waiting for agreement, four agreed', () => {
+  it('adds seven templates (#37, #38, #39, #209): three waiting for agreement, four agreed', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     expect(
@@ -280,6 +294,9 @@ describe('the demo seed (previews)', () => {
         time: null,
         due: '07:00',
       },
+      // #209's proposed chores, open for bids.
+      { title: 'Vynést kompost', status: 'proposed', score: 10, days: 0, time: null, due: null },
+      { title: 'Zalít kytky', status: 'proposed', score: 4, days: 0, time: null, due: null },
     ])
     const actions = db
       .select({ action: auditLog.action })
@@ -301,6 +318,8 @@ describe('the demo seed (previews)', () => {
       'template.created',
       'template.score_approved',
       'template.agreed',
+      'template.created',
+      ...['template.created', 'template.bid_placed', 'template.bid_placed'],
     ])
   })
 
@@ -316,6 +335,9 @@ describe('the demo seed (previews)', () => {
     expect(rows).toEqual([
       ['mladsi', 'taker', 5, null],
       ['tata', 'giver', 4, null],
+      // #209: the bids on "Zalít kytky".
+      ['starsi', 'taker', 6, null],
+      ['mladsi', 'taker', 7, null],
     ])
     expect(
       db
@@ -323,7 +345,7 @@ describe('the demo seed (previews)', () => {
         .from(templates)
         .all()
         .map((t) => t.score),
-    ).toEqual([1, 1, 4, 3, 2])
+    ).toEqual([1, 1, 4, 3, 2, 10, 4])
   })
 
   it('all or nothing: a failing template leaves no people either', () => {

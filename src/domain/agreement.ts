@@ -99,8 +99,17 @@ export function isAgreed(proposal: ScoreProposal, people: readonly Person[]): bo
 // ── Recurring templates (spec §5.1) ──────────────────────────────────────────────────────
 
 export type TemplateAgreement =
-  /** Not yet agreed: creates no instances. */
-  | { status: 'proposed'; proposal: ScoreProposal }
+  /**
+   * Not yet agreed: creates no instances. Takers may bid on the first score like on a one-time
+   * Návrh (#209, `templateBidding.ts`): `book` holds the open bids, `lastBids` each taker's newest
+   * bid since the giver side last changed the offer or turned the bidding down.
+   */
+  | {
+      status: 'proposed'
+      proposal: ScoreProposal
+      book: BidBook
+      lastBids: readonly OpenBid[]
+    }
   /**
    * Agreed at `score`. A score change in flight (`change`: takers' open bids and the giver side's
    * current offer) leaves `score` in force until someone accepts (spec §5.1; `scoreChange.ts`).
@@ -123,7 +132,12 @@ export function proposeTemplate(
   if (!giver || !isActiveGiver(giver)) return fail('not_a_giver')
   const proposal = proposeScore(people, giverId, score)
   if (!proposal.ok) return proposal
-  return ok(resolveTemplate({ status: 'proposed', proposal: proposal.value }, people))
+  return ok(
+    resolveTemplate(
+      { status: 'proposed', proposal: proposal.value, book: EMPTY_BOOK, lastBids: [] },
+      people,
+    ),
+  )
 }
 
 /**
@@ -137,7 +151,10 @@ export function resolveTemplate(
   if (template.status === 'proposed') {
     const proposal = pruneApprovals(template.proposal, people)
     if (isAgreed(proposal, people)) return { status: 'agreed', score: proposal.score, change: null }
-    return proposal === template.proposal ? template : { status: 'proposed', proposal }
+    const book = liveBook(template.book, people)
+    return proposal === template.proposal && book === template.book
+      ? template
+      : { ...template, proposal, book }
   }
   if (!template.change) return template
   const change = liveTemplateBook(template.change, people)
@@ -162,7 +179,7 @@ export function approveTemplate(
   if (template.status !== 'proposed') return fail('not_proposed')
   const approved = approveScore(template.proposal, people, approverId)
   if (!approved.ok) return approved
-  return ok(resolveTemplate({ status: 'proposed', proposal: approved.value }, people))
+  return ok(resolveTemplate({ ...template, proposal: approved.value }, people))
 }
 
 /** Instances can only come from an agreed template (spec §5.1). */

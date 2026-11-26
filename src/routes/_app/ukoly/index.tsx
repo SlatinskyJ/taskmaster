@@ -82,6 +82,18 @@ function Tasks() {
         </Button>
       )
     }
+    // A reopened round with bids waits for the parent like a Návrh does (#212).
+    if (t.status === 'open' && t.rebidding && t.bids.length > 0) {
+      return (
+        <Link
+          to="/ukol/$taskId"
+          params={{ taskId: String(t.id) }}
+          className={buttonVariants({ variant: 'ghost' })}
+        >
+          {cs.bids.answer}
+        </Link>
+      )
+    }
     if (t.status === 'open') {
       return (
         <Button
@@ -118,7 +130,9 @@ function Tasks() {
             list={list}
             meta={meta}
             action={action}
+            linked={(t) => features.reopenBidding && t.status === 'open' && t.origin === 'one_time'}
             approve={features.approveAnywhere ? { busy, run } : undefined}
+            links={features.openRows}
           />
         )}
       </section>
@@ -134,6 +148,7 @@ function Tasks() {
                   <TemplateRow
                     template={t}
                     busy={busy !== null}
+                    links={features.openRows}
                     onNow={() => {
                       void run(
                         `now-${String(t.id)}`,

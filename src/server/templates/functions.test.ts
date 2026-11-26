@@ -1,5 +1,18 @@
+import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
-import { parseNewTemplate, parseTemplateId } from './parse'
+import { featureFlags } from '~/server/db/schema'
+import { family, must, T0, T1, T2 } from '~/server/tasks/testing'
+import {
+  acceptTemplateBidHandler,
+  acceptTemplateOfferHandler,
+  bidTemplateScoreHandler,
+  counterTemplateScoreHandler,
+  turnDownTemplateBidsHandler,
+  withdrawTemplateBidHandler,
+} from './functions'
+import { parseApproval, parseNewTemplate, parseTemplateId, parseTemplateTurnDown } from './parse'
+import { createTemplate } from './templates'
+import { threadRows } from './testing'
 
 const VALID = {
   title: 'Vynést koše',
@@ -64,5 +77,132 @@ describe('parseTemplateId', () => {
     ['null', null],
   ])('refuses %s', (_, body) => {
     expect(() => parseTemplateId(body)).toThrow('Invalid input')
+  })
+})
+
+describe('parseApproval', () => {
+  it('takes a score up to 999 and refuses 1000', () => {
+    expect(parseApproval({ templateId: 1, score: 999 })).toEqual({ templateId: 1, score: 999 })
+    expect(() => parseApproval({ templateId: 1, score: 1000 })).toThrow('Invalid input')
+  })
+})
+
+describe('parseTemplateTurnDown (#209)', () => {
+  const bids = (n: number) => Array.from({ length: n }, (_, i) => ({ takerId: i + 1, score: 5 }))
+
+  it('takes 1 to 20 bids, one per taker', () => {
+    expect(parseTemplateTurnDown({ templateId: 3, bids: bids(1) })).toEqual({
+      templateId: 3,
+      bids: [{ takerId: 1, score: 5 }],
+    })
+    expect(parseTemplateTurnDown({ templateId: 3, bids: bids(20) }).bids).toHaveLength(20)
+    expect(parseTemplateTurnDown({ templateId: 3, bids: [{ takerId: 1, score: 1 }] }).bids).toEqual(
+      [{ takerId: 1, score: 1 }],
+    )
+  })
+
+  it.each([
+    ['21 bids', { templateId: 3, bids: bids(21) }],
+    ['no bids', { templateId: 3, bids: [] }],
+    ['bids not a list', { templateId: 3, bids: 'x' }],
+    [
+      'two bids of one taker',
+      {
+        templateId: 3,
+        bids: [
+          { takerId: 1, score: 5 },
+          { takerId: 1, score: 6 },
+        ],
+      },
+    ],
+    ['a 0 score', { templateId: 3, bids: [{ takerId: 1, score: 0 }] }],
+    ['a 1000 score', { templateId: 3, bids: [{ takerId: 1, score: 1000 }] }],
+    ['a missing templateId', { bids: bids(1) }],
+    ['a string takerId', { templateId: 3, bids: [{ takerId: '1', score: 5 }] }],
+  ])('refuses %s', (_, body) => {
+    expect(() => parseTemplateTurnDown(body)).toThrow('Invalid input')
+  })
+})
+
+describe('template score handlers on a proposed chore (#209, switch choreBidding)', () => {
+  const withSwitch = (enabled: boolean) => {
+    const f = family()
+    f.db.update(featureFlags).set({ enabled }).where(eq(featureFlags.key, 'choreBidding')).run()
+    const input = { title: 'Vynést koš', score: 10, approvalRequired: true }
+    const id = must(
+      createTemplate(f.db, f.tata, { ...input, schedule: null, deadline: null }, T0),
+    ).id
+    return { f, id }
+  }
+
+  it('off: each handler answers not_agreed and writes nothing', () => {
+    const { f, id } = withSwitch(false)
+    const at = { templateId: id, score: 12 }
+    const off = { ok: false, error: 'not_agreed' }
+    expect(bidTemplateScoreHandler(f.db, f.starsi, at, T1)).toEqual(off)
+    expect(counterTemplateScoreHandler(f.db, f.tata, at, T1)).toEqual(off)
+    expect(acceptTemplateBidHandler(f.db, f.tata, at, T1)).toEqual(off)
+    expect(acceptTemplateOfferHandler(f.db, f.starsi, { templateId: id, score: 10 }, T1)).toEqual(
+      off,
+    )
+    expect(withdrawTemplateBidHandler(f.db, f.starsi, { templateId: id }, T1)).toEqual(off)
+    const bids = [{ takerId: f.starsi, score: 12 }]
+    expect(turnDownTemplateBidsHandler(f.db, f.tata, { templateId: id, bids }, T1)).toEqual(off)
+    expect(threadRows(f.db, id)).toEqual([])
+  })
+
+  it('on: a bid answers exactly ok, id and the score 10', () => {
+    const { f, id } = withSwitch(true)
+    expect(bidTemplateScoreHandler(f.db, f.starsi, { templateId: id, score: 12 }, T1)).toEqual({
+      ok: true,
+      id,
+      score: 10,
+      status: 'proposed',
+    })
+  })
+
+  it("on: Nechci closes Starší's bid; a turn-down with the bids he saw closes the rest", () => {
+    const { f, id } = withSwitch(true)
+    expect(bidTemplateScoreHandler(f.db, f.starsi, { templateId: id, score: 12 }, T1).ok).toBe(true)
+    expect(bidTemplateScoreHandler(f.db, f.mladsi, { templateId: id, score: 14 }, T1).ok).toBe(true)
+    expect(withdrawTemplateBidHandler(f.db, f.starsi, { templateId: id }, T2)).toEqual({
+      ok: true,
+      id,
+      score: 10,
+      status: 'proposed',
+    })
+    const bids = [{ takerId: f.mladsi, score: 14 }]
+    expect(turnDownTemplateBidsHandler(f.db, f.tata, { templateId: id, bids }, T2)).toEqual({
+      ok: true,
+      id,
+      score: 10,
+      status: 'proposed',
+    })
+    expect(threadRows(f.db, id)).toEqual([
+      ['taker', f.starsi, 12, 'closed'],
+      ['taker', f.mladsi, 14, 'closed'],
+      ['giver', f.tata, 10, null],
+    ])
+  })
+
+  it('on: a counter answers status proposed at its offer', () => {
+    const { f, id } = withSwitch(true)
+    expect(counterTemplateScoreHandler(f.db, f.tata, { templateId: id, score: 11 }, T1)).toEqual({
+      ok: true,
+      id,
+      score: 11,
+      status: 'proposed',
+    })
+  })
+
+  it('on: accepting the lowest answers the agreed score', () => {
+    const { f, id } = withSwitch(true)
+    expect(bidTemplateScoreHandler(f.db, f.starsi, { templateId: id, score: 12 }, T1).ok).toBe(true)
+    expect(acceptTemplateBidHandler(f.db, f.tata, { templateId: id, score: 12 }, T2)).toEqual({
+      ok: true,
+      id,
+      score: 12,
+      status: 'active',
+    })
   })
 })

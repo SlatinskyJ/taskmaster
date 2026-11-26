@@ -96,6 +96,7 @@ function Home() {
       ? waitingProposals(proposals, user.id)
       : []
   const approveOnTop = user.role === 'giver' && features.approveAnywhere
+  const links = features.openRows
   const giverIdle =
     proposalRows.length +
       waiting.length +
@@ -108,7 +109,7 @@ function Home() {
   return (
     <Screen title={`${cs.home.greeting}, ${user.displayName}!`} user={user}>
       {user.role === 'taker' && <MyPoints points={points} me={user.id} />}
-      {approveOnTop && <ToApprove items={toApprove} />}
+      {approveOnTop && <ToApprove items={toApprove} links={links} />}
       <WaitingForYou
         items={waiting}
         templates={shownTemplates}
@@ -116,11 +117,14 @@ function Home() {
         taskPriceChanges={taskPriceChanges}
         proposals={proposalRows}
         me={{ id: user.id, role: user.role }}
+        links={links}
       />
       {user.role === 'taker' ? (
         <>
-          <TakerBoard items={board} me={user.id} />
-          {features.recurring && <RecurringList items={recurring} waiting={priceChanges} />}
+          <TakerBoard items={board} me={user.id} rebid={features.reopenBidding} links={links} />
+          {features.recurring && (
+            <RecurringList items={recurring} waiting={priceChanges} links={links} />
+          )}
         </>
       ) : (
         <>
@@ -131,6 +135,7 @@ function Home() {
             bids={bids}
             me={{ id: user.id, role: user.role }}
             approveOnTop={approveOnTop}
+            links={links}
           />
           {giverIdle && (
             <EmptyState

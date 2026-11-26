@@ -71,6 +71,7 @@ const pending: TaskView = {
   graceEndsAt: null,
   createdAt: '2026-11-17T10:00:00.000Z',
   waitingFor: [],
+  rebidding: null,
   scoreChange: {
     id: 7,
     score: 20,
