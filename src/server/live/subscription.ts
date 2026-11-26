@@ -1,9 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { max } from 'drizzle-orm'
 import type { CurrentUser } from '~/server/auth'
-import { sessionToken } from '~/server/auth/http'
 import type { Db } from '~/server/db'
-import { getDb } from '~/server/db'
 import { auditLog } from '~/server/db/schema'
 import { getFlags } from '~/server/features'
 import { ROLES } from '~/domain/parties'
@@ -94,24 +92,26 @@ export function newestAuditId(db: Db): number {
   )
 }
 
-/** `liveSubscription`'s body, with what it reads from the request passed in. */
+/**
+ * The live subscription for what a data function read, or null (switch off, or no session).
+ * Called by `serveLive` (./read.ts) in the same synchronous block as the reads. A list over
+ * `TOPIC_LIMIT` is a screen's mistake: it throws outside production; in production it is
+ * logged (the count only) and the screen loads without a banner.
+ */
 export function liveSubscriptionIn(
   db: Db,
   key: string | undefined,
   user: CurrentUser,
   topics: readonly Topic[],
+  env: NodeJS.ProcessEnv,
 ): LiveSub | null {
   if (!key || !getFlags(db).liveChanges) return null
+  if (topics.length > TOPIC_LIMIT && env.NODE_ENV === 'production') {
+    console.error(
+      `[live] subscription refused: ${String(topics.length)} topics, limit ${String(TOPIC_LIMIT)}`,
+    )
+    return null
+  }
   const asOf = newestAuditId(db)
   return { token: signSubscription(key, user, topics, asOf), asOf }
-}
-
-/**
- * The live subscription for what a data function read, or null (switch off, or no session).
- * Call it **before** the function's reads, or in the same synchronous block: a change committed
- * during an `await` between `asOf` and the reads would otherwise be missed (an early `asOf`
- * only over-fires).
- */
-export function liveSubscription(user: CurrentUser, topics: readonly Topic[]): LiveSub | null {
-  return liveSubscriptionIn(getDb(), sessionToken(), user, topics)
 }

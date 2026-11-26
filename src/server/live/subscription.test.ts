@@ -6,12 +6,7 @@ import type { CurrentUser } from '~/server/auth'
 import type { Db } from '~/server/db'
 import { featureFlags } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
-import {
-  liveSubscription,
-  liveSubscriptionIn,
-  readSubscription,
-  signSubscription,
-} from './subscription'
+import { liveSubscriptionIn, readSubscription, signSubscription } from './subscription'
 import { TOPIC_LIMIT } from './topics'
 import type { Topic } from './topics'
 
@@ -158,7 +153,7 @@ describe('signSubscription / readSubscription', () => {
   })
 })
 
-describe('liveSubscription', () => {
+describe('liveSubscriptionIn', () => {
   function db(on: boolean): Db {
     const d = createTestDb()
     d.update(featureFlags).set({ enabled: on }).where(eq(featureFlags.key, 'liveChanges')).run()
@@ -168,18 +163,18 @@ describe('liveSubscription', () => {
   it('switch off → null', () => {
     req.db = db(false)
     req.token = A
-    expect(liveSubscription(starsi, ['week'])).toBeNull()
+    expect(liveSubscriptionIn(req.db, req.token, starsi, ['week'], {})).toBeNull()
   })
 
   it('no session token → null', () => {
     req.db = db(true)
-    expect(liveSubscription(starsi, ['week'])).toBeNull()
+    expect(liveSubscriptionIn(req.db, req.token, starsi, ['week'], {})).toBeNull()
   })
 
   it('on → token for the user, asOf = max(audit_log.id)', () => {
     req.db = db(true)
     req.token = A
-    expect(liveSubscription(starsi, ['week'])?.asOf).toBe(0)
+    expect(liveSubscriptionIn(req.db, req.token, starsi, ['week'], {})?.asOf).toBe(0)
     withAudit(req.db, () => undefined, [
       {
         actor: { kind: 'system' },
@@ -189,7 +184,7 @@ describe('liveSubscription', () => {
       },
       { actor: { kind: 'system' }, action: 'period.ended', entityType: 'period', entityId: 1 },
     ])
-    const sub = liveSubscription(starsi, ['week', 'points:3'])
+    const sub = liveSubscriptionIn(req.db, req.token, starsi, ['week', 'points:3'], {})
     expect(sub?.asOf).toBe(2)
     expect(readSubscription(A, sub?.token ?? '')).toEqual({
       userId: 3,
@@ -197,6 +192,6 @@ describe('liveSubscription', () => {
       topics: ['week', 'points:3'],
       asOf: 2,
     })
-    expect(liveSubscriptionIn(req.db, B, starsi, ['week'])?.token).not.toBe(sub?.token)
+    expect(liveSubscriptionIn(req.db, B, starsi, ['week'], {})?.token).not.toBe(sub?.token)
   })
 })

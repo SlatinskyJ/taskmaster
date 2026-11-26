@@ -8,8 +8,11 @@ import { getFlags } from '~/server/features'
 import { liveHub } from './hub'
 import { openStream } from './stream'
 
+export type { Live } from './read'
+export type { LiveSub } from './subscription'
+
 // The stream route's body (src/routes/api/live.ts, #299): reads the request and hands it to
-// `openStream` (./stream.ts). Server only.
+// `openStream` (./stream.ts). Server only. Screens import the subscription types from here.
 
 export const liveStreamResponse = createServerOnlyFn((request: Request): Response => {
   const url = new URL(request.url)

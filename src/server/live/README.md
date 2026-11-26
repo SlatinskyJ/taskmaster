@@ -4,7 +4,7 @@ The server side of the live change banner (design: `docs/superpowers/specs/2026-
 A screen that is open while someone else changes what it shows gets an event; the banner
 (PR 2) tells the person, and they refresh when they choose. Behind the launch switch
 `liveChanges` (off in production; the `demo` seed turns it on). Off: the stream answers 404
-and `liveSubscription` returns `null`.
+and data functions return `live: null`.
 
 ## What fires an event
 
@@ -34,12 +34,19 @@ to. Over-firing is accepted; a miss is not.
 
 ## Subscribing (data functions, PR 2)
 
-A data function returns, next to its data, `liveSubscription(user, topics)`: a token signed
-with the request's session token (HMAC-SHA256) and `asOf`, the newest audit id. The token
-carries the viewer's id and role (`{ u, r, t, a }`). Call it
-**before** the function's reads, or in the same synchronous block, so a change committed during
-an `await` is never between `asOf` and the data (an early `asOf` only over-fires). Only issue a
-topic the function checked the viewer may read: the stream trusts what the server signed.
+A data function is a `liveRead` (`read.ts`) in its module: `read` (synchronous) and `topics`
+(what the viewer was shown). Its server function's handler is `serveLive(def, context.user,
+data)`, which reads, then signs the topics in the same synchronous block, and returns
+`{ data, live }`: `live` is a token signed with the request's session token (HMAC-SHA256) and
+`asOf`, the newest audit id, or null (switch off, no session, no topics). No `await` can fall
+between the read and `asOf`, so no change is missed. The token carries the viewer's id and role
+(`{ u, r, t, a }`). `serveLive` is the only way to subscribe. Only issue a topic the function
+checked the viewer may read: the stream trusts what the server signed. More than `TOPIC_LIMIT`
+topics from one function throws outside production; in production it is logged
+(`[live] subscription refused: <n> topics, limit 50`) and the screen loads without a banner.
+
+A loader takes the data with `liveSubs()` (`src/lib/liveSubs.ts`) and returns the screen's
+subscriptions as `live: LiveSub[]`, for the client's stream.
 
 ## The stream
 
