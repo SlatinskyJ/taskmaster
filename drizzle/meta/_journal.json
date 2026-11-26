@@ -267,6 +267,20 @@
       "when": 1795688417594,
       "tag": "0037_descriptions_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1795714234229,
+      "tag": "0038_week_copies",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1795714234904,
+      "tag": "0039_week_plan_switch",
+      "breakpoints": true
     }
   ]
 }
