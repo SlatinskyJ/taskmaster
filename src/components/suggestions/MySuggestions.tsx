@@ -2,39 +2,10 @@ import { formatPragueDate } from '~/lib/formatDate'
 import { cs } from '~/lib/strings'
 import type { MySuggestion } from '~/server/suggestions/functions'
 import { StatusChip } from './StatusChip'
+import { IssueLink, SuggestionText } from './SuggestionRow'
 
 // Moje návrhy on Profil (#247): the caller's suggestions as the server sends them (newest
-// first), each with its state and, once sent, a link to the issue. Text wraps, never cut.
-
-export function SuggestionText({
-  title,
-  description,
-}: {
-  title: string
-  description: string | null
-}) {
-  return (
-    <>
-      <b className="text-row font-bold break-words">{title}</b>
-      {description && (
-        <p className="text-meta break-words whitespace-pre-line text-muted">{description}</p>
-      )}
-    </>
-  )
-}
-
-export function IssueLink({ url }: { url: string }) {
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex min-h-tap w-fit items-center font-bold underline decoration-1 underline-offset-4"
-    >
-      {cs.suggestions.issueLink}
-    </a>
-  )
-}
+// first), each with its state and, once sent, a link to the issue.
 
 export function MySuggestions({ items }: { items: MySuggestion[] }) {
   if (items.length === 0)

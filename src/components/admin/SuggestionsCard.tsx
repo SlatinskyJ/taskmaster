@@ -1,6 +1,6 @@
 import { Avatar } from '~/components/shell/Avatar'
 import { SectionLabel } from '~/components/shell/SectionLabel'
-import { IssueLink, SuggestionText } from '~/components/suggestions/MySuggestions'
+import { IssueLink, SuggestionText } from '~/components/suggestions/SuggestionRow'
 import { StatusChip } from '~/components/suggestions/StatusChip'
 import { Button } from '~/components/ui/button'
 import { formatPragueDate } from '~/lib/formatDate'
