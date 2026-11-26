@@ -1,11 +1,12 @@
 import { getRequestHeader } from '@tanstack/react-start/server'
-import { asc, gt, inArray, max, or } from 'drizzle-orm'
+import { asc, gt, inArray, or } from 'drizzle-orm'
 import { onAuditWritten } from '~/server/audit'
 import type { AuditAction, AuditLogRow, EntityType } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { getDb } from '~/server/db'
 import { auditLog } from '~/server/db/schema'
 import { topicsOf } from './mapping'
+import { newestAuditId } from './subscription'
 import type { Topic } from './topics'
 
 // The in-process hub (#299): every committed change becomes one event for each open stream
@@ -129,12 +130,7 @@ export function createHub(db: Db, opts: { originTab?: () => string | undefined }
   const originTab = opts.originTab ?? requestTab
   /** Attached streams, oldest first, with the newest id each has been sent (or skipped). */
   const streams = new Map<Stream, { lastId: number }>()
-  const newestId = () =>
-    db
-      .select({ id: max(auditLog.id) })
-      .from(auditLog)
-      .get()?.id ?? 0
-  let lastSent = newestId()
+  let lastSent = newestAuditId(db)
   let pending: { origin: string | undefined } | null = null
 
   function detach(s: Stream): void {
