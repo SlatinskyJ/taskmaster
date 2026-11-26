@@ -133,4 +133,30 @@ describe('lastBids (same number, Jakub 2026-11-24)', () => {
     bid(f, id, f.tata, 'giver', 4)
     expect(at(f, id)).toEqual([])
   })
+
+  const ids = (f: Family, taskId: number) => threadOf(f.db, taskId).map((r) => r.id)
+  const since = (f: Family, taskId: number, from: number) =>
+    lastBids(f.db, taskId, from).map((r) => [r.userId, r.score])
+
+  it('in a reopened round (#212) only rows above its start count', () => {
+    const f = family()
+    const id = rawTask(f)
+    bid(f, id, f.starsi, 'taker', 5)
+    close(f, f.starsi)
+    const start = Math.max(...ids(f, id))
+    expect(since(f, id, start)).toEqual([])
+    bid(f, id, f.mladsi, 'taker', 7)
+    expect(since(f, id, start)).toEqual([[f.mladsi, 7]])
+  })
+
+  it('in a round the floor is the newer of its start and the newest giver row', () => {
+    const f = family()
+    const id = rawTask(f)
+    const start = 0
+    bid(f, id, f.starsi, 'taker', 12)
+    close(f, f.starsi)
+    bid(f, id, f.tata, 'giver', 15)
+    // Starší's 12 was before Táta's counter: 12 is his previous bid no more.
+    expect(since(f, id, start)).toEqual([])
+  })
 })

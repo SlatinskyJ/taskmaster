@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray } from 'drizzle-orm'
 import {
   approveOneTimeOffer,
+  isAgreedOneTime,
   createOneTimeItem,
   createOneTimeTask,
   byPerson,
@@ -9,12 +10,19 @@ import {
   liveBook,
   lowestBid,
   markAgreed,
+  markRebidAgreed,
   missingRoles,
   oneTimeChangeWaitingFor,
   reopenOneTimeOffer,
   resolveOneTime,
 } from '~/domain'
-import type { AgreementError, LifecycleError, OneTimeAgreement, Person } from '~/domain'
+import type {
+  AgreedOneTime,
+  AgreementError,
+  LifecycleError,
+  OneTimeAgreement,
+  Person,
+} from '~/domain'
 import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
 import { toIsoUtc } from '~/domain/dates'
@@ -30,7 +38,7 @@ import { openChangeOf } from './changeRows'
 import { taskHistory } from './history'
 import type { HistoryEntry } from './history'
 import { saveItem, toItem } from './item'
-import { addEntry, lastBids, openBids, openOffer, threadOf } from './thread'
+import { addEntry, lastBids, openBids, openOffer, openOfferOrNull, threadOf } from './thread'
 
 // One-time tasks and their score agreement (spec §5.2 path 1, §5.5). The rules live in
 // src/domain (agreement + lifecycle); this module loads the rows, asks the domain, and writes
@@ -66,6 +74,8 @@ function currentApprovers(tx: Db | Tx, task: TaskRow): number[] {
 
 /** The domain's view of a proposed task's agreement: the open offer and the open bids. */
 export function agreementOf(tx: Db | Tx, task: TaskRow): OneTimeAgreement {
+  if (task.status === 'open' && task.biddingFrom !== null)
+    return roundOf(tx, task, task.biddingFrom)
   if (task.status !== 'proposed') return { status: 'open', score: task.score }
   // The offer is stored twice (the task's score and its open giver row); a writer that moved
   // only one fails here instead of agreeing a score next to the wrong giver.
@@ -87,13 +97,23 @@ export function agreementOf(tx: Db | Tx, task: TaskRow): OneTimeAgreement {
   }
 }
 
-export type AgreedOneTime = Exclude<OneTimeAgreement, { status: 'proposed' }>
+/** A reopened round (#212): the agreed score stays; the offer is a giver's counter, or nobody's. */
+function roundOf(tx: Db | Tx, task: TaskRow, since: number): OneTimeAgreement {
+  const counter = openOfferOrNull(tx, task.id)
+  return {
+    status: 'rebidding',
+    score: task.score,
+    offer: counter ? { score: counter.score, by: counter.userId } : { score: task.score, by: null },
+    book: { bids: openBids(tx, task.id).map((b) => ({ by: b.userId, score: b.score })) },
+    lastBids: lastBids(tx, task.id, since).map((b) => ({ by: b.userId, score: b.score })),
+  }
+}
 
 /**
  * Ends a negotiation: the task is agreed at `agreed.score`, open or reserved to the bidder with
  * the giver who agreed. The thread closes (`accepted` = the rows agreed at). An agreed score that
  * differs from the current offer starts a new offer round, so no approval sits on it. Writes
- * `task.agreed`. The caller checked the task is proposed.
+ * `task.agreed`. The caller checked the task is proposed, or open in a reopened round (#212).
  */
 export function agree(
   tx: Tx,
@@ -103,17 +123,22 @@ export function agree(
   actor: Actor,
   now: Date,
 ): TaskRow {
-  const item = markAgreed(
-    toItem(task),
-    agreed.status === 'reserved' ? { takerId: agreed.takerId, giverId: agreed.giverId } : null,
-  )
+  const bid =
+    agreed.status === 'reserved' ? { takerId: agreed.takerId, giverId: agreed.giverId } : null
+  // A reopened round (#212) agrees an open task; otherwise the task leaves `proposed`.
+  const inRound = task.status === 'open'
+  const item = inRound ? markRebidAgreed(toItem(task), bid) : markAgreed(toItem(task), bid)
   if (!item.ok) throw new Error(`task ${String(task.id)} cannot be agreed: ${item.error}`)
   const offerRound = agreed.score === task.score ? task.offerRound : task.offerRound + 1
   const saved = saveItem(
     tx,
     task,
     item.value,
-    { set: { score: agreed.score, agreedAt: toIsoUtc(now), offerRound }, accepted },
+    {
+      set: { score: agreed.score, agreedAt: toIsoUtc(now), offerRound },
+      accepted,
+      endBidding: inRound,
+    },
     now,
   )
   const row = saved.row
@@ -210,10 +235,28 @@ export function approveTaskOffer(
   return db.transaction((tx) => {
     const task = tx.select().from(tasks).where(eq(tasks.id, taskId)).get()
     if (!task) return fail('not_found')
+    const people = listPeople(tx)
+    const agreement = agreementOf(tx, task)
+    if (agreement.status === 'rebidding') {
+      // A reopened round (#212): a brother's yes to a giver's counter; no approvals rows.
+      if (agreement.offer.score !== score) return fail('offer_changed')
+      const result = approveOneTimeOffer(agreement, people, userId)
+      if (!result.ok) return result
+      if (!isAgreedOneTime(result.value)) throw new Error('a yes in a round is agreed')
+      const actor = { kind: 'user', userId } as const
+      writeAudit(tx, {
+        actor,
+        action: 'task.score_approved',
+        entityType: 'task',
+        entityId: taskId,
+        after: { score },
+        at: now,
+      })
+      return ok(agree(tx, task, result.value, [openOffer(tx, taskId).id], actor, now))
+    }
     if (task.status !== 'proposed') return fail('not_proposed')
     if (task.score !== score) return fail('offer_changed')
-    const people = listPeople(tx)
-    const result = approveOneTimeOffer(agreementOf(tx, task), people, userId)
+    const result = approveOneTimeOffer(agreement, people, userId)
     if (!result.ok) return result
     tx.insert(taskScoreApprovals)
       .values({ taskId, userId, offerRound: task.offerRound, score, approvedAt: at })
@@ -227,7 +270,7 @@ export function approveTaskOffer(
       after: { score },
       at: now,
     })
-    if (result.value.status === 'proposed') return ok(task)
+    if (!isAgreedOneTime(result.value)) return ok(task)
     return ok(agree(tx, task, result.value, [openOffer(tx, taskId).id], actor, now))
   })
 }
