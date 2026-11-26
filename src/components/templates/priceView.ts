@@ -19,6 +19,8 @@ interface ScoreData {
   score: number
   /** A brother's yes or bid (#207): the text the page showed, refused as stale if it changed. */
   seenDescription?: string | null
+  /** A bid, counter or accept (#243): the chore status the page showed, stale if it moved. */
+  seenStatus?: TemplateView['status']
 }
 
 /** One call to a template score server function. */
@@ -80,14 +82,15 @@ function firstPriceButtons(t: TemplateView, me: Me): PriceButton[] {
   const label =
     who.length > 1 ? cs.bids.acceptTie(lowest) : cs.templatePrice.acceptBid(lowest, who.join(', '))
   const hint = cs.templatePrice.firstAgreeHint(lowest)
-  return [{ key: 'bid', action: 'acceptBid', data: data(lowest), label, hint }]
+  const seen = { ...data(lowest), seenStatus: t.status }
+  return [{ key: 'bid', action: 'acceptBid', data: seen, label, hint }]
 }
 
 /** The yes buttons: a brother accepts the parents' offer, a parent the lowest bid. */
 export function priceButtons(t: TemplateView, me: Me): PriceButton[] {
   if (canBid(t, me)) return firstPriceButtons(t, me)
   if (!canChange(t, me) || !t.change) return []
-  const data = (score: number) => ({ templateId: t.id, score })
+  const data = (score: number) => ({ templateId: t.id, score, seenStatus: t.status })
   const hint = cs.templatePrice.acceptHint
   const { offer, lowest } = t.change
   if (me.role === 'taker' && offer) {
@@ -147,7 +150,7 @@ const lastBid = (t: TemplateView, me: Me) =>
 
 /** The send button on a proposed chore: a brother bids, a parent counters or, at a bid, accepts. */
 function firstPriceSend(t: TemplateView, me: Me, value: number): PriceSend {
-  const data = { templateId: t.id, score: value }
+  const data = { templateId: t.id, score: value, seenStatus: t.status }
   const offer = t.bidding?.offer?.score ?? t.score
   if (me.role === 'taker') {
     const same = value === lastBid(t, me)
@@ -177,7 +180,7 @@ function firstPriceSend(t: TemplateView, me: Me, value: number): PriceSend {
 export function priceSend(t: TemplateView, me: Me, value: number): PriceSend | null {
   if (canBid(t, me)) return firstPriceSend(t, me, value)
   if (!canChange(t, me)) return null
-  const data = { templateId: t.id, score: value }
+  const data = { templateId: t.id, score: value, seenStatus: t.status }
   const offer = t.change?.offer?.score ?? null
   if (me.role === 'taker') {
     const same = value === lastBid(t, me)
@@ -233,7 +236,7 @@ export function priceToast(
   if (call.action === 'withdraw') return cs.bids.toast.withdrawn
   if (call.action === 'turnDown') return cs.bids.toast.turnedDown
   // A first price agrees only when the chore came back active at the number sent. A bid never
-  // agrees, and a call that landed after the chore went active runs as a score change (§5.1).
+  // agrees; a call that landed after the chore went active is refused as `offer_changed` (#243).
   if (wasProposed) {
     const agreed =
       call.action !== 'bid' && result.status === 'active' && result.score === call.data.score

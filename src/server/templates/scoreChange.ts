@@ -23,7 +23,7 @@ import { writeAudit } from '~/server/audit'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { templates } from '~/server/db/schema'
-import type { TemplateRow, TemplateThreadRow } from '~/server/db/schema'
+import type { TemplateRow, TemplateStatus, TemplateThreadRow } from '~/server/db/schema'
 import { listPeople } from '~/server/users/people'
 import type { AgreedBy, BiddingOpts, TemplateError } from './templates'
 import { agreeIn, agreementOf, approveIn, offerRowIds } from './templates'
@@ -40,6 +40,7 @@ import { addEntry, closeRows, closeThread, markBidsFrom, openRows } from './thre
 // - counter: any active giver; at exactly the lowest live bid it accepts that bid;
 // - acceptLowestBid: any active giver, with the lowest bid he saw;
 // - acceptOffer: any active taker, with the offer he saw.
+// Each may carry the status the caller's page showed (#243): one that moved is `offer_changed`.
 //
 // Each action has an `…In(tx)` twin for callers that already hold a transaction (the demo seed).
 //
@@ -54,10 +55,14 @@ export type { BiddingOpts }
 const OFF: BiddingOpts = { choreBidding: false, bidRefusals: false }
 
 /**
- * An action's options: the switch, and the description a taker's page showed (#207 ruling 8;
- * undefined = not checked). A different one is `offer_changed`, before any rule runs.
+ * An action's options: the switch, the description a taker's page showed (#207 ruling 8) and the
+ * status the caller's page showed (#243); undefined = not checked. A different one is
+ * `offer_changed`, before any rule runs.
  */
-export type ActionOpts = BiddingOpts & { seenDescription?: string | null }
+export type ActionOpts = BiddingOpts & {
+  seenDescription?: string | null
+  seenStatus?: TemplateStatus
+}
 
 type Action = (
   tx: Tx,
@@ -109,6 +114,9 @@ function byStatus(
 ): Result<TemplateRow, TemplateError> {
   return onTemplate(tx, templateId, (ctx) => {
     if (isStaleDescription(ctx.row.description, opts.seenDescription)) return fail('offer_changed')
+    if (opts.seenStatus !== undefined && opts.seenStatus !== ctx.row.status) {
+      return fail('offer_changed')
+    }
     if (ctx.row.status === 'active') return active(ctx)
     return opts.choreBidding ? proposed(ctx) : fail('not_agreed')
   })

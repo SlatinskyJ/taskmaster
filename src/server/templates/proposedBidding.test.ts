@@ -563,3 +563,74 @@ describe('bidding on a proposed chore: switch on (#209)', () => {
     })
   })
 })
+
+describe('a call sent while the chore had another status is offer_changed (#243)', () => {
+  const PROPOSED = { ...on, seenStatus: 'proposed' } as const
+  const ACTIVE = { ...on, seenStatus: 'active' } as const
+
+  /** Starší bid 6 on the proposed chore; then Mladší's Souhlasím made it active at 10. */
+  function wentActive() {
+    const s = setup()
+    must(bidOnTemplate(s.db, s.starsi, s.id, 6, T1, on))
+    must(approveTemplateScore(s.db, s.mladsi, s.id, 10, T2))
+    expect(row(s)).toMatchObject({ status: 'active', score: 10 })
+    return s
+  }
+
+  const stale: [string, (s: S) => unknown][] = [
+    [
+      "Táta's counter at the bid he saw",
+      (s) => counterOnTemplate(s.db, s.tata, s.id, 6, T3, PROPOSED),
+    ],
+    ["Mladší's bid", (s) => bidOnTemplate(s.db, s.mladsi, s.id, 7, T3, PROPOSED)],
+    [
+      "Starší's yes to the offer",
+      (s) => acceptOfferOnTemplate(s.db, s.starsi, s.id, 10, T3, PROPOSED),
+    ],
+    [
+      "Táta's accept of the lowest bid",
+      (s) => acceptLowestBidOnTemplate(s.db, s.tata, s.id, 6, T3, PROPOSED),
+    ],
+  ]
+
+  it.each(stale)('%s, sent while proposed, after it went active writes nothing', (_, act) => {
+    const s = wentActive()
+    const before = snapshot(s)
+    const open = threadRows(s.db, s.id)
+    expect(act(s)).toEqual({ ok: false, error: 'offer_changed' })
+    expect(snapshot(s)).toEqual(before)
+    expect(threadRows(s.db, s.id)).toEqual(open)
+  })
+
+  it('a bid sent seeing active on a proposed chore is offer_changed and writes nothing', () => {
+    const s = setup()
+    const before = snapshot(s)
+    expect(bidOnTemplate(s.db, s.starsi, s.id, 12, T1, ACTIVE)).toEqual({
+      ok: false,
+      error: 'offer_changed',
+    })
+    expect(snapshot(s)).toEqual(before)
+  })
+
+  it('the status he saw still holds: a bid on proposed and a counter on active run', () => {
+    const s = setup()
+    expect(must(bidOnTemplate(s.db, s.starsi, s.id, 6, T1, PROPOSED))).toMatchObject({
+      status: 'proposed',
+    })
+    expect(threadRows(s.db, s.id)).toEqual([['taker', s.starsi, 6, null]])
+    must(approveTemplateScore(s.db, s.mladsi, s.id, 10, T2))
+    must(counterOnTemplate(s.db, s.tata, s.id, 6, T3, ACTIVE))
+    expect(threadRows(s.db, s.id).at(-1)).toEqual(['giver', s.tata, 6, null])
+    expect(audits(s).at(-1)).toMatchObject({ action: 'template.score_countered', actor: s.tata })
+  })
+
+  it('no status sent: the late counter opens a price change, as before', () => {
+    const s = wentActive()
+    expect(must(counterOnTemplate(s.db, s.tata, s.id, 6, T3, on))).toMatchObject({
+      status: 'active',
+      score: 10,
+    })
+    expect(threadRows(s.db, s.id).at(-1)).toEqual(['giver', s.tata, 6, null])
+    expect(audits(s).at(-1)).toMatchObject({ action: 'template.score_countered', actor: s.tata })
+  })
+})

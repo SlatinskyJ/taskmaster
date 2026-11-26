@@ -12,7 +12,15 @@ import {
   templateDetailHandler,
   withdrawTemplateBidHandler,
 } from './functions'
-import { parseApproval, parseNewTemplate, parseTemplateId, parseTemplateTurnDown } from './parse'
+import {
+  parseApproval,
+  parseNewTemplate,
+  parseSeenApproval,
+  parseSeenScore,
+  parseTemplateId,
+  parseTemplateTurnDown,
+  seenStatusOf,
+} from './parse'
 import { approveTemplateScore, createTemplate } from './templates'
 import { threadRows } from './testing'
 
@@ -86,6 +94,38 @@ describe('parseApproval', () => {
   it('takes a score up to 999 and refuses 1000', () => {
     expect(parseApproval({ templateId: 1, score: 999 })).toEqual({ templateId: 1, score: 999 })
     expect(() => parseApproval({ templateId: 1, score: 1000 })).toThrow('Invalid input')
+  })
+})
+
+describe('the status a price call saw (#243)', () => {
+  it('seenStatusOf: none, proposed or active', () => {
+    expect(seenStatusOf({})).toEqual({})
+    expect(seenStatusOf({ seenStatus: 'proposed' })).toEqual({ seenStatus: 'proposed' })
+    expect(seenStatusOf({ seenStatus: 'active' })).toEqual({ seenStatus: 'active' })
+  })
+
+  it.each([['done'], [1], [null], ['']])('seenStatusOf refuses %j', (seenStatus) => {
+    expect(() => seenStatusOf({ seenStatus })).toThrow('Invalid input')
+  })
+
+  it('parseSeenScore and parseSeenApproval carry it; without it, none', () => {
+    const body = { templateId: 1, score: 6, seenStatus: 'proposed' }
+    expect(parseSeenScore(body)).toEqual(body)
+    expect(parseSeenApproval(body)).toEqual(body)
+    expect(parseSeenApproval({ templateId: 1, score: 6 })).toEqual({ templateId: 1, score: 6 })
+    expect(() => parseSeenScore({ templateId: 1, score: 6, seenStatus: 'done' })).toThrow(
+      'Invalid input',
+    )
+  })
+
+  it.each([
+    ['a 1000 score', { templateId: 1, score: 1000 }],
+    ['a string score', { templateId: 1, score: '6' }],
+    ['no templateId', { score: 6 }],
+    ['a bad status', { templateId: 1, score: 6, seenStatus: 'done' }],
+    ['null', null],
+  ])('parseSeenApproval refuses %s', (_, body) => {
+    expect(() => parseSeenApproval(body)).toThrow('Invalid input')
   })
 })
 
@@ -207,6 +247,72 @@ describe('template score handlers on a proposed chore (#209, switch choreBidding
       status: 'active',
     })
   })
+})
+
+describe('a price call whose chore went active meanwhile is offer_changed (#243)', () => {
+  /** Starší bid 6 on the proposed chore; Mladší's Souhlasím then made it active at 10. */
+  const wentActive = () => {
+    const f = family()
+    f.db
+      .update(featureFlags)
+      .set({ enabled: true })
+      .where(eq(featureFlags.key, 'choreBidding'))
+      .run()
+    const input = { title: 'Vynést koš', score: 10, approvalRequired: true }
+    const id = must(
+      createTemplate(f.db, f.tata, { ...input, schedule: null, deadline: null }, T0),
+    ).id
+    expect(bidTemplateScoreHandler(f.db, f.starsi, { templateId: id, score: 6 }, T1).ok).toBe(true)
+    must(approveTemplateScore(f.db, f.mladsi, id, 10, T1))
+    return { f, id }
+  }
+
+  type F = ReturnType<typeof wentActive>
+  type Call = (
+    f: F['f'],
+    data: { templateId: number; score: number; seenStatus: 'proposed' | 'active' },
+  ) => { ok: boolean }
+
+  // [name, the step before (on the active chore), the call, its score]
+  const cases: [string, (f: F['f'], id: number) => void, Call, number][] = [
+    ['counter', () => undefined, (f, d) => counterTemplateScoreHandler(f.db, f.tata, d, T2), 6],
+    ['bid', () => undefined, (f, d) => bidTemplateScoreHandler(f.db, f.mladsi, d, T2), 7],
+    [
+      'accept bid',
+      (f, id) => {
+        expect(bidTemplateScoreHandler(f.db, f.mladsi, { templateId: id, score: 7 }, T1).ok).toBe(
+          true,
+        )
+      },
+      (f, d) => acceptTemplateBidHandler(f.db, f.tata, d, T2),
+      7,
+    ],
+    [
+      'accept offer',
+      (f, id) => {
+        expect(counterTemplateScoreHandler(f.db, f.tata, { templateId: id, score: 8 }, T1).ok).toBe(
+          true,
+        )
+      },
+      (f, d) => acceptTemplateOfferHandler(f.db, f.starsi, d, T2),
+      8,
+    ],
+  ]
+
+  it.each(cases)(
+    '%s: sent seeing proposed is refused, nothing written; seeing active it runs',
+    (_, before, call, score) => {
+      const { f, id } = wentActive()
+      before(f, id)
+      const rows = threadRows(f.db, id)
+      expect(call(f, { templateId: id, score, seenStatus: 'proposed' })).toEqual({
+        ok: false,
+        error: 'offer_changed',
+      })
+      expect(threadRows(f.db, id)).toEqual(rows)
+      expect(call(f, { templateId: id, score, seenStatus: 'active' }).ok).toBe(true)
+    },
+  )
 })
 
 describe('Nechci and turn-down handlers on a price change (#232, switch bidRefusals)', () => {
