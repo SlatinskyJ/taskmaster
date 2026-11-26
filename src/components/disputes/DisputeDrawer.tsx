@@ -1,5 +1,11 @@
 import { useState } from 'react'
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '~/components/ui/drawer'
+import {
+  Drawer,
+  DrawerBody,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+} from '~/components/ui/drawer'
 import { cs } from '~/lib/strings'
 import { openDisputeFn } from '~/server/disputes/functions'
 import type { OpenableKind } from '~/server/disputes/functions'
@@ -46,18 +52,21 @@ export function DisputeDrawer({
         <DrawerHeader>
           <DrawerTitle>{cs.disputes.action}</DrawerTitle>
         </DrawerHeader>
-        <DisputeForm
-          what={what}
-          value={value}
-          reason={reason}
-          busy={busy}
-          error={error}
-          onReason={(r) => {
-            setReason(r)
-            setError(null)
-          }}
-          onSend={() => void send()}
-        />
+        {/* A long reason makes the sheet taller than what the keyboard leaves. */}
+        <DrawerBody>
+          <DisputeForm
+            what={what}
+            value={value}
+            reason={reason}
+            busy={busy}
+            error={error}
+            onReason={(r) => {
+              setReason(r)
+              setError(null)
+            }}
+            onSend={() => void send()}
+          />
+        </DrawerBody>
       </DrawerContent>
     </Drawer>
   )

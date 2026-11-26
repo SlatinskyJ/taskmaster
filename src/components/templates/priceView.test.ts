@@ -337,7 +337,7 @@ describe('a proposed chore with first-price bidding (#209)', () => {
     expect(priceToast(at('counter', 11), res(11, 'proposed'), true)).toBe('Nabídka odeslána')
     expect(priceToast(at('approve', 10), res(10, 'proposed'), true)).toBe('Nabídka odeslána')
     expect(priceToast(at('acceptBid', 12), res(12, 'active'), true)).toBe('Domluveno')
-    // Stale: the chore went active before the call landed, so it ran as a score change.
+    // A call that ran after the chore went active (one sent without the status it saw, #243).
     expect(priceToast(at('counter', 11), res(10, 'active'), true)).toBe('Nabídka odeslána')
     const bid = { action: 'bid' as const, data: { templateId: 7, score: 12 } }
     expect(priceToast(bid, res(12, 'active'), true)).toBe('Nabídka odeslána')
@@ -479,11 +479,13 @@ describe("a brother's yes and bid carry the text the page showed (#207)", () => 
       templateId: 7,
       score: 4,
       seenDescription: description,
+      seenStatus: 'active',
     })
     expect(priceSend(t, STARSI, 6)?.data).toEqual({
       templateId: 7,
       score: 6,
       seenDescription: description,
+      seenStatus: 'active',
     })
   })
 
@@ -498,6 +500,7 @@ describe("a brother's yes and bid carry the text the page showed (#207)", () => 
       templateId: 7,
       score: 12,
       seenDescription: description,
+      seenStatus: 'proposed',
     })
   })
 
@@ -505,6 +508,39 @@ describe("a brother's yes and bid carry the text the page showed (#207)", () => 
     expect(priceButtons({ ...demo, description: text }, TATA)[0]?.data).toEqual({
       templateId: 7,
       score: 5,
+      seenStatus: 'active',
     })
+  })
+})
+
+describe('every bid, counter and accept carries the status the page showed (#243)', () => {
+  const first: TemplateView = {
+    ...proposed,
+    score: 10,
+    bidding: {
+      offer: { score: 10, byName: 'Táta' },
+      bids: [{ takerId: MLADSI.id, name: 'Mladší', score: 6 }],
+      lowest: 6,
+      lastBids: [],
+    },
+  }
+
+  it('a proposed chore: bid, accept bid and counter say proposed; Souhlasím says nothing', () => {
+    const seen = { seenStatus: 'proposed' }
+    expect(priceSend(first, STARSI, 12)?.data).toMatchObject(seen)
+    expect(priceButtons(first, TATA)[0]).toMatchObject({ action: 'acceptBid', data: seen })
+    expect(priceSend(first, TATA, 8)).toMatchObject({ action: 'counter', data: seen })
+    expect(priceSend(first, TATA, 6)).toMatchObject({ action: 'counter', data: seen })
+    const approve = priceButtons(first, STARSI)[0]
+    expect(approve?.action).toBe('approve')
+    expect(approve?.data).not.toHaveProperty('seenStatus')
+  })
+
+  it('an agreed chore with a change: accept offer, bid, accept bid and counter say active', () => {
+    const seen = { seenStatus: 'active' }
+    expect(priceButtons(demo, STARSI)[0]).toMatchObject({ action: 'acceptOffer', data: seen })
+    expect(priceSend(demo, STARSI, 6)).toMatchObject({ action: 'bid', data: seen })
+    expect(priceButtons(demo, TATA)[0]).toMatchObject({ action: 'acceptBid', data: seen })
+    expect(priceSend(demo, TATA, 6)).toMatchObject({ action: 'counter', data: seen })
   })
 })

@@ -103,3 +103,24 @@ test('a price change offers no Nechci or turn-down with bidRefusals off (#232)',
   await expect(page.getByText(`${cs.bids.yourBid} 5`)).toBeVisible()
   await expect(page.getByRole('button', { name: cs.bids.withdraw, exact: true })).toHaveCount(0)
 })
+
+test('Souhlasím on a proposed chore’s Domů row agrees it, choreBidding off (#244)', async ({
+  page,
+}) => {
+  // Keep this test last: it agrees "Vynést koše" for good, and the #209 test above needs it
+  // still proposed. "Vynést koše" (/sablona/1) waits for one brother's yes. With the switch off its row has
+  // only Souhlasím, no Jiná cena.
+  await passwordLogin(page, 'starsi')
+  await expect(page).toHaveURL(/\/$/)
+  const waiting = page.locator('section').filter({ has: page.getByText(cs.home.waiting) })
+  const bins = waiting.getByRole('listitem').filter({ hasText: 'Vynést koše' })
+  await expect(bins.getByRole('link', { name: cs.bids.otherPriceShort })).toHaveCount(0)
+  await bins.getByRole('button', { name: cs.tasks.approve, exact: true }).click()
+  await expect(page.getByText(cs.tasks.approved, { exact: true })).toBeVisible()
+  await expect(waiting.getByText('Vynést koše')).toHaveCount(0)
+
+  await switchTo(page, 'tata')
+  await page.goto('/sablona/1')
+  await expect(page.getByText(cs.templatePrice.now(4))).toBeVisible()
+  await expect(page.getByText(cs.state.proposed, { exact: true })).toHaveCount(0)
+})

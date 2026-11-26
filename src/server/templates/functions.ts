@@ -9,8 +9,8 @@ import { STALE, seenOf, unseen } from '~/server/descriptions/seen'
 import { getFlags } from '~/server/features'
 import { hasDescription } from '~/server/descriptions/parse'
 import {
-  parseApproval,
   parseNewTemplate,
+  parseSeenApproval,
   parseSeenScore,
   parseTemplateId,
   parseTemplateTurnDown,
@@ -110,9 +110,14 @@ export const listTemplatesFn = createServerFn({ method: 'GET' })
 // counter to put, or the lowest bid / the offer to accept. A number that moved meanwhile is refused
 // (`offer_changed`). The handlers are plain functions, tested directly.
 
+/**
+ * The number, and the chore status the page showed (#243): a bid, counter or accept sent while
+ * proposed that lands on an active chore (or the other way) is `offer_changed`.
+ */
 interface Score {
   templateId: number
   score: number
+  seenStatus?: TemplateStatus
 }
 
 /** A taker's number, with the text his page showed (#207 ruling 8). */
@@ -121,25 +126,26 @@ type Seen = Score & { seenDescription?: string | null }
 /** A taker bids a score. */
 export function bidTemplateScoreHandler(db: Db, userId: number, data: Seen, now: Date) {
   if (unseen(db, data)) return STALE
-  const opts = { ...bidding(db), seenDescription: seenOf(db, data) }
+  const opts = { ...bidding(db), seenDescription: seenOf(db, data), seenStatus: data.seenStatus }
   return answered(bidOnTemplate(db, userId, data.templateId, data.score, now, opts))
 }
 
 /** A giver counters with a new offer to every taker (at an open bid it agrees at it). */
 export function counterTemplateScoreHandler(db: Db, userId: number, data: Score, now: Date) {
-  return answered(counterOnTemplate(db, userId, data.templateId, data.score, now, bidding(db)))
+  const opts = { ...bidding(db), seenStatus: data.seenStatus }
+  return answered(counterOnTemplate(db, userId, data.templateId, data.score, now, opts))
 }
 
 /** A giver accepts the lowest bid he saw. */
 export function acceptTemplateBidHandler(db: Db, userId: number, data: Score, now: Date) {
-  const opts = bidding(db)
+  const opts = { ...bidding(db), seenStatus: data.seenStatus }
   return answered(acceptLowestBidOnTemplate(db, userId, data.templateId, data.score, now, opts))
 }
 
 /** A taker accepts the giver side's offer he saw. */
 export function acceptTemplateOfferHandler(db: Db, userId: number, data: Seen, now: Date) {
   if (unseen(db, data)) return STALE
-  const opts = { ...bidding(db), seenDescription: seenOf(db, data) }
+  const opts = { ...bidding(db), seenDescription: seenOf(db, data), seenStatus: data.seenStatus }
   return answered(acceptOfferOnTemplate(db, userId, data.templateId, data.score, now, opts))
 }
 
@@ -175,14 +181,14 @@ export const bidTemplateScoreFn = createServerFn({ method: 'POST' })
 
 export const counterTemplateScoreFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver')])
-  .validator(parseApproval)
+  .validator(parseSeenApproval)
   .handler(({ data, context }) =>
     counterTemplateScoreHandler(getDb(), context.user.id, data, new Date()),
   )
 
 export const acceptTemplateBidFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver')])
-  .validator(parseApproval)
+  .validator(parseSeenApproval)
   .handler(({ data, context }) =>
     acceptTemplateBidHandler(getDb(), context.user.id, data, new Date()),
   )

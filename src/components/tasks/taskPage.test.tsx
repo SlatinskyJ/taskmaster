@@ -148,6 +148,15 @@ describe('task page', () => {
   })
 })
 
+describe('task page: header (#264)', () => {
+  it('shows a long task name in full, not cut at two lines', () => {
+    const html = render({ id: 2, role: 'giver', displayName: 'Táta' })
+    const h1 = /<h1 class="([^"]*)">([^<]*)</.exec(html)
+    expect(h1?.[2]).toBe(reserved.title)
+    expect(h1?.[1]).not.toContain('line-clamp')
+  })
+})
+
 describe('task page: Schválit and Zamítnout (#206)', () => {
   const TATA = { id: 2, role: 'giver', displayName: 'Táta' } as const
   const STARSI = { id: 3, role: 'taker', displayName: 'Starší' } as const
