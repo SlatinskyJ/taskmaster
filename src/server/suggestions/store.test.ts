@@ -229,6 +229,18 @@ describe('closeSuggestionIn', () => {
     expect(closeSuggestionIn(f.db, f.admin, id, 'done', T1).ok).toBe(true)
   })
 
+  it('answers closed when its update changed no row although the row still allows it', () => {
+    const f = family()
+    const id = suggest(f, f.starsi, 'T')
+    f.db.$client.exec(
+      `CREATE TRIGGER skip BEFORE UPDATE OF closed_by ON suggestions BEGIN SELECT RAISE(IGNORE); END`,
+    )
+    const before = entries(f).length
+    expect(closeSuggestionIn(f.db, f.admin, id, 'done', T1)).toEqual({ ok: false, error: 'closed' })
+    expect(row(f, id)?.status).toBe('new')
+    expect(entries(f)).toHaveLength(before)
+  })
+
   it('says why from the row as it is when another write moved it first', () => {
     const f = family()
     const id = suggest(f, f.starsi, 'T')

@@ -218,7 +218,11 @@ describe('sendSuggestion', () => {
     expect(f.row()).toMatchObject({ status: 'new', issueUrl: null, sentTitle: null })
     expect(f.sentEntries()).toHaveLength(0)
     expect(isSending(f.id)).toBe(false)
-    expect(JSON.stringify(log.mock.calls)).toContain(URL_OK)
+    expect(log).toHaveBeenCalledWith('suggestions: issue created but not saved', {
+      id: f.id,
+      number: 301,
+      url: URL_OK,
+    })
     expect(JSON.stringify(log.mock.calls)).not.toContain(TOKEN)
   })
 
@@ -248,6 +252,10 @@ describe('sendSuggestion', () => {
     expect(f.row()?.issueNumber).toBe(300)
     expect(f.sentEntries()).toHaveLength(0)
     expect(isSending(f.id)).toBe(false)
-    expect(JSON.stringify(log.mock.calls)).toContain(URL_OK)
+    expect(log).toHaveBeenCalledWith('suggestions: issue created but not saved', {
+      id: f.id,
+      number: 301,
+      url: URL_OK,
+    })
   })
 })

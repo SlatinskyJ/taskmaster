@@ -71,6 +71,15 @@ describe('createIssue', () => {
     expect(log).toHaveBeenCalledWith('suggestions: GitHub issue failed', 'TimeoutError')
   })
 
+  it('logs "unknown" when the fetch throws something that is not an error', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    // The point of the test: a rejection that is not an Error.
+    // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
+    const { fn } = fakeFetch(() => Promise.reject(TOKEN))
+    expect(await createIssue(TOKEN, ISSUE, fn)).toEqual({ ok: false, error: 'github_failed' })
+    expect(log.mock.calls).toEqual([['suggestions: GitHub issue failed', 'unknown']])
+  })
+
   it.each([
     ['another repository', { number: 301, html_url: 'https://github.com/other/repo/issues/301' }],
     [
