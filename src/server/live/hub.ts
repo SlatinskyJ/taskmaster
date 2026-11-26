@@ -1,5 +1,5 @@
 import { getRequestHeader } from '@tanstack/react-start/server'
-import { asc, gt, inArray, or } from 'drizzle-orm'
+import { and, asc, gt, inArray, lte, or } from 'drizzle-orm'
 import { onAuditWritten } from '~/server/audit'
 import type { AuditAction, AuditLogRow, EntityType } from '~/server/audit'
 import { TAB_HEADER } from '~/lib/tab'
@@ -57,6 +57,11 @@ export interface Hub {
 
 /** Streams per session: a login is one device, one or two tabs (design "Limits") [call]. */
 export const STREAMS_PER_SESSION = 3
+/**
+ * Most audit rows a catch-up reads and maps; past it the stream gets one `overflow` (the
+ * screen is many changes behind either way), so a long sleep never maps an unbounded log.
+ */
+export const CATCH_UP_ROWS = 1000
 /** A backstop over every session. */
 export const STREAMS_TOTAL = 50
 
@@ -72,7 +77,7 @@ interface Change {
 }
 
 /** The request's tab id, or undefined outside a request (the scheduler) or without one. */
-function requestTab(): string | undefined {
+export function requestTab(): string | undefined {
   try {
     const tab = getRequestHeader(TAB_HEADER)
     return tab && tab.length <= 64 ? tab : undefined
@@ -146,6 +151,8 @@ export function createHub(db: Db, opts: { originTab?: () => string | undefined }
     const last = rows.at(-1)
     if (!last) return
     lastSent = last.id
+    // Nobody listening: nothing to map.
+    if (streams.size === 0) return
     const changes = group(db, rows)
     for (const [stream, state] of [...streams]) {
       if (origin !== undefined && stream.tab === origin) {
@@ -208,9 +215,13 @@ export function createHub(db: Db, opts: { originTab?: () => string | undefined }
         .from(auditLog)
         .where(gt(auditLog.id, afterId))
         .orderBy(asc(auditLog.id))
+        .limit(CATCH_UP_ROWS + 1)
         .all()
+      if (rows.length > CATCH_UP_ROWS) {
+        return { events: [], overflow: true, lastId: newestAuditId(db) }
+      }
       // A change that began at or before `afterId` but ended after it: fetch its start too, so
-      // its main entry is the right one (it is still sent once, by its newest id).
+      // its main entry is the right one (it is still sent once, by its newest id). Capped too.
       const early = [
         ...new Set(
           rows.map((r) => r.changeId).filter((k): k is number => k !== null && k <= afterId),
@@ -222,10 +233,18 @@ export function createHub(db: Db, opts: { originTab?: () => string | undefined }
           : db
               .select()
               .from(auditLog)
-              .where(or(inArray(auditLog.id, early), inArray(auditLog.changeId, early)))
+              .where(
+                and(
+                  lte(auditLog.id, afterId),
+                  or(inArray(auditLog.id, early), inArray(auditLog.changeId, early)),
+                ),
+              )
               .orderBy(asc(auditLog.id))
+              .limit(CATCH_UP_ROWS - rows.length + 1)
               .all()
-              .filter((r) => r.id <= afterId)
+      if (rows.length + head.length > CATCH_UP_ROWS) {
+        return { events: [], overflow: true, lastId: newestAuditId(db) }
+      }
       const events: LiveEvent[] = []
       let overflow = false
       for (const change of group(db, [...head, ...rows])) {

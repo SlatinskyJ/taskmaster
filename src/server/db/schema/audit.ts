@@ -35,6 +35,8 @@ export const auditLog = sqliteTable(
   (t) => [
     index('audit_log_entity_idx').on(t.entityType, t.entityId),
     index('audit_log_at_idx').on(t.at),
+    /** The catch-up finds a change's entries by its key (#299, src/server/live/hub.ts). */
+    index('audit_log_change_idx').on(t.changeId),
     check('audit_log_actor_check', sql`(${t.actorKind} = 'user') = (${t.actorUserId} IS NOT NULL)`),
     check('audit_log_before_json', sql`${t.before} IS NULL OR json_valid(${t.before})`),
     check('audit_log_after_json', sql`${t.after} IS NULL OR json_valid(${t.after})`),

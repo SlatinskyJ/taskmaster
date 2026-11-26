@@ -34,13 +34,18 @@ async function setup() {
   const mladsiKey = login(f.mladsi)
   let ping: (() => void) | null = null
   let now = T0
+  let hubCalls = 0
   const user = (id: number) => {
     const row = f.db.select().from(users).where(eq(users.id, id)).get()
     if (!row) throw new Error('no user')
     return toCurrentUser(row)
   }
   const deps = (over: Partial<StreamDeps> = {}): StreamDeps => ({
-    hub,
+    hub: () => {
+      hubCalls += 1
+      return hub
+    },
+    findUser: (id) => f.db.select().from(users).where(eq(users.id, id)).get(),
     features: ALL_FEATURES,
     currentUser: user(f.starsi),
     sessionKey: starsiKey,
@@ -65,6 +70,7 @@ async function setup() {
     deps,
     ping: () => ping?.(),
     hasPing: () => ping !== null,
+    hubCalls: () => hubCalls,
     setNow: (d: Date) => {
       now = d
     },
@@ -224,7 +230,7 @@ describe('refusals', () => {
   it('the hub refusing attach (STREAMS_TOTAL) → 503', async () => {
     const s = await setup()
     const hub: Hub = { ...s.hub, attach: () => null }
-    const res = openStream(request({ tokens: [sign(s, ['tasks'])] }), s.deps({ hub }))
+    const res = openStream(request({ tokens: [sign(s, ['tasks'])] }), s.deps({ hub: () => hub }))
     expect(res.status).toBe(503)
   })
 
@@ -235,6 +241,45 @@ describe('refusals', () => {
     expect(res.headers.get('content-type')).toBe('text/event-stream')
     expect(res.headers.get('cache-control')).toBe('no-store')
     expect(res.headers.get('x-accel-buffering')).toBe('no')
+  })
+})
+
+describe('the hub is built only for a stream that passes every check', () => {
+  it('switch off, signed out, a bad token or a bad request: no hub', async () => {
+    const s = await setup()
+    const tokens = [sign(s, ['tasks'])]
+    openStream(request({ tokens }), s.deps({ features: NO_FEATURES }))
+    openStream(request({ tokens }), s.deps({ currentUser: null, sessionKey: undefined }))
+    openStream(request({ tokens: ['forged.token'] }), s.deps())
+    openStream(request({ tokens, tab: null }), s.deps())
+    expect(s.hubCalls()).toBe(0)
+    expect(openStream(request({ tokens }), s.deps()).status).toBe(200)
+    expect(s.hubCalls()).toBeGreaterThan(0)
+  })
+})
+
+describe('request values', () => {
+  it('a tab id of exactly 64 characters is fine; 65 → 400', async () => {
+    const s = await setup()
+    const tokens = [sign(s, ['tasks'])]
+    expect(openStream(request({ tokens, tab: 'a'.repeat(64) }), s.deps()).status).toBe(200)
+    expect(openStream(request({ tokens, tab: 'a'.repeat(65) }), s.deps()).status).toBe(400)
+  })
+
+  it.each(['12', '4812'])('a multi-digit since or Last-Event-ID (%s) is accepted', async (id) => {
+    const s = await setup()
+    const tokens = [sign(s, ['tasks'])]
+    expect(openStream(request({ tokens, since: id }), s.deps()).status).toBe(200)
+    expect(openStream(request({ tokens, lastEventId: id }), s.deps()).status).toBe(200)
+  })
+
+  it('Last-Event-ID 12 replays only the changes after 12', async () => {
+    const s = await setup()
+    for (let i = 0; i < 14; i++) await change(s.f, 70 + i)
+    const body = reader(
+      openStream(request({ tokens: [sign(s, ['tasks'])], lastEventId: '12' }), s.deps()),
+    )
+    expect(events(await body.text()).map((e) => e.id)).toEqual([13, 14])
   })
 })
 
@@ -348,6 +393,43 @@ describe('heartbeat and the session', () => {
     await body.text()
     expect(body.done()).toBe(true)
     expect(s.hub.size()).toBe(0)
+  })
+
+  it('a session expiring exactly at a ping ends the stream', async () => {
+    const s = await setup()
+    const body = reader(openStream(request({ tokens: [sign(s, ['tasks'])] }), s.deps()))
+    await body.text()
+    const row = findSession(s.f.db, s.starsiKey)
+    if (!row) throw new Error('no session')
+    s.setNow(new Date(row.expiresAt))
+    s.ping()
+    await body.text()
+    expect(body.done()).toBe(true)
+    expect(s.hub.size()).toBe(0)
+  })
+
+  it.each([
+    ['deactivated', { active: false }],
+    ['given another role', { role: 'giver' as const }],
+  ])('a user %s → the stream ends at the next ping', async (_, set) => {
+    const s = await setup()
+    const body = reader(openStream(request({ tokens: [sign(s, ['tasks'])] }), s.deps()))
+    await body.text()
+    s.f.db.update(users).set(set).where(eq(users.id, s.f.starsi)).run()
+    s.ping()
+    await body.text()
+    expect(body.done()).toBe(true)
+    expect(s.hub.size()).toBe(0)
+  })
+
+  it('a ping with the user unchanged keeps the stream open', async () => {
+    const s = await setup()
+    const body = reader(openStream(request({ tokens: [sign(s, ['tasks'])] }), s.deps()))
+    await body.text()
+    s.ping()
+    expect(await body.text()).toBe(': ping\n\n')
+    expect(body.done()).toBe(false)
+    expect(s.hub.size()).toBe(1)
   })
 
   it("a ping does not move the session's expires_at", async () => {

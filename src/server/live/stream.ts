@@ -27,7 +27,8 @@ export interface StreamRequest {
 }
 
 export interface StreamDeps {
-  hub: Hub
+  /** The hub, built on first use: only after the request passed every check. */
+  hub: () => Hub
   features: Features
   /** The request's signed-in user, or null. */
   currentUser: CurrentUser | null
@@ -35,6 +36,8 @@ export interface StreamDeps {
   sessionKey: string | undefined
   /** The session behind a token as stored, without sliding it. */
   findSession: (key: string) => { id: number; userId: number; expiresAt: string } | undefined
+  /** The user as stored now (each ping checks they are still active, with the same role). */
+  findUser: (id: number) => { active: boolean; role: string } | undefined
   now: () => Date
   setInterval: (run: () => void, ms: number) => unknown
   clearInterval: (handle: unknown) => void
@@ -116,7 +119,8 @@ export function openStream(req: StreamRequest, deps: StreamDeps): Response {
   }
 
   // Catch-up and attach in one synchronous block: no flush can fall between them.
-  const caught = deps.hub.changesSince(start, topics, CATCH_UP_LIMIT)
+  const hub = deps.hub()
+  const caught = hub.changesSince(start, topics, CATCH_UP_LIMIT)
   const stream: Stream = {
     sessionId: session.id,
     userId: user.id,
@@ -127,7 +131,7 @@ export function openStream(req: StreamRequest, deps: StreamDeps): Response {
     },
     close: end,
   }
-  detach = deps.hub.attach(stream, caught.lastId)
+  detach = hub.attach(stream, caught.lastId)
   if (!detach) {
     ended = true
     return status(503)
@@ -136,8 +140,16 @@ export function openStream(req: StreamRequest, deps: StreamDeps): Response {
   else for (const e of caught.events) write(frame(e))
 
   timer = deps.setInterval(() => {
+    // The session and the user as stored, read without sliding the session: logged out,
+    // expired, deactivated or given another role, and the stream ends.
     const now = deps.findSession(key)
-    if (now?.userId !== user.id || parseIsoUtc(now.expiresAt) <= deps.now()) {
+    const stored = deps.findUser(user.id)
+    if (
+      now?.userId !== user.id ||
+      parseIsoUtc(now.expiresAt) <= deps.now() ||
+      !stored?.active ||
+      stored.role !== user.role
+    ) {
       end()
       return
     }

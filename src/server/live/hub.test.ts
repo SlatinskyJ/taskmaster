@@ -3,7 +3,7 @@ import { withAudit, writeAudit } from '~/server/audit'
 import type { AuditEntry } from '~/server/audit'
 import { disputes, pointAdjustments, settlements } from '~/server/db/schema'
 import { MEETING, week } from '~/server/settlement/testing'
-import { createHub, STREAMS_PER_SESSION, STREAMS_TOTAL } from './hub'
+import { CATCH_UP_ROWS, createHub, STREAMS_PER_SESSION, STREAMS_TOTAL } from './hub'
 import type { Hub, LiveEvent, Stream } from './hub'
 import * as mapping from './mapping'
 import { idTopic } from './topics'
@@ -323,6 +323,7 @@ describe('nothing twice, nothing lost', () => {
       error.mockRestore()
     }
     expect(good.got).toHaveLength(1)
+    expect(bad.closed).toBe(true)
     expect(hub.size()).toBe(1)
     change(f)
     await settle()
@@ -420,5 +421,52 @@ describe('changesSince', () => {
     const over = hub.changesSince(base, new Set<Topic>(['tasks']), 2)
     expect(over.overflow).toBe(true)
     expect(over.lastId).toBe(base + 3)
+  })
+})
+
+describe('cost bounds', () => {
+  it('flush with zero streams calls no topicsOf; a stream attached later gets only later changes', async () => {
+    const f = await setup()
+    const hub = hubOf(f)
+    const spy = vi.spyOn(mapping, 'topicsOf')
+    try {
+      change(f, taskEntry(f, 70))
+      await settle()
+      expect(spy).not.toHaveBeenCalled()
+      const s = stream(['tasks'])
+      hub.attach(s, 0)
+      change(f, taskEntry(f, 71))
+      await settle()
+      expect(s.got.map((e) => e.entityId)).toEqual(['71'])
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('changesSince maps exactly CATCH_UP_ROWS (1000) rows; one past it is overflow, unmapped', async () => {
+    const f = await setup()
+    const hub = hubOf(f)
+    expect(CATCH_UP_ROWS).toBe(1000)
+    const base = hub.changesSince(0, new Set(), 1).lastId
+    change(
+      f,
+      Array.from({ length: 1000 }, () => taskEntry(f, 70)),
+    )
+    await settle()
+    const at = hub.changesSince(base, new Set<Topic>(['tasks']), 100)
+    expect(at.overflow).toBe(false)
+    expect(at.events).toHaveLength(1)
+    expect(at.lastId).toBe(base + 1000)
+
+    change(f, taskEntry(f, 71))
+    await settle()
+    const spy = vi.spyOn(mapping, 'topicsOf')
+    try {
+      const past = hub.changesSince(base, new Set<Topic>(['tasks']), 100)
+      expect(past).toEqual({ events: [], overflow: true, lastId: base + 1001 })
+      expect(spy).not.toHaveBeenCalled()
+    } finally {
+      spy.mockRestore()
+    }
   })
 })
