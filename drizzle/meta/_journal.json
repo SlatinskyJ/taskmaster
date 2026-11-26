@@ -281,6 +281,13 @@
       "when": 1795714234904,
       "tag": "0039_week_plan_switch",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "6",
+      "when": 1795726791556,
+      "tag": "0040_suggestions",
+      "breakpoints": true
     }
   ]
 }

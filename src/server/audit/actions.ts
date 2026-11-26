@@ -102,6 +102,11 @@ export const AUDIT_ACTIONS = [
   'dispute.opened',
   'dispute.corrected',
   'dispute.dismissed',
+  // Suggestions (§5.13)
+  'suggestion.created',
+  'suggestion.sent',
+  'suggestion.done',
+  'suggestion.dismissed',
 ] as const
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number]
@@ -131,5 +136,6 @@ export const ENTITY_TYPES = [
   'dispute',
   'app_meta',
   'feature',
+  'suggestion',
 ] as const
 export type EntityType = (typeof ENTITY_TYPES)[number]

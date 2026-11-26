@@ -93,6 +93,7 @@ describe('demo seed (#62)', () => {
       openRows: false,
       descriptions: false,
       weekPlan: false,
+      suggestions: false,
     })
   })
 
@@ -241,6 +242,7 @@ describe('demo seed (#62)', () => {
       openRows: false,
       descriptions: false,
       weekPlan: false,
+      suggestions: false,
     })
   })
 })
