@@ -72,25 +72,28 @@ export function ScoreDial({
   /** Accessible name, e.g. "Body". */
   label: string
 }) {
-  const drag = useRef<{ x: number; value: number } | null>(null)
+  const drag = useRef<{ x: number; value: number; step: number } | null>(null)
   const [offset, setOffset] = useState(0)
-  const [dragging, setDragging] = useState(false)
+  /** The gap of the running drag (null when not dragging). */
+  const [dragStep, setDragStep] = useState<number | null>(null)
 
   function onPointerDown(e: PointerEvent<HTMLDivElement>) {
     e.currentTarget.setPointerCapture(e.pointerId)
-    drag.current = { x: e.clientX, value }
-    setDragging(true)
+    // One gap for the whole drag, also when it crosses 99, so the numbers stay under the finger.
+    const step = dialStepPx(value)
+    drag.current = { x: e.clientX, value, step }
+    setDragStep(step)
   }
   function onPointerMove(e: PointerEvent<HTMLDivElement>) {
     if (!drag.current) return
-    const start = drag.current.value
-    const next = dialStep(start, e.clientX - drag.current.x, min, max, dialStepPx(start))
+    const { x, value: start, step } = drag.current
+    const next = dialStep(start, e.clientX - x, min, max, step)
     setOffset(next.offset)
     if (next.value !== value) onChange(next.value)
   }
   function onPointerEnd() {
     drag.current = null
-    setDragging(false)
+    setDragStep(null)
     setOffset(0)
   }
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
@@ -100,7 +103,7 @@ export function ScoreDial({
     onChange(next)
   }
 
-  const step = dialStepPx(value)
+  const step = dragStep ?? dialStepPx(value)
   const numbers: number[] = []
   for (let n = Math.max(min, value - SIDE); n <= Math.min(max, value + SIDE); n++) numbers.push(n)
 
@@ -139,7 +142,7 @@ export function ScoreDial({
               aria-hidden="true"
               className={cn(
                 'absolute top-1/2 grid -translate-1/2 justify-items-center gap-1 num font-bold',
-                !dragging &&
+                dragStep === null &&
                   'transition-[left] duration-200 ease-out motion-reduce:transition-none',
                 distance === 0 ? 'text-points text-ink' : 'text-lg text-muted',
               )}
