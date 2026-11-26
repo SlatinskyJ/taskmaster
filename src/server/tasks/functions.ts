@@ -40,6 +40,9 @@ import type { Seen as SeenText } from '~/server/descriptions/seen'
 import { getFlags } from '~/server/features'
 import { hasDescription, optionalDescription, seenDescriptionOf } from '~/server/descriptions/parse'
 import type { Db } from '~/server/db'
+import { idTopic, liveRead, serveLive } from '~/server/live'
+import type { Topic } from '~/server/live'
+import { templateDetailHandler } from '~/server/templates/functions'
 import {
   approveTaskOffer,
   createTask,
@@ -228,20 +231,39 @@ export const approveTaskOfferFn = createServerFn({ method: 'POST' })
     approveTaskOfferHandler(getDb(), context.user.id, data, new Date()),
   )
 
+// Live topics (#299, src/server/live/README.md): every task list a screen reads is `tasks`.
+const TASKS: readonly Topic[] = ['tasks']
+
+export const pendingApprovalsRead = liveRead({
+  read: (db, viewer, _arg: undefined, now): TaskView[] =>
+    pendingApprovals(db, viewer.id, shown(db, now)),
+  topics: () => TASKS,
+})
+
+export const tasksRead = liveRead({
+  read: (db, _viewer, _arg: undefined, now): TaskView[] => listTasks(db, shown(db, now)),
+  topics: () => TASKS,
+})
+
+export const planTasksRead = liveRead({
+  read: (db, _viewer, _arg: undefined, now): TaskView[] => listPlanTasks(db, shown(db, now)),
+  topics: () => TASKS,
+})
+
 /** "Čeká na tebe": offers waiting for this person's approval. */
 export const listPendingApprovalsFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
-  .handler(({ context }): TaskView[] => pendingApprovals(getDb(), context.user.id, shown(getDb())))
+  .handler(({ context }) => serveLive(pendingApprovalsRead, context.user, undefined))
 
 /** Every one-time task, for the giver's Úkoly screen. */
 export const listTasksFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver')])
-  .handler((): TaskView[] => listTasks(getDb(), shown(getDb())))
+  .handler(({ context }) => serveLive(tasksRead, context.user, undefined))
 
 /** The meeting's plan step (#44). */
 export const listPlanTasksFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver')])
-  .handler((): TaskView[] => listPlanTasks(getDb(), shown(getDb())))
+  .handler(({ context }) => serveLive(planTasksRead, context.user, undefined))
 
 // ── Bidding (#34, spec §5.2 path 2) ─────────────────────────────────────────────────────
 
@@ -343,15 +365,37 @@ export function taskDetailHandler(
   return getTaskDetail(db, data.taskId, shown(db))
 }
 
+/**
+ * The task page's topics: the task, and a copy's chore only when the chore page itself would
+ * load for this viewer (its own visibility function, not a copy of its rule). None for null.
+ */
+export const taskDetailRead = liveRead({
+  read: (db, viewer, arg: { taskId: number }) => taskDetailHandler(db, viewer, arg),
+  topics: (viewer, data, db): Topic[] => {
+    if (!data) return []
+    const out: Topic[] = [idTopic('task', data.task.id)]
+    const templateId = data.task.templateId
+    if (templateId !== null && templateDetailHandler(db, viewer, { templateId })) {
+      out.push(idTopic('template', templateId))
+    }
+    return out
+  },
+})
+
 export const getTaskDetailFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker', 'admin')])
   .validator(parseTaskId)
-  .handler(({ data, context }) => taskDetailHandler(getDb(), context.user, data))
+  .handler(({ data, context }) => serveLive(taskDetailRead, context.user, data))
+
+export const bidsToAnswerRead = liveRead({
+  read: (db, _viewer, _arg: undefined, now): TaskView[] => listBidsToAnswer(db, shown(db, now)),
+  topics: () => TASKS,
+})
 
 /** Proposed tasks with bids waiting for a giver. */
 export const listBidsToAnswerFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver')])
-  .handler((): TaskView[] => listBidsToAnswer(getDb(), shown(getDb())))
+  .handler(({ context }) => serveLive(bidsToAnswerRead, context.user, undefined))
 
 // ── Work flow (#35, spec §5.4–§5.6) ─────────────────────────────────────────────────────
 
@@ -370,15 +414,26 @@ function done(result: ReturnType<typeof reserveTask>): LifecycleActionResult {
   return result.ok ? { ok: true, id: result.value.id, status: result.value.status } : result
 }
 
+export const boardRead = liveRead({
+  read: (db, _viewer, _arg: undefined, now): TaskView[] => listBoard(db, shown(db, now)),
+  topics: () => TASKS,
+})
+
+export const pendingCompletionsRead = liveRead({
+  read: (db, _viewer, _arg: undefined, now): TaskView[] =>
+    listPendingCompletions(db, shown(db, now)),
+  topics: () => TASKS,
+})
+
 /** Open, reserved and pending tasks (taker's Domů until #40). */
 export const listBoardFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('taker')])
-  .handler((): TaskView[] => listBoard(getDb(), shown(getDb())))
+  .handler(({ context }) => serveLive(boardRead, context.user, undefined))
 
 /** Completions waiting for a giver (giver's Domů until #41). */
 export const listPendingCompletionsFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver')])
-  .handler((): TaskView[] => listPendingCompletions(getDb(), shown(getDb())))
+  .handler(({ context }) => serveLive(pendingCompletionsRead, context.user, undefined))
 
 /** Rezervovat; with the `weekPlan` switch on a week copy's day rules apply (#257). */
 export function reserveTaskHandler(
@@ -485,8 +540,12 @@ export const declineTaskScoreChangeFn = createServerFn({ method: 'POST' })
   )
 
 /** "Čeká na tebe": price changes waiting for this person. */
+export const scoreChangesWaitingRead = liveRead({
+  read: (db, viewer, _arg: undefined, now): TaskView[] =>
+    listScoreChangesWaiting(db, viewer.id, shown(db, now)),
+  topics: () => TASKS,
+})
+
 export const listScoreChangesWaitingFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
-  .handler(({ context }): TaskView[] =>
-    listScoreChangesWaiting(getDb(), context.user.id, shown(getDb())),
-  )
+  .handler(({ context }) => serveLive(scoreChangesWaitingRead, context.user, undefined))

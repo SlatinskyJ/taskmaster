@@ -17,7 +17,19 @@ import {
   turnDownBidsHandler,
   withdrawBidHandler,
   taskDetailHandler,
+  bidsToAnswerRead,
+  boardRead,
+  pendingApprovalsRead,
+  pendingCompletionsRead,
+  planTasksRead,
+  scoreChangesWaitingRead,
+  taskDetailRead,
+  tasksRead,
 } from './functions'
+import { tasks, templates, users } from '~/server/db/schema'
+import { templateDetailHandler } from '~/server/templates/functions'
+import { approveTemplateScore, createTemplate } from '~/server/templates/templates'
+import { agreedTemplate } from '~/server/templates/testing'
 import { eq } from 'drizzle-orm'
 import { featureFlags } from '~/server/db/schema'
 import { ForbiddenError } from '~/server/auth/guards'
@@ -294,5 +306,106 @@ describe('the views a screen reads (shown, #257)', () => {
     expect(shown(f.db, WED_NOON)).toEqual({ descriptions: false, weekPlanAt: WED_NOON })
     setWeekPlan(f.db, false)
     expect(shown(f.db, WED_NOON)).toEqual({ descriptions: false, weekPlanAt: undefined })
+  })
+})
+
+describe('topics (#299)', () => {
+  const as = (id: number, role: 'giver' | 'taker' | 'admin') => ({
+    id,
+    username: role,
+    displayName: role,
+    role,
+  })
+  const setFlag = (f: ReturnType<typeof family>, key: string, enabled: boolean) =>
+    f.db.update(featureFlags).set({ enabled }).where(eq(featureFlags.key, key)).run()
+  /** A copy row of template `templateId`, written by hand. */
+  const copyOf = (f: ReturnType<typeof family>, templateId: number) =>
+    f.db
+      .insert(tasks)
+      .values({
+        title: 'Vyndat myčku',
+        status: 'open',
+        score: 3,
+        approvalRequired: true,
+        createdBy: f.tata,
+        templateId,
+        origin: 'on_demand',
+        createdAt: T0.toISOString(),
+        updatedAt: T0.toISOString(),
+      })
+      .returning()
+      .get().id
+
+  it('every task list is tasks, for each role that reads it', () => {
+    const f = family()
+    const giver = as(f.tata, 'giver')
+    const taker = as(f.starsi, 'taker')
+    for (const read of [
+      tasksRead,
+      planTasksRead,
+      bidsToAnswerRead,
+      pendingCompletionsRead,
+      pendingApprovalsRead,
+      scoreChangesWaitingRead,
+    ]) {
+      expect(read.topics(giver, [], f.db)).toEqual(['tasks'])
+    }
+    for (const read of [boardRead, pendingApprovalsRead, scoreChangesWaitingRead]) {
+      expect(read.topics(taker, [], f.db)).toEqual(['tasks'])
+    }
+  })
+
+  it('task page: a one-time task → task:<id>; null → none', () => {
+    const f = family()
+    const id = car(f)
+    const giver = as(f.tata, 'giver')
+    const detail = taskDetailRead.read(f.db, giver, { taskId: id }, T0)
+    expect(taskDetailRead.topics(giver, detail, f.db)).toEqual([`task:${String(id)}`])
+    expect(taskDetailRead.read(f.db, giver, { taskId: 999 }, T0)).toBeNull()
+    expect(taskDetailRead.topics(giver, null, f.db)).toEqual([])
+  })
+
+  it("task page: a copy → task:<id> and its chore's page, for each role that may load it", () => {
+    const f = family()
+    setFlag(f, 'disputes', true)
+    const tid = agreedTemplate(f)
+    const id = copyOf(f, tid)
+    for (const viewer of [as(f.tata, 'giver'), as(f.starsi, 'taker'), as(f.admin, 'admin')]) {
+      const detail = taskDetailRead.read(f.db, viewer, { taskId: id }, T0)
+      expect(taskDetailRead.topics(viewer, detail, f.db)).toEqual([
+        `task:${String(id)}`,
+        `template:${String(tid)}`,
+      ])
+    }
+  })
+
+  it("a taker's copy of a chore whose page is null for him: task:<id> only", () => {
+    const f = family()
+    setFlag(f, 'openRows', false)
+    setFlag(f, 'choreBidding', false)
+    const input = { title: 'Vyndat myčku', score: 3, approvalRequired: true }
+    const tid = must(
+      createTemplate(f.db, f.tata, { ...input, schedule: null, deadline: null }, T0),
+    ).id
+    // Its giver deactivated, the boys' side said yes: still proposed, waiting for a giver.
+    f.db.update(users).set({ active: false }).where(eq(users.id, f.tata)).run()
+    must(approveTemplateScore(f.db, f.mladsi, tid, 3, T0))
+    expect(f.db.select().from(templates).where(eq(templates.id, tid)).get()?.status).toBe(
+      'proposed',
+    )
+    const id = copyOf(f, tid)
+    const starsi = as(f.starsi, 'taker')
+    expect(templateDetailHandler(f.db, starsi, { templateId: tid })).toBeNull()
+    const detail = taskDetailRead.read(f.db, starsi, { taskId: id }, T0)
+    expect(detail?.task.id).toBe(id)
+    expect(taskDetailRead.topics(starsi, detail, f.db)).toEqual([`task:${String(id)}`])
+  })
+
+  it('the admin with disputes off is refused before any topic', () => {
+    const f = family()
+    const id = car(f)
+    expect(() => taskDetailRead.read(f.db, as(f.admin, 'admin'), { taskId: id }, T0)).toThrow(
+      ForbiddenError,
+    )
   })
 })

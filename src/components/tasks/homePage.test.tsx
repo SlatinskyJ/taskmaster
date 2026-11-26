@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { marker } from '~/lib/liveSubs.testing'
 import { cs } from '~/lib/strings'
 import { getProposalsFn } from '~/server/periods/functions'
 import type { TaskView } from '~/server/tasks/functions'
@@ -61,14 +62,22 @@ const features = vi.hoisted(() => ({
 vi.mock('./useTaskAction', () => ({ useTaskAction: () => ({ busy: null, run: vi.fn() }) }))
 vi.mock('./bidCalls', () => ({ callBid: vi.fn(), BID_CALLS: {} }))
 // The loader's server calls, each returning a marker so the test can see where it went.
-vi.mock('~/server/tasks/functions', () => ({
-  listPendingApprovalsFn: vi.fn(() => Promise.resolve(['waiting'])),
-  listBoardFn: vi.fn(() => Promise.resolve(['board'])),
-  listPendingCompletionsFn: vi.fn(() => Promise.resolve(['toApprove'])),
-  listBidsToAnswerFn: vi.fn(() => Promise.resolve(['bids'])),
-  listScoreChangesWaitingFn: vi.fn(() => Promise.resolve(['taskPriceChanges'])),
-  listTasksFn: vi.fn(() => Promise.resolve(['tasks'])),
-}))
+// A data function with a live subscription (#299) answers `{ data, live: marker(<its name>) }`.
+vi.mock('~/server/tasks/functions', async () => {
+  const { withMarker: m } = await import('~/lib/liveSubs.testing')
+  return {
+    listPendingApprovalsFn: vi.fn(() => Promise.resolve(m('listPendingApprovalsFn', ['waiting']))),
+    listBoardFn: vi.fn(() => Promise.resolve(m('listBoardFn', ['board']))),
+    listPendingCompletionsFn: vi.fn(() =>
+      Promise.resolve(m('listPendingCompletionsFn', ['toApprove'])),
+    ),
+    listBidsToAnswerFn: vi.fn(() => Promise.resolve(m('listBidsToAnswerFn', ['bids']))),
+    listScoreChangesWaitingFn: vi.fn(() =>
+      Promise.resolve(m('listScoreChangesWaitingFn', ['taskPriceChanges'])),
+    ),
+    listTasksFn: vi.fn(() => Promise.resolve(m('listTasksFn', ['tasks']))),
+  }
+})
 const points = vi.hoisted(() => ({
   value: {
     levels: { lower: 40, upper: 90 },
@@ -325,6 +334,16 @@ describe('Domů points (#40)', () => {
   })
 })
 
+// The live subscriptions each role's Domů returns (#299), in call order.
+const TAKER_LIVE = ['listPendingApprovalsFn', 'listScoreChangesWaitingFn', 'listBoardFn']
+const GIVER_LIVE = [
+  'listPendingApprovalsFn',
+  'listScoreChangesWaitingFn',
+  'listPendingCompletionsFn',
+  'listBidsToAnswerFn',
+  'listTasksFn',
+]
+
 describe('Domů loader', () => {
   type Loader = (args: {
     context: {
@@ -370,6 +389,7 @@ describe('Domů loader', () => {
       bids: [],
       tasks: [],
       points: ['points'],
+      live: TAKER_LIVE.map(marker),
     })
   })
 
@@ -387,6 +407,7 @@ describe('Domů loader', () => {
       bids: ['bids'],
       tasks: ['tasks'],
       points: ['points'],
+      live: GIVER_LIVE.map(marker),
     })
   })
 })
