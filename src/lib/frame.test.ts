@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { frameHeader, frameReentryUrl, guardedReentryUrl, keepFrameToken } from './frame'
+import {
+  frameHeader,
+  frameNameFor,
+  frameReentryUrl,
+  guardedReentryUrl,
+  keepFrameToken,
+  tokenInFrameName,
+} from './frame'
 import type { ReentryStore } from './frame'
 
 const at = (name: string, href: string) => ({ name, location: { href } })
@@ -126,5 +133,20 @@ describe('guardedReentryUrl', () => {
     expect(guardedReentryUrl(at('', 'http://x/sprava'), store, 1000)).toBeNull()
     expect(guardedReentryUrl(at('tm-frame:', 'http://x/sprava'), store, 1000)).toBeNull()
     expect(map.size).toBe(0)
+  })
+})
+
+describe('frameNameFor and tokenInFrameName', () => {
+  it('names a frame by its token', () => {
+    expect(frameNameFor(undefined)).toBe('tm-frame:')
+    expect(frameNameFor(null)).toBe('tm-frame:')
+    expect(frameNameFor('abc')).toBe('tm-frame:abc')
+  })
+
+  it('reads the token back: undefined for none, null for a name that is not a frame', () => {
+    expect(tokenInFrameName('tm-frame:abc')).toBe('abc')
+    expect(tokenInFrameName('tm-frame:')).toBeUndefined()
+    expect(tokenInFrameName('')).toBeNull()
+    expect(tokenInFrameName('other')).toBeNull()
   })
 })
