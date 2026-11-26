@@ -89,6 +89,8 @@ export const SUITES: readonly Suite[] = [
   // The multi-user viewer (#265): logs frames in and out and proposes tasks, so its own server.
   // `week`: the boys' Týden tab is on.
   { name: 'multi', spec: 'multi.spec.ts', seed: 'week' },
+  // Launch switches in Správa (#296). Its own server: it flips switches for good.
+  { name: 'switches', spec: 'switches.spec.ts', seed: 'launch' },
 ]
 
 /** Passkeys on (localhost) for the `on` suite only, at its own port. */
