@@ -10,6 +10,10 @@ import { approveTemplateScore, createTemplate } from '~/server/templates'
 import { agreedTemplate } from '~/server/templates/testing'
 import { expireOverdueInstances } from './expiry'
 import { createOnDemandInstance } from './instances'
+import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
+import { schedulerJobs } from '~/server/scheduler/jobs'
+import { MON_10, THU_0005, WED_NOON, copiesOf, setWeekPlan, weekFamily } from './testing'
+import type { WeekFamily } from './testing'
 
 // Expiry (#39, spec §5.3): a deadline instance nobody finished in its grace window expires.
 
@@ -137,5 +141,65 @@ describe('expireOverdueInstances', () => {
     const id = bins(f)
     f.db.update(tasks).set({ status: 'cancelled' }).where(eq(tasks.id, id)).run()
     expect(expireOverdueInstances(f.db, GRACE_END)).toEqual([])
+  })
+})
+
+describe('midnight expiry of week copies (#257, spec §5.12)', () => {
+  const tick = (f: WeekFamily, at: Date, log = { info: vi.fn(), error: vi.fn() }) => {
+    const job = schedulerJobs(f.db, () => DEFAULT_PERIOD_DEFAULTS, log).find(
+      (j) => j.name === 'expiry',
+    )
+    if (!job) throw new Error('no expiry job')
+    job.run(at)
+    return log
+  }
+  const statuses = (f: WeekFamily) => copiesOf(f.db, f.cat).map((r) => r.status)
+
+  it("expiry job (through schedulerJobs, switch on): an open and a reserved no-deadline copy for yesterday expire at the first tick after midnight (instance.expired, system); today's does not; one made before the flip (week_rules 0) stays open", () => {
+    const f = weekFamily()
+    setWeekPlan(f.db, false)
+    const old = must(createOnDemandInstance(f.db, f.tata, f.cat, MON_10)).id
+    setWeekPlan(f.db, true)
+    const wednesday = f.day[2] ?? 0
+    must(reserveTask(f.db, f.starsi, wednesday, WED_NOON, true))
+    // Wednesday 23:55: Monday's and Tuesday's are over, Wednesday's (reserved) is not yet.
+    tick(f, new Date(THU_0005.getTime() - 10 * 60_000))
+    expect(statuses(f).slice(0, 4)).toEqual(['expired', 'expired', 'reserved', 'open'])
+    const log = tick(f, THU_0005)
+    expect(statuses(f)).toEqual([
+      'expired',
+      'expired',
+      'expired',
+      'open',
+      'open',
+      'open',
+      'open',
+      'open',
+    ])
+    expect(row(f.db, old)).toMatchObject({ status: 'open', weekRules: false, planDayAt: null })
+    expect(log.info).toHaveBeenCalledWith('[scheduler] expiry: 1')
+    const entry = f.db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.action, 'instance.expired'))
+      .all()
+      .find((e) => e.entityId === String(wednesday))
+    expect(entry).toMatchObject({ actorKind: 'system', at: THU_0005.toISOString() })
+    expect(json(entry?.before)).toMatchObject({ status: 'reserved', reservedBy: f.starsi })
+  })
+
+  it('with the switch off nothing expires at midnight', () => {
+    const f = weekFamily()
+    setWeekPlan(f.db, false)
+    tick(f, THU_0005)
+    expect(statuses(f).every((s) => s === 'open')).toBe(true)
+  })
+
+  it('a failed audit write on the midnight expiry leaves the copy open', () => {
+    const f = weekFamily()
+    failAuditOn(f.db, 'instance.expired')
+    const log = tick(f, THU_0005)
+    expect(statuses(f).every((s) => s === 'open')).toBe(true)
+    expect(log.error).toHaveBeenCalledTimes(3)
   })
 })

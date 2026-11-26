@@ -164,6 +164,8 @@ export const cs = {
       scoreChanged: 'Cena se mezitím změnila, podívej se znovu.',
       alreadyOpen: 'Tenhle úkol už je zadaný. Najdeš ho na Domů.',
       tooEarly: 'Tohle už patří do minulého týdne.',
+      /** Hotovo on a week copy before its day (#257). */
+      beforeDay: 'Tohle je naplánované na jiný den. Hotovo jde až ten den.',
     },
   },
   /** Recurring templates (#37): GCreate recurring part, GTasks, TApprove (UI doc §7). */

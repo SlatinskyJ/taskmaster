@@ -48,5 +48,6 @@ export const listLoggableTemplatesFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('taker')])
   .handler(() => {
     const db = getDb()
-    return { tiles: listLoggableTemplates(db), choices: logChoicesAt(db, new Date()) }
+    const now = new Date()
+    return { tiles: listLoggableTemplates(db, now), choices: logChoicesAt(db, now) }
   })

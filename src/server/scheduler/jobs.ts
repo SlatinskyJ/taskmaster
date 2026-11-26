@@ -35,7 +35,7 @@ export function schedulerJobs(
     {
       name: 'expiry',
       run(at) {
-        const n = expireOverdueInstances(db, at, log).length
+        const n = expireOverdueInstances(db, at, log, getFlags(db).weekPlan).length
         if (n > 0) log.info(`[scheduler] expiry: ${String(n)}`)
       },
     },

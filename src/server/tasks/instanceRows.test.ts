@@ -4,9 +4,10 @@ import { writeAudit } from '~/server/audit'
 import { auditLog, tasks } from '~/server/db/schema'
 import type { TaskRow } from '~/server/db/schema'
 import { takerPoints } from '~/server/points'
+import { THU_0005, WED_NOON, weekFamily } from '~/server/instances/testing'
 import { agreedTemplate } from '~/server/templates/testing'
 import { columnsOf, toItem } from './item'
-import { approveTask, completeTask, rejectTask } from './lifecycle'
+import { approveTask, completeTask, rejectTask, releaseTask, reserveTask } from './lifecycle'
 import { rejectionsSince } from './rejections'
 import { proposeTaskScoreChange } from './scoreChange'
 import { getTaskDetail, listBoard, listPendingCompletions } from './tasks'
@@ -205,5 +206,35 @@ describe('views and audit reads of instances', () => {
       [id, false],
       [log.id, true],
     ])
+  })
+})
+
+describe('the day rules of a week copy (#257, spec §5.12)', () => {
+  it("Hotovo on Thursday's copy on Wednesday is refused (before_day) with the switch on, and allowed with it off", () => {
+    const f = weekFamily()
+    const thursday = f.day[3] ?? 0
+    expect(completeTask(f.db, f.starsi, thursday, WED_NOON, true)).toEqual({
+      ok: false,
+      error: 'before_day',
+    })
+    expect(row(f.db, thursday)?.status).toBe('open')
+    expect(must(completeTask(f.db, f.starsi, thursday, WED_NOON, false)).status).toBe(
+      'done_unconfirmed',
+    )
+  })
+
+  it("Hotovo on Thursday's copy from Thursday's first minute works with the switch on", () => {
+    const f = weekFamily()
+    const thursday = f.day[3] ?? 0
+    expect(must(completeTask(f.db, f.starsi, thursday, THU_0005, true)).status).toBe(
+      'done_unconfirmed',
+    )
+  })
+
+  it("reserving and releasing Thursday's copy on Wednesday work", () => {
+    const f = weekFamily()
+    const thursday = f.day[3] ?? 0
+    expect(must(reserveTask(f.db, f.starsi, thursday, WED_NOON, true)).status).toBe('reserved')
+    expect(must(releaseTask(f.db, f.starsi, thursday, WED_NOON)).status).toBe('open')
   })
 })

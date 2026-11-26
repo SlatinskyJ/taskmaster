@@ -1,6 +1,7 @@
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq, inArray, or } from 'drizzle-orm'
 import {
   byPerson,
+  copyDay,
   createInstance,
   findPerson,
   instanceDeadline,
@@ -11,7 +12,7 @@ import {
 import type { LogWhen } from '~/domain'
 import { currentPeriod } from '~/server/periods'
 import type { Item, LifecycleError } from '~/domain'
-import { toIsoUtc } from '~/domain/dates'
+import { startOfPragueDay, toIsoUtc } from '~/domain/dates'
 import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
 import { writeAudit } from '~/server/audit'
@@ -19,6 +20,7 @@ import type { Actor as AuditActor, Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { tasks, templates } from '~/server/db/schema'
 import type { TaskRow, TemplateRow } from '~/server/db/schema'
+import { getFlags } from '~/server/features'
 import { columnsOf } from '~/server/tasks/item'
 import { deadlineRuleOf } from '~/server/templates/rules'
 import { listPeople } from '~/server/users/people'
@@ -133,7 +135,10 @@ const byUser = (userId: number, now: Date): InstanceBirth => ({
   createdAt: now,
 })
 
-/** "+ Teď": a giver makes an open instance now; a deadline template is due by its rule from now. */
+/**
+ * "+ Teď": a giver makes an open instance now; a deadline template is due by its rule from now.
+ * With the `weekPlan` switch on it is a copy of today (spec §5.12, #257).
+ */
 export function createOnDemandInstance(
   db: Db | Tx,
   giverId: number,
@@ -145,27 +150,43 @@ export function createOnDemandInstance(
     if (!loaded.ok) return loaded
     const { template, actor } = loaded.value
     const rule = deadlineRuleOf(template)
+    const day = getFlags(tx).weekPlan ? copyDay(now) : null
     const item = createInstance(
       actor,
       'on_demand',
       template.approvalRequired,
       rule ? instanceDeadline(rule, now) : null,
+      day,
     )
     if (!item.ok) return item
-    return ok(insertInstance(tx, byUser(giverId, now), template, 'on_demand', item.value))
+    const birth = { ...byUser(giverId, now), ...(day ? { planDayAt: day.startsAt } : {}) }
+    return ok(insertInstance(tx, birth, template, 'on_demand', item.value))
   })
 }
 
-/** Whether a copy of the template is on the board, open or reserved (a pending one is not). */
-function onBoard(db: Db | Tx, templateId: number): boolean {
+/**
+ * Whether a copy of the template is on the board, open or reserved (a pending one is not). With
+ * `today` (the start of today's Prague day, `weekPlan` switch on, #257) only today's week copy
+ * counts, and any copy under the old rules.
+ */
+function onBoard(db: Db | Tx, templateId: number, today: Date | null): boolean {
+  const which = today
+    ? or(eq(tasks.weekRules, false), eq(tasks.planDayAt, toIsoUtc(today)))
+    : undefined
   return (
     db
       .select({ id: tasks.id })
       .from(tasks)
-      .where(and(eq(tasks.templateId, templateId), inArray(tasks.status, ['open', 'reserved'])))
+      .where(
+        and(eq(tasks.templateId, templateId), inArray(tasks.status, ['open', 'reserved']), which),
+      )
       .get() !== undefined
   )
 }
+
+/** Today's start when the week plan is on, else null (the old rule): `onBoard`'s `today`. */
+const planToday = (db: Db | Tx, now: Date): Date | null =>
+  getFlags(db).weekPlan ? startOfPragueDay(now) : null
 
 /** Zapsat's "Kdy?" choices at `now`: never before the running week started. */
 export function logChoicesAt(db: Db | Tx, now: Date): LogWhen[] {
@@ -194,7 +215,7 @@ export function selfLogInstance(
     const item = selfLog(actor, logInstant(when, now))
     if (!item.ok) return item
     if (template.score !== score) return fail('score_changed')
-    if (onBoard(tx, template.id)) return fail('already_open')
+    if (onBoard(tx, template.id, planToday(tx, now))) return fail('already_open')
     if (!logChoicesAt(tx, now).includes(when)) return fail('too_early')
     return ok(insertInstance(tx, byUser(takerId, now), template, 'self_logged', item.value))
   })
@@ -203,12 +224,14 @@ export function selfLogInstance(
 /** What Zapsat offers: every agreed template, by Czech title; `onBoard` ones can't be logged. */
 export function listLoggableTemplates(
   db: Db | Tx,
+  now: Date = new Date(),
 ): { id: number; title: string; score: number; onBoard: boolean }[] {
+  const today = planToday(db, now)
   return db
     .select({ id: templates.id, title: templates.title, score: templates.score })
     .from(templates)
     .where(eq(templates.status, 'active'))
     .all()
     .sort((a, b) => a.title.localeCompare(b.title, 'cs'))
-    .map((t) => ({ ...t, onBoard: onBoard(db, t.id) }))
+    .map((t) => ({ ...t, onBoard: onBoard(db, t.id, today) }))
 }

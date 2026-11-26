@@ -374,10 +374,30 @@ export const listPendingCompletionsFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver')])
   .handler((): TaskView[] => listPendingCompletions(getDb(), shown(getDb())))
 
+/** Rezervovat; with the `weekPlan` switch on a week copy's day rules apply (#257). */
+export function reserveTaskHandler(
+  db: Db,
+  userId: number,
+  data: { taskId: number },
+  now: Date,
+): LifecycleActionResult {
+  return done(reserveTask(db, userId, data.taskId, now, getFlags(db).weekPlan))
+}
+
+/** Hotovo; with the `weekPlan` switch on a week copy's day rules apply (#257). */
+export function completeTaskHandler(
+  db: Db,
+  userId: number,
+  data: { taskId: number },
+  now: Date,
+): LifecycleActionResult {
+  return done(completeTask(db, userId, data.taskId, now, getFlags(db).weekPlan))
+}
+
 export const reserveTaskFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('taker')])
   .validator(parseTaskId)
-  .handler(({ data, context }) => done(reserveTask(getDb(), context.user.id, data.taskId)))
+  .handler(({ data, context }) => reserveTaskHandler(getDb(), context.user.id, data, new Date()))
 
 export const releaseTaskFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver', 'taker')])
@@ -388,7 +408,7 @@ export const releaseTaskFn = createServerFn({ method: 'POST' })
 export const completeTaskFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver', 'taker')])
   .validator(parseTaskId)
-  .handler(({ data, context }) => done(completeTask(getDb(), context.user.id, data.taskId)))
+  .handler(({ data, context }) => completeTaskHandler(getDb(), context.user.id, data, new Date()))
 
 export const approveTaskFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver')])
