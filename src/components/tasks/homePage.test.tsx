@@ -97,12 +97,14 @@ vi.mock('~/server/descriptions/functions', async () => {
     ),
   }
 })
-vi.mock('~/server/periods/functions', () => ({
-  getProposalsFn: vi.fn(() => Promise.resolve('proposals')),
-}))
-vi.mock('~/server/points/functions', () => ({
-  getPointsFn: vi.fn(() => Promise.resolve(['points'])),
-}))
+vi.mock('~/server/periods/functions', async () => {
+  const { withMarker: m } = await import('~/lib/liveSubs.testing')
+  return { getProposalsFn: vi.fn(() => Promise.resolve(m('getProposalsFn', 'proposals'))) }
+})
+vi.mock('~/server/points/functions', async () => {
+  const { withMarker: m } = await import('~/lib/liveSubs.testing')
+  return { getPointsFn: vi.fn(() => Promise.resolve(m('getPointsFn', ['points']))) }
+})
 vi.mock('~/server/templates/functions', async () => {
   const { withMarker: m } = await import('~/lib/liveSubs.testing')
   return {
@@ -354,6 +356,7 @@ const TAKER_LIVE = [
   'listScoreChangesWaitingFn',
   'listBoardFn',
   'listTemplatesFn',
+  'getPointsFn',
 ]
 const GIVER_LIVE = [
   'listPendingApprovalsFn',
@@ -363,6 +366,7 @@ const GIVER_LIVE = [
   'listPendingCompletionsFn',
   'listBidsToAnswerFn',
   'listTasksFn',
+  'getPointsFn',
 ]
 
 describe('Domů loader', () => {
@@ -388,6 +392,11 @@ describe('Domů loader', () => {
     expect(getProposalsFn).toHaveBeenCalledTimes(1)
     expect((await load('giver', true)).proposals).toBe('proposals')
     expect(getProposalsFn).toHaveBeenCalledTimes(2)
+    // Its subscription comes right after the price changes, in both roles.
+    const withProposals = (names: string[]) =>
+      [...names.slice(0, 4), 'getProposalsFn', ...names.slice(4)].map(marker)
+    expect((await load('taker', true)).live).toEqual(withProposals(TAKER_LIVE))
+    expect((await load('giver', true)).live).toEqual(withProposals(GIVER_LIVE))
   })
 
   it('descriptions (#207 ruling 6): a brother gets his waiting changes only with the switch on', async () => {

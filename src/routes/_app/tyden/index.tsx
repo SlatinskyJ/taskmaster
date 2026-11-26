@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { Screen } from '~/components/shell/Screen'
 import { WeekScreen } from '~/components/week/WeekScreen'
+import { liveSubs } from '~/lib/liveSubs'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { getDisputeListFn } from '~/server/disputes/functions'
@@ -13,13 +14,17 @@ export const Route = createFileRoute('/_app/tyden/')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/tyden')
   },
-  loader: async ({ context }) => ({
-    week: await getWeekFn(),
-    // Příští týden card (#43): only with the launch switch on, so off means no call.
-    proposals: context.features.periodProposals ? await getProposalsFn() : null,
-    // Rozporováno (#46): only with the disputes switch on.
-    disputeList: context.features.disputes ? await getDisputeListFn() : null,
-  }),
+  loader: async ({ context }) => {
+    const live = liveSubs()
+    return {
+      week: live.take(await getWeekFn()),
+      // Příští týden card (#43): only with the launch switch on, so off means no call.
+      proposals: context.features.periodProposals ? live.take(await getProposalsFn()) : null,
+      // Rozporováno (#46): only with the disputes switch on.
+      disputeList: context.features.disputes ? live.take(await getDisputeListFn()) : null,
+      live: live.all(),
+    }
+  },
   component: WeekPage,
 })
 

@@ -6,6 +6,8 @@ import { getDb } from '~/server/db'
 import { SETTLEMENT_LEVELS } from '~/server/db/schema'
 import type { Db } from '~/server/db'
 import { getFlags } from '~/server/features'
+import { idTopic, liveRead, serveLive } from '~/server/live'
+import type { Topic } from '~/server/live'
 import { int, record } from '~/server/periods/validators'
 import { dismissDisputeIn, disputeMarks, markKey, openDisputeIn } from './disputes'
 import type { DisputeMark, DisputeServerError, OpenDisputeError } from './disputes'
@@ -120,11 +122,26 @@ export const getItemMarkFn = createServerFn({ method: 'GET' })
     itemMarkHandler(getDb(), { id: context.user.id, role: context.user.role }, data),
   )
 
+/**
+ * A giver sees every dispute; a taker those he opened, those about him and those about nobody
+ * (a task's score). Switch off: nothing read, nothing subscribed.
+ */
+export const disputeListRead = liveRead({
+  read: (db, viewer) => disputeListHandler(db, { id: viewer.id, role: viewer.role }),
+  topics: (viewer, data): Topic[] => {
+    if ('error' in data) return []
+    if (viewer.role !== 'taker') return ['disputes']
+    return [
+      idTopic('disputes:by', viewer.id),
+      idTopic('disputes:about', viewer.id),
+      'disputes:about:none',
+    ]
+  },
+})
+
 export const getDisputeListFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
-  .handler(({ context }) =>
-    disputeListHandler(getDb(), { id: context.user.id, role: context.user.role }),
-  )
+  .handler(({ context }) => serveLive(disputeListRead, context.user, undefined))
 
 /** An item's value as the admin saw it: null, `{ score }`, `{ points }` or a settlement's. */
 export function parseSeenValue(data: unknown): DisputeValue | null {

@@ -42,7 +42,7 @@ export const Route = createFileRoute('/_app/')({
     const priceChanges = live.take(await listPendingTemplatePriceChangesFn())
     const taskPriceChanges = live.take(await listScoreChangesWaitingFn())
     // Proposals for next week (#43): only with the launch switch on, so off means no call.
-    const proposals = context.features.periodProposals ? await getProposalsFn() : null
+    const proposals = context.features.periodProposals ? live.take(await getProposalsFn()) : null
     if (context.user.role === 'taker') {
       // Waiting description changes (#207 ruling 6): only a brother answers them, only with the switch on.
       const descriptionChanges = context.features.descriptions
@@ -60,7 +60,7 @@ export const Route = createFileRoute('/_app/')({
         toApprove: [],
         bids: [],
         tasks: [],
-        points: await getPointsFn(),
+        points: live.take(await getPointsFn()),
         live: live.all(),
       }
     }
@@ -76,7 +76,7 @@ export const Route = createFileRoute('/_app/')({
       toApprove: live.take(await listPendingCompletionsFn()),
       bids: live.take(await listBidsToAnswerFn()),
       tasks: live.take(await listTasksFn()),
-      points: await getPointsFn(),
+      points: live.take(await getPointsFn()),
       live: live.all(),
     }
   },

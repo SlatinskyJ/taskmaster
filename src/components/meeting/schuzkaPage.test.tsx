@@ -25,7 +25,7 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
 }))
 vi.mock('~/server/settlement/functions', () => ({
-  getMeetingFn: vi.fn(() => Promise.resolve('meeting')),
+  getMeetingFn: vi.fn(() => Promise.resolve(withMarker('getMeetingFn', 'meeting'))),
   settlePeriodFn: vi.fn(),
 }))
 vi.mock('~/server/tasks/functions', () => ({
@@ -42,7 +42,7 @@ describe('Schůzka page', () => {
     expect(await loader()).toEqual({
       meeting: 'meeting',
       plan: 'plan',
-      live: [marker('listPlanTasksFn')],
+      live: [marker('getMeetingFn'), marker('listPlanTasksFn')],
     })
     expect(getMeetingFn).toHaveBeenCalledTimes(1)
     expect(listPlanTasksFn).toHaveBeenCalledTimes(1)

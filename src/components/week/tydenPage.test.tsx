@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import { marker, withMarker } from '~/lib/liveSubs.testing'
 import { cs } from '~/lib/strings'
 import { getWeekFn } from '~/server/settlement/functions'
 import { getDisputeListFn } from '~/server/disputes/functions'
@@ -44,14 +45,14 @@ vi.mock('@tanstack/react-router', () => ({
     ),
 }))
 vi.mock('~/server/periods/functions', () => ({
-  getProposalsFn: vi.fn(() => Promise.resolve(proposalsView())),
+  getProposalsFn: vi.fn(() => Promise.resolve(withMarker('getProposalsFn', proposalsView()))),
 }))
 vi.mock('~/server/disputes/functions', () => ({
-  getDisputeListFn: vi.fn(() => Promise.resolve([])),
+  getDisputeListFn: vi.fn(() => Promise.resolve(withMarker('getDisputeListFn', []))),
   openDisputeFn: vi.fn(),
 }))
 vi.mock('~/server/settlement/functions', () => ({
-  getWeekFn: vi.fn(() => Promise.resolve('week')),
+  getWeekFn: vi.fn(() => Promise.resolve(withMarker('getWeekFn', 'week'))),
 }))
 
 const { Route } = await import('~/routes/_app/tyden/index')
@@ -69,7 +70,12 @@ describe('Týden page', () => {
     })
 
   it('the loader asks for the week; with the switch off nothing about proposals', async () => {
-    expect(await load(false)).toEqual({ week: 'week', proposals: null, disputeList: null })
+    expect(await load(false)).toEqual({
+      week: 'week',
+      proposals: null,
+      disputeList: null,
+      live: [marker('getWeekFn')],
+    })
     expect(getWeekFn).toHaveBeenCalledTimes(1)
     expect(getProposalsFn).not.toHaveBeenCalled()
   })
@@ -79,14 +85,23 @@ describe('Týden page', () => {
       week: 'week',
       proposals: proposalsView(),
       disputeList: null,
+      live: [marker('getWeekFn'), marker('getProposalsFn')],
     })
     expect(getProposalsFn).toHaveBeenCalledTimes(1)
   })
 
   it('disputes switch on: the loader also asks for Rozporováno; off it does not', async () => {
     expect(getDisputeListFn).not.toHaveBeenCalled()
-    expect(await load(false, true)).toEqual({ week: 'week', proposals: null, disputeList: [] })
-    expect(getDisputeListFn).toHaveBeenCalledTimes(1)
+    expect(await load(false, true)).toEqual({
+      week: 'week',
+      proposals: null,
+      disputeList: [],
+      live: [marker('getWeekFn'), marker('getDisputeListFn')],
+    })
+    expect((await load(true, true)) as { live: unknown }).toMatchObject({
+      live: [marker('getWeekFn'), marker('getProposalsFn'), marker('getDisputeListFn')],
+    })
+    expect(getDisputeListFn).toHaveBeenCalledTimes(2)
   })
 
   it('disputes switch on: Rozporovat on the giver Týden; off: none', () => {

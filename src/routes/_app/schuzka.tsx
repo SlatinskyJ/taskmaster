@@ -14,7 +14,7 @@ export const Route = createFileRoute('/_app/schuzka')({
   },
   loader: async () => {
     const live = liveSubs()
-    const meeting = await getMeetingFn()
+    const meeting = live.take(await getMeetingFn())
     const plan = live.take(await listPlanTasksFn())
     return { meeting, plan, live: live.all() }
   },
