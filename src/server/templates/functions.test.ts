@@ -157,6 +157,7 @@ describe('template score handlers on a proposed chore (#209, switch choreBidding
       ok: true,
       id,
       score: 10,
+      status: 'proposed',
     })
   })
 
@@ -168,18 +169,30 @@ describe('template score handlers on a proposed chore (#209, switch choreBidding
       ok: true,
       id,
       score: 10,
+      status: 'proposed',
     })
     const bids = [{ takerId: f.mladsi, score: 14 }]
     expect(turnDownTemplateBidsHandler(f.db, f.tata, { templateId: id, bids }, T2)).toEqual({
       ok: true,
       id,
       score: 10,
+      status: 'proposed',
     })
     expect(threadRows(f.db, id)).toEqual([
       ['taker', f.starsi, 12, 'closed'],
       ['taker', f.mladsi, 14, 'closed'],
       ['giver', f.tata, 10, null],
     ])
+  })
+
+  it('on: a counter answers status proposed at its offer', () => {
+    const { f, id } = withSwitch(true)
+    expect(counterTemplateScoreHandler(f.db, f.tata, { templateId: id, score: 11 }, T1)).toEqual({
+      ok: true,
+      id,
+      score: 11,
+      status: 'proposed',
+    })
   })
 
   it('on: accepting the lowest answers the agreed score', () => {
@@ -189,6 +202,7 @@ describe('template score handlers on a proposed chore (#209, switch choreBidding
       ok: true,
       id,
       score: 12,
+      status: 'active',
     })
   })
 })

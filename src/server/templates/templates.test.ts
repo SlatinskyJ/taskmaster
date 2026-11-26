@@ -315,7 +315,7 @@ describe('reads', () => {
         schedule: { days: [2], time: '18:00' },
         deadline: { dayOffset: 1, due: '07:00', graceMinutes: 120 },
         change: null,
-        bidding: { offer: { score: 4, byName: 'Táta' }, bids: [], lowest: null, lastBids: [] },
+        bidding: null,
       },
     ])
     expect(Object.keys(list[0] ?? {}).sort()).toEqual(
@@ -355,7 +355,7 @@ describe('reads', () => {
     must(counterOnTemplate(db, mama, id, 5, T1, on))
     must(bidOnTemplate(db, mladsi, id, 8, T2, on))
     must(bidOnTemplate(db, bratranec, id, 6, T2, on))
-    const view = () => listTemplates(db, tata).find((t) => t.id === id)
+    const view = () => listTemplates(db, tata, on).find((t) => t.id === id)
     expect(view()?.bidding).toEqual({
       offer: { score: 5, byName: 'Máma' },
       bids: [
@@ -371,6 +371,46 @@ describe('reads', () => {
     })
     must(approveTemplateScore(db, starsi, id, 5, T2))
     expect(view()).toMatchObject({ status: 'active', bidding: null, change: null })
+  })
+
+  it('a proposed chore has bidding only with choreBidding on, in every read (#209)', () => {
+    const { db, tata, starsi } = family()
+    const { id } = must(createTemplate(db, tata, BINS, T0))
+    const on = { choreBidding: true }
+    must(bidOnTemplate(db, starsi, id, 6, T1, on))
+    const off = { choreBidding: false }
+    for (const opts of [off, undefined]) {
+      expect(listTemplates(db, tata, opts)[0]?.bidding).toBeNull()
+      expect(getTemplateDetail(db, id, tata, opts)?.template.bidding).toBeNull()
+      expect(pendingTemplateApprovals(db, starsi, opts)[0]?.bidding).toBeNull()
+    }
+    expect(listTemplates(db, tata, on)[0]?.bidding?.lowest).toBe(6)
+    expect(getTemplateDetail(db, id, tata, on)?.template.bidding?.lowest).toBe(6)
+    expect(pendingTemplateApprovals(db, starsi, on)[0]?.bidding?.lowest).toBe(6)
+  })
+
+  it("a brother opens a proposed chore's page only with choreBidding on; an admin never (#209)", () => {
+    const { db, admin, tata, starsi } = family()
+    const { id } = must(createTemplate(db, tata, BINS, T0))
+    const on = { choreBidding: true }
+    expect(getTemplateDetail(db, id, starsi)).toBeNull()
+    expect(getTemplateDetail(db, id, starsi, { choreBidding: false })).toBeNull()
+    expect(getTemplateDetail(db, id, starsi, on)?.template.id).toBe(id)
+    expect(getTemplateDetail(db, id, admin, on)).toBeNull()
+  })
+
+  it("a parent's Vyjednávání takes a proposed chore with bids only with the switch on (#209)", () => {
+    const { db, tata, starsi } = family()
+    const on = { choreBidding: true }
+    const withBid = must(createTemplate(db, tata, BINS, T0)).id
+    must(createTemplate(db, tata, { ...BINS, title: 'Zalít kytky' }, T0))
+    const agreed = must(createTemplate(db, tata, DISHES, T0)).id
+    must(approveTemplateScore(db, starsi, agreed, 3, T0))
+    must(bidOnTemplate(db, starsi, agreed, 5, T1))
+    must(bidOnTemplate(db, starsi, withBid, 6, T1, on))
+    expect(pendingTemplatePriceChanges(db, tata, on).map((t) => t.id)).toEqual([agreed, withBid])
+    expect(pendingTemplatePriceChanges(db, tata).map((t) => t.id)).toEqual([agreed])
+    expect(pendingTemplatePriceChanges(db, starsi, on)).toEqual([])
   })
 
   it('pending approvals: takers until they approve, givers only when no current giver has', () => {

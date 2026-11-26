@@ -22,7 +22,7 @@ import type { Db } from '~/server/db'
 import { templates } from '~/server/db/schema'
 import type { TemplateRow, TemplateThreadRow } from '~/server/db/schema'
 import { listPeople } from '~/server/users/people'
-import type { AgreedBy, TemplateError } from './templates'
+import type { AgreedBy, BiddingOpts, TemplateError } from './templates'
 import { agreeIn, agreementOf, approveIn, offerRowIds } from './templates'
 import { addEntry, closeRows, closeThread, openRows } from './thread'
 
@@ -46,10 +46,8 @@ import { addEntry, closeRows, closeThread, openRows } from './thread'
 // count per round) with a giver row in the thread; any agreement makes it active (`agreeIn`).
 // With the switch off a proposed template answers `not_agreed`, as before the switch existed.
 
-/** The launch switch the caller read (#209). Off by default: the demo seed and older callers. */
-export interface BiddingOpts {
-  choreBidding: boolean
-}
+// The switch the caller read (#209). Off by default: the demo seed and older callers.
+export type { BiddingOpts }
 const OFF: BiddingOpts = { choreBidding: false }
 
 type Action = (

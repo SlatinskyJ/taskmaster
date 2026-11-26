@@ -94,6 +94,21 @@ const dishes: TemplateView = {
 }
 
 const flowers: TemplateView = { ...dishes, id: 10, title: 'Zalít kytky', change: null }
+/** A proposed chore with first-price bidding (#209): Táta offers 10, Starší bids 12. */
+const bins = (bids: { takerId: number; name: string; score: number }[]): TemplateView => ({
+  ...dishes,
+  id: 11,
+  title: 'Vynést koš',
+  status: 'proposed',
+  score: 10,
+  change: null,
+  bidding: {
+    offer: { score: 10, byName: 'Táta' },
+    bids,
+    lowest: bids[0]?.score ?? null,
+    lastBids: bids.map((b) => ({ takerId: b.takerId, score: b.score })),
+  },
+})
 
 function render(user: PageUser, recurring: TemplateView[], over: Record<string, unknown> = {}) {
   page.user = user
@@ -201,6 +216,26 @@ describe('Domů', () => {
       waitingTemplates: [flowers],
     })
     expect(html).not.toContain('Teď na tebe nic nečeká.')
+  })
+
+  it("a brother's proposed chore row follows first-price bidding (#209)", () => {
+    const mladsi = { id: 5, role: 'taker', displayName: 'Mladší' } as const
+    const starsi = { id: 4, role: 'taker', displayName: 'Starší' } as const
+    const bid = [{ takerId: 4, name: 'Starší', score: 12 }]
+    const without = render(mladsi, [], { priceChanges: [], waitingTemplates: [bins([])] })
+    expect(without).toContain('Souhlasím')
+    expect(without).toContain('Jiná cena')
+    expect(without).toContain('Táta nabízí 10')
+    const mine = render(starsi, [], { priceChanges: [], waitingTemplates: [bins(bid)] })
+    expect(mine).toContain('Otevřít')
+    expect(mine).not.toContain('Souhlasím')
+    const off = render(mladsi, [], {
+      priceChanges: [],
+      waitingTemplates: [{ ...bins(bid), bidding: null }],
+    })
+    expect(off).toContain('Souhlasím')
+    expect(off).not.toContain('Jiná cena')
+    expect(off).toContain('Opakovaný')
   })
 
   it('a brother never gets the parent empty line', () => {

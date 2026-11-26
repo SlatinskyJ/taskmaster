@@ -54,7 +54,9 @@ function TemplatePage() {
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <StateChip state={chip.state} label={chip.label} />
           <span className="num text-title font-bold">{t.score}</span>
-          <span className="text-meta text-muted">{cs.templatePrice.now(t.score)}</span>
+          <span className="text-meta text-muted">
+            {t.bidding ? cs.templatePrice.proposedNow(t.score) : cs.templatePrice.now(t.score)}
+          </span>
         </div>
         {meta && <p className="font-bold break-words">{meta}</p>}
         <p className="text-meta break-words text-muted">{templateDetail(t)}</p>

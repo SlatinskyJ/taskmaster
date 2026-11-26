@@ -3,6 +3,7 @@ import type { FeatureKey } from '~/lib/features'
 import {
   bootTick,
   cancelled,
+  choreBidding,
   corrections,
   disputes,
   instances,
@@ -49,6 +50,8 @@ export const SEEDS = {
   week: { pieces: [pastWeek, thisWeek], features: ['week', 'meeting'] },
   /** Recurring chores made by a person (#38): + Teď and Zapsat. */
   recurring: { pieces: [points, templates, instances], features: ['recurring', 'log'] },
+  /** Bidding on a proposed chore (#209): two proposed chores, one with two bids. */
+  chores: { pieces: [choreBidding], features: ['recurring', 'choreBidding'] },
   /** The scheduler (#39): everyday templates through the past week, then the boot tick. */
   scheduler: { pieces: [pastWeekScheduled, bootTick], features: ['recurring'] },
   /** Příští týden and Výchozí týden (#43): an open proposal of each kind. */
@@ -72,6 +75,7 @@ export const SEEDS = {
       cancelled,
       points,
       templates,
+      choreBidding,
       thisWeek,
       disputes,
       corrections,
