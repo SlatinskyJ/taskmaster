@@ -118,4 +118,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.MERGE_TOKEN }}
           MERGE_MARKER_KEY: ${{ secrets.MERGE_MARKER_KEY }}
+          # Optional: the API trigger of the Claude scheduled task "Merge-me hand-back relay".
+          # On a hand-over, run.ts fires it, and its thread tells the project's coordinator.
+          HANDBACK_FIRE_URL: ${{ secrets.HANDBACK_FIRE_URL }}
+          HANDBACK_FIRE_TOKEN: ${{ secrets.HANDBACK_FIRE_TOKEN }}
         run: node scripts/merge-queue/run.ts

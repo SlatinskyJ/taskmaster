@@ -2,6 +2,7 @@
 // (.github/workflows/merge-queue.yml) runs it as `node scripts/merge-queue/run.ts`.
 // No retry loops: the next event (label, CI done, push to main) runs it again.
 import { pathToFileURL } from 'node:url'
+import { alertHandback } from './alert.ts'
 import { nextActions, type PrFacts } from './decide.ts'
 import {
   FOOTER,
@@ -185,4 +186,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     )
     process.exitCode = 1
   }
+  // Wakes the coordinator through a Claude scheduled task (alert.ts); a failed alert only warns.
+  const alert = await alertHandback(fetch, process.env, handedOver)
+  if (alert === 'sent') console.log('merge-queue: hand-over alert sent')
+  else if (alert !== 'skipped') console.log(`::warning::merge-queue: hand-over alert ${alert}`)
 }
