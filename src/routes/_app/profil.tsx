@@ -6,6 +6,7 @@ import { ProfilePassword } from '~/components/auth/ProfilePassword'
 import { ProfilePasskeys } from '~/components/auth/ProfilePasskeys'
 import { Avatar } from '~/components/shell/Avatar'
 import { SectionLabel } from '~/components/shell/SectionLabel'
+import { SwitchRow } from '~/components/shell/SwitchRow'
 import { Button, buttonVariants } from '~/components/ui/button'
 import { Card } from '~/components/ui/card'
 import { useEffectsSwitch } from '~/lib/effects'
@@ -109,42 +110,16 @@ function Profile() {
         </div>
 
         <SectionLabel>{cs.profile.effects}</SectionLabel>
-        {/* The whole row is the switch, so the tap target is the row, not just the knob. */}
         <Card className="p-0">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={effects}
-            aria-labelledby="effects-label"
-            aria-describedby="effects-hint"
-            onClick={() => {
+          <SwitchRow
+            id="effects"
+            label={cs.profile.effectsLabel}
+            hint={cs.profile.effectsHint}
+            checked={effects}
+            onToggle={() => {
               setEffects(!effects)
             }}
-            className="flex min-h-tap w-full cursor-pointer items-center gap-3 rounded-card p-card text-left"
-          >
-            <span className="grid flex-1">
-              <b id="effects-label" className="text-row font-extrabold">
-                {cs.profile.effectsLabel}
-              </b>
-              <span id="effects-hint" className="text-meta font-bold text-muted">
-                {cs.profile.effectsHint}
-              </span>
-            </span>
-            <span
-              aria-hidden="true"
-              className={cn(
-                'relative h-8 w-13 shrink-0 rounded-full transition-colors motion-reduce:transition-none',
-                effects ? 'bg-ok' : 'bg-muted',
-              )}
-            >
-              <span
-                className={cn(
-                  'absolute top-[3px] size-[26px] rounded-full bg-surface shadow-sticker transition-[left] motion-reduce:transition-none',
-                  effects ? 'left-[23px]' : 'left-[3px]',
-                )}
-              />
-            </span>
-          </button>
+          />
         </Card>
 
         <ProfilePasskeys enabled={enabled} items={passkeys} />

@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { DefaultWeekCard } from '~/components/admin/DefaultWeekCard'
 import { DismissDialog } from '~/components/admin/DismissDialog'
+import { FeaturesCard } from '~/components/admin/FeaturesCard'
+import { confirmCopy, loadSwitches } from '~/components/admin/featureSwitch'
 import { dismissInput, DisputesCard, loadAdminDisputes } from '~/components/admin/DisputesCard'
 import { afterFix, draftKey, FixCard, fixStartOf, loadFixable } from '~/components/admin/FixCard'
 import { FixDrawer } from '~/components/admin/FixDrawer'
@@ -19,12 +21,24 @@ import { Screen } from '~/components/shell/Screen'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
 import { Card } from '~/components/ui/card'
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '~/components/ui/dialog'
+import { forgetFeatures } from '~/lib/featureCache'
+import type { FeatureKey } from '~/lib/features'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { userErrorMessage } from '~/lib/userErrors'
 import type { PeriodDefaults } from '~/domain'
 import type { AdminOutcome } from '~/components/disputes/disputeCalls'
 import { getFixableFn } from '~/server/corrections/functions'
+import { getFeaturesFn, setSwitchFn } from '~/server/features/functions'
 import type { AdminDisputeEntry } from '~/server/disputes/functions'
 import { dismissDisputeFn, getAdminDisputesFn } from '~/server/disputes/functions'
 import { listPasskeyCountsFn } from '~/server/passkeys/functions'
@@ -38,29 +52,87 @@ import { createUserFn, listUsersFn, resetPasswordFn, updateUserFn } from '~/serv
 // admin edits the default week directly. Sporné (#47, spec §5.11): the open disputes, first,
 // each kept with a note or fixed (Opravit, #48); Opravy bodů (#48, spec §5.9): the admin adds
 // or takes points, or corrects a settled week, directly. Both hidden while the `disputes`
-// switch is off.
+// switch is off. Funkce (#296, spec §6): every launch switch, turned on or off after a confirm;
+// read fresh here, not from the app shell's cache.
 export const Route = createFileRoute('/_app/sprava')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/sprava')
   },
   loader: async () => {
-    const [people, passkeys, defaults, disputes, fixable] = await Promise.all([
+    const [people, passkeys, defaults, disputes, fixable, switches] = await Promise.all([
       listUsersFn(),
       listPasskeyCountsFn(),
       getPeriodDefaultsFn(),
       loadAdminDisputes(() => getAdminDisputesFn()),
       loadFixable(() => getFixableFn()),
+      loadSwitches(() => getFeaturesFn()),
     ])
-    return { people, passkeys, defaults, disputes, fixable }
+    return { people, passkeys, defaults, disputes, fixable, switches }
   },
   component: Sprava,
 })
+
+interface Flip {
+  key: FeatureKey
+  turnOn: boolean
+}
+
+/** The confirm before a switch flips: it changes the app for the whole family. */
+function SwitchConfirmDialog({
+  flip,
+  open,
+  onOpenChange,
+  onConfirm,
+}: {
+  flip: Flip | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onConfirm: (flip: Flip) => Promise<void>
+}) {
+  const [busy, setBusy] = useState(false)
+  const copy = flip ? confirmCopy(flip.key, flip.turnOn) : null
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        {flip && copy && (
+          <div className="grid gap-4">
+            <DialogHeader>
+              <DialogTitle>{copy.title}</DialogTitle>
+              <DialogDescription>{copy.body}</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="ghost">
+                  {cs.admin.cancel}
+                </Button>
+              </DialogClose>
+              <Button
+                type="button"
+                variant={flip.turnOn ? 'primary' : 'no'}
+                disabled={busy}
+                aria-busy={busy}
+                onClick={() => {
+                  setBusy(true)
+                  void onConfirm(flip).finally(() => {
+                    setBusy(false)
+                  })
+                }}
+              >
+                {busy ? cs.admin.features.saving : copy.confirm}
+              </Button>
+            </DialogFooter>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 type Sheet = { mode: 'add' } | { mode: 'edit'; person: PersonSummary } | null
 
 function Sprava() {
   const { user } = Route.useRouteContext()
-  const { people, passkeys, defaults, disputes, fixable } = Route.useLoaderData()
+  const { people, passkeys, defaults, disputes, fixable, switches } = Route.useLoaderData()
   const router = useRouter()
   const [sheet, setSheet] = useState<Sheet>(null)
   // Kept apart from `sheet` so the drawer can close while its last content fades out.
@@ -74,6 +146,8 @@ function Sprava() {
   const [fixOpenings, setFixOpenings] = useState(0)
   // The typed reasons, per sheet: a reload after a stale row keeps them.
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [flip, setFlip] = useState<Flip | null>(null)
+  const [flipOpen, setFlipOpen] = useState(false)
   const editing = sheet?.mode === 'edit' ? sheet.person : undefined
 
   function open(next: Exclude<Sheet, null>) {
@@ -138,6 +212,22 @@ function Sprava() {
     setDrafts((d) => afterFix(d, draftKey(start), outcome))
     if (outcome.ok) toast.success(cs.admin.fix.done)
     else toast.error(outcome.message)
+    await router.invalidate()
+  }
+
+  async function sendFlip({ key, turnOn }: Flip) {
+    const { name } = cs.admin.features.names[key]
+    try {
+      await setSwitchFn({ data: { key, enabled: turnOn } })
+    } catch {
+      setFlipOpen(false)
+      toast.error(cs.admin.features.failed)
+      return
+    }
+    // The admin's own app reads the new values on its next navigation, not within the hour.
+    forgetFeatures()
+    setFlipOpen(false)
+    toast.success(cs.admin.features.done(name, turnOn))
     await router.invalidate()
   }
 
@@ -250,6 +340,23 @@ function Sprava() {
       >
         {cs.admin.add}
       </Button>
+      <FeaturesCard
+        features={'error' in switches ? null : switches}
+        failed={'error' in switches}
+        onToggle={(key, turnOn) => {
+          setFlip({ key, turnOn })
+          setFlipOpen(true)
+        }}
+        onRetry={() => {
+          void router.invalidate()
+        }}
+      />
+      <SwitchConfirmDialog
+        flip={flip}
+        open={flipOpen}
+        onOpenChange={setFlipOpen}
+        onConfirm={sendFlip}
+      />
       <PersonDrawer
         open={sheetOpen}
         onOpenChange={setSheetOpen}
