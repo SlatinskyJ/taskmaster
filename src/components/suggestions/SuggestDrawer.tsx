@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { sectionLabelClass } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
 import {
@@ -17,9 +17,9 @@ import { createSuggestionFn } from '~/server/suggestions/functions'
 import { checkSuggestion, sendNewSuggestion } from './suggestionForms'
 
 // Navrhnout zlepšení (#247): a bottom sheet (it moves above the phone keyboard) with Název and
-// Popis. The form is keyed by `open`, so it starts empty each time. Název gets focus once the
-// sheet has finished opening: focused during the slide-in, the keyboard comes up before the
-// sheet follows it and covers the field. The server counts the limits; maxLength is a guard.
+// Popis. The form is keyed by `open`, so it starts empty each time. No focus on open: on an
+// iPhone a focus() outside the tap brings up no keyboard, so the person taps Název once the
+// sheet is in place. The server counts the limits; maxLength is a guard.
 
 const t = cs.suggestions
 
@@ -43,17 +43,7 @@ export function SuggestDrawer({ open, onOpenChange, onSent }: Props) {
   )
 }
 
-/** vaul's slide-in (its TRANSITIONS.DURATION); its onAnimationEnd fires only for its own taps. */
-const SHEET_OPEN_MS = 500
-
 function SuggestForm({ onSent }: { onSent: () => void }) {
-  const titleRef = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    const id = setTimeout(() => titleRef.current?.focus(), SHEET_OPEN_MS)
-    return () => {
-      clearTimeout(id)
-    }
-  }, [])
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(false)
@@ -94,7 +84,6 @@ function SuggestForm({ onSent }: { onSent: () => void }) {
           </label>
           <Input
             id="suggest-title"
-            ref={titleRef}
             name="title"
             autoComplete="off"
             enterKeyHint="next"

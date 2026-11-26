@@ -33,6 +33,7 @@ test('Mladší suggests from Profil; Moje návrhy lists it first, as Nový', asy
   await profileAs(page, 'mladsi')
   const sheet = await openSheet(page)
   const title = sheet.getByLabel(t.titleLabel, { exact: true })
+  await title.click()
   await expect(title).toBeFocused()
   await title.fill(BREAK)
   // Return moves to Popis, it doesn't send.

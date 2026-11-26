@@ -19,8 +19,11 @@ test('Profil, Navrhnout zlepšení: Název and Popis stay visible', async ({ pag
   await page.goto('/profil')
   await page.getByRole('button', { name: t.row }).click()
   const sheet = page.getByRole('dialog', { name: t.sheetTitle })
-  // The sheet focuses Název once it is open: no tap, the keyboard comes up by itself.
+  // Nothing is focused on open (an iPhone brings up no keyboard for a focus outside a tap):
+  // the person taps Název once the sheet is in place, and it stays above the keyboard.
   const title = sheet.getByLabel(t.titleLabel, { exact: true })
+  await expect(title).not.toBeFocused()
+  await title.tap()
   await expect(title).toBeFocused()
   await expect(page.locator('#__keyboard')).toBeAttached()
   await expectAboveKeyboard(page, title)
