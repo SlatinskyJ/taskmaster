@@ -12,7 +12,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-11-16-taskmaster-design.md` §5.9 step 3, §5.12 ("At the meeting", "The plan table (Týden)"); UI doc `docs/superpowers/specs/2026-11-16-taskmaster-ui-design.md` §7.3 M3Plan.
 
-**Size:** about 150 changed lines, not counting tests, migrations and generated files: `planRefresh.ts` ~45, `MeetingWeekPlan.tsx` ~70, `schuzka.tsx` +8, `MeetingScreen.tsx` +8, `strings.ts` +6, `seeds.ts` +3, `e2e/suites.ts` +3. This is under 300 lines, but it adds keys to the Czech strings module (`src/lib/strings.ts`), and CLAUDE.md lists that module as a protected shared module. So this is **not** a small PR, and it gets this plan and the plan rounds. Nothing else it touches is protected: no schema, domain, auth, scheduler, CI or dependency change.
+**Size:** about 160 changed lines, not counting tests, migrations and generated files: `planRefresh.ts` ~45, `MeetingWeekPlan.tsx` ~70, `schuzka.tsx` +8, `MeetingScreen.tsx` +14, `meetingFlow.ts` +5, `functions.ts` +2, `strings.ts` +6, `seeds.ts` +3, `e2e/suites.ts` +3. This is under 300 lines, but it adds keys to the Czech strings module (`src/lib/strings.ts`), and CLAUDE.md lists that module as a protected shared module. So this is **not** a small PR, and it gets this plan and the plan rounds. Nothing else it touches is protected: no schema, domain, auth, scheduler, CI or dependency change.
 
 ## Open questions for Jakub (spec silent or unclear)
 
@@ -50,13 +50,14 @@ Everything else is settled by the spec, the issue, or Jakub's wireframe decision
 
 **Files:**
 - Create: `src/components/meeting/planRefresh.ts`
+- Modify: `src/server/instances/functions.ts` (the `PlanAnswer` type, next to `WeekPlan`)
 - Test: `src/components/meeting/planRefresh.test.ts`
 
 **Interfaces:**
 - Consumes: `WeekPlan` from `~/server/instances/functions`.
-- Produces:
+- Produces, in `~/server/instances/functions` next to the `WeekPlan` re-export: `export type PlanAnswer = WeekPlan | { error: 'feature_off' }`. `weekPlanHandler` gets this return type, and nothing else changes there.
+- Produces, in `planRefresh.ts` (it imports `PlanAnswer` from there):
   ```ts
-  export type PlanAnswer = WeekPlan | { error: 'feature_off' }
   export interface RefreshState { base: PlanAnswer | null; plan: PlanAnswer | null; busy: boolean; failed: boolean }
   export const REFRESH_START: RefreshState // { base: null, plan: null, busy: false, failed: false }
   export type RefreshEvent =
@@ -68,6 +69,12 @@ Everything else is settled by the spec, the issue, or Jakub's wireframe decision
   export function refreshView(s: RefreshState, loaded: PlanAnswer): { plan: PlanAnswer; busy: boolean; failed: boolean }
   /** One call at a time (as createConfirm). `base` is the loader plan when tapped. */
   export function createRefresh(fetch: () => Promise<PlanAnswer>, dispatch: (e: RefreshEvent) => void): (base: PlanAnswer) => Promise<void>
+  /**
+   * The Obnovit tap, as the component wires it: always sends the **loader** plan as `base`,
+   * never the plan on screen (which may be an earlier refresh's answer). The component's
+   * onClick is exactly `refreshTap(refresh, loaded)`; it holds no logic of its own.
+   */
+  export function refreshTap(refresh: (base: PlanAnswer) => Promise<void>, loaded: PlanAnswer): () => void
   ```
   Rules: `sending` sets `busy`, clears `failed`, and keeps `plan` only if `base` is unchanged. `answer`/`failed` always clear `busy`, but set `plan`/`failed` only when `e.base === s.base`. `refreshView` returns `{ plan: loaded, busy, failed: false }` when `s.base !== loaded`, otherwise `{ plan: s.plan ?? loaded, busy, failed }`. Compare by identity (`===`): every loader run returns a new object.
 
@@ -76,21 +83,24 @@ Everything else is settled by the spec, the issue, or Jakub's wireframe decision
   - `an answer replaces the plan`: sending(a) then answer(a, b) → `refreshView(s, a).plan === b`, `busy` false.
   - `drops an answer started from an older loader plan`: sending(a), then the loader gives `c`, then answer(a, b) → `refreshView(s, c).plan === c`, `busy` false.
   - `a newer loader plan wins over an earlier refresh`: sending(a), answer(a, b), loader gives `c` → `refreshView(s, c).plan === c`.
+  - `sending keeps plan when base is unchanged`: sending(a), answer(a, b), sending(a) → `refreshView(s, a)` is `{ plan: b, busy: true, failed: false }` (the last answer stays on screen while the next one loads). With sending(c) instead of the second sending(a) → `refreshView(s, c).plan === c`.
   - `failed keeps the table and sets failed`: sending(a), failed(a) → `{ plan: a, busy: false, failed: true }`. Then sending(a) clears `failed`.
   - `a second refresh while one is on its way does nothing`: `createRefresh` with a fetch that returns a pending promise, called twice → fetch called once and `sending` dispatched once. After it resolves, a third call fetches again.
-  - `a thrown fetch dispatches failed`: fetch rejects → events `[sending, failed]`, no throw out of the returned function.
+  - `a thrown fetch dispatches failed, and the next call fetches again`: fetch rejects → events `[sending, failed]`, no throw out of the returned function. A second call then calls fetch again (call count 2) and, if it resolves with `b`, dispatches `[sending, answer(a, b)]`. The in-flight flag is cleared in `finally`.
+  - `two consecutive taps: the second tap's answer shows`: run the real wiring with a reducer. Hold `state` in a variable, `dispatch = (e) => { state = refreshReduce(state, e) }`, `refresh = createRefresh(fetch, dispatch)`, and a fetch that resolves `b`, then `c`. `await` `refreshTap(refresh, a)()` (flush the promise), then do it a second time with the same `loaded = a` → `refreshView(state, a).plan === c` and `busy` false. The variant where the second tap passes the plan on screen (`b`) as `loaded` must be impossible by the API, so the test only uses `refreshTap(refresh, a)`.
 - [ ] **Step 2: Run** `pnpm test src/components/meeting/planRefresh.test.ts`. Expected: FAIL (module missing).
-- [ ] **Step 3: Implement** `planRefresh.ts` with the signatures above, and an in-flight flag in the closure as in `createConfirm`.
+- [ ] **Step 3: Implement** `PlanAnswer` in `functions.ts` and `planRefresh.ts` with the signatures above. Use an in-flight flag in the closure, as in `createConfirm`, cleared in `finally`.
 - [ ] **Step 4: Run** the same command. Expected: PASS. Then `pnpm mutation --mutate src/components/meeting/planRefresh.ts` and kill the surviving mutants with assertions, not by loosening code.
-- [ ] **Step 5: Commit** `Add the refresh state for the meeting's plan table`.
+- [ ] **Step 5: Commit** `Add the refresh state for the meeting's plan table` (`planRefresh.ts`, its test, `functions.ts`).
 
 ### Task 2: The plan block in step 3
 
 **Files:**
 - Create: `src/components/meeting/MeetingWeekPlan.tsx`
-- Modify: `src/components/meeting/MeetingScreen.tsx` (props of `MeetingScreen`, `MeetingBody`, `StepPlan`; placement)
+- Modify: `src/components/meeting/MeetingScreen.tsx` (props of `MeetingScreen`, `MeetingBody`, `StepPlan`; placement; `frame`)
+- Modify: `src/components/meeting/meetingFlow.ts` (`planShown`)
 - Modify: `src/lib/strings.ts` (`cs.meeting`)
-- Test: `src/components/meeting/meetingWeekPlan.test.tsx`, `src/components/meeting/meeting.test.tsx`
+- Test: `src/components/meeting/meetingWeekPlan.test.tsx`, `src/components/meeting/meeting.test.tsx`, `src/components/meeting/meetingFlow.test.ts`
 
 **Interfaces:**
 - Consumes: Task 1. `WeekPlanTable` (`plan`, `viewer`) from `~/components/week/WeekPlanTable`. `weekLabel` from `~/components/period/periodView`. `getWeekPlanFn` from `~/server/instances/functions`.
@@ -98,10 +108,14 @@ Everything else is settled by the spec, the issue, or Jakub's wireframe decision
   ```ts
   /** Hook-free drawing: header, hint, message, table. */
   export function MeetingWeekPlanView(props: { plan: PlanAnswer; busy: boolean; failed: boolean; viewerId: number; onRefresh: () => void }): ReactNode
-  /** With state: useReducer(refreshReduce, REFRESH_START) + createRefresh(() => getWeekPlanFn(), dispatch) in useMemo. */
+  /** With state: useReducer(refreshReduce, REFRESH_START), createRefresh(() => getWeekPlanFn(), dispatch) in useMemo, onRefresh = refreshTap(refresh, loaded). */
   export function MeetingWeekPlan(props: { loaded: PlanAnswer; viewerId: number }): ReactNode
   ```
-  `MeetingScreen` and `MeetingBody` get `weekPlan?: ReactNode` (default none) and pass it to `StepPlan`. `StepPlan` renders it **after** the open-tasks list (or its empty state) and **before** the "+ Nový úkol" / "Ukončit schůzku" buttons.
+  `MeetingBody` gets `weekPlan?: ReactNode` (default none) and passes it to `StepPlan`. It stays hook-free. `MeetingScreen` gets:
+  - `weekPlan?: PlanAnswer | null` and `viewerId: number`. It builds `<MeetingWeekPlan loaded={weekPlan} viewerId={viewerId} />` only when `planShown` is true, and passes it to `MeetingBody`.
+  - `frame?: (body: ReactNode, wide: boolean) => ReactNode` (default `(body) => body`). It returns `frame(<MeetingBody … />, planShown(stepOf(meeting, ui), weekPlan))`, so the route's `Screen` is `wide` only while step 3 shows the table.
+
+  `planShown` lives in `meetingFlow.ts`: `export function planShown(step: MeetingStep, weekPlan: PlanAnswer | null | undefined): boolean`, true only for `step === 3` and a loader answer that is a `WeekPlan` (not `null`, not `{ error: 'feature_off' }`). `wide` follows the loader answer. If a later Obnovit answers `feature_off` (the switch went off mid-meeting), the block hides and the Screen stays wide until the next reload. That is accepted as harmless and noted in the brief. `StepPlan` renders it **after** the open-tasks list (or its empty state) and **before** the "+ Nový úkol" / "Ukončit schůzku" buttons.
 - Strings (`cs.meeting`): `refresh: 'Obnovit'`, `planHint: 'Kluci si dny rezervují v Týdnu na svých telefonech. Pak klepni na Obnovit.'`, `refreshFailed: 'Plán se nepodařilo načíst. Zkus to znovu.'`. The section title reuses `cs.plan.title` ("Plán týdne").
 
 Layout (360 px, long names). `<section aria-labelledby="meeting-plan-label">`:
@@ -118,12 +132,13 @@ Layout (360 px, long names). `<section aria-labelledby="meeting-plan-label">`:
   - `feature_off answer renders nothing`: `renderToStaticMarkup(...) === ''`.
   - `empty plan: #258 empty state under the header`: `planFixture({ period: null, days: [], rows: [] })` → contains `cs.week.noPeriod` and `cs.meeting.refresh`. With `rows: []` → `cs.plan.noRows`.
   - `tap targets`: the Obnovit button's markup has `min-h-tap`.
-- [ ] **Step 2: Add to `meeting.test.tsx`** (same file, existing mocks):
+- [ ] **Step 2: Add to `meeting.test.tsx`** (same file, existing mocks) and `meetingFlow.test.ts`:
+  - `planShown`: `planShown(3, planFixture())` is true. It is false for `(1, plan)`, `(2, plan)`, `(3, null)`, `(3, undefined)` and `(3, { error: 'feature_off' })`.
   - `step 3 renders the weekPlan slot after the open tasks and before Ukončit schůzku`: `MeetingBody` with `weekPlan={<div data-testid="slot" />}` at step 3 → `html.indexOf('data-testid="slot"')` is greater than the index of `cs.meeting.planTasks` and less than the index of `cs.meeting.end`.
   - `steps 1 and 2 never render the slot`: `pendingWeek()` at step 1 and at step 2 → no `data-testid="slot"`.
   - `no slot: step 3 unchanged`: the existing step 3 assertions pass with `weekPlan` left out (no change to the old tests).
 - [ ] **Step 3: Run** `pnpm test src/components/meeting`. Expected: the new cases FAIL.
-- [ ] **Step 4: Implement** the strings, `MeetingWeekPlan.tsx`, and the slot in `MeetingScreen.tsx`. `MeetingWeekPlan` computes `refreshView(state, loaded)` and calls `refresh(loaded)` on tap.
+- [ ] **Step 4: Implement** the strings, `MeetingWeekPlan.tsx`, and the slot in `MeetingScreen.tsx`. `MeetingWeekPlan` draws `refreshView(state, loaded)` and passes `onRefresh={refreshTap(refresh, loaded)}`, with no other tap logic in the component.
 - [ ] **Step 5: Run** `pnpm test src/components/meeting && pnpm typecheck && pnpm lint`. Expected: PASS.
 - [ ] **Step 6: Commit** `Show the week plan table in the meeting's step 3`.
 
@@ -134,15 +149,17 @@ Layout (360 px, long names). `<section aria-labelledby="meeting-plan-label">`:
 - Test: `src/components/meeting/schuzkaPage.test.tsx`
 
 **Interfaces:**
-- Consumes: Task 2 (`MeetingWeekPlan`, `MeetingScreen`'s `weekPlan` prop). `getWeekPlanFn`.
+- Consumes: Task 2 (`MeetingScreen`'s `weekPlan`, `viewerId` and `frame` props). `getWeekPlanFn`.
 - Produces: the loader returns `{ meeting, plan, weekPlan: PlanAnswer | null }`. `null` means the switch is off and no call was made.
 
-Change: `loader: async ({ context }) => ({ meeting: await getMeetingFn(), plan: await listPlanTasksFn(), weekPlan: context.features.weekPlan ? await getWeekPlanFn() : null })`. This is the same pattern as `/tyden`'s card. The component passes `weekPlan={weekPlan && <MeetingWeekPlan loaded={weekPlan} viewerId={user.id} />}` and `<Screen … wide={weekPlan !== null}>`, so a phone held sideways fits the week (as `/tyden/plan`). With the switch off, the Screen stays narrow. The loader error path is unchanged (`RouteError`).
+Change: `loader: async ({ context }) => ({ meeting: await getMeetingFn(), plan: await listPlanTasksFn(), weekPlan: context.features.weekPlan ? await getWeekPlanFn() : null })`. This is the same pattern as `/tyden`'s card. The component renders `<MeetingScreen … weekPlan={weekPlan} viewerId={user.id} frame={(body, wide) => <Screen title={cs.nav.meeting} user={user} wide={wide}>{body}</Screen>} />`. So a phone held sideways fits the week (as `/tyden/plan`) only while step 3 shows the table. In steps 1 and 2, with the switch off, or on a `feature_off` answer, the Screen stays narrow. The loader error path is unchanged (`RouteError`).
 
 - [ ] **Step 1: Update and extend the tests.** Mock `~/server/instances/functions` (`getWeekPlanFn: vi.fn(() => Promise.resolve('week'))`) and `~/server/tasks/functions` (add `reserveTaskFn`, `releaseTaskFn`).
   - `the loader asks for the meeting and the plan tasks` becomes `with weekPlan off the loader asks for the meeting and the plan tasks only`: `loader({ context: { features: { weekPlan: false } } })` → `{ meeting: 'meeting', plan: 'plan', weekPlan: null }`, and `getWeekPlanFn` is not called.
   - `with weekPlan on the loader also asks for the week plan`: → `weekPlan: 'week'`, `getWeekPlanFn` called once.
   - `renders the meeting with the table at step 3 when weekPlan is loaded`: `page.data = { meeting: settled step-3 fixture (no period), plan: [], weekPlan: planFixture() }` → contains `>Plán týdne<`, `cs.meeting.refresh` and `landscape:max-w-3xl`.
+  - `step 1 with weekPlan loaded: narrow, no table`: `page.data = { meeting: pendingWeek(), plan: [], weekPlan: planFixture() }` → no `landscape:max-w-3xl`, no `cs.meeting.refresh`.
+  - `feature_off answer: step 3 narrow and unchanged`: step-3 fixture with `weekPlan: { error: 'feature_off' }` → no `landscape:max-w-3xl`, no `cs.meeting.refresh`.
   - `the existing "renders the meeting, not the placeholder"` gets `weekPlan: null` and also asserts no `landscape:max-w-3xl` and no `cs.meeting.refresh`.
   - (Wrong actor) `beforeLoad` with `weekPlan` on: a taker is redirected to his landing page and the admin to `/sprava`, a giver stays (`screenGuard.test.ts` has no Schůzka case today; mock `redirect` to return `{ redirect: to }` as `planPage.test.tsx` does).
 - [ ] **Step 2: Run** `pnpm test src/components/meeting/schuzkaPage.test.tsx`. Expected: FAIL.
@@ -169,6 +186,7 @@ Seed facts (from `planTable`, no week running): the week started yesterday 00:00
   3. `cell = section.locator('button[aria-label^="Prostřít stůl k večeři, "]').first()`. Read `day = data-day` and assert the label ends in `: volné`.
   4. A second context: Starší logs in, opens `/tyden/plan`, taps `button[data-day="<day>"][aria-label^="Prostřít stůl k večeři, "]`, and sees `Rezervováno: …`.
   5. Táta's page: the cell still ends in `: volné` (no auto-refresh). He taps `Obnovit`, and the cell's label ends in `: rezervováno, Starší`. The button is enabled again.
+  5b. A second round: Starší frees that cell on `/tyden/plan` (tap → Uvolnit sheet → Uvolnit, as `releaseOwn` in `week-plan.spec.ts`). Táta's cell still says `: rezervováno, Starší`. Táta taps `Obnovit` a **second** time, and the cell's label ends in `: volné` again. Then Starší reserves it once more so step 6 opens a reserved copy.
   6. Táta taps the cell → URL `/ukol/\d+$`.
 - [ ] **Step 2: Extend `e2e/meeting.spec.ts`** (`week` seed, switch off): after settling, assert `page.locator('[data-slot="plan-days"]')` has count 0 and there is no `Obnovit` button.
 - [ ] **Step 3: Run** `pnpm build && pnpm exec playwright test e2e/meeting-plan.spec.ts e2e/meeting.spec.ts`. Expected: PASS. Also run `pnpm test src/server/demo`.
