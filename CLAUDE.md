@@ -37,7 +37,7 @@ Node 22 + pnpm (`corepack enable`). `pnpm install` also installs the lefthook pr
 
 ## PR flow
 
-A PR that closes an issue is judged twice in the same PR: first its **plan**, then its **code**. A PR with no issue (ad-hoc) and a Dependabot PR have no plan: they skip steps 2 and 3.
+A PR that closes an issue is judged twice in the same PR: first its **plan**, then its **code**. A PR with no issue (ad-hoc) and a Dependabot PR have no plan: they skip steps 2 and 3. So does a **small PR**: it expects to change at most about 300 lines (not counting tests, migrations and generated files) and touches none of the protected areas (Trivial PRs below). Its body says `Plan: none (small, about <n> lines)`; the Architecture judge checks the claim in code round 1.
 
 1. **Branch** from `main`. One feature per PR. Bigger features become **stacked PRs**, each one logical step that passes CI alone.
    - Link a stack as a **GitHub stack** once its PRs are open: each PR's base is the branch of the PR below it, then
@@ -61,7 +61,7 @@ Where a superpowers skill and this file differ, this file wins:
 | final whole-branch review by a fresh reviewer; `superpowers:requesting-code-review` | the judges' review rounds (step 6) |
 | `superpowers:finishing-a-development-branch` | steps 5 to 7 |
 
-PR size is a soft goal of about 400 changed lines (not counting tests, migrations and generated files). A PR goes over it only for a good reason, which its plan states. Over about 800 the Architecture judge says so in the plan round, and asks for a split when the reason does not hold. Parallel PRs are fine; `main` requires branches to be up to date, so update your branch after other merges.
+PR size is a soft goal of about 400 changed lines (not counting tests, migrations and generated files). Every judge reads the whole diff every round, so size is the biggest token cost: split into stacked PRs whenever the parts can land one after the other. A PR goes over 400 only for a good reason, which its plan states. Over about 600 the Architecture judge says so in the plan round, and asks for a split when the reason does not hold. Parallel PRs are fine; `main` requires branches to be up to date, so update your branch after other merges.
 
 ## Dependabot PRs
 
@@ -82,7 +82,7 @@ Protected areas:
 
 ## Hard rules
 
-- No code for an issue before the judges approved its plan. No plan file in a PR that is ready for review, and none on `main`.
+- No code for an issue before the judges approved its plan (a small PR, PR flow above, has no plan). No plan file in a PR that is ready for review, and none on `main`.
 - Never skip, delete or weaken a test to get green.
 - Never fix the spec inside a PR. If the spec is wrong or unclear, stop and ask Jakub.
 - Problems that were already there before your PR → a `follow-up` issue, not a fix in your PR.

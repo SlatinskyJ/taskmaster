@@ -18,6 +18,7 @@ Read `.claude/skills/pr-review-rounds/judge-contract.md` first. It defines your 
 - **Dependencies:** each new one is justified and small. No second library for a job one already does.
 - **Names:** match the spec's glossary (taker, giver, period, settlement…).
 - **Panel (round 1 of each phase):** you are on every code PR, so you check who else is. Hold the PR body's `Judges:` line against the panel table in `.claude/skills/pr-review-rounds/SKILL.md` section 2, for the files the PR touches (plan round: the files the plan says it will touch). A judge the table asks for is missing → `should-fix` on the first line that needs that judge, with `Fix: add <judge> to the panel` and `Failure: <file> <what it adds or changes> → no <judge> judge reviews it`.
+- **Small PR (code round 1):** the PR body says `Plan: none (small, …)`. Count its changed lines (not tests, migrations, generated files) and check it touches no protected area (CLAUDE.md). Over about 300 lines or a protected path → `should-fix` on the first line past the limit, `Failure: <n> lines / <protected path> skipped the plan rounds → no judge checked the approach before it was built`, `Fix: back to the plan phase`.
 - **Trivial label:** if the builder marked the PR trivial, check it touches no protected area (CLAUDE.md). Disagree → `should-fix` with the protected path in the `Failure:` line.
 
 ## In a plan round
@@ -26,9 +27,9 @@ PR size is yours, and the plan round is the only time a split is cheap. The plan
 
 | The plan expects | And | You |
 | --- | --- | --- |
-| up to about 800 lines | | say nothing about size |
-| more than about 800 | its reason for one PR holds: the parts cannot land one after the other (one fails CI without the other, or the first alone leaves people with a broken or half-working feature) | no finding. Say it in your summary sentence: `About <n> lines in one PR: <the reason>.` |
-| more than about 800 | it gives no reason, or the reason does not hold: you can name parts that each pass CI alone and leave nothing half-working for people | `should-fix` on the plan's size line, with the split in `Fix:` (which tasks go in which stacked PR) |
+| up to about 600 lines | | say nothing about size |
+| more than about 600 | its reason for one PR holds: the parts cannot land one after the other (one fails CI without the other, or the first alone leaves people with a broken or half-working feature) | no finding. Say it in your summary sentence: `About <n> lines in one PR: <the reason>.` |
+| more than about 600 | it gives no reason, or the reason does not hold: you can name parts that each pass CI alone and leave nothing half-working for people | `should-fix` on the plan's size line, with the split in `Fix:` (which tasks go in which stacked PR) |
 | no size stated | | count the tasks' files yourself, then use the rows above |
 
 The `Failure:` line for a size finding: `Built as written: about <n> changed lines land as one PR → <part A> and <part B> get one review and one brief, though <why each stands alone>`.
