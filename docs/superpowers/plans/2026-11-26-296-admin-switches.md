@@ -91,7 +91,7 @@
 - Create: `src/components/shell/SwitchRow.tsx` (the row switch now inline in `profil.tsx`, extracted: `SwitchRow({ id, label, hint, checked, onToggle, disabled? })`, same markup and classes)
 - Modify: `src/routes/_app/profil.tsx` (use `SwitchRow`; no visual change)
 - Create: `src/components/admin/FeaturesCard.tsx`, `src/components/admin/featureSwitch.ts`
-- Modify: `src/routes/_app/sprava.tsx` (loader adds `features: getFeaturesFn()`; render `FeaturesCard` last, after the add-person button; confirm `Dialog`)
+- Modify: `src/routes/_app/sprava.tsx` (loader adds `switches: loadSwitches(() => getFeaturesFn())` — `loadSwitches<T>(fetch): Promise<T | { error: 'failed' }>` in featureSwitch.ts, the same catch pattern as `loadFixable`, so a failed read shows the card's error state and the rest of Správa still loads; render `FeaturesCard` last, after the add-person button; confirm `Dialog`)
 - Modify: `src/lib/strings.ts` (`cs.admin.features`)
 - Test: `src/components/admin/featuresCard.test.tsx`, `src/components/admin/featureSwitch.test.ts`
 
@@ -105,9 +105,11 @@
 
 - [ ] **Step 1: Failing tests**
   - `featureSwitch.test.ts`: `switchRows(NO_FEATURES)` has `FEATURE_KEYS.length` rows, keys in `FEATURE_KEYS` order, all `on: false`; `switchRows({...NO_FEATURES, log: true})` has `log` on only; every row has a non-empty `name` and `hint`. `confirmCopy('weekPlan', false).body` contains `weekPlanOff`; `confirmCopy('weekPlan', true).body` and `confirmCopy('log', false).body` do not.
-  - `featuresCard.test.tsx` (static markup): renders a region named `Funkce`, one `role="switch"` per key with `aria-checked` matching, the note text.
+  - `featuresCard.test.tsx` (static markup): renders a region named `Funkce`, one `role="switch"` per key with `aria-checked` matching, the note text; with `failed` it renders `cs.admin.features.failedLoad` and a *Zkusit znovu* button (reuse the existing retry string) and no switches.
+  - `featureSwitch.test.ts`: `loadSwitches` returns the value, and `{ error: 'failed' }` when the fetch rejects.
+  - `setSwitchFn`'s return is exactly `{ changed: boolean }` (`toStrictEqual` in the flags test on `setSwitch`).
 - [ ] **Step 2: Run** `pnpm test src/components/admin/feature` → FAIL.
-- [ ] **Step 3: Implement.** Extract `SwitchRow` from Profil first (Profil's tests stay green). `FeaturesCard({ features, onToggle(key, turnOn) })`: `SectionLabel` + `Card` (`aria-labelledby` its heading, like `DefaultWeekCard`) with one `SwitchRow` per `switchRows` entry; the hint line ends with the state word (Zapnuto/Vypnuto) so the state is readable, not only the knob colour; the note under the card. In `sprava.tsx`: tap → `Dialog` with `confirmCopy`; confirm → `setSwitchFn({ data })`; on success `forgetFeatures()`, toast `done`, `router.invalidate()`; on throw toast `failed`, dialog closes, nothing changes. Confirm button disabled while sending.
+- [ ] **Step 3: Implement.** Extract `SwitchRow` from Profil first (Profil's tests stay green). `FeaturesCard({ features, onToggle(key, turnOn) })`: `SectionLabel` + `Card` (`aria-labelledby` its heading, like `DefaultWeekCard`) with one `SwitchRow` per `switchRows` entry; the hint line ends with the state word (Zapnuto/Vypnuto) so the state is readable, not only the knob colour; the note under the card. In `sprava.tsx`: tap → `Dialog` with `confirmCopy`; confirm → `setSwitchFn({ data })`; on success `forgetFeatures()`, toast `done`, `router.invalidate()`; on throw toast `failed`, dialog closes, nothing changes. Confirm button disabled while sending (busy state). Layout at 360 px: the name and hint wrap (`break-words`), the switch knob never shrinks (`shrink-0`, as in Profil), the row is at least `min-h-tap`. The knob's transitions keep their `motion-reduce:` opt-outs. `FeaturesCard` takes `failed` and `onRetry` like `FixCard`; string `failedLoad: 'Funkce se nepodařilo načíst.'`.
 - [ ] **Step 4: Run** `pnpm test src/components src/routes` → PASS; `pnpm typecheck && pnpm lint`.
 - [ ] **Step 5: Commit** `feat: Funkce card in Správa (#296)`
 
@@ -119,6 +121,7 @@
 
 - [ ] **Step 1: Write the test** `admin turns Zapsat on; a taker gets the tab`:
   admin logs in → `/sprava`; region `Funkce` has `FEATURE_KEYS.length` switches, all `aria-checked="false"` (seed `launch` turns every switch off). Tap *Zapsat* → dialog → *Zrušit* → still false. Tap again → *Zapnout* → toast, switch `aria-checked="true"` without a reload. Reload → still true. Log out, log in as `starsi` → bottom bar has *Zapsat*.
+  Third test `a giver can't set a switch`: log in as `tata`, call the server function through `page.evaluate` (fetch POST to its URL; see how other e2e specs reach a server function, else drop this test and rely on the guard test plus a unit test of `authorize` for `['admin']`) → 403, switch unchanged.
   Second test `turning Plán týdne off warns about the 15 minutes`: turn `weekPlan` on, then tap again → dialog contains `weekPlanOff`; cancel.
 - [ ] **Step 2: Run** `pnpm e2e switches` (check the script name in package.json) → PASS. Take a 360 px screenshot of the card and of the open dialog for the brief and the UX judge.
 - [ ] **Step 3: Commit** `test: e2e for launch switches in Správa (#296)`
