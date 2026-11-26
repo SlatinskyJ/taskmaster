@@ -95,7 +95,7 @@ describe('a round under "Čeká na tebe" (#237)', () => {
     const f = family()
     const id = round(f)
     must(counterOffer(f.db, f.tata, id, 15, [], T2))
-    must(reserveTask(f.db, f.starsi, id, T3))
+    must(reserveTask(f.db, f.starsi, id, T3, false))
     expect(waiting(f, f.mladsi)).toEqual([])
   })
 })
