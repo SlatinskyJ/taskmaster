@@ -55,6 +55,11 @@ beforeEach(() => {
 })
 
 describe('loginWithPasskey', () => {
+  it('in a viewer frame passes the frame token on', async () => {
+    fns.passkeyLoginFn.mockResolvedValue({ ok: true, user: USER, frameToken: 'tok' })
+    expect(await loginWithPasskey()).toEqual({ ok: true, user: USER, frameToken: 'tok' })
+  })
+
   it('ok passes the parsed options and returns the user', async () => {
     fns.passkeyLoginFn.mockResolvedValue({ ok: true, user: USER })
     expect(await loginWithPasskey()).toEqual({ ok: true, user: USER })

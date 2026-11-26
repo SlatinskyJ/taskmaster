@@ -1,5 +1,6 @@
 import { HeadContent, Scripts, createRootRoute, useRouter } from '@tanstack/react-router'
 import { useEffect, type ReactNode } from 'react'
+import { frameReentryUrl } from '~/lib/frame'
 import { trackVisualViewport } from '~/lib/visualViewport'
 import { Toaster } from '~/components/ui/sonner'
 import { themeBootScript } from '~/lib/theme'
@@ -26,6 +27,11 @@ function RootDocument({ children }: { children: ReactNode }) {
     registerServiceWorker(router)
   }, [router])
   useEffect(() => trackVisualViewport(window), [])
+  useEffect(() => {
+    // A viewer frame loaded without its token (dev and previews): load it again with it.
+    const url = frameReentryUrl(window)
+    if (url) location.replace(url)
+  }, [])
   return (
     // data-theme is set before hydration by the boot script, so React must not fight it.
     <html lang="cs" suppressHydrationWarning>

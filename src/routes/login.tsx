@@ -15,6 +15,7 @@ import {
   passkeysUsable,
   type PasskeyLoginOutcome,
 } from '~/lib/passkeys'
+import { keepFrameToken } from '~/lib/frame'
 import { getCurrentUserFn, loginFn } from '~/server/auth/functions'
 import { getPasskeysEnabledFn, listMyPasskeysFn } from '~/server/passkeys/functions'
 
@@ -79,6 +80,7 @@ function Login() {
 
   function onPasskey(outcome: PasskeyLoginOutcome) {
     if (outcome.ok) {
+      keepFrameToken(window, outcome.frameToken)
       void finish(outcome.user)
       return
     }
@@ -137,6 +139,7 @@ function Login() {
         setError(result.error === 'rate_limited' ? cs.login.rateLimited : cs.login.invalid)
         return
       }
+      keepFrameToken(window, result.frameToken)
       await finish(result.user, await offerPasskey())
     } catch {
       // Network down or server error: say so and let them try again.

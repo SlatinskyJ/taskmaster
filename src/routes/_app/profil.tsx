@@ -11,6 +11,7 @@ import { Card } from '~/components/ui/card'
 import { useEffectsSwitch } from '~/lib/effects'
 import { landingPath } from '~/lib/landing'
 import { guardScreen } from '~/lib/screenGuard'
+import { keepFrameToken } from '~/lib/frame'
 import { cs } from '~/lib/strings'
 import { THEME_PREFS, useThemePref, type ThemePref } from '~/lib/theme'
 import { cn } from '~/lib/utils'
@@ -51,6 +52,7 @@ function Profile() {
     setLeaving(true)
     try {
       await logoutFn()
+      keepFrameToken(window, undefined)
       await router.invalidate()
       await router.navigate({ to: '/login' })
     } catch {
