@@ -89,6 +89,8 @@ export const SUITES: readonly Suite[] = [
   // The multi-user viewer (#265): logs frames in and out and proposes tasks, so its own server.
   // `week`: the boys' Týden tab is on.
   { name: 'multi', spec: 'multi.spec.ts', seed: 'week' },
+  // The live change stream's route (#299): read-only, `demo` has the liveChanges switch on.
+  { name: 'live', spec: 'live.spec.ts', seed: 'demo' },
 ]
 
 /** Passkeys on (localhost) for the `on` suite only, at its own port. */

@@ -2,6 +2,7 @@ import { getRequestHeader } from '@tanstack/react-start/server'
 import { asc, gt, inArray, or } from 'drizzle-orm'
 import { onAuditWritten } from '~/server/audit'
 import type { AuditAction, AuditLogRow, EntityType } from '~/server/audit'
+import { TAB_HEADER } from '~/lib/tab'
 import type { Db } from '~/server/db'
 import { getDb } from '~/server/db'
 import { auditLog } from '~/server/db/schema'
@@ -58,8 +59,6 @@ export interface Hub {
 export const STREAMS_PER_SESSION = 3
 /** A backstop over every session. */
 export const STREAMS_TOTAL = 50
-/** The header a tab's server function calls carry (src/start.ts). */
-export const TAB_HEADER = 'x-tm-tab'
 
 interface Entry {
   row: AuditLogRow

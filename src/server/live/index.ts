@@ -1,4 +1,4 @@
-export { createHub, liveHub, STREAMS_PER_SESSION, STREAMS_TOTAL, TAB_HEADER } from './hub'
+export { createHub, liveHub, STREAMS_PER_SESSION, STREAMS_TOTAL } from './hub'
 export type { Hub, LiveEvent, Stream } from './hub'
 export { MAPPED, topicsOf } from './mapping'
 export { liveSubscription, readSubscription, signSubscription } from './subscription'

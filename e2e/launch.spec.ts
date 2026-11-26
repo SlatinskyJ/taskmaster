@@ -56,3 +56,9 @@ test('a parent’s Úkoly row has no task link with the switch off (#212)', asyn
   await expect(parentRow).toBeVisible()
   await expect(parentRow.getByRole('link')).toHaveCount(0)
 })
+
+test('the live change stream answers 404 with its switch off (#299)', async ({ page }) => {
+  await passwordLogin(page, 'starsi')
+  await expect(page).toHaveURL(/\/$/)
+  expect((await page.request.get('/api/live?tab=x')).status()).toBe(404)
+})

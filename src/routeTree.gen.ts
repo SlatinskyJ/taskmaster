@@ -18,6 +18,7 @@ import { Route as AppSchuzkaRouteImport } from './routes/_app/schuzka'
 import { Route as AppSpravaRouteImport } from './routes/_app/sprava'
 import { Route as AppZapsatRouteImport } from './routes/_app/zapsat'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
+import { Route as ApiLiveRouteImport } from './routes/api/live'
 import { Route as DevMultiRouteImport } from './routes/dev/multi'
 import { Route as DevUiRouteImport } from './routes/dev/ui'
 import { Route as AppSablonaTemplateIdRouteImport } from './routes/_app/sablona/$templateId'
@@ -70,6 +71,11 @@ const AppZapsatRoute = AppZapsatRouteImport.update({
 const ApiHealthRoute = ApiHealthRouteImport.update({
   id: '/api/health',
   path: '/api/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLiveRoute = ApiLiveRouteImport.update({
+  id: '/api/live',
+  path: '/api/live',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DevMultiRoute = DevMultiRouteImport.update({
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/sprava': typeof AppSpravaRoute
   '/zapsat': typeof AppZapsatRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/live': typeof ApiLiveRoute
   '/dev/multi': typeof DevMultiRoute
   '/dev/ui': typeof DevUiRoute
   '/sablona/$templateId': typeof AppSablonaTemplateIdRoute
@@ -145,6 +152,7 @@ export interface FileRoutesByTo {
   '/sprava': typeof AppSpravaRoute
   '/zapsat': typeof AppZapsatRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/live': typeof ApiLiveRoute
   '/dev/multi': typeof DevMultiRoute
   '/dev/ui': typeof DevUiRoute
   '/': typeof AppIndexRoute
@@ -166,6 +174,7 @@ export interface FileRoutesById {
   '/_app/sprava': typeof AppSpravaRoute
   '/_app/zapsat': typeof AppZapsatRoute
   '/api/health': typeof ApiHealthRoute
+  '/api/live': typeof ApiLiveRoute
   '/dev/multi': typeof DevMultiRoute
   '/dev/ui': typeof DevUiRoute
   '/_app/': typeof AppIndexRoute
@@ -188,6 +197,7 @@ export interface FileRouteTypes {
     | '/sprava'
     | '/zapsat'
     | '/api/health'
+    | '/api/live'
     | '/dev/multi'
     | '/dev/ui'
     | '/sablona/$templateId'
@@ -206,6 +216,7 @@ export interface FileRouteTypes {
     | '/sprava'
     | '/zapsat'
     | '/api/health'
+    | '/api/live'
     | '/dev/multi'
     | '/dev/ui'
     | '/'
@@ -226,6 +237,7 @@ export interface FileRouteTypes {
     | '/_app/sprava'
     | '/_app/zapsat'
     | '/api/health'
+    | '/api/live'
     | '/dev/multi'
     | '/dev/ui'
     | '/_app/'
@@ -242,6 +254,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
   ApiHealthRoute: typeof ApiHealthRoute
+  ApiLiveRoute: typeof ApiLiveRoute
   DevMultiRoute: typeof DevMultiRoute
   DevUiRoute: typeof DevUiRoute
 }
@@ -309,6 +322,13 @@ declare module '@tanstack/react-router' {
       path: '/api/health'
       fullPath: '/api/health'
       preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/live': {
+      id: '/api/live'
+      path: '/api/live'
+      fullPath: '/api/live'
+      preLoaderRoute: typeof ApiLiveRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dev/multi': {
@@ -415,6 +435,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
   ApiHealthRoute: ApiHealthRoute,
+  ApiLiveRoute: ApiLiveRoute,
   DevMultiRoute: DevMultiRoute,
   DevUiRoute: DevUiRoute,
 }
