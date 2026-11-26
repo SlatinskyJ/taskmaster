@@ -87,6 +87,12 @@ const EXPECTED_ROLES: Record<string, string> = {
   settlePeriodFn: 'giver',
   getPointsFn: 'giver,taker',
   getFeaturesFn: 'any',
+  createSuggestionFn: 'any',
+  listMySuggestionsFn: 'any',
+  getAdminSuggestionsFn: 'admin',
+  closeSuggestionFn: 'admin',
+  sendSuggestionFn: 'admin',
+  setSwitchFn: 'admin',
 }
 
 const SRC = join(import.meta.dirname, '..', 'src')

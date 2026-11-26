@@ -2,11 +2,14 @@ import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
+import { FEATURE_KEYS, NO_FEATURES } from '~/lib/features'
 import { cs } from '~/lib/strings'
 import { listPasskeyCountsFn } from '~/server/passkeys/functions'
 import { getAdminDisputesFn } from '~/server/disputes/functions'
+import { getFeaturesFn } from '~/server/features/functions'
 import type { AdminDisputeEntry } from '~/server/disputes/functions'
 import { getPeriodDefaultsFn } from '~/server/periods/functions'
+import { getAdminSuggestionsFn } from '~/server/suggestions/functions'
 import { listUsersFn } from '~/server/users/functions'
 
 // Správa through its route (#47): the loader asks for the default week, and the page renders the
@@ -42,6 +45,15 @@ vi.mock('~/server/corrections/functions', () => ({
   adjustPointsFn: vi.fn(),
   correctSettlementFn: vi.fn(),
 }))
+vi.mock('~/server/features/functions', () => ({
+  getFeaturesFn: vi.fn(() => Promise.resolve({ ...NO_FEATURES, log: true })),
+  setSwitchFn: vi.fn(),
+}))
+vi.mock('~/server/suggestions/functions', () => ({
+  getAdminSuggestionsFn: vi.fn(() => Promise.resolve({ items: [], canSend: false })),
+  closeSuggestionFn: vi.fn(),
+  sendSuggestionFn: vi.fn(),
+}))
 vi.mock('~/server/periods/functions', () => ({
   getPeriodDefaultsFn: vi.fn(() => Promise.resolve('defaults')),
   savePeriodDefaultsFn: vi.fn(),
@@ -61,8 +73,11 @@ describe('Správa route', () => {
       defaults: 'defaults',
       disputes: [],
       fixable: [],
+      switches: { ...NO_FEATURES, log: true },
+      suggestions: { items: [], canSend: false },
     })
     expect(getPeriodDefaultsFn).toHaveBeenCalled()
+    expect(getFeaturesFn).toHaveBeenCalled()
     expect(listUsersFn).toHaveBeenCalled()
     expect(listPasskeyCountsFn).toHaveBeenCalled()
     expect(getAdminDisputesFn).toHaveBeenCalled()
@@ -83,6 +98,8 @@ describe('Správa route', () => {
       defaults: DEFAULT_PERIOD_DEFAULTS,
       disputes: [],
       fixable: [],
+      switches: NO_FEATURES,
+      suggestions: { items: [], canSend: false },
     }
     const Page = route.component
     const html = renderToStaticMarkup(<Page />)
@@ -107,8 +124,21 @@ describe('Správa: Sporné (#47)', () => {
     value: { score: 8 },
     page: null,
   }
-  const render = (disputes: unknown, fixable: unknown = []) => {
-    page.data = { people: [], passkeys: {}, defaults: DEFAULT_PERIOD_DEFAULTS, disputes, fixable }
+  const render = (
+    disputes: unknown,
+    fixable: unknown = [],
+    suggestions: unknown = { error: 'feature_off' },
+    switches: unknown = NO_FEATURES,
+  ) => {
+    page.data = {
+      people: [],
+      passkeys: {},
+      defaults: DEFAULT_PERIOD_DEFAULTS,
+      disputes,
+      fixable,
+      switches,
+      suggestions,
+    }
     const Page = route.component
     return renderToStaticMarkup(<Page />)
   }
@@ -148,5 +178,66 @@ describe('Správa: Sporné (#47)', () => {
   it('a failed fix fetch: its load error and retry', () => {
     const html = render([], { error: 'load' })
     expect(html).toContain(cs.admin.fix.loadError)
+  })
+
+  it('Návrhy (#247) sits under Sporné, above Opravy bodů', () => {
+    const html = render([entry], [], { items: [], canSend: false })
+    const suggestions = html.indexOf(`>${cs.suggestions.adminTitle(0)}<`)
+    expect(suggestions).toBeGreaterThan(html.indexOf(cs.admin.disputes.title(1)))
+    expect(suggestions).toBeLessThan(html.indexOf(cs.admin.fix.title))
+  })
+
+  it('suggestions switch off: no Návrhy text at all', () => {
+    // Funkce in its error state: its list names the switches, Návrhy zlepšení among them (#296).
+    const html = render([entry], [], { error: 'feature_off' }, { error: 'failed' })
+    expect(html).not.toContain('Návrh')
+  })
+
+  it('a failed suggestions fetch: its error and retry, the rest still renders', async () => {
+    vi.mocked(getAdminSuggestionsFn).mockRejectedValueOnce(new Error('net'))
+    await expect(route.loader()).resolves.toMatchObject({
+      defaults: 'defaults',
+      suggestions: { error: 'load' },
+    })
+    const html = render([entry], [], { error: 'load' })
+    expect(html).toContain(cs.suggestions.loadError)
+    expect(html).toContain(cs.admin.defaults.title)
+  })
+})
+
+describe('Správa: Funkce (#296)', () => {
+  const render = (switches: unknown) => {
+    page.data = {
+      people: [],
+      passkeys: {},
+      defaults: DEFAULT_PERIOD_DEFAULTS,
+      disputes: [],
+      fixable: [],
+      suggestions: { error: 'feature_off' },
+      switches,
+    }
+    const Page = route.component
+    return renderToStaticMarkup(<Page />)
+  }
+
+  it('a failed switch read gives the card its error state, the rest still loads', async () => {
+    vi.mocked(getFeaturesFn).mockRejectedValueOnce(new Error('net'))
+    await expect(route.loader()).resolves.toMatchObject({
+      defaults: 'defaults',
+      switches: { error: 'failed' },
+    })
+  })
+
+  it('renders Funkce last, after Přidat člověka, one switch per launch switch', () => {
+    const html = render(NO_FEATURES)
+    const funkce = html.indexOf(`>${cs.admin.features.title}<`)
+    expect(funkce).toBeGreaterThan(html.indexOf(`>${cs.admin.add}<`))
+    expect(html.match(/role="switch"/g)).toHaveLength(FEATURE_KEYS.length)
+  })
+
+  it('shows the error state after a failed read', () => {
+    const html = render({ error: 'failed' })
+    expect(html).toContain(cs.admin.features.failedLoad)
+    expect(html).not.toContain('role="switch"')
   })
 })

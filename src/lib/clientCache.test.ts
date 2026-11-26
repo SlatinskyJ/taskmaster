@@ -88,4 +88,14 @@ describe('clientCache', () => {
     expect(await get()).toBe('ok')
     expect(fetch).toHaveBeenCalledTimes(2)
   })
+
+  it('forget drops the cached value', async () => {
+    const { fetch, get } = setup()
+    expect(await get()).toBe(1)
+    expect(await get()).toBe(1)
+    expect(fetch).toHaveBeenCalledTimes(1)
+    get.forget()
+    expect(await get()).toBe(2)
+    expect(fetch).toHaveBeenCalledTimes(2)
+  })
 })

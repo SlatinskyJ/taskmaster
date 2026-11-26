@@ -36,6 +36,8 @@ export const FEATURE_KEYS = [
   'descriptions',
   /** Week plan (#257, spec §5.12): week copies and their day rules. */
   'weekPlan',
+  /** Suggestions from Profil, sent to GitHub by the admin (#247). */
+  'suggestions',
 ] as const
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number]
@@ -60,6 +62,7 @@ export const NO_FEATURES: Readonly<Features> = {
   openRows: false,
   descriptions: false,
   weekPlan: false,
+  suggestions: false,
 }
 
 /** Every switch on: the full app as designed (UI doc §6). */
@@ -79,4 +82,5 @@ export const ALL_FEATURES: Readonly<Features> = {
   openRows: true,
   descriptions: true,
   weekPlan: true,
+  suggestions: true,
 }

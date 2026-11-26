@@ -2,6 +2,8 @@
 // Keys are English; add new ones under the screen or concept they belong to.
 // Item states: UI design doc §2.2.
 
+import type { FeatureKey } from './features'
+
 export const cs = {
   /** Short weekday names, Sunday first (dates.ts `Weekday`). */
   weekdays: ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'],
@@ -796,6 +798,62 @@ export const cs = {
       notFound: 'Tenhle člověk už neexistuje.',
       notAdmin: 'Na tohle nemáš práva.',
     },
+    /** Funkce on Správa (#296): the launch switches, turned on or off by the admin. */
+    features: {
+      title: 'Funkce',
+      on: 'Zapnuto',
+      off: 'Vypnuto',
+      note: 'Ostatní uvidí změnu, až aplikaci znovu otevřou (nejpozději do hodiny).',
+      turnOnTitle: (name: string) => `Zapnout „${name}“?`,
+      turnOffTitle: (name: string) => `Vypnout „${name}“?`,
+      forFamily: 'Změna platí pro celou rodinu.',
+      /** Turning weekPlan off drops the copies' day rules on the next scheduler tick (15 min). */
+      weekPlanOff: 'Než ho znovu zapneš, nech ho aspoň 15 minut vypnutý.',
+      confirmOn: 'Zapnout',
+      confirmOff: 'Vypnout',
+      saving: 'Ukládám…',
+      done: (name: string, on: boolean) => `${name}: ${on ? 'zapnuto' : 'vypnuto'}`,
+      failed: 'Nepovedlo se. Zkus to znovu.',
+      failedLoad: 'Funkce se nepodařilo načíst.',
+      retry: 'Zkusit znovu',
+      /** One per launch switch (src/lib/features.ts): its name and one line on what it does. */
+      names: {
+        recurring: { name: 'Opakované úkoly', hint: 'Šablony, jejich schvalování a změny ceny' },
+        log: { name: 'Zapsat', hint: 'Záložka Zapsat: zapsání udělané práce' },
+        week: { name: 'Týden', hint: 'Záložka Týden' },
+        meeting: { name: 'Schůzka', hint: 'Záložka Schůzka a vyúčtování' },
+        periodProposals: { name: 'Návrhy týdne', hint: 'Návrhy na příští a výchozí týden' },
+        disputes: { name: 'Rozpory a opravy', hint: 'Rozporování a opravy bodů' },
+        settleLastDay: {
+          name: 'Vyúčtovat poslední den',
+          hint: 'Běžící týden jde vyúčtovat jen v jeho poslední den',
+        },
+        passwordChange: { name: 'Změna hesla', hint: 'Vlastní změna hesla na Profilu' },
+        bidRefusals: {
+          name: 'Nechci a odmítnutí',
+          hint: '„Nechci“ u kluků a odmítnutí rodičem',
+        },
+        approveAnywhere: {
+          name: 'Schvalovat odkudkoli',
+          hint: 'Schválení ze stránky úkolu a z Úkolů',
+        },
+        reopenBidding: {
+          name: 'Znovu dohadovat cenu',
+          hint: 'Znovu otevřít dohadování u otevřeného úkolu',
+        },
+        choreBidding: {
+          name: 'Cena opakovaného úkolu',
+          hint: 'Dohadování první ceny navrženého opakovaného úkolu',
+        },
+        openRows: { name: 'Otevírat řádky', hint: 'Řádek otevře stránku úkolu' },
+        descriptions: { name: 'Popisy', hint: 'Popisy u úkolů' },
+        weekPlan: { name: 'Plán týdne', hint: 'Kopie opakovaného úkolu na každý den týdne' },
+        suggestions: {
+          name: 'Návrhy zlepšení',
+          hint: 'Návrhy z Profilu, admin je posílá na GitHub',
+        },
+      } satisfies Record<FeatureKey, { name: string; hint: string }>,
+    },
   },
   /**
    * Passkeys (spec §11, UI doc §7.4/§7.5, #29). One name for the feature everywhere:
@@ -927,6 +985,60 @@ export const cs = {
       failed: 'Nepovedlo se. Zkus to znovu.',
     },
   },
+  /** Suggestions (#247, spec §5.13): Navrhnout zlepšení on Profil, Návrhy on Správa. */
+  suggestions: {
+    section: 'Nápady na zlepšení',
+    row: 'Navrhnout zlepšení',
+    sheetTitle: 'Navrhnout zlepšení',
+    titleLabel: 'Název',
+    descriptionLabel: 'Popis (nepovinné)',
+    note: 'Návrh uvidí správce aplikace.',
+    send: 'Odeslat',
+    sending: 'Odesílám…',
+    sent: 'Návrh je odeslaný. Díky!',
+    mine: 'Moje návrhy',
+    mineEmpty: 'Zatím žádný návrh.',
+    status: { new: 'Nový', sent: 'Na GitHubu', done: 'Hotovo', dismissed: 'Zamítnutý' },
+    issueLink: 'Otevřít na GitHubu',
+    /** `Návrhy`, `Návrhy · 1 nový`, `Návrhy · 3 nové`, `Návrhy · 5 nových`. */
+    adminTitle: (newCount: number) =>
+      newCount === 0 ? 'Návrhy' : `Návrhy · ${String(newCount)} ${plural(newCount, newWords)}`,
+    adminEmpty: 'Žádné návrhy.',
+    done: 'Hotovo',
+    dismiss: 'Zamítnout',
+    confirmDone: 'Označit návrh jako hotový?',
+    confirmDismiss: 'Zamítnout návrh?',
+    confirmFinal: 'Tohle už nejde vrátit.',
+    cancel: 'Zpět',
+    sendRow: 'Poslat na GitHub',
+    previewTitle: 'Poslat na GitHub',
+    issueTitleLabel: 'Název issue',
+    issueBodyLabel: 'Text issue',
+    publicNote: 'Issue bude veřejné. Zkontroluj, že v textu nejsou jména.',
+    noToken: 'Server nemá GitHub token, poslat teď nejde.',
+    sendIssue: 'Poslat na GitHub',
+    sentToast: 'Návrh je na GitHubu.',
+    notSaved:
+      'Issue na GitHubu vzniklo, ale aplikace si ho neuložila. Neposílej ho znovu, označ návrh jako hotový.',
+    loadError: 'Návrhy se nepodařilo načíst.',
+    retry: 'Zkusit znovu',
+    stale: 'Návrh se mezitím změnil, seznam je obnovený.',
+    errors: {
+      title_empty: 'Napiš název.',
+      title_too_long: 'Název je moc dlouhý (nejvýš 120 znaků).',
+      description_too_long: 'Popis je moc dlouhý (nejvýš 2000 znaků).',
+      body_too_long: 'Text je moc dlouhý (nejvýš 4000 znaků).',
+      not_found: 'Návrh už neexistuje.',
+      not_admin: 'Tohle může jen správce.',
+      not_new: 'Návrh už byl odeslaný.',
+      closed: 'Návrh je už vyřízený.',
+      busy: 'Návrh se právě odesílá, chvilku počkej.',
+      no_token: 'Server nemá GitHub token, poslat teď nejde.',
+      github_failed: 'GitHub teď neodpovídá. Zkus to znovu.',
+      feature_off: 'Návrhy jsou teď vypnuté.',
+      generic: 'Nepodařilo se to odeslat. Zkus to znovu.',
+    },
+  },
   roles: {
     taker: 'Bere úkoly',
     giver: 'Zadává úkoly',
@@ -1017,6 +1129,9 @@ export function plural(n: number, forms: PluralForms): string {
   if (abs >= 2 && abs <= 4) return forms.few
   return forms.many
 }
+
+/** `1 nový`, `3 nové`, `5 nových`: new suggestions on Správa. */
+export const newWords: PluralForms = { one: 'nový', few: 'nové', many: 'nových' }
 
 export const keyWords: PluralForms = { one: 'klíč', few: 'klíče', many: 'klíčů' }
 

@@ -5,7 +5,9 @@ import { toast } from 'sonner'
 import { ProfilePassword } from '~/components/auth/ProfilePassword'
 import { ProfilePasskeys } from '~/components/auth/ProfilePasskeys'
 import { Avatar } from '~/components/shell/Avatar'
+import { loadMine, ProfileSuggestions } from '~/components/suggestions/ProfileSuggestions'
 import { SectionLabel } from '~/components/shell/SectionLabel'
+import { SwitchRow } from '~/components/shell/SwitchRow'
 import { Button, buttonVariants } from '~/components/ui/button'
 import { Card } from '~/components/ui/card'
 import { useEffectsSwitch } from '~/lib/effects'
@@ -17,19 +19,24 @@ import { THEME_PREFS, useThemePref, type ThemePref } from '~/lib/theme'
 import { cn } from '~/lib/utils'
 import { logoutFn } from '~/server/auth/functions'
 import { getPasskeysEnabledFn, listMyPasskeysFn } from '~/server/passkeys/functions'
+import { listMySuggestionsFn } from '~/server/suggestions/functions'
 
 // Profile (UI doc §7.4): light / dark / auto, effects on/off, passkeys (#29), own password
-// (#210, behind the `passwordChange` switch), log out. Both choices are
-// stored on this device (src/lib/theme.ts, src/lib/effects.ts): a phone and a shared screen
-// may want different ones.
+// (#210, behind the `passwordChange` switch), suggestions (#247, behind `suggestions`), log
+// out. Both choices are stored on this device (src/lib/theme.ts, src/lib/effects.ts): a phone
+// and a shared screen may want different ones.
 export const Route = createFileRoute('/_app/profil')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/profil')
   },
   // Passkeys are listed with them off too, so old ones can still be removed.
   loader: async () => {
-    const [enabled, passkeys] = await Promise.all([getPasskeysEnabledFn(), listMyPasskeysFn()])
-    return { enabled, passkeys }
+    const [enabled, passkeys, suggestions] = await Promise.all([
+      getPasskeysEnabledFn(),
+      listMyPasskeysFn(),
+      loadMine(() => listMySuggestionsFn()),
+    ])
+    return { enabled, passkeys, suggestions }
   },
   component: Profile,
 })
@@ -46,7 +53,7 @@ function Profile() {
   const [theme, setTheme] = useThemePref()
   const [effects, setEffects] = useEffectsSwitch()
   const [leaving, setLeaving] = useState(false)
-  const { enabled, passkeys } = Route.useLoaderData()
+  const { enabled, passkeys, suggestions } = Route.useLoaderData()
 
   async function logout() {
     setLeaving(true)
@@ -109,47 +116,27 @@ function Profile() {
         </div>
 
         <SectionLabel>{cs.profile.effects}</SectionLabel>
-        {/* The whole row is the switch, so the tap target is the row, not just the knob. */}
         <Card className="p-0">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={effects}
-            aria-labelledby="effects-label"
-            aria-describedby="effects-hint"
-            onClick={() => {
+          <SwitchRow
+            id="effects"
+            label={cs.profile.effectsLabel}
+            hint={cs.profile.effectsHint}
+            checked={effects}
+            onToggle={() => {
               setEffects(!effects)
             }}
-            className="flex min-h-tap w-full cursor-pointer items-center gap-3 rounded-card p-card text-left"
-          >
-            <span className="grid flex-1">
-              <b id="effects-label" className="text-row font-extrabold">
-                {cs.profile.effectsLabel}
-              </b>
-              <span id="effects-hint" className="text-meta font-bold text-muted">
-                {cs.profile.effectsHint}
-              </span>
-            </span>
-            <span
-              aria-hidden="true"
-              className={cn(
-                'relative h-8 w-13 shrink-0 rounded-full transition-colors motion-reduce:transition-none',
-                effects ? 'bg-ok' : 'bg-muted',
-              )}
-            >
-              <span
-                className={cn(
-                  'absolute top-[3px] size-[26px] rounded-full bg-surface shadow-sticker transition-[left] motion-reduce:transition-none',
-                  effects ? 'left-[23px]' : 'left-[3px]',
-                )}
-              />
-            </span>
-          </button>
+          />
         </Card>
 
         <ProfilePasskeys enabled={enabled} items={passkeys} />
 
         <ProfilePassword enabled={features.passwordChange} username={user.username} />
+
+        <ProfileSuggestions
+          enabled={features.suggestions}
+          data={suggestions}
+          onReload={() => router.invalidate()}
+        />
 
         <Button
           variant="no"

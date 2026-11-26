@@ -18,6 +18,7 @@ import {
   priceChange,
   proposals,
   rebidding,
+  suggestions,
   templates,
   thisWeek,
   weekChores,
@@ -92,6 +93,8 @@ export const SEEDS = {
   weekplan: { pieces: [weekChores, points], features: ['recurring', 'log', 'weekPlan'] },
   /** The plan table on Týden (#258): four chores, yesterday's and today's copies in each state. */
   plantable: { pieces: [planTable], features: ['recurring', 'week', 'weekPlan'] },
+  /** Suggestions on Profil and Správa (#247): two new, one done, one dismissed. */
+  suggestions: { pieces: [suggestions], features: ['suggestions'] },
   /** Previews and dev: everything. */
   demo: {
     pieces: [
@@ -115,6 +118,7 @@ export const SEEDS = {
       descriptions,
       weekChores,
       planTable,
+      suggestions,
     ],
     features: FEATURE_KEYS,
   },
