@@ -35,6 +35,26 @@ test('saying no, agreeing to a new price, and cancelling a task', async ({ page 
   await expect(page.getByText(cs.taskPrice.toast.declined)).toBeVisible()
   await expect(page.getByText(cs.taskPrice.pending, { exact: true })).toHaveCount(0)
   await expect(history(page)).toContainText(cs.history.changeDeclined(12))
+  // The time shows under a bubble only after a tap, only under that one; a second tap hides it (#248).
+  const bubble = history(page).getByRole('button', {
+    name: cs.history.changeDeclined(12),
+    exact: true,
+  })
+  const other = history(page).getByRole('button').first()
+  const bubbleTime = await bubble.getAttribute('aria-controls')
+  const otherTime = await other.getAttribute('aria-controls')
+  expect(bubbleTime).toMatch(/^history-time-\d+$/)
+  expect(otherTime).not.toBe(bubbleTime)
+  const timeOf = (id: string | null) => page.locator(`#${id ?? ''}`)
+  await expect(timeOf(bubbleTime)).toBeHidden()
+  await expect(timeOf(otherTime)).toBeHidden()
+  await bubble.click()
+  await expect(bubble).toHaveAttribute('aria-expanded', 'true')
+  await expect(timeOf(bubbleTime)).toBeVisible()
+  await expect(timeOf(bubbleTime)).toHaveText(/\d{1,2}\. \d{1,2}\. \d{2}:\d{2}/)
+  await expect(timeOf(otherTime)).toBeHidden()
+  await bubble.click()
+  await expect(timeOf(bubbleTime)).toBeHidden()
   const url = page.url()
   await logout(page)
 

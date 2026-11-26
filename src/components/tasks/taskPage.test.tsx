@@ -259,8 +259,11 @@ describe('task page: price, cancel, history (#36)', () => {
     const html = render(STARSI, { ...reserved, status: 'cancelled', reservedBy: null })
     page.history = []
     expect(html).toContain(cs.history.title)
-    expect(html).toContain('so 21. 11. 10:12 · Táta: zrušeno')
+    expect(html).toContain('Táta')
+    expect(html).toContain('zrušeno')
     expect(html).toContain('„Udělá to firma.“')
+    // The time is in the markup, hidden until a tap (#248).
+    expect(html).toMatch(/<p id="history-time-1" hidden=""[^>]*>so 21\. 11\. 10:12<\/p>/)
     expect(html).not.toContain(cs.cancelTask.action)
     // Never reopened: no round dividers (#212).
     expect(html).not.toContain('role="separator"')
@@ -285,12 +288,75 @@ describe('task page: price, cancel, history (#36)', () => {
     const html = render(STARSI, reserved)
     page.history = []
     const one = html.indexOf(cs.history.round(1))
-    const old = html.indexOf('Mladší: chce 5 b')
+    const old = html.indexOf('chce 5 b')
     const two = html.indexOf(cs.history.round(2))
-    const now = html.indexOf('Mladší: chce 12 b')
+    const now = html.indexOf('chce 12 b')
     expect(Math.min(one, old, two, now)).toBeGreaterThanOrEqual(0)
     expect(one < old && old < two && two < now).toBe(true)
     expect(html).toContain(`role="separator" aria-label="${cs.history.round(2)}"`)
+  })
+
+  // The history's <li>s, in order (#248).
+  const historyLis = (html: string) => {
+    const start = html.indexOf('aria-labelledby="history-label"')
+    return html.slice(start, html.indexOf('</ol>', start)).split('<li').slice(1)
+  }
+  const at = '2026-11-21T09:12:00.000Z'
+
+  it('chat bubbles: mine on the left and dark with no name, theirs on the right with a name (#248)', () => {
+    page.history = [
+      {
+        id: 1,
+        at,
+        action: 'task.bid_placed',
+        by: { id: 3, name: 'Starší' },
+        score: 6,
+        reservedBy: null,
+        reason: null,
+      },
+      {
+        id: 2,
+        at,
+        action: 'task.bid_accepted',
+        by: { id: 2, name: 'Táta' },
+        score: 6,
+        reservedBy: null,
+        reason: null,
+      },
+    ]
+    const html = render(STARSI, reserved)
+    page.history = []
+    const [mine, theirs] = historyLis(html)
+    expect(mine).toContain('items-start')
+    expect(mine).toContain('bg-ink')
+    expect(mine).toContain('chce 6 b')
+    expect(mine).not.toContain('Starší')
+    expect(theirs).toContain('items-end')
+    expect(theirs).toContain('Táta')
+    expect(theirs).toContain('přijato 6 b')
+    expect(theirs).not.toContain('bg-ink')
+  })
+
+  it('a system entry is a centred note whose time a tap shows (#248)', () => {
+    page.history = [
+      {
+        id: 7,
+        at,
+        action: 'instance.expired',
+        by: null,
+        score: null,
+        reservedBy: null,
+        reason: null,
+      },
+    ]
+    const html = render(STARSI, reserved)
+    page.history = []
+    const [note] = historyLis(html)
+    expect(note).toContain('items-center')
+    expect(note).toMatch(
+      /<button type="button" aria-expanded="false" aria-controls="history-time-7"[^>]*>.*prošlo/,
+    )
+    expect(note).toMatch(/<p id="history-time-7" hidden=""[^>]*>so 21\. 11\. 10:12<\/p>/)
   })
 })
 
@@ -531,24 +597,30 @@ describe('task page: the admin reads it, never acts (#222)', () => {
     }
   }
 
-  it.each(states)('%s, every switch on: no button, no action, the history is there', (_, task) => {
-    const html = allOn(() => render(ADMIN, task))
-    expect(html).toContain('Vyluxovat celý obývák a chodbu')
-    expect(html).not.toContain('<button')
-    for (const label of [
-      cs.disputes.action,
-      cs.work.reserve,
-      // Not cs.work.done: a confirmed task's chip says Hotovo too; no <button covers it.
-      cs.work.release,
-      cs.work.approve,
-      cs.work.reject,
-      cs.cancelTask.action,
-      cs.tasks.approve,
-    ]) {
-      expect(html).not.toContain(`>${label}<`)
-    }
-    expect(html).toContain(cs.history.title)
-  })
+  it.each(states)(
+    '%s, every switch on: no action button, no action, the history is there',
+    (_, task) => {
+      const html = allOn(() => render(ADMIN, task))
+      expect(html).toContain('Vyluxovat celý obývák a chodbu')
+      // The only buttons are the history's time toggles (#248): a tap shows when, it changes nothing.
+      const buttons = html.match(/<button[^>]*>/g) ?? []
+      expect(buttons.length).toBeGreaterThan(0)
+      for (const b of buttons) expect(b).toMatch(/aria-controls="history-time-\d+"/)
+      for (const label of [
+        cs.disputes.action,
+        cs.work.reserve,
+        // Not cs.work.done: a confirmed task's chip says Hotovo too; no <button covers it.
+        cs.work.release,
+        cs.work.approve,
+        cs.work.reject,
+        cs.cancelTask.action,
+        cs.tasks.approve,
+      ]) {
+        expect(html).not.toContain(`>${label}<`)
+      }
+      expect(html).toContain(cs.history.title)
+    },
+  )
 
   it('a chore copy keeps its link to the chore (navigation, not an action)', () => {
     const html = allOn(() => render(ADMIN, copy))
