@@ -67,6 +67,7 @@ describe('loadAdminSuggestions', () => {
 
 describe('SuggestionsCard', () => {
   const items = [
+    row({ id: 5, status: 'new' }),
     row({ id: 4, status: 'new', author: { id: 5, displayName: 'Starší' } }),
     row({ id: 3, status: 'new' }),
     row({ id: 2, status: 'sent', issueUrl: url }),
@@ -77,8 +78,8 @@ describe('SuggestionsCard', () => {
     expect(card({ error: 'feature_off' })).toBe('')
   })
 
-  it('the label counts the new ones: 2 new, 1 sent, 1 done', () => {
-    expect(card({ items, canSend: false })).toContain('Návrhy · 2 nové')
+  it('the label counts the new ones: 3 new, 1 sent, 1 done', () => {
+    expect(card({ items, canSend: false })).toContain('Návrhy · 3 nové')
   })
 
   it('a new row offers Hotovo, Zamítnout and Poslat na GitHub', () => {
