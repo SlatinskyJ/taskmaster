@@ -461,3 +461,50 @@ describe('Nechci, turn-down and the same number on a price change (#232)', () =>
     expect(priceError(down)('offer_changed')).toBe(cs.bids.turnDownChanged)
   })
 })
+
+describe("a brother's yes and bid carry the text the page showed (#207)", () => {
+  const text = 'Talíře do myčky.\nHrnce ručně.'
+  const firstPrice = (description: string | null): TemplateView => ({
+    ...base,
+    description,
+    status: 'proposed',
+    score: 10,
+    approvedBy: ['Táta'],
+    bidding: { offer: { score: 10, byName: 'Táta' }, bids: [], lowest: null, lastBids: [] },
+  })
+
+  it.each([null, text])('description %j: agreed chore Beru za and Poslat', (description) => {
+    const t = { ...demo, description }
+    expect(priceButtons(t, STARSI)[0]?.data).toEqual({
+      templateId: 7,
+      score: 4,
+      seenDescription: description,
+    })
+    expect(priceSend(t, STARSI, 6)?.data).toEqual({
+      templateId: 7,
+      score: 6,
+      seenDescription: description,
+    })
+  })
+
+  it.each([null, text])('description %j: first price Souhlasím and Poslat', (description) => {
+    const t = firstPrice(description)
+    expect(priceButtons(t, STARSI)[0]?.data).toEqual({
+      templateId: 7,
+      score: 10,
+      seenDescription: description,
+    })
+    expect(priceSend(t, STARSI, 12)?.data).toEqual({
+      templateId: 7,
+      score: 12,
+      seenDescription: description,
+    })
+  })
+
+  it("a parent's calls do not carry it", () => {
+    expect(priceButtons({ ...demo, description: text }, TATA)[0]?.data).toEqual({
+      templateId: 7,
+      score: 5,
+    })
+  })
+})

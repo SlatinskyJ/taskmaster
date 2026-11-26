@@ -180,9 +180,6 @@ describe('ruling 8 through the handlers', () => {
       parseSeenScore({ templateId: tid, score, seenDescription: 'old' })
     expect(approveTemplateScoreHandler(f.db, f.starsi, tpl(10), T2)).toEqual(stale)
     expect(bidTemplateScoreHandler(f.db, f.mladsi, tpl(14), T2)).toEqual(stale)
-    expect(bidTemplateScoreHandler(f.db, f.mladsi, { templateId: tid, score: 14 }, T2).ok).toBe(
-      true,
-    )
     expect(acceptTemplateOfferHandler(f.db, f.mladsi, tpl(10), T3)).toEqual(stale)
   })
 
@@ -204,6 +201,33 @@ describe('ruling 8 through the handlers', () => {
         T2,
       ).ok,
     ).toBe(true)
+  })
+
+  it('switch on: a call with no seenDescription is refused by all six (ruling 2)', () => {
+    const { f, id, tid } = changed(true)
+    const task = (score: number) => ({ taskId: id, score })
+    expect(approveTaskOfferHandler(f.db, f.starsi, task(18), T2)).toEqual(stale)
+    expect(placeBidHandler(f.db, f.mladsi, task(25), T2)).toEqual(stale)
+    must(placeBid(f.db, f.mladsi, id, 25, T2))
+    expect(acceptOfferHandler(f.db, f.mladsi, task(18), T3)).toEqual(stale)
+    const tpl = (score: number) => ({ templateId: tid, score })
+    expect(approveTemplateScoreHandler(f.db, f.starsi, tpl(10), T2)).toEqual(stale)
+    expect(bidTemplateScoreHandler(f.db, f.mladsi, tpl(14), T2)).toEqual(stale)
+    expect(acceptTemplateOfferHandler(f.db, f.mladsi, tpl(10), T3)).toEqual(stale)
+  })
+
+  it('switch off: a call with no seenDescription goes through', () => {
+    const { f, id, tid } = changed(false)
+    expect(placeBidHandler(f.db, f.mladsi, { taskId: id, score: 25 }, T2).ok).toBe(true)
+    expect(acceptOfferHandler(f.db, f.mladsi, { taskId: id, score: 18 }, T3).ok).toBe(true)
+    expect(approveTaskOfferHandler(f.db, f.starsi, { taskId: car(f), score: 18 }, T2).ok).toBe(true)
+    const tpl = (score: number) => ({ templateId: tid, score })
+    expect(bidTemplateScoreHandler(f.db, f.mladsi, tpl(14), T2).ok).toBe(true)
+    expect(acceptTemplateOfferHandler(f.db, f.mladsi, tpl(10), T3).ok).toBe(true)
+    const t = { title: 'z', score: 6, approvalRequired: true, schedule: null, deadline: null }
+    const fresh = must(createTemplate(f.db, f.tata, t, T0)).id
+    const yes = { templateId: fresh, score: 6 }
+    expect(approveTemplateScoreHandler(f.db, f.starsi, yes, T2).ok).toBe(true)
   })
 
   it('switch on: the current text (normalised) goes through', () => {

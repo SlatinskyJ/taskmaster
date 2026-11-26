@@ -68,6 +68,14 @@ const OFF = { ok: false, error: 'feature_off' } as const
 const seenOf = (db: Db, data: { seenDescription?: string | null }) =>
   getFlags(db).descriptions ? data.seenDescription : undefined
 
+/**
+ * Ruling 2 (#207): with the switch on a brother's yes or bid must say what text it saw. One
+ * without it comes from a page loaded before the switch or the deploy: refused as stale.
+ */
+const unseen = (db: Db, data: { seenDescription?: string | null }) =>
+  getFlags(db).descriptions && data.seenDescription === undefined
+const STALE = { ok: false, error: 'offer_changed' } as const
+
 /** A giver proposes a new recurring template (spec §5.1); a description needs the switch. */
 export function createTemplateHandler(
   db: Db,
@@ -81,6 +89,7 @@ export function createTemplateHandler(
 
 /** A giver or taker approves the template score they were shown (spec §3). */
 export function approveTemplateScoreHandler(db: Db, userId: number, data: Seen, now: Date) {
+  if (unseen(db, data)) return STALE
   return answered(
     approveTemplateScore(db, userId, data.templateId, data.score, now, seenOf(db, data)),
   )
@@ -121,6 +130,7 @@ type Seen = Score & { seenDescription?: string | null }
 
 /** A taker bids a score. */
 export function bidTemplateScoreHandler(db: Db, userId: number, data: Seen, now: Date) {
+  if (unseen(db, data)) return STALE
   const opts = { ...bidding(db), seenDescription: seenOf(db, data) }
   return answered(bidOnTemplate(db, userId, data.templateId, data.score, now, opts))
 }
@@ -138,6 +148,7 @@ export function acceptTemplateBidHandler(db: Db, userId: number, data: Score, no
 
 /** A taker accepts the giver side's offer he saw. */
 export function acceptTemplateOfferHandler(db: Db, userId: number, data: Seen, now: Date) {
+  if (unseen(db, data)) return STALE
   const opts = { ...bidding(db), seenDescription: seenOf(db, data) }
   return answered(acceptOfferOnTemplate(db, userId, data.templateId, data.score, now, opts))
 }

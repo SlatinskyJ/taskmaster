@@ -16,7 +16,11 @@ export interface Me {
 
 /** One call to a bidding server function; `bidders` only where the server needs it. */
 export type BidCall =
-  | { action: 'approveOffer' | 'acceptOffer' | 'placeBid'; data: { taskId: number; score: number } }
+  | {
+      action: 'approveOffer' | 'acceptOffer' | 'placeBid'
+      // The text the page showed (#207): the server refuses it as stale if it changed.
+      data: { taskId: number; score: number; seenDescription: string | null }
+    }
   | {
       action: 'acceptLowestTaskBid' | 'counterOffer'
       data: { taskId: number; score: number; bidders: number[] }
@@ -90,10 +94,11 @@ export function bidButtons(task: TaskView, me: Me): BidButton[] {
     if (round?.offeredBy === null) return []
     if (task.approverIds.includes(me.id)) return []
     const bid = myBid(task, me)
+    const seen = { ...offer, seenDescription: task.description }
     const approve: BidButton = {
       key: 'approve',
       action: 'approveOffer',
-      data: offer,
+      data: seen,
       label: cs.tasks.approve,
       hint: round ? cs.rebid.approveHint(round.offer) : cs.bids.approveHint,
       variant: bid === null ? 'ok' : 'ghost',
@@ -102,7 +107,7 @@ export function bidButtons(task: TaskView, me: Me): BidButton[] {
     const take: BidButton = {
       key: 'take',
       action: 'acceptOffer',
-      data: offer,
+      data: seen,
       label: cs.bids.take(offer.score),
       hint: cs.bids.takeHint,
       variant: 'ok',
@@ -144,7 +149,7 @@ export function sendButton(task: TaskView, me: Me, value: number): SendButton | 
     const again = value !== current && value === lastBid(task, me)
     return {
       action: 'placeBid',
-      data,
+      data: { ...data, seenDescription: task.description },
       label: cs.bids.send,
       hint: again ? cs.bids.sameAgainHint : cs.bids.bidHint,
       disabled: value === current || again,

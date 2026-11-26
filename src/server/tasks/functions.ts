@@ -183,6 +183,14 @@ const shown = (db: Db) => ({ descriptions: getFlags(db).descriptions })
 const seenOf = (db: Db, data: Seen) =>
   getFlags(db).descriptions ? data.seenDescription : undefined
 
+/**
+ * Ruling 2 (#207): with the switch on a brother's yes or bid must say what text it saw. One
+ * without it comes from a page loaded before the switch or the deploy: refused as stale.
+ */
+const unseen = (db: Db, data: { seenDescription?: string | null }) =>
+  getFlags(db).descriptions && data.seenDescription === undefined
+const STALE = { ok: false, error: 'offer_changed' } as const
+
 /** A giver creates a one-time task with an offer (spec §5.2); a description needs the switch. */
 export function createTaskHandler(
   db: Db,
@@ -196,16 +204,19 @@ export function createTaskHandler(
 
 /** A giver or taker approves the offer they were shown (spec §5.2 path 1). */
 export function approveTaskOfferHandler(db: Db, userId: number, data: Seen, now: Date) {
+  if (unseen(db, data)) return STALE
   return answered(approveTaskOffer(db, userId, data.taskId, data.score, now, seenOf(db, data)))
 }
 
 /** A taker bids (or re-bids) a number of his own. */
 export function placeBidHandler(db: Db, takerId: number, data: Seen, now: Date) {
+  if (unseen(db, data)) return STALE
   return answered(placeBid(db, takerId, data.taskId, data.score, now, seenOf(db, data)))
 }
 
 /** A taker with a bid takes the offer he was shown: reserved to him. */
 export function acceptOfferHandler(db: Db, takerId: number, data: Seen, now: Date) {
+  if (unseen(db, data)) return STALE
   return answered(acceptOffer(db, takerId, data.taskId, data.score, now, seenOf(db, data)))
 }
 

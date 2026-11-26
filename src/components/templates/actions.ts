@@ -89,12 +89,13 @@ export async function submitNewItem(
 
 /** "Souhlasím" on a proposed template: approves the score the person sees. */
 export function approveTemplate(
-  t: Pick<TemplateView, 'id' | 'score'>,
+  t: Pick<TemplateView, 'id' | 'score' | 'description'>,
   fn: (input: {
-    data: { templateId: number; score: number }
+    data: { templateId: number; score: number; seenDescription: string | null }
   }) => Promise<ActionResult> = approveTemplateScoreFn,
 ): Promise<ActionResult> {
-  return fn({ data: { templateId: t.id, score: t.score } })
+  // With the text the page showed (#207): a changed one is refused as stale.
+  return fn({ data: { templateId: t.id, score: t.score, seenDescription: t.description } })
 }
 
 /** The toast after an approval, or after the call threw (network). */

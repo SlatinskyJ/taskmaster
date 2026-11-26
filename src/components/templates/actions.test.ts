@@ -109,11 +109,16 @@ describe('submitNewItem', () => {
 })
 
 describe('approveTemplate', () => {
-  it('sends the template id and the score shown', async () => {
-    const fn = vi.fn(() => Promise.resolve({ ok: true as const, id: 7 }))
-    await approveTemplate({ id: 7, score: 4 }, fn)
-    expect(fn).toHaveBeenCalledWith({ data: { templateId: 7, score: 4 } })
-  })
+  it.each([null, 'Talíře do myčky.'])(
+    'sends the template id, the score and the text shown (%j)',
+    async (description) => {
+      const fn = vi.fn(() => Promise.resolve({ ok: true as const, id: 7 }))
+      await approveTemplate({ id: 7, score: 4, description }, fn)
+      expect(fn).toHaveBeenCalledWith({
+        data: { templateId: 7, score: 4, seenDescription: description },
+      })
+    },
+  )
 })
 
 describe('approveOutcome', () => {
