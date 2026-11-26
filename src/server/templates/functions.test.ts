@@ -238,10 +238,20 @@ describe('Nechci and turn-down handlers on a price change (#232, switch bidRefus
     const kept = { ok: true, id, score: 8, status: 'active' }
     expect(withdrawTemplateBidHandler(f.db, f.starsi, { templateId: id }, T2)).toEqual(kept)
     const bids = [{ takerId: f.mladsi, score: 11 }]
+    // No parent offer yet: nothing to turn down to (Jakub 2026-11-26).
+    expect(turnDownTemplateBidsHandler(f.db, f.tata, { templateId: id, bids }, T2)).toEqual({
+      ok: false,
+      error: 'no_offer',
+    })
+    expect(counterTemplateScoreHandler(f.db, f.tata, { templateId: id, score: 9 }, T2).ok).toBe(
+      true,
+    )
     expect(turnDownTemplateBidsHandler(f.db, f.tata, { templateId: id, bids }, T2)).toEqual(kept)
     expect(threadRows(f.db, id)).toEqual([
       ['taker', f.starsi, 10, 'closed'],
       ['taker', f.mladsi, 11, 'closed'],
+      ['giver', f.tata, 9, 'replaced'],
+      ['giver', f.tata, 9, null],
     ])
   })
 })

@@ -116,31 +116,21 @@ describe('turn-down on a price change (#232)', () => {
     must(bid(s, s.starsi, 12))
   })
 
-  it('with no offer: the change ends, the old number starts a new change', () => {
+  it('with no parent offer: refused, nothing written (Jakub 2026-11-26)', () => {
     const s = setup()
     must(bid(s, s.starsi, 12))
-    must(turnDown(s, [{ takerId: s.starsi, score: 12 }]))
-    expect(score(s.db, s.id)).toBe(10)
-    expect(threadRows(s.db, s.id)).toEqual([['taker', s.starsi, 12, 'closed']])
-    const [taken] = s.db
-      .select()
-      .from(templateThread)
-      .all()
-      .map((r) => r.id)
-    expect(audit(s)).toEqual({
-      action: 'template.bids_turned_down',
-      actor: s.tata,
-      kind: 'user',
-      before: { score: 10, entryIds: [taken], bidsFrom: 0 },
-      after: { bidsFrom: taken },
+    const before = { ...count(s), bidsFrom: bidsFrom(s) }
+    expect(turnDown(s, [{ takerId: s.starsi, score: 12 }])).toEqual({
+      ok: false,
+      error: 'no_offer',
     })
-    expect(getTemplateDetail(s.db, s.id, s.tata, on)?.template.change).toBeNull()
-    must(bid(s, s.starsi, 12))
-    expect(getTemplateDetail(s.db, s.id, s.tata, on)?.template.change?.bids).toHaveLength(1)
+    expect({ ...count(s), bidsFrom: bidsFrom(s) }).toEqual(before)
+    expect(threadRows(s.db, s.id)).toEqual([['taker', s.starsi, 12, null]])
   })
 
-  it('with no offer: each brother re-bids his own number', () => {
+  it('then each brother re-bids his own number', () => {
     const s = setup()
+    must(counterOnTemplate(s.db, s.tata, s.id, 8, T1, on))
     must(bid(s, s.starsi, 12))
     must(bid(s, s.mladsi, 13))
     const seen = [
@@ -154,6 +144,7 @@ describe('turn-down on a price change (#232)', () => {
 
   it('with a stale list writes nothing', () => {
     const s = setup()
+    must(counterOnTemplate(s.db, s.tata, s.id, 8, T1, on))
     must(bid(s, s.starsi, 12))
     must(bid(s, s.mladsi, 11))
     const before = count(s)
@@ -217,6 +208,7 @@ describe('the same-number floor (#232)', () => {
     const other = chore(s, 'Vyndat myčku')
     must(bid(s, s.starsi, 12))
     must(nechci(s, s.starsi))
+    must(counterOnTemplate(s.db, s.tata, other, 8, T1, on))
     must(bid(s, s.mladsi, 12, on, other))
     must(turnDown(s, [{ takerId: s.mladsi, score: 12 }], on, other))
     expect(bid(s, s.starsi, 12)).toEqual({ ok: false, error: 'same_score' })
@@ -229,7 +221,11 @@ describe('the same-number floor (#232)', () => {
     expect(getTemplateDetail(s.db, s.id, s.starsi, on)?.template.lastBids).toEqual([
       { takerId: s.starsi, score: 12 },
     ])
+    must(counterOnTemplate(s.db, s.tata, s.id, 8, T2, on))
     must(bid(s, s.mladsi, 11))
+    expect(getTemplateDetail(s.db, s.id, s.starsi, on)?.template.lastBids).toEqual([
+      { takerId: s.mladsi, score: 11 },
+    ])
     must(turnDown(s, [{ takerId: s.mladsi, score: 11 }]))
     expect(getTemplateDetail(s.db, s.id, s.starsi, on)?.template.lastBids).toEqual([])
   })

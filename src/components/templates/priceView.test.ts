@@ -384,8 +384,12 @@ describe('Nechci, turn-down and the same number on a price change (#232)', () =>
     expect(priceRefusal(noBid, STARSI, true)).toBeNull()
   })
 
-  it('a parent with bids turns down exactly the bids shown; the old price stays', () => {
-    expect(priceRefusal(change, TATA, true)).toEqual({
+  it('a parent with bids and an offer turns down exactly the bids shown; the offer stays', () => {
+    const withOffer = {
+      ...change,
+      change: { bids: change.change?.bids ?? [], lowest: 12, offer: { score: 11, byName: 'Máma' } },
+    }
+    expect(priceRefusal(withOffer, TATA, true)).toEqual({
       key: 'turnDown',
       action: 'turnDown',
       data: {
@@ -396,8 +400,10 @@ describe('Nechci, turn-down and the same number on a price change (#232)', () =>
         ],
       },
       label: cs.bids.turnDown,
-      hint: cs.rebid.turnDownHint(10),
+      hint: cs.bids.turnDownChangeHint(10, 11),
     })
+    // No parents' offer: nothing to turn down to, no button (Jakub 2026-11-26).
+    expect(priceRefusal(change, TATA, true)).toBeNull()
     const offer = { score: 11, byName: 'Táta' }
     const offerOnly = { ...change, change: { offer, bids: [], lowest: null } }
     expect(priceRefusal(offerOnly, TATA, true)).toBeNull()

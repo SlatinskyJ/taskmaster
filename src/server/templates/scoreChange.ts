@@ -424,8 +424,8 @@ export function withdrawTemplateBidIn(
 
 /**
  * A giver turns the bidding down: every open bid closes. On a proposed template he offers the
- * current score again in a new offer round; on a score change the giver offer (if any) is offered
- * again by him, and with none the change ends. Bids reset (#232). `seen` are the bids he saw; if
+ * current score again in a new offer round; on a score change the giver offer is offered again by
+ * him (no offer: `no_offer`, Jakub 2026-11-26). Bids reset (#232). `seen` are the bids he saw; if
  * they changed meanwhile, `offer_changed`.
  */
 export function turnDownTemplateBidsIn(
@@ -482,7 +482,8 @@ export function turnDownTemplateBidsIn(
       const result = turnDownTemplateChangeBids(ctx.agreement, ctx.people, giverId, book)
       if (!result.ok) return result
       const entryIds = closeBids()
-      // The offer stays in flight, now his (a new giver row); with none the change ends.
+      // The offer stays in flight, now his (a new giver row). The domain refuses a turn-down
+      // with no parent offer (`no_offer`), so there always is one.
       const offer = result.value.status === 'agreed' ? result.value.change?.offer : null
       const reissued = offer
         ? addEntry(tx, { templateId, userId: giverId, side: 'giver', score: offer.score }, now)

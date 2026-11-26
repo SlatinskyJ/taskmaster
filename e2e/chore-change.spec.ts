@@ -14,7 +14,7 @@ const threadRow = (page: Page, text: RegExp) =>
     .getByRole('listitem')
     .filter({ hasText: text })
 
-test('Starší says Nechci and may not send 10 again; Táta turns the bids down, 8 stays', async ({
+test('Starší says Nechci and may not send 10 again; no turn-down until Táta offers, then his 9 stays', async ({
   page,
 }) => {
   await passwordLogin(page, 'starsi')
@@ -35,12 +35,17 @@ test('Starší says Nechci and may not send 10 again; Táta turns the bids down,
   await expect(page).toHaveURL(/\/$/)
   await page.goto('/sablona/1')
   await expect(page.getByRole('heading', { name: 'Umýt koupelnu' })).toBeVisible()
-  await expect(page.getByText(cs.rebid.turnDownHint(8))).toBeVisible()
-  await page.getByRole('button', { name: cs.bids.turnDown, exact: true }).click()
+  // No parents' offer yet: nothing to turn down to (Jakub 2026-11-26).
+  const turnDown = page.getByRole('button', { name: cs.bids.turnDown, exact: true })
+  await expect(turnDown).toHaveCount(0)
+  // Táta offers 9; now he may turn the bids down and his 9 stays.
+  await page.getByRole('button', { name: cs.tasks.more }).click()
+  await page.getByRole('button', { name: cs.bids.send, exact: true }).click()
+  await expect(page.getByText(cs.bids.toast.sent, { exact: true })).toBeVisible()
+  await expect(page.getByText(cs.bids.turnDownChangeHint(8, 9))).toBeVisible()
+  await turnDown.click()
   await expect(page.getByText(cs.bids.toast.turnedDown, { exact: true })).toBeVisible()
-  await expect(page.getByText(cs.templatePrice.now(8), { exact: true })).toBeVisible()
   await expect(threadRow(page, /chce 11(?!\d)/)).toContainText(cs.bids.closed)
-  for (const name of [/^Přijmout/, new RegExp(`^${cs.bids.turnDown}$`)]) {
-    await expect(page.getByRole('button', { name })).toHaveCount(0)
-  }
+  await expect(page.getByRole('button', { name: /^Přijmout/ })).toHaveCount(0)
+  await expect(turnDown).toHaveCount(0)
 })

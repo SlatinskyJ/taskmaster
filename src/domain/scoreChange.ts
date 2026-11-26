@@ -160,11 +160,15 @@ export function turnDownTemplateChangeBids(
   if (!isGiver(people, giverId)) return fail('not_a_giver')
   const live = template.change ? liveTemplateBook(template.change, people).bids : []
   if (live.length === 0) return fail('no_bids')
+  // Only a parent's offer can be stood by (Jakub 2026-11-26): with none, nothing to turn down to.
+  const offer = template.change?.offer
+  if (!offer) return fail('no_offer')
   const key = (b: OpenBid) => `${String(b.by)}:${String(b.score)}`
   if (!sameTakers(live.map(key), seen.map(key))) return fail('offer_changed')
-  const offer = template.change?.offer
-  const change = offer ? { offer: { score: offer.score, proposedBy: giverId }, bids: [] } : null
-  return ok({ ...template, change })
+  return ok({
+    ...template,
+    change: { offer: { score: offer.score, proposedBy: giverId }, bids: [] },
+  })
 }
 
 // ── One-time tasks ───────────────────────────────────────────────────────────────────────

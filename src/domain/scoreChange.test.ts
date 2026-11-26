@@ -342,17 +342,13 @@ describe('template change: same number, Nechci, turn-down (#232)', () => {
     })
   })
 
-  it('turn-down with no offer ends the change; the score stays', () => {
+  it('turn-down with no parent offer is refused (Jakub 2026-11-26)', () => {
     const t = agreed({ offer: null, bids: two })
-    expect(value(turnDownTemplateChangeBids(t, family, DAD, two))).toMatchObject({
-      status: 'agreed',
-      score: 10,
-      change: null,
-    })
+    expect(error(turnDownTemplateChangeBids(t, family, DAD, two))).toBe('no_offer')
   })
 
   it('turn-down refuses a stale list, a taker, no bids', () => {
-    const t = agreed({ offer: null, bids: two })
+    const t = agreed({ offer: { score: 14, proposedBy: DAD }, bids: two })
     const stale = [
       [{ by: OLDER, score: 12 }],
       [...two, { by: JAKUB, score: 9 }],

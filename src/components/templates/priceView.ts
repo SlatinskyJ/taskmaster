@@ -121,14 +121,17 @@ export function priceRefusal(t: TemplateView, me: Me, refusals = false): PriceBu
     }
   }
   if (bids.length === 0) return null
+  // A price change is turned down only to a parents' offer (Jakub 2026-11-26).
+  const offer = first ? null : t.change?.offer
+  if (!first && !offer) return null
   return {
     key: 'turnDown',
     action: 'turnDown',
     data: { templateId: t.id, bids: bids.map((b) => ({ takerId: b.takerId, score: b.score })) },
     label: cs.bids.turnDown,
-    hint: first
-      ? cs.bids.turnDownHint(first.offer?.score ?? t.score)
-      : cs.rebid.turnDownHint(t.score),
+    hint: offer
+      ? cs.bids.turnDownChangeHint(t.score, offer.score)
+      : cs.bids.turnDownHint(first?.offer?.score ?? t.score),
   }
 }
 
