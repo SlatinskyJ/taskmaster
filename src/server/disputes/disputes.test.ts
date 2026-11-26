@@ -670,6 +670,66 @@ describe('listOpenForAdmin (#47)', () => {
   })
 })
 
+describe("the admin list: each entry's page (#222)", () => {
+  it('a task, completion or rejection opens its task, a chore its chore, the rest nothing', () => {
+    const f = setup()
+    const rejected = rejection(f, f.mladsi)
+    const rejectedTask = rejectionsSince(f.db, new Date(0)).find((r) => r.entryId === rejected)
+    const template = agreedTemplate(f)
+    const sid = settlement(f, f.mladsi)
+    const adjustmentId = f.db
+      .insert(pointAdjustments)
+      .values({
+        takerId: f.mladsi,
+        points: 2,
+        reason: 'Navíc.',
+        madeBy: f.admin,
+        madeAt: AT.toISOString(),
+      })
+      .returning()
+      .get().id
+    must(openDisputeIn(f.db, f.starsi, { kind: 'task_score', id: f.confirmed }, 'Cena.', AT))
+    must(openDisputeIn(f.db, f.starsi, { kind: 'completion', id: f.confirmed }, 'Víc.', AT))
+    must(openDisputeIn(f.db, f.mladsi, { kind: 'rejection', id: rejected }, 'Bylo hotovo.', AT))
+    must(openDisputeIn(f.db, f.mladsi, { kind: 'template_score', id: template }, 'cena', AT))
+    must(openDisputeIn(f.db, f.mladsi, { kind: 'settlement', id: sid }, 'Málo.', AT))
+    must(openDisputeIn(f.db, f.mladsi, { kind: 'adjustment', id: adjustmentId }, 'Hm.', AT))
+    f.db
+      .insert(disputes)
+      .values({
+        itemKind: 'completion',
+        itemId: 9999,
+        openedBy: f.starsi,
+        reason: 'Pryč.',
+        openedAt: AT.toISOString(),
+        status: 'open',
+      })
+      .run()
+
+    expect(rejectedTask?.taskId).not.toBe(rejected)
+    expect(listOpenForAdmin(f.db).map((e) => [e.item.kind, e.page])).toEqual([
+      ['task_score', { kind: 'task', id: f.confirmed }],
+      ['completion', { kind: 'task', id: f.confirmed }],
+      ['rejection', { kind: 'task', id: rejectedTask?.taskId }],
+      ['template_score', { kind: 'template', id: template }],
+      ['settlement', null],
+      ['adjustment', null],
+      ['completion', null],
+    ])
+  })
+
+  it("a taker's or giver's list carries no page", () => {
+    const f = setup()
+    must(openDisputeIn(f.db, f.starsi, { kind: 'completion', id: f.confirmed }, 'Víc.', AT))
+    for (const viewer of [
+      { id: f.starsi, role: 'taker' as const },
+      { id: f.tata, role: 'giver' as const },
+    ]) {
+      for (const e of listDisputes(f.db, viewer)) expect(e).not.toHaveProperty('page')
+    }
+  })
+})
+
 describe('an adjustment dispute in Rozporováno (#48)', () => {
   it("a taker who disputes another boy's adjustment does not see its reason", () => {
     const f = setup()

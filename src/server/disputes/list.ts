@@ -7,7 +7,7 @@ import type { DisputeRow } from '~/server/db/schema'
 import { toMark } from './disputes'
 import type { DisputeMark } from './disputes'
 import { loadTarget } from './targets'
-import type { DisputeItem, DisputeValue } from './targets'
+import type { DisputeItem, DisputeValue, ItemPage } from './targets'
 
 // Rozporováno (#46): the disputes a viewer is involved in, on Týden →
 // Historie, so an outcome stays visible after its week. A giver sees every dispute; a taker the
@@ -37,6 +37,8 @@ export type AdminDisputeEntry = Omit<DisputeListEntry, 'mark'> & {
   value: DisputeValue | null
   /** Whose item it is (#48: the fix sheet's boy); null for a score. Admin only. */
   takerId: number | null
+  /** Where tapping the card opens the item (#222); null: no page (a settlement, an adjustment, a gone item). */
+  page: ItemPage | null
 }
 
 interface Viewer {
@@ -91,6 +93,7 @@ function describe(db: Db | Tx, names: Map<number, string>, r: DisputeRow) {
   return {
     takerId,
     value: loaded?.value ?? null,
+    page: loaded?.about.page ?? null,
     entry: {
       id: r.id,
       item,
@@ -148,6 +151,6 @@ export function listOpenForAdmin(db: Db | Tx): AdminDisputeEntry[] {
     .all()
     .map((r) => {
       const d = describe(db, names, r)
-      return { ...d.entry, value: d.value, takerId: d.takerId }
+      return { ...d.entry, value: d.value, takerId: d.takerId, page: d.page }
     })
 }

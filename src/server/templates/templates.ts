@@ -518,7 +518,8 @@ export interface TemplateDetail {
 }
 
 /**
- * The price page of a template, or null: unknown id, or a viewer who is not a party (the admin).
+ * The price page of a template, or null for an unknown id or viewer. The admin reads it too
+ * (#222, from Sporné); `templateDetailHandler` lets him in only while `disputes` is on.
  * A proposed one shows to the brothers too when a switch lets them reach it: with `openRows`
  * they agree to it there (spec §5.1, #205), with `choreBidding` they bid on its first price (#209).
  */
@@ -532,7 +533,8 @@ export function getTemplateDetail(
   const row = db.select().from(templates).where(eq(templates.id, templateId)).get()
   if (!row) return null
   const viewer = findPerson(listPeople(db), viewerId)
-  if (viewer?.role !== 'giver' && viewer?.role !== 'taker') return null
+  // The admin too (#222: a Sporné card opens it); getTemplateDetailFn checks the switch.
+  if (!viewer) return null
   const takerMay = opts.choreBidding || openRows
   if (row.status === 'proposed' && viewer.role === 'taker' && !takerMay) return null
   const [template] = views(db, [row], opts)

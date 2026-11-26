@@ -24,6 +24,12 @@ export interface DisputeItem {
 export type DisputeValue =
   { score: number } | { level: Level; deducted: number } | { points: number }
 
+/** The page an item opens on (#222): a task's or a chore's; a settlement or adjustment has none. */
+export interface ItemPage {
+  kind: 'task' | 'template'
+  id: number
+}
+
 /** What the Rozporováno list needs: a title, whose item it is, and a settlement's week. */
 export interface ItemAbout {
   /** The task or template title, an adjustment's reason; '' for a settlement. */
@@ -32,6 +38,8 @@ export interface ItemAbout {
   takerId: number | null
   /** A settlement's week (UTC ISO); null otherwise. */
   week: { startsAt: string; endsAt: string } | null
+  /** Where the admin's Sporné card opens it (#222). */
+  page: ItemPage | null
 }
 
 export interface LoadedTarget {
@@ -55,14 +63,19 @@ export function loadTarget(db: Db | Tx, item: DisputeItem): LoadedTarget | null 
         return {
           target: { kind: 'task_score', id: t.id, agreement: agreed ? 'open' : 'proposed' },
           value,
-          about: { title: t.title, takerId: null, week: null },
+          about: { title: t.title, takerId: null, week: null, page: { kind: 'task', id: t.id } },
         }
       }
       const outcome = t.status === 'confirmed' ? 'confirmed' : 'pending'
       return {
         target: { kind: 'completion', id: t.id, outcome },
         value,
-        about: { title: t.title, takerId: t.earnerId, week: null },
+        about: {
+          title: t.title,
+          takerId: t.earnerId,
+          week: null,
+          page: { kind: 'task', id: t.id },
+        },
       }
     }
     case 'template_score': {
@@ -75,7 +88,7 @@ export function loadTarget(db: Db | Tx, item: DisputeItem): LoadedTarget | null 
           agreement: t.status === 'active' ? 'agreed' : 'proposed',
         },
         value: { score: t.score },
-        about: { title: t.title, takerId: null, week: null },
+        about: { title: t.title, takerId: null, week: null, page: { kind: 'template', id: t.id } },
       }
     }
     case 'rejection': {
@@ -84,7 +97,12 @@ export function loadTarget(db: Db | Tx, item: DisputeItem): LoadedTarget | null 
       return {
         target: { kind: 'rejection', id: r.entryId },
         value: { score: r.score },
-        about: { title: r.title, takerId: r.earnerId, week: null },
+        about: {
+          title: r.title,
+          takerId: r.earnerId,
+          week: null,
+          page: { kind: 'task', id: r.taskId },
+        },
       }
     }
     case 'settlement': {
@@ -103,6 +121,7 @@ export function loadTarget(db: Db | Tx, item: DisputeItem): LoadedTarget | null 
           week: period
             ? { startsAt: toIsoUtc(period.startsAt), endsAt: toIsoUtc(periodEnd(period)) }
             : null,
+          page: null,
         },
       }
     }
@@ -112,7 +131,7 @@ export function loadTarget(db: Db | Tx, item: DisputeItem): LoadedTarget | null 
       return {
         target: { kind: 'adjustment', id: a.id },
         value: { points: a.points },
-        about: { title: a.reason, takerId: a.takerId, week: null },
+        about: { title: a.reason, takerId: a.takerId, week: null, page: null },
       }
     }
   }

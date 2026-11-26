@@ -692,6 +692,8 @@ export const cs = {
       /** Beside Ponechat on a Sporné row (#48): the fix sheet for this dispute. */
       fix: 'Opravit',
       fixFor: (what: string, name: string) => `Opravit: ${what} – ${name}`,
+      /** A Sporné card's link to its task or chore page (#222), the admin reads it there. */
+      openFor: (what: string, name: string) => `Otevřít: ${what} – ${name}`,
     },
     /** Opravy bodů on Správa and the fix sheet (#48, UI doc §7.5 AFix, spec §5.9). */
     fix: {

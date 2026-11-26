@@ -462,7 +462,7 @@ describe('dispute targets (#48)', () => {
     expect(loadTarget(f.db, { kind: 'adjustment', id: adjustmentId })).toEqual({
       target: { kind: 'adjustment', id: adjustmentId },
       value: { points: 5 },
-      about: { title: 'Pomoc s nákupem.', takerId: f.starsi, week: null },
+      about: { title: 'Pomoc s nákupem.', takerId: f.starsi, week: null, page: null },
     })
     must(openDisputeIn(f.db, f.starsi, { kind: 'adjustment', id: adjustmentId }, 'Málo.', MONDAY))
   })

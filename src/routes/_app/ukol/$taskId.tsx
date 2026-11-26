@@ -24,7 +24,7 @@ import {
 import { buttonVariants } from '~/components/ui/button'
 import { Card } from '~/components/ui/card'
 import { parseIdParam } from '~/lib/idParam'
-import { guardScreen } from '~/lib/screenGuard'
+import { guardDisputeReader } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { getItemMarkFn } from '~/server/disputes/functions'
 import type { DisputeMark } from '~/server/disputes/functions'
@@ -36,7 +36,8 @@ import { getTaskDetailFn } from '~/server/tasks/functions'
 // task's history. A chore's copy links to its chore (#205).
 export const Route = createFileRoute('/_app/ukol/$taskId')({
   beforeLoad: ({ context }) => {
-    guardScreen(context.user.role, '/ukol/$taskId')
+    // The admin reads it while disputes is on (#222: Sporné on Správa); never acts on it.
+    guardDisputeReader(context.user.role, '/ukol/$taskId', context.features.disputes)
   },
   loader: async ({ params, context }) => {
     const taskId = parseIdParam(params.taskId)
@@ -47,7 +48,11 @@ export const Route = createFileRoute('/_app/ukol/$taskId')({
     // eslint-disable-next-line @typescript-eslint/only-throw-error
     if (!detail) throw notFound()
     // Rozporovat (#46): the marks of the score and the completion, only with the switch on.
-    const items = context.features.disputes ? taskDisputes(detail.task, false) : []
+    // Not for the admin: Rozporovat is a party's action, and marks are giver/taker only.
+    const items =
+      context.features.disputes && context.user.role !== 'admin'
+        ? taskDisputes(detail.task, false)
+        : []
     // Keyed by kind (one score and one completion per task), so a mark can't land on the
     // other line.
     const marks = await Promise.all(
@@ -120,6 +125,7 @@ function TaskPage() {
           </Link>
         )}
         {features.disputes &&
+          user.role !== 'admin' &&
           taskDisputes(task, user.role === 'giver').map((d) => (
             <DisputeControl
               key={d.item.kind}
