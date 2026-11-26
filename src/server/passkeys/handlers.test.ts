@@ -7,7 +7,8 @@ import type {
 } from '@simplewebauthn/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Db } from '~/server/db'
-import { passkeyChallenges, passkeys } from '~/server/db/schema'
+import { passkeyChallenges, passkeys, sessions } from '~/server/db/schema'
+import { MAX_LOGIN_CHALLENGES_PER_IP, MAX_REGISTER_CHALLENGES_PER_USER } from './challenges'
 import { CONFIG, family, IPHONE_UA, phone } from '../../../tests/support/passkeys'
 import type { Family } from '../../../tests/support/passkeys'
 
@@ -185,5 +186,88 @@ describe('passkeys on', () => {
     expect(h.listPasskeyCounts()).toEqual({ [f.tata.id]: 2 })
     expect(h.removeAllPasskeysOf(f.admin, f.tata.id)).toEqual({ removed: 2 })
     expect(h.listPasskeyCounts()).toEqual({})
+  })
+})
+
+// Each handler stops at the first failure: it answers that failure and touches no cookie after
+// it (no challenge cookie for a refused start, no session cookie for a refused login).
+describe('early returns', () => {
+  const names = () => req.set.map((c) => c.name)
+  const loginAnswer = (device: ReturnType<typeof phone>, optionsJson: string) =>
+    device.authenticate(JSON.parse(optionsJson) as PublicKeyCredentialRequestOptionsJSON)
+
+  it('login options when this IP holds too many challenges → busy, no cookie', async () => {
+    for (let i = 0; i < MAX_LOGIN_CHALLENGES_PER_IP; i++) await h.passkeyLoginOptions(ON)
+    req.set = []
+    expect(await h.passkeyLoginOptions(ON)).toEqual({ ok: false, error: 'busy' })
+    expect(req.set).toEqual([])
+  })
+
+  it('login with no challenge cookie → expired_challenge, nothing cleared or set', async () => {
+    const { device } = await enrol()
+    const options = await h.passkeyLoginOptions(ON)
+    if (!options.ok) throw new Error(options.error)
+    req.cookies.delete(CHALLENGE)
+    req.set = []
+    req.deleted = []
+    expect(await h.passkeyLogin(loginAnswer(device, options.optionsJson), ON)).toEqual({
+      ok: false,
+      error: 'expired_challenge',
+    })
+    expect(req.deleted).toEqual([])
+    expect(req.set).toEqual([])
+  })
+
+  it('a refused login → its error, no session cookie, no session', async () => {
+    const { device } = await enrol()
+    device.forge()
+    const options = await h.passkeyLoginOptions(ON)
+    if (!options.ok) throw new Error(options.error)
+    req.set = []
+    expect(await h.passkeyLogin(loginAnswer(device, options.optionsJson), ON)).toEqual({
+      ok: false,
+      error: 'unknown_passkey',
+    })
+    expect(names()).toEqual([])
+    expect(f.db.select().from(sessions).all()).toEqual([])
+  })
+
+  it('register options when the user holds too many challenges → busy, no cookie', async () => {
+    for (let i = 0; i < MAX_REGISTER_CHALLENGES_PER_USER; i++) {
+      await h.passkeyRegisterOptions(f.tata, ON)
+    }
+    req.set = []
+    expect(await h.passkeyRegisterOptions(f.tata, ON)).toEqual({ ok: false, error: 'busy' })
+    expect(req.set).toEqual([])
+  })
+
+  it('register with no challenge cookie → expired_challenge, nothing cleared or stored', async () => {
+    const started = await h.passkeyRegisterOptions(f.tata, ON)
+    if (!started.ok) throw new Error(started.error)
+    req.cookies.delete(CHALLENGE)
+    req.deleted = []
+    const response = phone().register(
+      JSON.parse(started.optionsJson) as PublicKeyCredentialCreationOptionsJSON,
+    )
+    expect(await h.passkeyRegister(f.tata, response, ON)).toEqual({
+      ok: false,
+      error: 'expired_challenge',
+    })
+    expect(req.deleted).toEqual([])
+    expect(f.db.select().from(passkeys).all()).toEqual([])
+  })
+
+  it('a refused registration → its error, nothing stored', async () => {
+    const started = await h.passkeyRegisterOptions(f.tata, ON)
+    if (!started.ok) throw new Error(started.error)
+    const response = phone().register(
+      JSON.parse(started.optionsJson) as PublicKeyCredentialCreationOptionsJSON,
+      { userVerified: false },
+    )
+    expect(await h.passkeyRegister(f.tata, response, ON)).toEqual({
+      ok: false,
+      error: 'not_verified',
+    })
+    expect(f.db.select().from(passkeys).all()).toEqual([])
   })
 })
