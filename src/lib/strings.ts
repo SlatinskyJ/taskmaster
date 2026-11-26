@@ -88,7 +88,7 @@ export const cs = {
     installHint: 'Taskmaster na ploše jako appka',
     installIosTitle: 'Přidat na plochu',
     installIosSteps: [
-      'Ťukni na Sdílet dole v prohlížeči.',
+      'Ťukni na Sdílet v liště prohlížeče (někdy je pod •••).',
       'Vyber Přidat na plochu.',
       'Ťukni na Přidat.',
     ],
