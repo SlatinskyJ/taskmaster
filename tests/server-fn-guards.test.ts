@@ -91,6 +91,7 @@ const EXPECTED_ROLES: Record<string, string> = {
   getAdminSuggestionsFn: 'admin',
   closeSuggestionFn: 'admin',
   sendSuggestionFn: 'admin',
+  setSwitchFn: 'admin',
 }
 
 const SRC = join(import.meta.dirname, '..', 'src')

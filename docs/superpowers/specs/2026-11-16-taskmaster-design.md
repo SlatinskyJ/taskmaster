@@ -296,6 +296,7 @@ Creating a suggestion and every state change (sent with its issue link and text,
 - Every user logs in. The app is on the public internet, so: HTTPS only, hashed passwords, rate limiting on login, secure session cookies.
 - **Accounts live in the database only** (Jakub, 2026-11-17). No config or seed file holds people or password hashes. No self-signup.
 - **Admin console** (Jakub, 2026-11-17): a small screen where the admin adds a user (name, role, starting password), renames them, changes their role, deactivates or reactivates them, and resets their password. Every change is audit-logged. Adding Mum later = the admin adds a giver there. No code change.
+- **Launch switches** (Jakub, 2026-11-26, #296): Správa lists every launch switch the app knows, with a Czech name, one line on what it does and its state (*Zapnuto* / *Vypnuto*). A switch with no stored value is off and still listed. The admin turns one on or off after a confirm; each change is audit-logged with the admin as actor. Others see the change on their next page load (within the hour, because the app caches the switches). No launch switch for this list itself **[call]**.
 - Users are never deleted, only deactivated, so their history and audit entries stay readable **[call]**.
 - A password reset sets a new password chosen by the admin, who passes it on; the user's sessions end **[call]**.
 - **Changing your own password** (Jakub, 2026-11-22/24): on Profil anyone signed in enters the current password and the new one twice (same length rules as the admin's starting password). A wrong current password counts toward the login rate limit. A checkbox, ticked by default, logs out every other session; this one stays. Audit-logged. The admin's reset stays for forgotten passwords.
@@ -316,7 +317,7 @@ Creating a suggestion and every state change (sent with its issue link and text,
   - **Period settings**: propose length/levels for an upcoming period, propose a change to the defaults (givers), approve proposals.
   - **Dispute**: mark a locked item as disputed, with a reason (takers and givers).
   - **Suggest**: suggest a change to the app, from Profil, and see my own suggestions (5.13).
-  - **Admin**: settings, open disputes, corrections, adjustments, people (admin console), suggestions and sending them to GitHub (5.13).
+  - **Admin**: settings, open disputes, corrections, adjustments, people (admin console), launch switches, suggestions and sending them to GitHub (5.13).
 - The UI design (theme, tokens, effects, screen inventory) is in `2026-11-16-taskmaster-ui-design.md`.
 
 Rough home screen sketch (taker):
