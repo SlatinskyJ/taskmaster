@@ -81,7 +81,7 @@ export function parseJudgeFile(fileName: string, raw: string): JudgeFile {
       ? data.verdict
       : fail('verdict must be APPROVE or CHANGES')
   const counts = rec(data.counts, 'counts')
-  const comments = list(data.comments, 'comments').map((c, i) => {
+  const comments = list(data.comments ?? [], 'comments').map((c, i) => {
     const r = rec(c, `comments[${i}]`)
     return {
       path: str(r.path, `comments[${i}].path`),
@@ -89,7 +89,7 @@ export function parseJudgeFile(fileName: string, raw: string): JudgeFile {
       body: str(r.body, `comments[${i}].body`),
     }
   })
-  const replies = list(data.replies, 'replies').map((c, i) => {
+  const replies = list(data.replies ?? [], 'replies').map((c, i) => {
     const r = rec(c, `replies[${i}]`)
     return {
       commentId: int(r.commentId, `replies[${i}].commentId`, 1),

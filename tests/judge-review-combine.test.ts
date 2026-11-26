@@ -74,6 +74,19 @@ describe('parseJudgeFile', () => {
     expect(parseJudgeFile('rules.json', raw())).toEqual(judgeFile('Rules'))
   })
 
+  it('reads missing comments and replies as empty lists', () => {
+    expect(parseJudgeFile('rules.json', raw({ comments: undefined, replies: undefined }))).toEqual(
+      judgeFile('Rules'),
+    )
+  })
+
+  it.each([
+    ['comments', raw({ comments: {} })],
+    ['replies', raw({ replies: 'none' })],
+  ])('rejects %s that is not a list', (_name, text) => {
+    expect(() => parseJudgeFile('rules.json', text)).toThrow(/must be an array/)
+  })
+
   it.each([
     ['missing commit', raw({ commit: undefined })],
     ['round 0', raw({ round: 0 })],

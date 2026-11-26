@@ -16,6 +16,7 @@ You run unattended; he may be asleep. Anything outside this skill's allowed chan
 - Only Jakub decides `merge-me`. Add it yourself only when his own message names that PR ("merge #131 too"); that PR then goes through the same checks as any other, and you say so in the report. Never merge a PR without it, even one every judge approved.
 - Never bypass the ruleset (`--admin`, editing rules), never `--no-verify`, never skip or weaken a test, never force-push or rebase a labelled branch.
 - Update a branch by **merging `main` into it**. Squash merge keeps `main` linear anyway, and a merge needs no force-push.
+- While your run is active, only you push to labelled branches. Another thread that needs a change on one messages you instead.
 
 ## 1. Build the queue
 
@@ -62,6 +63,8 @@ Strictly one at a time: start the next PR only when this one is merged or stoppe
 | `src/routeTree.gen.ts` conflicts | take main's side, regenerate with `pnpm build`, commit the result | no |
 | `pnpm-lock.yaml` conflicts | take main's side, `pnpm install`, commit | no |
 | Markdown lists (e.g. `src/domain/README.md`) both added lines | keep both sides' lines | no |
+| a migration number the PR uses is now taken on `main` | drop the branch's own migrations (never on `main`, so this is not editing a committed one) with their snapshots, take main's `drizzle/meta/_journal.json` and snapshots, run `pnpm db:generate --custom --name <same name>` and copy the old SQL into the new file, then `pnpm db:check` | Architecture only, on the merge commit |
+| stacked PR, the PR below was just squash-merged and merging `main` re-conflicts the lower PR's files | merge the lower PR's final head (`git fetch origin pull/<lower>/head`), then `git merge -s ours <its squash commit on main>` (check `git diff <squash commit> HEAD -- <lower PR's files>` is empty first), then merge `main` | no |
 | code conflict where both sides' intent survives unchanged (imports, both added entries to a list or switch) | combine both | Architecture only, on the merge commit |
 | code from `main` breaks the PR mechanically (renamed helper, new required argument, a guard test such as an unguarded server function) and the fix has **one obvious form that changes no behaviour a user or the spec sees** | fix it | the panel table in `pr-review-rounds` step 2, applied to the files your fix changes |
 
@@ -79,7 +82,7 @@ Anything else stops the PR: a choice between behaviours (who may see what, which
 
 ## 5. Report
 
-One message in the project thread when the queue is empty, nothing in between. Each PR by title and link ([#N Title](https://github.com/SlatinskyJ/taskmaster/pull/N)), grouped: **merged** (note any allowed fix and judge round), **stopped** (the question), **out** (the reason, e.g. draft, red CI, no label, new commit after the label). Link any `follow-up` issue you opened. Then end; don't wait for his answers. If your session must end before the queue is empty, send the report anyway, with the PRs still waiting listed as **not reached**.
+One message in the project thread when the queue is empty, nothing in between. Each PR by title and link ([#N Title](https://github.com/SlatinskyJ/taskmaster/pull/N)), grouped: **merged** (note any allowed fix and judge round), **stopped** (the question), **out** (the reason, e.g. draft, red CI, no label, new commit after the label). Link any `follow-up` issue you opened. Resolve the project threads whose PRs you merged (Jakub, 2026-11-21). Then end; don't wait for his answers. If your session must end before the queue is empty, send the report anyway, with the PRs still waiting listed as **not reached**.
 
 ## Common mistakes
 
