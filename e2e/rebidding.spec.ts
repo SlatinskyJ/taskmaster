@@ -64,3 +64,30 @@ test('the round shows only its own bids, and Táta turns them down', async ({ pa
   await expect(page.getByText(cs.taskPrice.oldStays(12), { exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: cs.rebid.reopen, exact: true })).toBeVisible()
 })
+
+test('a parent counter in a round waits under Čeká na tebe, and a brother agrees from Domů (#237)', async ({
+  page,
+}) => {
+  // After the turn-down above the task is free at 12 again: Táta reopens it from Úkoly and
+  // counters 13.
+  await passwordLogin(page, 'tata')
+  await expect(page.getByRole('heading', { level: 1 })).not.toHaveText(cs.login.title)
+  await page.goto('/ukoly')
+  await page.getByRole('link', { name: ROUND, exact: true }).click()
+  await expect(page.getByRole('heading', { name: ROUND })).toBeVisible()
+  await page.getByRole('button', { name: cs.rebid.reopen, exact: true }).click()
+  await expect(page.getByText(cs.rebid.toast.reopened, { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: cs.tasks.more }).click()
+  await page.getByRole('button', { name: cs.bids.send, exact: true }).click()
+  await expect(page.getByText(cs.bids.toast.sent, { exact: true })).toBeVisible()
+  await logout(page)
+
+  await passwordLogin(page, 'mladsi')
+  const waiting = page.getByRole('region', { name: new RegExp(`^${cs.home.waiting}`) })
+  const row = waiting.getByRole('listitem').filter({ hasText: ROUND })
+  await expect(row).toContainText(`${cs.tasks.offeredBy} Táta`)
+  await expect(row).toContainText('13')
+  await row.getByRole('button', { name: cs.tasks.approve, exact: true }).click()
+  await expect(page.getByText(cs.bids.toast.agreed, { exact: true }).first()).toBeVisible()
+  await expect(waiting.getByRole('listitem').filter({ hasText: ROUND })).toHaveCount(0)
+})

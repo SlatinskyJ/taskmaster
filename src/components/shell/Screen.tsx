@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { buttonVariants } from '~/components/ui/button'
 import type { StaticAppPath } from '~/lib/nav'
 import { cs } from '~/lib/strings'
+import { cn } from '~/lib/utils'
 import { Avatar } from './Avatar'
 
 /**
@@ -12,7 +13,8 @@ import { Avatar } from './Avatar'
  * the content. Gutter 16 px, designed at 390 px and works from 360 px (UI doc §2.3).
  * `back` adds a back button before the title (sub-screens such as Nový úkol); `action` sits
  * next to the avatar (e.g. "+ Nový"). `back="history"` (a task or chore page, #205) goes back
- * to where the person came from in the app, else to Domů.
+ * to where the person came from in the app, else to Domů. `fullTitle` (a task or chore page,
+ * #264) wraps the whole name; elsewhere the title is cut at two lines.
  */
 
 /** The history back arrow: back within the app if it can, else the link's own `/`. */
@@ -29,12 +31,14 @@ export function Screen({
   user,
   back,
   action,
+  fullTitle = false,
   children,
 }: {
   title: ReactNode
   user: { id: number; displayName: string }
   back?: StaticAppPath | 'history'
   action?: ReactNode
+  fullTitle?: boolean
   children: ReactNode
 }) {
   const router = useRouter()
@@ -51,8 +55,14 @@ export function Screen({
             <ChevronLeft aria-hidden="true" />
           </Link>
         )}
-        {/* A long task name as the title wraps to two lines, then is cut (#34). */}
-        <h1 className="line-clamp-2 min-w-0 flex-1 font-display text-title leading-tight font-bold break-words">
+        {/* A long title wraps to two lines, then is cut (#34); a task or chore page shows its
+            name in full, as it is said nowhere else on the page (#264). */}
+        <h1
+          className={cn(
+            'min-w-0 flex-1 font-display text-title leading-tight font-bold break-words',
+            !fullTitle && 'line-clamp-2',
+          )}
+        >
           {title}
         </h1>
         {action}

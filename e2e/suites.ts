@@ -49,6 +49,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'recurring', spec: 'recurring.spec.ts', seed: 'recurring' },
   // Its own server: bids, Nechci and the turn-down change the chores for good (#209).
   { name: 'chores', spec: 'chore-bidding.spec.ts', seed: 'chores' },
+  // Its own server: Souhlasím makes the proposed chore run for good (#244).
+  { name: 'chore-approve', spec: 'chore-approve.spec.ts', seed: 'chores' },
   // Its own server: Nechci and the turn-down change the chore's price change for good (#232).
   { name: 'chorechange', spec: 'chore-change.spec.ts', seed: 'chorechange' },
   // Its own server: the scheduled and expired rows of #39.
@@ -65,6 +67,9 @@ export const SUITES: readonly Suite[] = [
   // The fix sheet with the keyboard open (#48): it needs the disputes switch and open disputes.
   // Read-only: sheets are opened, never sent.
   { name: 'keyboard-fix', spec: 'keyboard-fix.spec.ts', seed: 'corrections' },
+  // The dispute forms (#46, #47) with the keyboard open (#219). Read-only: forms are opened,
+  // never sent.
+  { name: 'keyboard-disputes', spec: 'keyboard-disputes.spec.ts', seed: 'disputes' },
   // Its own server: the password changes for good (#210).
   { name: 'password', spec: 'password.spec.ts', seed: 'password' },
   // Změnit heslo with the keyboard open (#210): it needs the passwordChange switch. Read-only.

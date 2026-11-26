@@ -70,3 +70,48 @@ test('Starší says Nechci on Zalít kytky, then Táta turns the bids down', asy
   await expect(threadRow(page, /chce 6(?!\d)/)).toContainText(cs.bids.closed)
   await expect(threadRow(page, /chce 7(?!\d)/)).toContainText(cs.bids.closed)
 })
+
+// "Zalít kytky" is now proposed at 4 with its bids closed (the test above).
+test("Táta's counter at a bid is refused once a brother agreed the chore meanwhile (#243)", async ({
+  browser,
+}) => {
+  const viewport = { width: 360, height: 800 }
+  const open = async () => (await browser.newContext({ viewport })).newPage()
+  const [mladsi, tata, starsi] = [await open(), await open(), await open()]
+
+  await openFromHome(mladsi, 'mladsi', 'Zalít kytky')
+  await expect(mladsi.getByText(cs.templatePrice.proposedNow(4))).toBeVisible()
+  for (let i = 0; i < 2; i++) {
+    await mladsi.getByRole('button', { name: cs.tasks.more, exact: true }).click()
+  }
+  await mladsi.getByRole('button', { name: cs.bids.send, exact: true }).click()
+  await expect(mladsi.getByText(cs.bids.toast.sent, { exact: true })).toBeVisible()
+  await expect(mladsi.getByText(`${cs.bids.yourBid} 6`)).toBeVisible()
+
+  // Táta's page shows Mladší's bid 6; he steps to it but does not tap yet.
+  await openFromHome(tata, 'tata', 'Zalít kytky')
+  await expect(threadRow(tata, /chce 6(?!\d)/).filter({ hasText: 'Mladší' })).toHaveCount(1)
+  const offer = tata.getByRole('region', { name: cs.bids.newOffer })
+  for (let i = 0; i < 2; i++) {
+    await offer.getByRole('button', { name: cs.tasks.more, exact: true }).click()
+  }
+  // The counter under the stepper, at exactly the bid (not the yes button above it).
+  const send = offer.getByRole('button', {
+    name: cs.templatePrice.acceptBid(6, 'Mladší'),
+    exact: true,
+  })
+  await expect(send).toBeVisible()
+
+  // Meanwhile Starší agrees at the offer on his Domů: the chore runs at 4.
+  await passwordLogin(starsi, 'starsi')
+  await expect(starsi).toHaveURL(/\/$/)
+  await row(starsi, 'Zalít kytky').getByRole('button', { name: cs.tasks.approve }).click()
+  await expect(starsi.getByText(cs.tasks.approved, { exact: true })).toBeVisible()
+
+  await send.click()
+  await expect(tata.getByText(cs.tasks.errors.offerChanged)).toBeVisible()
+  await tata.reload()
+  await expect(tata.getByText(cs.templatePrice.now(4))).toBeVisible()
+  await expect(tata.getByRole('button', { name: /^Přijmout/ })).toHaveCount(0)
+  await expect(threadRow(tata, /nabízí 6(?!\d)/)).toHaveCount(0)
+})

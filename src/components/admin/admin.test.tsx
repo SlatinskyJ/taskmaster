@@ -41,4 +41,17 @@ describe('PersonForm (Správa, #134)', () => {
       expect(input).toMatch(/spellcheck="false"/i)
     }
   })
+
+  it('fields and Uložit share one scroll body, Uložit after the last field (#159)', () => {
+    const html = renderToStaticMarkup(<PersonForm mode="add" onSubmit={noop} />)
+    expect(html).not.toContain('data-slot="drawer-footer"')
+    const body = html.indexOf('data-slot="person-form-body"')
+    expect(body).toBeGreaterThan(-1)
+    const save = html.indexOf(`>${cs.admin.save}</button>`)
+    expect(save).toBeGreaterThan(html.indexOf('name="password"'))
+    // Exactly one scroll container, and the button sits inside it.
+    expect(html.match(/overflow-y-auto/g)).toHaveLength(1)
+    expect(html.indexOf('overflow-y-auto')).toBeLessThan(html.indexOf('name="displayName"'))
+    expect(html.slice(save)).toMatch(/^[^]*<\/div><\/form>$/)
+  })
 })

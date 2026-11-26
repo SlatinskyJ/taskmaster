@@ -191,6 +191,44 @@ describe('WaitingForYou with bids', () => {
   })
 })
 
+describe('WaitingForYou: a reopened round with a parent counter (#237)', () => {
+  const counter = view({
+    status: 'open',
+    score: 18,
+    offeredByName: null,
+    approvedBy: [],
+    approverIds: [],
+    rebidding: { offer: 15, offeredBy: { id: 2, name: 'Táta' } },
+  })
+  const row = (task: TaskView) =>
+    renderToStaticMarkup(
+      <WaitingForYou
+        descriptionChanges={[]}
+        priceChanges={[]}
+        taskPriceChanges={[]}
+        items={[task]}
+        me={STARSI}
+      />,
+    )
+
+  it('shows the counter, not the agreed score, with Souhlasím and Jiná cena', () => {
+    const html = row(counter)
+    expect(html).toMatch(/>15<\/span>/)
+    expect(html).not.toMatch(/>18<\/span>/)
+    expect(html).toContain('Nabízí Táta')
+    expect(html).toContain('Vyjednává se')
+    expect(html).toContain('Souhlasím')
+    expect(html).toMatch(/<a href="\/ukol\/1"[^>]*>Jiná cena/)
+  })
+
+  it('with my bid in the round: the counter next to my bid, and Otevřít', () => {
+    const html = row({ ...counter, bids: [{ takerId: 3, name: 'Starší', score: 20 }] })
+    expect(html).toContain('Táta 15 · ty 20')
+    expect(html).not.toContain('Souhlasím')
+    expect(html).toMatch(/<a href="\/ukol\/1"[^>]*>Otevřít/)
+  })
+})
+
 describe('BidsToAnswer', () => {
   it('lists bids for a parent with the lowest bid and "Odpovědět"; nothing when empty', () => {
     const html = renderToStaticMarkup(<BidsToAnswer items={[bids]} />)
