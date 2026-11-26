@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm'
 import type { Tx } from '~/server/audit'
 import { nextPeriod } from '~/domain'
-import { addPragueDays, startOfPragueDay, toIsoUtc } from '~/domain/dates'
+import { addPragueDays, startOfPragueDay, toIsoUtc, toPragueWallTime } from '~/domain/dates'
 import { settlements, tasks as taskTable, templates as templateTable } from '~/server/db/schema'
 import { adjustPointsIn, correctSettlementIn } from '~/server/corrections'
 import { changeDescriptionOf } from '~/server/descriptions/descriptions'
@@ -647,15 +647,21 @@ export const weekChores: Piece = ({ tx, id, now }) => {
 /**
  * Test only (#259, seed `planmeeting`), not in `demo`: an ended, unsettled week and a running
  * week whose last day is never today, so e2e can settle at Schůzka on any weekday with the
- * last-day rule on and come back to step 3. The ended week starts at `start` (the audit log
- * stays in time order) and, rolled with a one-day length, ends at the first default cutoff
- * after it: before `now`. The default week is then 14 days, so the running week, rolled from
- * that cutoff, ends at least a week from now. Must come first in a seed: it writes at `start`.
+ * last-day rule on and come back to step 3. The default week here ends at today's weekday 00:00:
+ * the ended week runs from `start` (a week ago; the audit log stays in time order) to today
+ * 00:00, and the running week from today 00:00 for seven days, as after a Sunday-evening
+ * meeting. Must come first in a seed: it writes at `start`.
  */
 export const endedWeek: Piece = ({ tx, now, start }) => {
-  const defaults = getPeriodDefaults(tx)
-  rollPeriods(tx, start, { ...defaults, lengthDays: 1 })
-  writePeriodDefaults(tx, { kind: 'system' }, { ...defaults, lengthDays: 14 }, start)
+  const today = startOfPragueDay(now)
+  const defaults = {
+    ...getPeriodDefaults(tx),
+    lengthDays: 7,
+    cutoff: { weekday: toPragueWallTime(today).weekday, hour: 0, minute: 0 },
+  }
+  // First the week, so the save's own roll at `start` finds it running.
+  rollPeriods(tx, start, defaults)
+  writePeriodDefaults(tx, { kind: 'system' }, defaults, start)
   rollPeriods(tx, now, getPeriodDefaults(tx))
 }
 

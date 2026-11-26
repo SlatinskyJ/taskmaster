@@ -261,6 +261,11 @@ describe('e2e seeds (#183)', () => {
       expect(ended && ended.cutoffAt.getTime() < now.getTime()).toBe(true)
       expect(running && isRunning(running, now)).toBe(true)
       expect(running && isLastDay(running, now)).toBe(false)
+      // As after a Sunday-evening meeting: the running week starts today 00:00, for seven days.
+      const today = fromPragueWallTime({ year: 2026, month: 11, day, hour: 0, minute: 0 })
+      expect(running?.startsAt).toEqual(today)
+      expect(ended?.cutoffAt).toEqual(today)
+      expect(getWeekPlan(db, now).days).toHaveLength(7)
       expect(db.select().from(settlements).all()).toEqual([])
       expect(getFlags(db)).toEqual({
         ...NO_FEATURES,
