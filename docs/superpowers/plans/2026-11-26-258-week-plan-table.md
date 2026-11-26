@@ -115,8 +115,8 @@ export function getWeekPlan(db: Db | Tx, now: Date): WeekPlan
 - No running period → `{ period: null, today, days: [], rows: [] }`.
 - Columns: each Prague day `d` from `startOfPragueDay(startsAt)` while `d < cutoffAt`, stepping with `addPragueDays(d, 1)`. A day starting exactly at `cutoffAt` is not a column.
 - Rows: templates with `status = 'active'` and `scheduleDays > 0`, sorted by `title` with `localeCompare(…, 'cs')`, then by id (plan). Proposed templates and templates without days have no row (spec [call]).
-- Copies: tasks of those templates with `plan_day_at` equal to one of the columns. Cancelled copies are left out, so a day whose only copy was cancelled is blank (plan). Rows without `plan_day_at` are left out: old-rule instances and self-logs. `week_rules` is not read: a copy keeps its day for display after the switch drops its rules (#257 comment in `weekRules.ts`).
-- Start day (spec [call] "only if a copy of it is still in the period"): a start-day copy with `completedAt < startsAt` belongs to the old week and is left out. If the period does not start at a Prague midnight and no start-day copy is left, the first column is dropped. A period starting at 00:00 always keeps its start day.
+- Copies: tasks of those templates with `plan_day_at` equal to one of the columns. Cancelled copies are left out, so a day whose only copy was cancelled is blank, and a cancelled start-day copy does not keep the start-day column (plan; asked Jakub 2026-11-26, blank is the default until he answers). Rows without `plan_day_at` are left out: old-rule instances and self-logs. `week_rules` is not read: a copy keeps its day for display after the switch drops its rules (#257 comment in `weekRules.ts`).
+- Start day (spec [call] "only if a copy of it is still in the period"): a start-day copy that reached its end before `startsAt` belongs to the old week and is left out: done or confirmed with `completedAt < startsAt`, or expired with `graceEndsAt < startsAt` (a deadline copy; a no-deadline copy expires only after its day ends, which is after `startsAt`). If the period does not start at a Prague midnight and no start-day copy is left, the first column is dropped. A period starting at 00:00 always keeps its start day.
 - `person`: reserved → `reservedBy`; done_unconfirmed / confirmed → `completedBy` (a parent's "Hotovo bez bodů" shows the parent); else null. Names come from `users.displayName`; nothing else of a user leaves the server.
 - The same data for a taker and a giver: the family plans on one shared board (spec §5.12).
 
@@ -125,15 +125,18 @@ export function getWeekPlan(db: Db | Tx, now: Date): WeekPlan
   - `columns: a week from Monday 00:00 to Sunday 20:00 has Mon..Sun` → `days` equals the 7 ISO day starts 30. 11. – 6. 12.
   - `eight columns after a Sunday 20:00 start when a Sunday copy is still open` → 8 days, the first is Sunday 29. 11.
   - `start day dropped when its only copy was done before the start` → completed at `startsAt − 1 ms`: 7 days. Boundary twin: completed exactly at `startsAt` → 8 days, and the copy is in the Sunday cell.
+  - `start day dropped when its only copy expired before the start` → a Sunday deadline copy due 12:00 (+60 min) expires at 13:00, the period starts 20:00: 7 days. Boundary twin: `graceEndsAt` exactly at `startsAt` → 8 days, the expired copy in the Sunday cell.
+  - `a period starting at Monday 00:00 keeps Monday with no Monday copy` → a chore with only a Tuesday slot: 7 days, Monday's cell is `[]`.
   - `a day starting exactly at the cutoff is not a column` (cutoff Monday 00:00) → the last column is Sunday.
-  - `DST week 2026-10-25: one column per Prague day` → a period 19. 10. 00:00 – 25. 10. 20:00: 7 distinct days, each `toPragueWallTime(…).hour === 0`.
+  - `DST weeks: one column per Prague day across the clock change` → a period Sun 25. 10. 2026 20:00 – Sun 1. 11. 20:00 (autumn, change at 25. 10. 03:00) and its twin Sun 29. 3. 2026 20:00 – Sun 5. 4. 20:00 (spring): each has 8 distinct days, each `toPragueWallTime(…).hour === 0`, and a daily chore's copy lands in every column (no blank cell), which a fixed 24 h step would miss.
   - `rows: active templates with days only, in Czech title order` → a proposed template, an on-demand-only template and an active one with days: only the last has a row. Two active ones titled "Čistit boty" and "Zalít kytky" come out in that order. One agreed on Wednesday has blank cells (`[]`) before Wednesday.
   - `cells: every state` → one row, cells in this order: open (`person: null`), reserved by Mladší (`person: { id, name: 'Mladší' }`), done_unconfirmed by Starší, confirmed by Starší, expired (`person: null`), cancelled (`[]`).
+  - `a done cell shows who did it, not who reserved it` → Mladší reserves, Táta marks it done without points: `person` is Táta.
   - `several copies on one day, oldest first` → a scheduled copy and an on-demand extra the same day: the cell has 2 copies in `createdAt` order, origins `['scheduled', 'on_demand']`.
   - `old-rule instances and self-logs are not copies` → an instance made with the switch off and a self-log on the same template: no copy in any cell.
   - `shape is pinned` → `expect(getWeekPlan(db, now)).toEqual({...})` with the full literal for a one-row week; `Object.keys` of a copy is exactly `['id', 'status', 'score', 'origin', 'createdAt', 'person']` and of `person` exactly `['id', 'name']` (no description, username or hash).
 - [ ] **Step 2:** Run `pnpm test src/server/instances/weekPlan.test.ts`. Expected: FAIL, `getWeekPlan` is not exported.
-- [ ] **Step 3: Implement `getWeekPlan`** in `src/server/instances/weekPlan.ts`, with the types above. Read the templates once and the copies once (`inArray(tasks.templateId, ids)`, `inArray(tasks.planDayAt, days)`, `ne(tasks.status, 'cancelled')`). Group in memory. Names come from one `users` select. Do not add it to `./index.ts`: it is imported only by `./functions` (keeps the index for the scheduler's modules).
+- [ ] **Step 3: Implement `getWeekPlan`** in `src/server/instances/weekPlan.ts`, with the types above. Read the templates once and the copies once (`inArray(tasks.templateId, ids)`, `inArray(tasks.planDayAt, days)`, `inArray(tasks.status, PLAN_COPY_STATUSES)` with `PLAN_COPY_STATUSES` the five `PlanCopyStatus` values, so the type matches what the query returns). Group in memory. Names come from one `users` select. Do not add it to `./index.ts`: it is imported only by `./functions` (keeps the index for the scheduler's modules).
 - [ ] **Step 4:** Run `pnpm test src/server/instances/weekPlan.test.ts`. Expected: PASS.
 - [ ] **Step 5: Commit** `git add src/server/instances/weekPlan.ts src/server/instances/weekPlan.test.ts && git commit -m "Read the week plan table: days of the running period, chores, copies"`
 
@@ -172,7 +175,8 @@ export function getWeekPlan(db: Db | Tx, now: Date): WeekPlan
   - `suites.test.ts` → `plantable (#258): today Mladší holds the long chore, Starší's flowers wait, the table is free` → seed at Prague Wed 2. 12. 10:00 and at Mon 30. 11. 10:00 (the Sunday-cutoff case). Check:
     - `getWeekPlan(db, now)` has the 4 rows in Czech order;
     - today's cells: Mladší reserved, Starší done_unconfirmed, open;
-    - yesterday's column: confirmed "Zalít kytky…", expired "Vyluxovat…" (Mon case: the Sunday column is present because the expired copy remains);
+    - Wed case, yesterday's column: confirmed "Zalít kytky…", expired "Vyluxovat…";
+    - Mon case: the running period starts Sun 20:00, so "Zalít kytky…" (completed Sun 18:00, before the start) belongs to the old week; the Sunday column holds only the expired "Vyluxovat…" (a no-deadline copy ends after its day, so it is still in the period);
     - switches exactly `recurring, week, weekPlan`;
     - audit `at` sorted.
   - `demo.test.ts` → the template count test becomes fifteen (#258 adds 4): update its title and numbers. Add `demo at T0: the plan table has the four #258 chores with today's reserved and pending copies`.
@@ -185,8 +189,9 @@ export function getWeekPlan(db: Db | Tx, now: Date): WeekPlan
 
 **Files:**
 - Create: `src/components/week/planView.ts`
-- Modify: `src/lib/strings.ts` (`cs.plan`)
-- Test: `src/components/week/planView.test.ts`
+- Modify: `src/lib/strings.ts` (`cs.plan`; `cs.templates.everyDay: 'každý den'`)
+- Modify: `src/lib/templateText.ts` (new `export function describeDays(days: readonly number[]): string`: all 7 days → `'každý den'`, else the days Monday-first joined by `', '` with `WEEK_ORDER`; `describeTemplate` calls it, so Úkoly and the plan table say the same thing)
+- Test: `src/components/week/planView.test.ts`, `src/lib/templateText.test.ts`
 
 **Interfaces:**
 - Consumes: `PlanCopy`, `PlanRow`, `WeekPlan` (Task 2 re-export); `dayLabel` (`~/components/tasks/taskView`: "Čt"), `dayMonth` (`~/components/period/periodView`), `formatPragueTime` (`~/lib/formatDate`), `formatPoints`, `cs`.
@@ -212,7 +217,7 @@ export function listRowAction(copy: PlanCopy, viewer: Viewer): 'reserve' | 'rele
 export function isPast(day: string, today: string): boolean   // day < today
 export function freeCount(plan: WeekPlan): number            // open copies on days >= today
 export function dayHeader(day: string): { weekday: string; date: string }  // { 'St', '2. 12.' }
-export function rowMeta(row: PlanRow): string                 // 'každý den' | 'Út, Pá'
+export function rowMeta(row: PlanRow): string                 // 'každý den' | 'Út, Pá', via describeDays
 export function cellLabel(title: string, day: string, cell: CellKind, viewer: Viewer): string
 export function listRowLabel(copy: PlanCopy, viewer: Viewer): { what: string; action: string | null }
 ```
@@ -264,7 +269,8 @@ export function listRowLabel(copy: PlanCopy, viewer: Viewer): { what: string; ac
   - `isPast` **boundary** → yesterday 00:00 vs today → true; today vs today → false; tomorrow → false.
   - `freeCount` → opens yesterday 1, today 2, tomorrow 1 (and one reserved today) → 3.
   - `dayHeader('<Wed 2. 12. 00:00 Prague ISO>')` → `{ weekday: 'St', date: '2. 12.' }`.
-  - `rowMeta` → days `[0..6]` → `'každý den'`; `[2, 5]` → `'Út, Pá'` (Monday-first order, `cs.templates.days`).
+  - `rowMeta` → days `[0..6]` → `'každý den'`; `[2, 5]` → `'Út, Pá'` (it calls `describeDays`).
+  - `templateText.test.ts` → `describeDays([0..6])` → `'každý den'`; `describeDays([5, 2])` → `'Út, Pá'`; the existing `describeTemplate` case `'Po, Út, St, Čt, Pá, So, Ne v 18:00 · do dalšího dne 7:00 (+2 h)'` becomes `'každý den v 18:00 · do dalšího dne 7:00 (+2 h)'` (one wording on Úkoly and in the table; Decisions 20).
   - `cellLabel` → free for a taker `'Prostřít stůl k večeři, St: volné, rezervovat'`; own `'…, St: rezervováno tebou, uvolnit'`; the brother's `'…, St: rezervováno, Mladší'`; count `'…, St: 2 kopie, otevřít seznam'`.
   - `listRowLabel` → a scheduled copy reserved by me `{ what: 'Podle rozvrhu · rezervováno tebou', action: 'Uvolnit' }`; an on-demand open copy made 14:20 `{ what: 'Navíc 14:20 · Volné', action: 'Rezervovat' }`; for a giver `action: null`.
 - [ ] **Step 2:** Run `pnpm test src/components/week/planView.test.ts`. Expected: FAIL.
@@ -316,7 +322,7 @@ export function CopyListSheet(props: { open; onOpenChange; row: PlanRow; day: st
   - Free: `STATE_CHIP_BG.open`, a dashed `border-state-open` border, and a "+" in `STATE_TEXT.open`.
   - Mine: `STATE_CHIP_BG.reserved`, a solid border and an `Avatar size="sm"`.
   - The brother's: `bg-surface`, a `border-track` border and an avatar.
-  - Pending: the points bar's diagonal pending stripes (the same `repeating-linear-gradient` on `var(--s-pending)` as `PointsBar.tsx`, lighter), an avatar and "čeká".
+  - Pending: the points bar's diagonal pending stripes, an avatar and "čeká". Move PointsBar's `repeating-linear-gradient` class into one constant `PENDING_STRIPES` in `stateStyles.ts`; PointsBar and the cell both use it (no copy).
   - Confirmed: an avatar and "✓".
   - Expired: `STATE_CHIP_BG.expired` and "prošlo".
   - Count: `STATE_CHIP_BG.open` with a solid border and "2×".
@@ -458,7 +464,8 @@ export function CopyListSheet(props: { open; onOpenChange; row: PlanRow; day: st
     - on Úkoly he taps "+ Teď" for "Prostřít stůl k večeři";
     - back on the table, today's cell reads `…: 2 kopie, otevřít seznam`;
     - tapping it opens the list with 2 rows, and a row is a link to `/ukol/\d+`.
-  - `Starší: the list reserves the extra copy` → open the `2×` cell → tap `Rezervovat` on the `Navíc …` row → toast, and the row reads `… · rezervováno tebou`.
+  - `Starší: the list reserves and releases the extra copy` → open the `2×` cell → tap `Rezervovat` on the `Navíc …` row → toast, and the row reads `… · rezervováno tebou`; then tap `Uvolnit` on that row → toast, and the row reads free again (`Rezervovat` is back). Asserts the release path calls `releaseTaskFn`.
+  - `busy: while a reserve is in flight every cell is disabled and the tapped one is aria-busy` → hold the reserve request with `page.route`, assert `disabled` on cells and `aria-busy="true"` on the tapped one, then release the request (the same run takes the busy screenshot).
   - `360×800: the long name wraps in the pinned column` → the "Vyluxovat celý obývák a chodbu" name cell has `scrollWidth <= clientWidth` (nothing overflows sideways), and its box height ≤ the row height.
 - [ ] **Step 2:** Run `pnpm build && pnpm exec playwright test e2e/week-plan.spec.ts`. Expected: PASS. Fix the code, not the test, on a failure (`superpowers:systematic-debugging`).
 - [ ] **Step 3: Screenshots** (`pr-brief` and `pr-review-rounds` §1 code phase: one Playwright run, iPhone 15 Pro, `deviceScaleFactor: 3`, light, one screen per file, a folder outside the repo, `plantable` seed):
@@ -534,3 +541,5 @@ All of them go into the PR brief.
 14. The e2e makes the on-demand extra through Táta's "+ Teď". The seed cannot: the switch is off while the seed's pieces run.
 15. The data is the same for a taker and a giver (the whole family's board); only the taps differ.
 16. `Avatar` gets a `sm` size (26 px) for cells.
+20. An every-day chore reads "každý den" on Úkoly too (shared `describeDays`, Architecture judge round 1), instead of listing all seven days.
+21. A start-day copy that expired before the period started (its grace ended before `startsAt`) belongs to the old week, like one completed before the start (Rules judge round 1).
