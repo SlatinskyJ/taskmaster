@@ -32,6 +32,8 @@ export const FEATURE_KEYS = [
   'choreBidding',
   /** Rows open their task or chore page (#205). */
   'openRows',
+  /** Descriptions on tasks and chores (#207). */
+  'descriptions',
 ] as const
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number]
@@ -54,6 +56,7 @@ export const NO_FEATURES: Readonly<Features> = {
   reopenBidding: false,
   choreBidding: false,
   openRows: false,
+  descriptions: false,
 }
 
 /** Every switch on: the full app as designed (UI doc §6). */
@@ -71,4 +74,5 @@ export const ALL_FEATURES: Readonly<Features> = {
   reopenBidding: true,
   choreBidding: true,
   openRows: true,
+  descriptions: true,
 }

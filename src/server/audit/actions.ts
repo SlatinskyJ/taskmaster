@@ -40,6 +40,13 @@ export const AUDIT_ACTIONS = [
   'task.approved',
   'task.rejected',
   'task.cancelled',
+  // Descriptions (#207, §5.2)
+  'task.description_changed',
+  'task.description_change_proposed',
+  'task.description_change_approved',
+  'task.description_change_declined',
+  'task.description_change_withdrawn',
+  'task.description_change_discarded',
   // Recurring templates and instances (§5.1, §5.3)
   'template.created',
   'template.score_approved',
@@ -52,6 +59,12 @@ export const AUDIT_ACTIONS = [
   'template.agreed',
   'template.updated',
   'template.cancelled',
+  // Descriptions (#207, §5.1)
+  'template.description_changed',
+  'template.description_change_proposed',
+  'template.description_change_approved',
+  'template.description_change_declined',
+  'template.description_change_withdrawn',
   // Instances are rows of `tasks` (#38): their entries have entity type `task`. Only their
   // birth has its own action (`instance.created` on demand or scheduled, `instance.self_logged`)
   // and the scheduler's `instance.expired` (#39); every later step reuses the `task.*` action.

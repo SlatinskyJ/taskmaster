@@ -91,6 +91,7 @@ describe('demo seed (#62)', () => {
       reopenBidding: false,
       choreBidding: false,
       openRows: false,
+      descriptions: false,
     })
   })
 
@@ -234,6 +235,7 @@ describe('demo seed (#62)', () => {
       reopenBidding: false,
       choreBidding: false,
       openRows: false,
+      descriptions: false,
     })
   })
 })
