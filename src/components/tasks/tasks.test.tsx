@@ -290,7 +290,9 @@ describe('WaitingForYou with templates (#37)', () => {
       `</div><a href="/sablona/1">${cs.description.readAndAgree}</a></div></li>`,
     )
     expect(html).not.toContain(`>${cs.tasks.approve}<`)
-    expect(wfy({ templates: [template] })).toContain(`>${cs.tasks.approve}<`)
+    const plain = wfy({ templates: [template] })
+    expect(plain).toContain(`>${cs.tasks.approve}<`)
+    expect(plain).not.toContain(cs.description.readAndAgree)
   })
 
   it('ruling 6: a waiting description change → a row linking to its page', () => {

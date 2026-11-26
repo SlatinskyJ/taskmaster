@@ -35,6 +35,23 @@ describe('wordDiff', () => {
     ])
   })
 
+  it('two changed words in a row: one removed part, one added part, spaces between kept', () => {
+    expect(wordDiff('a b c', 'x y c')).toEqual([
+      { kind: 'removed', text: 'a b' },
+      { kind: 'added', text: 'x y' },
+      { kind: 'same', text: ' c' },
+    ])
+  })
+
+  it('a moved word: only that word changes, the rest stays', () => {
+    expect(wordDiff('Umýt okna v kuchyni', 'Umýt v kuchyni okna')).toEqual([
+      { kind: 'same', text: 'Umýt ' },
+      { kind: 'removed', text: 'okna ' },
+      { kind: 'same', text: 'v kuchyni' },
+      { kind: 'added', text: ' okna' },
+    ])
+  })
+
   it('from or to nothing', () => {
     expect(wordDiff('', 'Nový text.')).toEqual([{ kind: 'added', text: 'Nový text.' }])
     expect(wordDiff('Starý text.', '')).toEqual([{ kind: 'removed', text: 'Starý text.' }])
