@@ -21,6 +21,10 @@ describe('frameReentryUrl', () => {
     expect(frameReentryUrl(at('', 'https://x/ukoly'))).toBeNull()
   })
 
+  it('null outside a frame even when the URL carries tmFrame (a frame link opened in a tab)', () => {
+    expect(frameReentryUrl(at('', 'https://x/?tmFrame=abc'))).toBeNull()
+  })
+
   it('null in a frame with no token', () => {
     expect(frameReentryUrl(at('tm-frame:', 'https://x/ukoly'))).toBeNull()
   })

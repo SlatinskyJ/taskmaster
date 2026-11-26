@@ -229,6 +229,22 @@ describe('in a viewer frame (preview)', () => {
     expect(req.set).toHaveLength(1)
   })
 
+  it('a failed passwordLogin in a frame returns the error and starts nothing', async () => {
+    family()
+    req.headers['x-tm-frame'] = '-'
+    const result = await passwordLogin({ username: 'starsi', password: 'wrong-password' })
+    expect(result).toEqual({ ok: false, error: 'invalid_credentials' })
+    expect(req.set).toEqual([])
+  })
+
+  it('logoutHere outside a frame ends the cookie session and clears the cookie', () => {
+    const f = family()
+    req.cookie = f.tata
+    logoutHere()
+    expect(resolveSession(f.db, f.tata, T0)).toBeNull()
+    expect(req.deleted).toBe(1)
+  })
+
   it('logoutHere in a frame ends that session only and leaves the cookie', () => {
     const f = family()
     req.cookie = f.tata
