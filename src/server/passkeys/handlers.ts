@@ -1,7 +1,7 @@
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server'
 import { getRequestHeader } from '@tanstack/react-start/server'
 import type { CurrentUser } from '~/server/auth'
-import { clientIp, setSessionCookie } from '~/server/auth/http'
+import { clientIp, startSession } from '~/server/auth/http'
 import { getDb } from '~/server/db'
 import { passkeyConfig } from './config'
 import { challengeToken, clearChallengeCookie, setChallengeCookie } from './http'
@@ -14,7 +14,8 @@ import type { PasskeySummary, RegisterError } from './register'
 // The bodies of the passkey server functions (./functions), as plain functions so tests can
 // call them with a fake request. Each answers `disabled` when passkeys are off (no
 // WEBAUTHN_RP_ID); listing and removing work either way. Replies hold no secrets: the session
-// token goes to the cookie only.
+// token goes to the cookie only, except in a viewer frame on dev and previews (auth/http): there
+// it goes back as `frameToken` to the frame that logged in.
 
 interface Off {
   ok: false
@@ -28,7 +29,9 @@ const OFF: Off = { ok: false, error: 'disabled' }
  */
 export type OptionsResult = { ok: true; optionsJson: string } | Off | { ok: false; error: 'busy' }
 export type PasskeyLoginResult =
-  { ok: true; user: CurrentUser } | Off | { ok: false; error: PasskeyLoginError }
+  | { ok: true; user: CurrentUser; frameToken?: string }
+  | Off
+  | { ok: false; error: PasskeyLoginError }
 export type PasskeyRegisterResult =
   { ok: true; passkey: PasskeySummary } | Off | { ok: false; error: RegisterError }
 
@@ -66,8 +69,8 @@ export async function passkeyLogin(
     now,
   )
   if (!result.ok) return result
-  setSessionCookie(result.value.token, result.value.expiresAt)
-  return { ok: true, user: result.value.user }
+  const started = startSession(result.value.token, result.value.expiresAt)
+  return { ok: true, user: result.value.user, ...started }
 }
 
 export async function passkeyRegisterOptions(

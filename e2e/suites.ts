@@ -77,6 +77,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'keyboard-descriptions', spec: 'keyboard-descriptions.spec.ts', seed: 'descriptions' },
   // Czech letters in the app's fonts (#246). Read-only.
   { name: 'fonts', spec: 'fonts.spec.ts', seed: 'demo' },
+  // Viewer frames (#265) and the CSRF check: logs in and out, so its own server.
+  { name: 'frames', spec: 'frames.spec.ts', seed: 'family' },
 ]
 
 /** Passkeys on (localhost) for the `on` suite only, at its own port. */

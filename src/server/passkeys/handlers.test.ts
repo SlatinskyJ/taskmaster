@@ -45,6 +45,7 @@ vi.mock('@tanstack/react-start/server', () => ({
   },
   getRequestHeader: (name: string) => req.headers[name],
   getRequestIP: () => req.ip,
+  getRequestUrl: () => new URL('https://x/'),
 }))
 vi.mock('~/server/db', () => ({ getDb: () => req.db }))
 
@@ -127,6 +128,23 @@ describe('passkeys on', () => {
     expect(session?.value).toMatch(/^[A-Za-z0-9_-]{43}$/)
     expect(JSON.stringify(reply)).not.toContain(session?.value)
     expect(req.cookies.has(CHALLENGE)).toBe(false)
+  })
+
+  it('passkey login in a frame returns frameToken and sets no cookie', async () => {
+    const { device } = await enrol()
+    req.set = []
+    req.headers['x-tm-frame'] = '-'
+    const options = await h.passkeyLoginOptions(ON)
+    if (!options.ok) throw new Error(options.error)
+    const reply = await h.passkeyLogin(
+      device.authenticate(JSON.parse(options.optionsJson) as PublicKeyCredentialRequestOptionsJSON),
+      ON,
+    )
+    if (!reply.ok) throw new Error(reply.error)
+    expect(Object.keys(reply).sort()).toEqual(['frameToken', 'ok', 'user'])
+    expect(reply.frameToken).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(req.set.map((c) => c.name)).toEqual([CHALLENGE])
+    expect(req.deleted).not.toContain(SESSION)
   })
 
   it('no challenge cookie → expired_challenge', async () => {

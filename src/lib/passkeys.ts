@@ -25,7 +25,8 @@ import type { PasskeyLoginResult } from '~/server/passkeys/functions'
 type CurrentUser = Extract<PasskeyLoginResult, { ok: true }>['user']
 
 export type PasskeyLoginOutcome =
-  | { ok: true; user: CurrentUser }
+  /** `frameToken`: logged in inside a viewer frame (dev and previews, src/lib/frame.ts). */
+  | { ok: true; user: CurrentUser; frameToken?: string }
   | { ok: false; reason: 'cancelled' | 'busy' | 'unknown' | 'rate_limited' | 'failed' }
 
 export type PasskeyAddOutcome =
@@ -104,7 +105,11 @@ export async function loginWithPasskey(
       return { ok: false, reason: isCancel(e) ? 'cancelled' : 'failed' }
     }
     const result = await passkeyLoginFn({ data: response })
-    if (result.ok) return { ok: true, user: result.user }
+    if (result.ok) {
+      return result.frameToken === undefined
+        ? { ok: true, user: result.user }
+        : { ok: true, user: result.user, frameToken: result.frameToken }
+    }
     switch (result.error) {
       case 'unknown_passkey':
         // Best effort: the phone stops offering a passkey the server no longer has.
