@@ -61,6 +61,7 @@ const { Route } = await import('~/routes/_app/ukoly/index')
 const template = (over: Partial<TemplateView>): TemplateView => ({
   id: 5,
   title: 'Vyndat myčku',
+  description: null,
   status: 'active',
   score: 3,
   approvalRequired: true,
@@ -76,6 +77,7 @@ const template = (over: Partial<TemplateView>): TemplateView => ({
 const instance: TaskView = {
   id: 9,
   title: 'Vynést koše',
+  description: null,
   status: 'open',
   score: 4,
   approvalRequired: true,

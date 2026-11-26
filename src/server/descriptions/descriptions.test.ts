@@ -28,7 +28,8 @@ import {
 import { acceptOfferOnTemplate, bidOnTemplate } from '~/server/templates/scoreChange'
 import { approveTemplateScore, createTemplate } from '~/server/templates/templates'
 import { agreedTemplate, templateAudits } from '~/server/templates/testing'
-import { answerDescriptionChange, changeDescriptionOf, waitingDescriptionOf } from './descriptions'
+import { answerDescriptionChange, changeDescriptionOf } from './descriptions'
+import { waitingDescriptionOf } from './rows'
 
 const task = (id: number) => ({ kind: 'task', id }) as const
 const tpl = (id: number) => ({ kind: 'template', id }) as const

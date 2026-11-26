@@ -20,6 +20,7 @@ const MLADSI: Me = { id: 5, role: 'taker' }
 const base: TemplateView = {
   id: 7,
   title: 'Vyndat myčku',
+  description: null,
   status: 'active',
   score: 3,
   approvalRequired: true,

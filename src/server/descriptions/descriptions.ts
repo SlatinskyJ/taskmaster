@@ -1,13 +1,10 @@
-import { and, eq, isNull } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import {
   answerDescription,
   changeDescription,
   normaliseDescription,
-  taskDescriptionRule,
-  templateDescriptionRule,
   waitingChangeAfter,
 } from '~/domain'
-import type { DescriptionError, DescriptionRule, Person } from '~/domain'
 import { toIsoUtc } from '~/domain/dates'
 import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
@@ -15,58 +12,17 @@ import { writeAudit } from '~/server/audit'
 import type { Actor, AuditAction, Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { descriptionChanges, tasks, templates } from '~/server/db/schema'
-import type {
-  DescriptionChangeClosing,
-  DescriptionChangeRow,
-  TaskRow,
-  TemplateRow,
-} from '~/server/db/schema'
+import type { DescriptionChangeClosing, TaskRow } from '~/server/db/schema'
 import { resetOfferRound } from '~/server/tasks/bidding'
 import { toItem } from '~/server/tasks/item'
 import { resetTemplateOffer } from '~/server/templates/scoreChange'
 import { listPeople } from '~/server/users/people'
+import { load, openChange } from './rows'
+import type { DescriptionServerError, DescriptionTarget, Loaded } from './rows'
 
 // A task's or a chore's description (#207, spec §5.1–§5.3). The rules live in
 // src/domain/description.ts; each write here loads the target, its waiting change and the
 // people, asks the domain, and writes the rows and audit entries in one transaction.
-
-export type DescriptionTarget = { kind: 'task'; id: number } | { kind: 'template'; id: number }
-
-export type DescriptionServerError = DescriptionError | 'not_found' | 'no_change' | 'offer_changed'
-
-export interface WaitingDescription {
-  id: number
-  /** The new text; null = removing the description. */
-  description: string | null
-  proposedBy: number
-  createdAt: string
-  /** Active takers whose OK would apply it, in people order (reserved: just the reserver). */
-  waitingFor: number[]
-}
-
-type Loaded =
-  | { kind: 'task'; row: TaskRow; rule: Result<DescriptionRule, DescriptionError> }
-  | { kind: 'template'; row: TemplateRow; rule: Result<DescriptionRule, DescriptionError> }
-
-function load(db: Db | Tx, target: DescriptionTarget): Loaded | null {
-  if (target.kind === 'task') {
-    const row = db.select().from(tasks).where(eq(tasks.id, target.id)).get()
-    return row ? { kind: 'task', row, rule: taskDescriptionRule(toItem(row)) } : null
-  }
-  const row = db.select().from(templates).where(eq(templates.id, target.id)).get()
-  if (!row) return null
-  const status = row.status === 'active' ? 'agreed' : 'proposed'
-  return { kind: 'template', row, rule: ok(templateDescriptionRule(status)) }
-}
-
-function openChange(db: Db | Tx, target: DescriptionTarget): DescriptionChangeRow | undefined {
-  const column = target.kind === 'task' ? descriptionChanges.taskId : descriptionChanges.templateId
-  return db
-    .select()
-    .from(descriptionChanges)
-    .where(and(eq(column, target.id), isNull(descriptionChanges.closedAt)))
-    .get()
-}
 
 function close(
   tx: Tx,
@@ -284,32 +240,6 @@ export function answerDescriptionChange(
     )
     return ok('declined')
   })
-}
-
-function waitingFor(rule: DescriptionRule, people: readonly Person[]): number[] {
-  if (rule.kind === 'direct') return []
-  return people
-    .filter((p) => p.active && p.role === 'taker')
-    .filter((p) => rule.kind === 'any_taker' || p.id === rule.takerId)
-    .map((p) => p.id)
-}
-
-/** The target's waiting change and who may OK it, or null. */
-export function waitingDescriptionOf(
-  db: Db | Tx,
-  target: DescriptionTarget,
-): WaitingDescription | null {
-  const pending = openChange(db, target)
-  if (!pending) return null
-  const loaded = load(db, target)
-  const rule = loaded?.rule
-  return {
-    id: pending.id,
-    description: pending.description,
-    proposedBy: pending.proposedBy,
-    createdAt: pending.createdAt,
-    waitingFor: rule?.ok ? waitingFor(rule.value, listPeople(db)) : [],
-  }
 }
 
 /**

@@ -31,6 +31,8 @@ import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { templates, templateScoreApprovals, users } from '~/server/db/schema'
 import type { TemplateRow, TemplateStatus } from '~/server/db/schema'
+import { waitingDescriptionOf } from '~/server/descriptions/rows'
+import type { WaitingDescription } from '~/server/descriptions/rows'
 import type { ThreadEntry } from '~/server/threadEntry'
 import { listPeople } from '~/server/users/people'
 import { closeThread, lastBids, openRows, threadOf } from './thread'
@@ -320,6 +322,8 @@ export function resolveProposedTemplates(tx: Tx, people: Person[], now: Date): v
 export interface TemplateView {
   id: number
   title: string
+  /** What done means (#207); null = none, or the `descriptions` switch is off. */
+  description: string | null
   status: TemplateStatus
   score: number
   approvalRequired: boolean
@@ -411,9 +415,11 @@ export function deadlineRuleOf(row: TemplateRow): DeadlineRule | null {
   return { dayOffset: row.dueDayOffset, due: { hour, minute }, graceMinutes: row.graceMinutes }
 }
 
-/** The launch switch a read or an action follows (#209). Off by default. */
+/** The launch switches a read or an action follows (#209, #207). Off by default. */
 export interface BiddingOpts {
   choreBidding: boolean
+  /** Reads show descriptions (#207). */
+  descriptions?: boolean
 }
 const BIDDING_OFF: BiddingOpts = { choreBidding: false }
 
@@ -426,6 +432,7 @@ function views(db: Db | Tx, rows: TemplateRow[], opts: BiddingOpts): TemplateVie
   return rows.map((t) => ({
     id: t.id,
     title: t.title,
+    description: opts.descriptions ? t.description : null,
     status: t.status,
     score: t.score,
     approvalRequired: t.approvalRequired,
@@ -469,6 +476,8 @@ export interface TemplateDetail {
   thread: ThreadEntry[]
   /** Who may still agree to a proposed template; any one of them per missing side (#205). */
   waitingFor: { id: number; name: string }[]
+  /** A description change waiting for a taker (#207); null with none, or the switch off. */
+  descriptionChange: WaitingDescription | null
 }
 
 /**
@@ -504,7 +513,10 @@ export function getTemplateDetail(
     id: p.id,
     name: names.get(p.id) ?? '',
   }))
-  return { template, thread, waitingFor }
+  const descriptionChange = opts.descriptions
+    ? waitingDescriptionOf(db, { kind: 'template', id: templateId })
+    : null
+  return { template, thread, waitingFor, descriptionChange }
 }
 
 /**

@@ -166,6 +166,7 @@ describe('WaitingForYou with templates (#37)', () => {
   const task = {
     id: 1,
     title: 'Umýt auto',
+    description: null,
     status: 'proposed' as const,
     score: 18,
     approvalRequired: true,
@@ -192,6 +193,7 @@ describe('WaitingForYou with templates (#37)', () => {
   const template = {
     id: 1,
     title: 'Vynést koše',
+    description: null,
     status: 'proposed' as const,
     score: 4,
     approvalRequired: true,
@@ -239,6 +241,7 @@ describe('ToApprove', () => {
   const item: TaskView = {
     id: 1,
     title: 'Vyluxovat celý obývák a chodbu',
+    description: null,
     status: 'done_unconfirmed',
     score: 5,
     approvalRequired: true,
@@ -298,6 +301,7 @@ describe('template price change: ways in', () => {
   const dishes: TemplateView = {
     id: 9,
     title: 'Vyndat myčku',
+    description: null,
     status: 'active',
     score: 3,
     approvalRequired: true,
@@ -333,6 +337,7 @@ describe('template price change: ways in', () => {
     const task: TaskView = {
       id: 7,
       title: 'Vyluxovat celý obývák a chodbu',
+      description: null,
       status: 'open',
       score: 10,
       approvalRequired: true,
@@ -423,6 +428,7 @@ describe('Úkoly: a proposed chore with first-price bidding (#209)', () => {
         template={{
           id: 9,
           title: 'Vynést koš',
+          description: null,
           status: 'proposed',
           score: 10,
           approvalRequired: true,
@@ -459,6 +465,7 @@ describe('TakerBoard Moje row (#148)', () => {
   const reserved: TaskView = {
     id: 1,
     title: 'Vyluxovat celý obývák a chodbu',
+    description: null,
     status: 'reserved',
     score: 18,
     approvalRequired: true,

@@ -73,6 +73,7 @@ const TATA = { id: 2, role: 'giver' } as const
 const view = (over: Partial<TaskView>): TaskView => ({
   id: 1,
   title: 'Vyluxovat celý obývák a chodbu',
+  description: null,
   status: 'reserved',
   score: 8,
   approvalRequired: true,

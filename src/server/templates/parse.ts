@@ -1,6 +1,7 @@
 import type { ClockTime, DeadlineRule, TemplateSchedule } from '~/domain'
 import type { Weekday } from '~/domain/dates'
 import { TASK_SCORE_MAX } from '~/lib/taskLimits'
+import { optionalDescription, seenDescriptionOf } from '~/server/descriptions/parse'
 import type { NewTemplate } from './templates'
 
 // Input checks for the template server functions: types and shape only, so nothing malformed
@@ -45,12 +46,14 @@ export function parseNewTemplate(data: unknown): NewTemplate {
   const { title, score, approvalRequired } = body
   if (typeof title !== 'string' || typeof approvalRequired !== 'boolean') invalid()
   if (!('schedule' in body) || !('deadline' in body)) invalid()
+  const description = optionalDescription(body)
   return {
     title,
     score: int(score),
     approvalRequired,
     schedule: schedule(body.schedule),
     deadline: deadline(body.deadline),
+    ...(description !== undefined && { description }),
   }
 }
 
@@ -64,6 +67,15 @@ function scoreOf(value: unknown): number {
 export function parseApproval(data: unknown): { templateId: number; score: number } {
   const { templateId, score } = record(data)
   return { templateId: int(templateId), score: scoreOf(score) }
+}
+
+/** A yes, bid or accept: the number, and the text the page showed (#207 ruling 8). */
+export function parseSeenScore(data: unknown): {
+  templateId: number
+  score: number
+  seenDescription?: string | null
+} {
+  return { ...parseApproval(data), ...seenDescriptionOf(record(data)) }
 }
 
 /** Most bids a turn-down may name: more than any family has takers. */

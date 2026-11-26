@@ -89,6 +89,7 @@ const { getItemMarkFn } = await import('~/server/disputes/functions')
 const reserved: TaskView = {
   id: 1,
   title: 'Vyluxovat celý obývák a chodbu',
+  description: null,
   status: 'reserved',
   score: 8,
   approvalRequired: true,

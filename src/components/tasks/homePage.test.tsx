@@ -97,6 +97,7 @@ const { Route } = await import('~/routes/_app/index')
 const dishes: TemplateView = {
   id: 9,
   title: 'Vyndat myčku',
+  description: null,
   status: 'active',
   score: 3,
   approvalRequired: true,
@@ -193,6 +194,7 @@ describe('Domů', () => {
     const change: TaskView = {
       id: 7,
       title: 'Vyluxovat celý obývák a chodbu',
+      description: null,
       status: 'open',
       score: 10,
       approvalRequired: true,

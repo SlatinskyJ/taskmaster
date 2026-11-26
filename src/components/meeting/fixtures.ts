@@ -6,6 +6,7 @@ import type { TaskView } from '~/server/tasks/functions'
 export const task = (over: Partial<TaskView>): TaskView => ({
   id: 1,
   title: 'Vyndat myčku',
+  description: null,
   status: 'done_unconfirmed',
   score: 2,
   approvalRequired: true,

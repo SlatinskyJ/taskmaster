@@ -31,6 +31,7 @@ import type { BidAction, BidCall } from './taskView'
 const view = (over: Partial<TaskView>): TaskView => ({
   id: 1,
   title: 'Vyluxovat celý obývák a chodbu',
+  description: null,
   status: 'proposed',
   score: 18,
   approvalRequired: true,

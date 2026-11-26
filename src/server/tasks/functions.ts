@@ -35,6 +35,7 @@ import {
   withdrawBid,
 } from './bidding'
 import { getFlags } from '~/server/features'
+import { hasDescription, optionalDescription, seenDescriptionOf } from '~/server/descriptions/parse'
 import type { Db } from '~/server/db'
 import {
   approveTaskOffer,
@@ -72,17 +73,38 @@ function scoreOf(value: unknown): number {
   return n
 }
 
-function parseNewTask(data: unknown): { title: string; score: number; approvalRequired: boolean } {
-  const { title, score, approvalRequired } = record(data)
+export function parseNewTask(data: unknown): {
+  title: string
+  score: number
+  approvalRequired: boolean
+  description?: string
+} {
+  const body = record(data)
+  const { title, score, approvalRequired } = body
   if (typeof title !== 'string' || typeof approvalRequired !== 'boolean') {
     throw new Error('Invalid input')
   }
-  return { title, score: scoreOf(score), approvalRequired }
+  const description = optionalDescription(body)
+  return {
+    title,
+    score: scoreOf(score),
+    approvalRequired,
+    ...(description !== undefined && { description }),
+  }
 }
 
 function parseApproval(data: unknown): { taskId: number; score: number } {
   const { taskId, score } = record(data)
   return { taskId: int(taskId), score: scoreOf(score) }
+}
+
+/** A taker's yes, bid or pick: the number, and the text his page showed (#207 ruling 8). */
+export function parseTakerScore(data: unknown): {
+  taskId: number
+  score: number
+  seenDescription?: string | null
+} {
+  return { ...parseApproval(data), ...seenDescriptionOf(record(data)) }
 }
 
 function parseTaskId(data: unknown): { taskId: number } {
@@ -146,52 +168,85 @@ export function answered(result: Result<TaskRow, TaskError>): TaskActionResult {
   return result.ok ? { ok: true, id: result.value.id, status: result.value.status } : result
 }
 
-/** A giver creates a one-time task with an offer (spec §5.2). */
+// ── Descriptions (#207, behind the `descriptions` switch) ────────────────────────────────
+
+interface Seen {
+  taskId: number
+  score: number
+  seenDescription?: string | null
+}
+
+/** The switch, as the views take it: descriptions are shown only with it on. */
+const shown = (db: Db) => ({ descriptions: getFlags(db).descriptions })
+
+/** The page's text, checked only with the switch on (ruling 8). */
+const seenOf = (db: Db, data: Seen) =>
+  getFlags(db).descriptions ? data.seenDescription : undefined
+
+/** A giver creates a one-time task with an offer (spec §5.2); a description needs the switch. */
+export function createTaskHandler(
+  db: Db,
+  giverId: number,
+  data: ReturnType<typeof parseNewTask>,
+  now: Date,
+): RefusalResult {
+  if (!getFlags(db).descriptions && hasDescription(data.description)) return OFF
+  return answered(createTask(db, giverId, data, now))
+}
+
+/** A giver or taker approves the offer they were shown (spec §5.2 path 1). */
+export function approveTaskOfferHandler(db: Db, userId: number, data: Seen, now: Date) {
+  return answered(approveTaskOffer(db, userId, data.taskId, data.score, now, seenOf(db, data)))
+}
+
+/** A taker bids (or re-bids) a number of his own. */
+export function placeBidHandler(db: Db, takerId: number, data: Seen, now: Date) {
+  return answered(placeBid(db, takerId, data.taskId, data.score, now, seenOf(db, data)))
+}
+
+/** A taker with a bid takes the offer he was shown: reserved to him. */
+export function acceptOfferHandler(db: Db, takerId: number, data: Seen, now: Date) {
+  return answered(acceptOffer(db, takerId, data.taskId, data.score, now, seenOf(db, data)))
+}
+
 export const createTaskFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver')])
   .validator(parseNewTask)
-  .handler(({ data, context }) => answered(createTask(getDb(), context.user.id, data)))
+  .handler(({ data, context }) => createTaskHandler(getDb(), context.user.id, data, new Date()))
 
-/** A giver or taker approves the offer they were shown (spec §5.2 path 1). */
 export const approveTaskOfferFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver', 'taker')])
-  .validator(parseApproval)
+  .validator(parseTakerScore)
   .handler(({ data, context }) =>
-    answered(approveTaskOffer(getDb(), context.user.id, data.taskId, data.score)),
+    approveTaskOfferHandler(getDb(), context.user.id, data, new Date()),
   )
 
 /** "Čeká na tebe": offers waiting for this person's approval. */
 export const listPendingApprovalsFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
-  .handler(({ context }): TaskView[] => pendingApprovals(getDb(), context.user.id))
+  .handler(({ context }): TaskView[] => pendingApprovals(getDb(), context.user.id, shown(getDb())))
 
 /** Every one-time task, for the giver's Úkoly screen. */
 export const listTasksFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver')])
-  .handler((): TaskView[] => listTasks(getDb()))
+  .handler((): TaskView[] => listTasks(getDb(), shown(getDb())))
 
 /** The meeting's plan step (#44). */
 export const listPlanTasksFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver')])
-  .handler((): TaskView[] => listPlanTasks(getDb()))
+  .handler((): TaskView[] => listPlanTasks(getDb(), shown(getDb())))
 
 // ── Bidding (#34, spec §5.2 path 2) ─────────────────────────────────────────────────────
 
-/** A taker bids (or re-bids) a number of his own. */
 export const placeBidFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('taker')])
-  .validator(parseApproval)
-  .handler(({ data, context }) =>
-    answered(placeBid(getDb(), context.user.id, data.taskId, data.score)),
-  )
+  .validator(parseTakerScore)
+  .handler(({ data, context }) => placeBidHandler(getDb(), context.user.id, data, new Date()))
 
-/** A taker with a bid takes the offer he was shown: reserved to him. */
 export const acceptOfferFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('taker')])
-  .validator(parseApproval)
-  .handler(({ data, context }) =>
-    answered(acceptOffer(getDb(), context.user.id, data.taskId, data.score)),
-  )
+  .validator(parseTakerScore)
+  .handler(({ data, context }) => acceptOfferHandler(getDb(), context.user.id, data, new Date()))
 
 /** A giver changes the offer for every taker; at takers' own bid it accepts them. */
 export const counterOfferFn = createServerFn({ method: 'POST' })
@@ -272,12 +327,12 @@ export const reopenBiddingFn = createServerFn({ method: 'POST' })
 export const getTaskDetailFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
   .validator(parseTaskId)
-  .handler(({ data }): TaskDetail | null => getTaskDetail(getDb(), data.taskId))
+  .handler(({ data }): TaskDetail | null => getTaskDetail(getDb(), data.taskId, shown(getDb())))
 
 /** Proposed tasks with bids waiting for a giver. */
 export const listBidsToAnswerFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver')])
-  .handler((): TaskView[] => listBidsToAnswer(getDb()))
+  .handler((): TaskView[] => listBidsToAnswer(getDb(), shown(getDb())))
 
 // ── Work flow (#35, spec §5.4–§5.6) ─────────────────────────────────────────────────────
 
@@ -299,12 +354,12 @@ function done(result: ReturnType<typeof reserveTask>): LifecycleActionResult {
 /** Open, reserved and pending tasks (taker's Domů until #40). */
 export const listBoardFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('taker')])
-  .handler((): TaskView[] => listBoard(getDb()))
+  .handler((): TaskView[] => listBoard(getDb(), shown(getDb())))
 
 /** Completions waiting for a giver (giver's Domů until #41). */
 export const listPendingCompletionsFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver')])
-  .handler((): TaskView[] => listPendingCompletions(getDb()))
+  .handler((): TaskView[] => listPendingCompletions(getDb(), shown(getDb())))
 
 export const reserveTaskFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('taker')])
@@ -393,4 +448,6 @@ export const declineTaskScoreChangeFn = createServerFn({ method: 'POST' })
 /** "Čeká na tebe": price changes waiting for this person. */
 export const listScoreChangesWaitingFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
-  .handler(({ context }): TaskView[] => listScoreChangesWaiting(getDb(), context.user.id))
+  .handler(({ context }): TaskView[] =>
+    listScoreChangesWaiting(getDb(), context.user.id, shown(getDb())),
+  )

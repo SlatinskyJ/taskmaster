@@ -31,6 +31,8 @@ const EXPECTED_ROLES: Record<string, string> = {
   updateUserFn: 'admin',
   resetPasswordFn: 'admin',
   createTaskFn: 'giver',
+  changeDescriptionFn: 'giver',
+  answerDescriptionFn: 'taker',
   createInstanceFn: 'giver',
   selfLogFn: 'taker',
   listLoggableTemplatesFn: 'taker',

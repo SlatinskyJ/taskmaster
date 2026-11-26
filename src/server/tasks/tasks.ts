@@ -34,6 +34,8 @@ import type { Actor, Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { taskScoreApprovals, tasks, users } from '~/server/db/schema'
 import type { TaskOrigin, TaskRow } from '~/server/db/schema'
+import { waitingDescriptionOf } from '~/server/descriptions/rows'
+import type { WaitingDescription } from '~/server/descriptions/rows'
 import type { ThreadEntry } from '~/server/threadEntry'
 import { listPeople } from '~/server/users/people'
 import { openChangeOf } from './changeRows'
@@ -349,6 +351,8 @@ export function resolveProposedTasks(tx: Tx, people: Person[], now: Date): void 
 export interface TaskView {
   id: number
   title: string
+  /** What done means (#207); null = none, or the `descriptions` switch is off. */
+  description: string | null
   status: TaskRow['status']
   score: number
   approvalRequired: boolean
@@ -424,7 +428,12 @@ function namesOf(db: Db | Tx): (id: number) => string {
   return (id) => names.get(id) ?? ''
 }
 
-function views(db: Db | Tx, rows: TaskRow[]): TaskView[] {
+/** What a read shows (#207): descriptions only with the `descriptions` switch on. Off by default. */
+export interface TaskViewOpts {
+  descriptions?: boolean
+}
+
+function views(db: Db | Tx, rows: TaskRow[], opts: TaskViewOpts = {}): TaskView[] {
   if (rows.length === 0) return []
   const name = namesOf(db)
   const people = listPeople(db)
@@ -440,6 +449,7 @@ function views(db: Db | Tx, rows: TaskRow[]): TaskView[] {
     return {
       id: t.id,
       title: t.title,
+      description: opts.descriptions ? t.description : null,
       status: t.status,
       score: t.score,
       approvalRequired: t.approvalRequired,
@@ -500,13 +510,17 @@ function scoreChangeView(
  * "Čeká na tebe" (UI doc §7.1 TApprove, a price change): open or reserved tasks whose new score
  * waits for this person, oldest change first.
  */
-export function listScoreChangesWaiting(db: Db | Tx, userId: number): TaskView[] {
+export function listScoreChangesWaiting(
+  db: Db | Tx,
+  userId: number,
+  opts: TaskViewOpts = {},
+): TaskView[] {
   const rows = db
     .select()
     .from(tasks)
     .where(inArray(tasks.status, ['open', 'reserved']))
     .all()
-  const waiting = views(db, rows).filter((t) =>
+  const waiting = views(db, rows, opts).filter((t) =>
     t.scoreChange?.waitingFor.some((p) => p.id === userId),
   )
   return waiting.sort((a, b) => (a.scoreChange?.id ?? 0) - (b.scoreChange?.id ?? 0))
@@ -517,13 +531,19 @@ export interface TaskDetail {
   thread: ThreadEntry[]
   /** Everything that happened to the task, oldest first (#36). */
   history: HistoryEntry[]
+  /** A description change waiting for a taker (#207); null with none, or the switch off. */
+  descriptionChange: WaitingDescription | null
 }
 
 /** A task with its full negotiation history (spec §5.2: every bid visible), or null. */
-export function getTaskDetail(db: Db | Tx, taskId: number): TaskDetail | null {
+export function getTaskDetail(
+  db: Db | Tx,
+  taskId: number,
+  opts: TaskViewOpts = {},
+): TaskDetail | null {
   const row = db.select().from(tasks).where(eq(tasks.id, taskId)).get()
   if (!row) return null
-  const [task] = views(db, [row])
+  const [task] = views(db, [row], opts)
   if (!task) return null
   const name = namesOf(db)
   const from = threadFrom(db, row)
@@ -537,7 +557,10 @@ export function getTaskDetail(db: Db | Tx, taskId: number): TaskDetail | null {
       at: e.createdAt,
       state: e.closedAs ?? 'open',
     }))
-  return { task, thread, history: taskHistory(db, taskId, name) }
+  const descriptionChange = opts.descriptions
+    ? waitingDescriptionOf(db, { kind: 'task', id: taskId })
+    : null
+  return { task, thread, history: taskHistory(db, taskId, name), descriptionChange }
 }
 
 /**
@@ -562,7 +585,7 @@ function threadFrom(db: Db | Tx, task: TaskRow): number {
  * Proposed tasks, and open ones in a reopened round (#212), with at least one current open bid,
  * oldest task first (a giver answers them).
  */
-export function listBidsToAnswer(db: Db | Tx): TaskView[] {
+export function listBidsToAnswer(db: Db | Tx, opts: TaskViewOpts = {}): TaskView[] {
   const proposed = db
     .select()
     .from(tasks)
@@ -571,14 +594,14 @@ export function listBidsToAnswer(db: Db | Tx): TaskView[] {
     )
     .orderBy(asc(tasks.id))
     .all()
-  return views(db, proposed).filter((t) => t.bids.length > 0)
+  return views(db, proposed, opts).filter((t) => t.bids.length > 0)
 }
 
 /**
  * The work board (taker's Domů until #40): open tasks, and reserved or pending ones, oldest
  * first. The screen splits them into "Moje" and "Volné".
  */
-export function listBoard(db: Db | Tx): TaskView[] {
+export function listBoard(db: Db | Tx, opts: TaskViewOpts = {}): TaskView[] {
   return views(
     db,
     db
@@ -587,11 +610,12 @@ export function listBoard(db: Db | Tx): TaskView[] {
       .where(inArray(tasks.status, ['open', 'reserved', 'done_unconfirmed']))
       .orderBy(asc(tasks.id))
       .all(),
+    opts,
   )
 }
 
 /** Completions waiting for a giver ("Ke schválení", spec §5.5), oldest done first. */
-export function listPendingCompletions(db: Db | Tx): TaskView[] {
+export function listPendingCompletions(db: Db | Tx, opts: TaskViewOpts = {}): TaskView[] {
   return views(
     db,
     db
@@ -600,11 +624,12 @@ export function listPendingCompletions(db: Db | Tx): TaskView[] {
       .where(eq(tasks.status, 'done_unconfirmed'))
       .orderBy(asc(tasks.completedAt))
       .all(),
+    opts,
   )
 }
 
 /** The meeting's plan step (spec §5.9 step 3): tasks that still need something, newest first. */
-export function listPlanTasks(db: Db | Tx): TaskView[] {
+export function listPlanTasks(db: Db | Tx, opts: TaskViewOpts = {}): TaskView[] {
   return views(
     db,
     db
@@ -613,12 +638,13 @@ export function listPlanTasks(db: Db | Tx): TaskView[] {
       .where(inArray(tasks.status, ['proposed', 'open', 'reserved']))
       .orderBy(desc(tasks.id))
       .all(),
+    opts,
   )
 }
 
 /** Every one-time task, newest first (the giver's Úkoly list). */
-export function listTasks(db: Db | Tx): TaskView[] {
-  return views(db, db.select().from(tasks).orderBy(desc(tasks.id)).all())
+export function listTasks(db: Db | Tx, opts: TaskViewOpts = {}): TaskView[] {
+  return views(db, db.select().from(tasks).orderBy(desc(tasks.id)).all(), opts)
 }
 
 /**
@@ -626,7 +652,7 @@ export function listTasks(db: Db | Tx): TaskView[] {
  * that they haven't approved yet. Takers see every new offer; a giver only when no current
  * giver has approved (the offering giver's approval stops counting if they leave).
  */
-export function pendingApprovals(db: Db | Tx, userId: number): TaskView[] {
+export function pendingApprovals(db: Db | Tx, userId: number, opts: TaskViewOpts = {}): TaskView[] {
   const people = listPeople(db)
   const me = findPerson(people, userId)
   if (!me || me.role === 'admin' || !me.active) return []
@@ -643,5 +669,5 @@ export function pendingApprovals(db: Db | Tx, userId: number): TaskView[] {
     if (agreement.offer.approvedBy.includes(userId)) return false
     return missingRoles(agreement.offer, people).includes(role)
   })
-  return views(db, waiting)
+  return views(db, waiting, opts)
 }
