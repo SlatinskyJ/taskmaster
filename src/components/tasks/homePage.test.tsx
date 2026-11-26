@@ -28,7 +28,25 @@ vi.mock('@tanstack/react-router', () => ({
   redirect: vi.fn(),
   useRouter: () => ({ invalidate: vi.fn() }),
   useRouterState: () => ({ location: { pathname: '/' } }),
-  Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
+  // With params (a row's page, #205) the href is built, so a test can see where a row goes.
+  Link: ({
+    to,
+    params,
+    children,
+    className,
+  }: {
+    to?: string
+    params?: Record<string, string>
+    children: ReactNode
+    className?: string
+  }) =>
+    params && to ? (
+      <a href={to.replace(/\$(\w+)/g, (_, k: string) => params[k] ?? '')} className={className}>
+        {children}
+      </a>
+    ) : (
+      <a>{children}</a>
+    ),
 }))
 // Launch switches (the app shell's `context.features`): all on unless a test turns one off.
 const features = vi.hoisted(() => ({
@@ -38,6 +56,7 @@ const features = vi.hoisted(() => ({
   meeting: true,
   periodProposals: false,
   approveAnywhere: false,
+  openRows: false,
 }))
 vi.mock('./useTaskAction', () => ({ useTaskAction: () => ({ busy: null, run: vi.fn() }) }))
 vi.mock('./bidCalls', () => ({ callBid: vi.fn(), BID_CALLS: {} }))
@@ -94,6 +113,21 @@ const dishes: TemplateView = {
 }
 
 const flowers: TemplateView = { ...dishes, id: 10, title: 'Zalít kytky', change: null }
+/** A proposed chore with first-price bidding (#209): Táta offers 10, Starší bids 12. */
+const bins = (bids: { takerId: number; name: string; score: number }[]): TemplateView => ({
+  ...dishes,
+  id: 11,
+  title: 'Vynést koš',
+  status: 'proposed',
+  score: 10,
+  change: null,
+  bidding: {
+    offer: { score: 10, byName: 'Táta' },
+    bids,
+    lowest: bids[0]?.score ?? null,
+    lastBids: bids.map((b) => ({ takerId: b.takerId, score: b.score })),
+  },
+})
 
 function render(user: PageUser, recurring: TemplateView[], over: Record<string, unknown> = {}) {
   page.user = user
@@ -201,6 +235,26 @@ describe('Domů', () => {
       waitingTemplates: [flowers],
     })
     expect(html).not.toContain('Teď na tebe nic nečeká.')
+  })
+
+  it("a brother's proposed chore row follows first-price bidding (#209)", () => {
+    const mladsi = { id: 5, role: 'taker', displayName: 'Mladší' } as const
+    const starsi = { id: 4, role: 'taker', displayName: 'Starší' } as const
+    const bid = [{ takerId: 4, name: 'Starší', score: 12 }]
+    const without = render(mladsi, [], { priceChanges: [], waitingTemplates: [bins([])] })
+    expect(without).toContain('Souhlasím')
+    expect(without).toContain('Jiná cena')
+    expect(without).toContain('Táta nabízí 10')
+    const mine = render(starsi, [], { priceChanges: [], waitingTemplates: [bins(bid)] })
+    expect(mine).toContain('Otevřít')
+    expect(mine).not.toContain('Souhlasím')
+    const off = render(mladsi, [], {
+      priceChanges: [],
+      waitingTemplates: [{ ...bins(bid), bidding: null }],
+    })
+    expect(off).toContain('Souhlasím')
+    expect(off).not.toContain('Jiná cena')
+    expect(off).toContain('Opakovaný')
   })
 
   it('a brother never gets the parent empty line', () => {
@@ -492,5 +546,117 @@ describe('Domů proposal rows (#43)', () => {
     })
     expect(html).toContain(cs.proposals.entry.periodRow)
     expect(html).not.toContain(cs.home.giverEmpty)
+  })
+})
+
+describe('switch openRows (#205): every row opens its page', () => {
+  const tata = { id: 2, role: 'giver', displayName: 'Táta' } as const
+  const starsi = { id: 4, role: 'taker', displayName: 'Starší' } as const
+  const task = (over: Partial<TaskView>) => ({
+    id: 1,
+    title: 'Úkol',
+    status: 'proposed',
+    score: 10,
+    approvalRequired: true,
+    createdByName: 'Táta',
+    offeredByName: 'Táta',
+    approvedBy: ['Táta'],
+    approverIds: [2],
+    bids: [],
+    lowest: null,
+    reservedBy: null,
+    completedBy: null,
+    completedAt: null,
+    earnerId: null,
+    waitingFor: [],
+    origin: 'one_time',
+    templateId: null,
+    dueAt: null,
+    graceEndsAt: null,
+    createdAt: '2026-11-17T10:00:00.000Z',
+    scoreChange: null,
+    ...over,
+  })
+  const boys = [
+    { id: 4, name: 'Starší' },
+    { id: 5, name: 'Mladší' },
+  ]
+  const giver = {
+    waiting: [task({ id: 1, title: 'Čeká na Tátu', waitingFor: [{ id: 2, name: 'Táta' }] })],
+    toApprove: [task({ id: 2, title: 'Hotový úkol', status: 'done_unconfirmed', earnerId: 4 })],
+    bids: [task({ id: 3, title: 'S nabídkou', bids: [{ takerId: 5, name: 'Mladší', score: 22 }] })],
+    tasks: [task({ id: 4, title: 'Uklidit sklep', waitingFor: boys })],
+  }
+  const proposedChore: TemplateView = {
+    ...dishes,
+    id: 11,
+    title: 'Vynést koše',
+    status: 'proposed',
+    change: null,
+  }
+  const taker = {
+    waiting: [task({ id: 5, title: 'Nová nabídka', waitingFor: boys })],
+    waitingTemplates: [proposedChore],
+    priceChanges: [dishes],
+    taskPriceChanges: [task({ id: 6, title: 'Nová cena', status: 'open', approvedBy: [] })],
+    board: [
+      task({
+        id: 7,
+        title: 'Moje rezervace',
+        status: 'reserved',
+        reservedBy: { id: 4, name: 'Starší' },
+      }),
+      task({ id: 8, title: 'Čeká na schválení', status: 'done_unconfirmed', earnerId: 4 }),
+      task({ id: 9, title: 'Volný úkol', status: 'open' }),
+    ],
+  }
+  /** The row's name is the stretched link to `href` (TaskRow). */
+  const linked = (html: string, href: string, name: string) => {
+    expect(html, name).toMatch(
+      new RegExp(`<a href="${href}" class="[^"]*after:inset-0[^"]*">${name}</a>`),
+    )
+  }
+
+  beforeEach(() => {
+    features.openRows = true
+    features.recurring = true
+  })
+  afterEach(() => {
+    features.openRows = false
+  })
+
+  it('a parent: Čeká na tebe, Ke schválení, Vyjednávání and Čeká na kluky rows', () => {
+    const html = render(tata, [], giver)
+    linked(html, '/ukol/1', 'Čeká na Tátu')
+    linked(html, '/ukol/2', 'Hotový úkol')
+    linked(html, '/ukol/3', 'S nabídkou')
+    linked(html, '/ukol/4', 'Uklidit sklep')
+  })
+
+  it('a parent with Ke schválení on top keeps its link', () => {
+    features.approveAnywhere = true
+    try {
+      linked(render(tata, [], giver), '/ukol/2', 'Hotový úkol')
+    } finally {
+      features.approveAnywhere = false
+    }
+  })
+
+  it('a brother: his offers, chores, price changes, Moje, Volné and Opakované úkoly', () => {
+    const html = render(starsi, [flowers], taker)
+    linked(html, '/ukol/5', 'Nová nabídka')
+    linked(html, '/sablona/11', 'Vynést koše')
+    linked(html, '/sablona/9', 'Vyndat myčku')
+    linked(html, '/ukol/6', 'Nová cena')
+    linked(html, '/ukol/7', 'Moje rezervace')
+    linked(html, '/ukol/8', 'Čeká na schválení')
+    linked(html, '/ukol/9', 'Volný úkol')
+    linked(html, '/sablona/10', 'Zalít kytky')
+  })
+
+  it('switch off: no row is a link', () => {
+    features.openRows = false
+    for (const html of [render(tata, [], giver), render(starsi, [flowers], taker)])
+      expect(html).not.toContain('after:inset-0')
   })
 })

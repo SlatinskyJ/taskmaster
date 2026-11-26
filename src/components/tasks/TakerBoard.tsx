@@ -1,14 +1,13 @@
-import { Bookmark } from 'lucide-react'
 import { EmptyState } from '~/components/EmptyState'
 import { SectionLabel } from '~/components/shell/SectionLabel'
-import { Button } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
-import { reserveTaskFn, type TaskView } from '~/server/tasks/functions'
-import { canWorkOn, instanceMeta, taskChipState } from './taskView'
+import type { TaskView } from '~/server/tasks/functions'
+import { taskLink } from './rowLink'
 import { TaskLink } from './TaskLink'
+import { canWorkOn, instanceMeta, taskChipState } from './taskView'
 import { TaskRow } from './TaskRow'
 import { useTaskAction } from './useTaskAction'
-import { DoneButton, WorkButtons } from './WorkButtons'
+import { DoneButton, ReserveButton, WorkButtons } from './WorkButtons'
 
 /**
  * A taker's work on Domů (UI doc §7.1): "Moje" (reserved by me, or done and waiting for
@@ -23,10 +22,13 @@ export function TakerBoard({
   items,
   me,
   rebid = false,
+  links = false,
 }: {
   items: readonly TaskView[]
   me: number
   rebid?: boolean
+  /** The `openRows` switch (#205): each row opens its page (then no separate name link). */
+  links?: boolean
 }) {
   const { busy, run } = useTaskAction()
   const now = new Date()
@@ -50,9 +52,15 @@ export function TakerBoard({
                     points={t.score}
                     meta={instanceMeta(t, now)}
                     action={<WorkButtons task={t} busy={busy} run={run} />}
+                    link={links ? taskLink(t.id) : undefined}
                   />
                 ) : (
-                  <TaskRow name={t.title} state="pending" points={t.score} />
+                  <TaskRow
+                    name={t.title}
+                    state="pending"
+                    points={t.score}
+                    link={links ? taskLink(t.id) : undefined}
+                  />
                 )}
               </li>
             ))}
@@ -69,7 +77,7 @@ export function TakerBoard({
               <li key={t.id}>
                 <TaskRow
                   name={
-                    rebid && t.origin === 'one_time' ? (
+                    !links && rebid && t.origin === 'one_time' ? (
                       <TaskLink id={t.id} title={t.title} />
                     ) : (
                       t.title
@@ -80,26 +88,11 @@ export function TakerBoard({
                   meta={instanceMeta(t, now)}
                   action={
                     <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={cs.work.reserve}
-                        title={cs.work.reserve}
-                        disabled={busy !== null}
-                        aria-busy={busy === `reserve-${String(t.id)}`}
-                        onClick={() => {
-                          void run(
-                            `reserve-${String(t.id)}`,
-                            () => reserveTaskFn({ data: { taskId: t.id } }),
-                            () => cs.work.toast.reserved,
-                          )
-                        }}
-                      >
-                        <Bookmark aria-hidden="true" />
-                      </Button>
+                      <ReserveButton task={t} busy={busy} run={run} />
                       <DoneButton task={t} busy={busy} run={run} />
                     </div>
                   }
+                  link={links ? taskLink(t.id) : undefined}
                 />
               </li>
             ))}

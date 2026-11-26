@@ -416,6 +416,45 @@ describe('template price change: ways in', () => {
   })
 })
 
+describe('Úkoly: a proposed chore with first-price bidding (#209)', () => {
+  const proposedRow = (bids: { takerId: number; name: string; score: number }[]) =>
+    renderToStaticMarkup(
+      <TemplateRow
+        template={{
+          id: 9,
+          title: 'Vynést koš',
+          status: 'proposed',
+          score: 10,
+          approvalRequired: true,
+          createdByName: 'Táta',
+          approvedBy: ['Táta'],
+          schedule: null,
+          deadline: null,
+          change: null,
+          bidding: {
+            offer: { score: 10, byName: 'Táta' },
+            bids,
+            lowest: bids[0]?.score ?? null,
+            lastBids: [],
+          },
+        }}
+      />,
+    )
+
+  it('with bids: Odpovědět and who wants what, not Čeká na souhlas', () => {
+    const html = proposedRow([{ takerId: 4, name: 'Starší', score: 12 }])
+    expect(html).toContain('<a href="/sablona/9">Odpovědět</a>')
+    expect(html).toContain('Starší chce 12')
+    expect(html).not.toContain('Čeká na souhlas')
+  })
+
+  it('without bids: Otevřít and Čeká na souhlas', () => {
+    const html = proposedRow([])
+    expect(html).toContain('<a href="/sablona/9">Otevřít</a>')
+    expect(html).toContain('Čeká na souhlas')
+  })
+})
+
 describe('TakerBoard Moje row (#148)', () => {
   const reserved: TaskView = {
     id: 1,

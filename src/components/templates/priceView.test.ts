@@ -3,6 +3,8 @@ import type { Me } from '~/components/tasks/taskView'
 import type { TemplateView } from '~/server/templates/functions'
 import {
   priceButtons,
+  priceError,
+  priceRefusal,
   priceMeta,
   priceSend,
   priceToast,
@@ -58,7 +60,12 @@ const tie: TemplateView = {
 const proposed: TemplateView = { ...base, status: 'proposed', approvedBy: ['Táta'] }
 
 const labels = (t: TemplateView, me: Me) =>
-  priceButtons(t, me).map((b) => [b.action, b.data.score, b.label, b.hint])
+  priceButtons(t, me).map((b) => [
+    b.action,
+    'score' in b.data ? b.data.score : null,
+    b.label,
+    b.hint,
+  ])
 
 describe('priceButtons', () => {
   it('a brother may accept the parents’ offer, with or without his own bid', () => {
@@ -157,7 +164,7 @@ describe('priceMeta', () => {
 })
 
 describe('priceToast', () => {
-  const ok = (score: number) => ({ ok: true as const, id: 7, score })
+  const ok = (score: number) => ({ ok: true as const, id: 7, score, status: 'active' as const })
   const call = (action: 'bid' | 'counter' | 'acceptBid' | 'acceptOffer', score: number) => ({
     action,
     data: { templateId: 7, score },
@@ -173,6 +180,8 @@ describe('priceToast', () => {
   it('a change someone else agreed meanwhile does not read as mine', () => {
     // The page showed 3; Starší accepted 4 meanwhile; Mladší's bid of 6 only opens a new change.
     expect(priceToast(call('bid', 6), ok(4))).toBe('Nabídka odeslána')
+    // An agreed chore: a bid the server takes at the number sent agrees (§5.1 score change).
+    expect(priceToast(call('bid', 4), ok(4))).toBe('Domluveno')
   })
 })
 
@@ -181,5 +190,163 @@ describe('templateChip', () => {
     expect(templateChip(proposed)).toEqual({ state: 'proposed' })
     expect(templateChip(demo)).toEqual({ state: 'negotiating' })
     expect(templateChip(base)).toEqual({ state: 'confirmed', label: 'Platí' })
+  })
+})
+
+// A proposed chore's first price (#209): "Vynést koš", offered by Táta at 10, Starší bids 12.
+describe('a proposed chore with first-price bidding (#209)', () => {
+  const bidding = (
+    bids: { takerId: number; name: string; score: number }[],
+    lastBids = bids.map((b) => ({ takerId: b.takerId, score: b.score })),
+  ): TemplateView => ({
+    ...base,
+    title: 'Vynést koš',
+    status: 'proposed',
+    score: 10,
+    approvedBy: ['Táta'],
+    bidding: {
+      offer: { score: 10, byName: 'Táta' },
+      bids: [...bids].sort((a, b) => a.score - b.score),
+      lowest: bids.length ? Math.min(...bids.map((b) => b.score)) : null,
+      lastBids,
+    },
+  })
+  const starsi12 = { takerId: STARSI.id, name: 'Starší', score: 12 }
+  const one = bidding([starsi12])
+  const none = bidding([])
+
+  it('a brother agrees to the offer; with his bid he may also say Nechci', () => {
+    const agree = ['approve', 10, 'Souhlasím', 'Úkol začne platit za 10 b.']
+    expect(labels(one, STARSI)).toEqual([agree])
+    expect(labels(one, MLADSI)).toEqual([agree])
+    expect(priceRefusal(one, STARSI)).toMatchObject({
+      action: 'withdraw',
+      data: { templateId: 7 },
+      label: 'Nechci',
+    })
+    expect(priceRefusal(one, MLADSI)).toBeNull()
+  })
+
+  it('a brother cannot send the offer or his last bid again', () => {
+    expect(priceSend(one, STARSI, 10)?.disabled).toBe(true)
+    expect(priceSend(one, STARSI, 12)).toMatchObject({
+      action: 'bid',
+      disabled: true,
+      hint: 'Stejné číslo můžeš poslat znovu, až rodiče změní nabídku.',
+    })
+    // After Nechci his bid is closed but still his last one.
+    const withdrawn = bidding([], [{ takerId: STARSI.id, score: 12 }])
+    expect(priceSend(withdrawn, STARSI, 12)?.disabled).toBe(true)
+    expect(priceSend(withdrawn, STARSI, 11)).toMatchObject({
+      disabled: false,
+      hint: 'Nabídka půjde rodičům.',
+    })
+    // Only his own last bid is blocked: Mladší may match Starší's 12.
+    expect(priceSend(one, MLADSI, 12)).toMatchObject({
+      disabled: false,
+      hint: 'Nabídka půjde rodičům.',
+    })
+    const sinceStarsi = bidding([starsi12], [{ takerId: STARSI.id, score: 12 }])
+    expect(priceSend(sinceStarsi, MLADSI, 12)?.disabled).toBe(false)
+    expect(stepperStart(one, STARSI)).toBe(12)
+    expect(stepperStart(one, MLADSI)).toBe(10)
+  })
+
+  it('a parent accepts the lowest or turns down exactly the bids he sees', () => {
+    const two = bidding([starsi12, { takerId: MLADSI.id, name: 'Mladší', score: 14 }])
+    expect(labels(two, TATA)).toEqual([
+      ['acceptBid', 12, 'Přijmout 12 (Starší)', 'Úkol začne platit za 12 b.'],
+    ])
+    expect(priceRefusal(two, TATA)).toEqual({
+      key: 'turnDown',
+      action: 'turnDown',
+      data: {
+        templateId: 7,
+        bids: [
+          { takerId: STARSI.id, score: 12 },
+          { takerId: MLADSI.id, score: 14 },
+        ],
+      },
+      label: 'Odmítnout nabídky',
+      hint: 'Všechny nabídky se uzavřou. Úkol zůstane navržený za 10 b.',
+    })
+    const tie = bidding([starsi12, { takerId: MLADSI.id, name: 'Mladší', score: 12 }])
+    expect(labels(tie, MAMA)[0]?.[2]).toBe('Přijmout 12')
+  })
+
+  it("a parent's stepper at a bid accepts that bid and names its bidder", () => {
+    const two = bidding([starsi12, { takerId: MLADSI.id, name: 'Mladší', score: 14 }])
+    expect(priceSend(two, TATA, 12)).toMatchObject({
+      action: 'counter',
+      label: 'Přijmout 12 (Starší)',
+    })
+    expect(priceSend(two, TATA, 14)).toMatchObject({
+      action: 'counter',
+      label: 'Přijmout 14 (Mladší)',
+      hint: 'Úkol začne platit za 14 b.',
+    })
+    expect(priceSend(two, TATA, 11)).toMatchObject({ label: 'Nabídnout', disabled: false })
+    expect(priceSend(two, TATA, 10)?.disabled).toBe(true)
+    const tie = bidding([starsi12, { takerId: MLADSI.id, name: 'Mladší', score: 12 }])
+    expect(priceSend(tie, TATA, 12)?.label).toBe('Přijmout 12 (Starší, Mladší)')
+  })
+
+  it('a parent with no bids has no yes and no turn-down, the proposer no Souhlasím', () => {
+    expect(priceButtons(none, TATA)).toEqual([])
+    expect(priceButtons(none, MAMA)).toEqual([])
+    expect(priceRefusal(none, TATA)).toBeNull()
+  })
+
+  it('chip and short line follow the bids', () => {
+    expect(templateChip(one)).toEqual({ state: 'negotiating' })
+    expect(templateChip(none)).toEqual({ state: 'proposed' })
+    expect(priceMeta(one, TATA)).toBe('Starší chce 12')
+    expect(priceMeta(one, STARSI)).toBe('Táta nabízí 10')
+  })
+
+  it('switch off (bidding null): nothing to do on the page', () => {
+    const off: TemplateView = { ...one, bidding: null }
+    for (const me of [TATA, STARSI]) {
+      expect(priceButtons(off, me)).toEqual([])
+      expect(priceRefusal(off, me)).toBeNull()
+      expect(priceSend(off, me, 11)).toBeNull()
+    }
+    expect(templateChip(off)).toEqual({ state: 'proposed' })
+  })
+
+  it('an admin can do nothing', () => {
+    expect(priceButtons(one, ADMIN)).toEqual([])
+    expect(priceRefusal(one, ADMIN)).toBeNull()
+    expect(priceSend(one, ADMIN, 11)).toBeNull()
+  })
+
+  it('toasts: sent until the chore is active; withdrawn; turned down', () => {
+    const res = (score: number, status: 'proposed' | 'active') => ({
+      ok: true as const,
+      id: 7,
+      score,
+      status,
+    })
+    const at = (action: 'counter' | 'approve' | 'acceptBid', score: number) => ({
+      action,
+      data: { templateId: 7, score },
+    })
+    expect(priceToast(at('counter', 11), res(11, 'proposed'), true)).toBe('Nabídka odeslána')
+    expect(priceToast(at('approve', 10), res(10, 'proposed'), true)).toBe('Nabídka odeslána')
+    expect(priceToast(at('acceptBid', 12), res(12, 'active'), true)).toBe('Domluveno')
+    // Stale: the chore went active before the call landed, so it ran as a score change.
+    expect(priceToast(at('counter', 11), res(10, 'active'), true)).toBe('Nabídka odeslána')
+    const bid = { action: 'bid' as const, data: { templateId: 7, score: 12 } }
+    expect(priceToast(bid, res(12, 'active'), true)).toBe('Nabídka odeslána')
+    expect(
+      priceToast({ action: 'withdraw', data: { templateId: 7 } }, res(10, 'proposed'), true),
+    ).toBe('Nabídka stažena')
+    const down = { action: 'turnDown' as const, data: { templateId: 7, bids: [] } }
+    expect(priceToast(down, res(10, 'proposed'), true)).toBe('Nabídky odmítnuty')
+    expect(priceError(down)('offer_changed')).toBe('Mezitím přišla nová nabídka. Podívej se na ni.')
+    expect(priceError(down)('not_found')).not.toBe('Mezitím přišla nová nabídka. Podívej se na ni.')
+    expect(priceError(at('counter', 11))('offer_changed')).not.toBe(
+      'Mezitím přišla nová nabídka. Podívej se na ni.',
+    )
   })
 })

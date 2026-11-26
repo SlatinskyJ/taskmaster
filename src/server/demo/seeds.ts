@@ -3,6 +3,7 @@ import type { FeatureKey } from '~/lib/features'
 import {
   bootTick,
   cancelled,
+  choreBidding,
   corrections,
   disputes,
   instances,
@@ -39,6 +40,11 @@ export const SEEDS = {
   launch: { pieces: [negotiation, points], features: [] },
   /** Done work to approve on Úkoly and the task page (#206). */
   approve: { pieces: [negotiation, points], features: ['approveAnywhere'] },
+  /** Rows that open their task or chore page (#205). */
+  rows: {
+    pieces: [negotiation, points, templates, instances],
+    features: ['recurring', 'week', 'openRows'],
+  },
   /** The task page (#36). */
   tasks: { pieces: [priceChange], features: [] },
   /** Saying no in bidding (#208): "Umýt auto" with two bids, the refusals switch on. */
@@ -49,6 +55,8 @@ export const SEEDS = {
   week: { pieces: [pastWeek, thisWeek], features: ['week', 'meeting'] },
   /** Recurring chores made by a person (#38): + Teď and Zapsat. */
   recurring: { pieces: [points, templates, instances], features: ['recurring', 'log'] },
+  /** Bidding on a proposed chore (#209): two proposed chores, one with two bids. */
+  chores: { pieces: [choreBidding], features: ['recurring', 'choreBidding'] },
   /** The scheduler (#39): everyday templates through the past week, then the boot tick. */
   scheduler: { pieces: [pastWeekScheduled, bootTick], features: ['recurring'] },
   /** Příští týden and Výchozí týden (#43): an open proposal of each kind. */
@@ -72,6 +80,7 @@ export const SEEDS = {
       cancelled,
       points,
       templates,
+      choreBidding,
       thisWeek,
       disputes,
       corrections,

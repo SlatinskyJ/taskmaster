@@ -10,6 +10,7 @@ import { listTasks } from '~/server/tasks'
 import { rejectionsSince } from '~/server/tasks/rejections'
 import { getFlags } from '~/server/features/flags'
 import { NO_FEATURES } from '~/lib/features'
+import { listTemplates } from '~/server/templates/templates'
 import { seedDemo } from './seed'
 import type { SeedName } from './seeds'
 
@@ -59,6 +60,27 @@ describe('e2e seeds (#183)', () => {
       expect(listPeriods(db)).toHaveLength(1)
     })
   }
+
+  it('rows (#205): recurring, week and openRows on; e2e/rows.spec.ts opens these ids', () => {
+    const db = seeded('rows')
+    expect(getFlags(db)).toEqual({ ...NO_FEATURES, recurring: true, week: true, openRows: true })
+    const byId = new Map(listTasks(db).map((t) => [t.id, t]))
+    expect([byId.get(9)?.title, byId.get(9)?.status]).toEqual([
+      'Umýt okna v obýváku i v ložnici',
+      'open',
+    ])
+    expect([byId.get(3)?.title, byId.get(3)?.status]).toEqual([
+      'Vyluxovat celý obývák a chodbu',
+      'reserved',
+    ])
+    expect([byId.get(12)?.title, byId.get(12)?.templateId]).toEqual(['Nachystat tašku do školy', 3])
+    const tpl = db.select().from(templates).all()
+    expect(tpl.map((t) => [t.id, t.title, t.status])).toEqual([
+      [1, 'Vynést koše', 'proposed'],
+      [2, 'Vyndat myčku', 'active'],
+      [3, 'Nachystat tašku do školy', 'active'],
+    ])
+  })
 
   it('approve (#206): only the approveAnywhere switch on; e2e/approve.spec.ts opens tasks 6 and 3', () => {
     const db = seeded('approve')
@@ -127,5 +149,22 @@ describe('e2e seeds (#183)', () => {
       waitingFor: [id('starsi'), id('mladsi')],
       settings: { lengthDays: 14, levels: { lower: 60, upper: 120 } },
     })
+  })
+
+  it('chores: Vynést kompost at 10 with no bids, Zalít kytky at 4 with Starší 6 and Mladší 7', () => {
+    const db = seeded('chores')
+    expect(listTasks(db)).toHaveLength(0)
+    const tata = db.select().from(users).where(eq(users.username, 'tata')).get()?.id ?? 0
+    // Newest first, as Úkoly lists them.
+    const views = listTemplates(db, tata, { choreBidding: true })
+    expect(views.map((t) => [t.title, t.status, t.score])).toEqual([
+      ['Zalít kytky', 'proposed', 4],
+      ['Vynést kompost', 'proposed', 10],
+    ])
+    expect(views[1]?.bidding?.bids).toEqual([])
+    expect(views[0]?.bidding?.bids.map((b) => [b.name, b.score])).toEqual([
+      ['Starší', 6],
+      ['Mladší', 7],
+    ])
   })
 })

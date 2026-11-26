@@ -397,7 +397,14 @@ export function deadlineRuleOf(row: TemplateRow): DeadlineRule | null {
   return { dayOffset: row.dueDayOffset, due: { hour, minute }, graceMinutes: row.graceMinutes }
 }
 
-function views(db: Db | Tx, rows: TemplateRow[]): TemplateView[] {
+/** The launch switch a read or an action follows (#209). Off by default. */
+export interface BiddingOpts {
+  choreBidding: boolean
+}
+const BIDDING_OFF: BiddingOpts = { choreBidding: false }
+
+/** With `choreBidding` off a proposed template has `bidding: null`: no screen offers bidding. */
+function views(db: Db | Tx, rows: TemplateRow[], opts: BiddingOpts): TemplateView[] {
   if (rows.length === 0) return []
   const names = nameMap(db)
   const people = listPeople(db)
@@ -420,7 +427,7 @@ function views(db: Db | Tx, rows: TemplateRow[]): TemplateView[] {
         ? null
         : { dayOffset: t.dueDayOffset, due: t.dueTime, graceMinutes: t.graceMinutes },
     change: changeView(db, t, people, name),
-    bidding: biddingView(db, t, people, name),
+    bidding: opts.choreBidding ? biddingView(db, t, people, name) : null,
   }))
 }
 
@@ -428,36 +435,47 @@ function views(db: Db | Tx, rows: TemplateRow[]): TemplateView[] {
  * Templates for the Úkoly screen, newest first. A giver sees every template; anyone else only
  * agreed ones (proposed ones reach takers through "Čeká na tebe").
  */
-export function listTemplates(db: Db | Tx, viewerId: number): TemplateView[] {
+export function listTemplates(
+  db: Db | Tx,
+  viewerId: number,
+  opts: BiddingOpts = BIDDING_OFF,
+): TemplateView[] {
   const viewer = findPerson(listPeople(db), viewerId)
   const query = db.select().from(templates)
   const rows =
     viewer?.role === 'giver'
       ? query.orderBy(desc(templates.id)).all()
       : query.where(eq(templates.status, 'active')).orderBy(desc(templates.id)).all()
-  return views(db, rows)
+  return views(db, rows, opts)
 }
 
 /** A template with its whole score change history (spec §5.1: every bid is kept). */
 export interface TemplateDetail {
   template: TemplateView
   thread: ThreadEntry[]
+  /** Who may still agree to a proposed template; any one of them per missing side (#205). */
+  waitingFor: { id: number; name: string }[]
 }
 
 /**
- * The price page of a template, or null: unknown id, or a proposed template for anyone but a
- * giver (takers approve proposed ones from "Čeká na tebe").
+ * The price page of a template, or null: unknown id, or a viewer who is not a party (the admin).
+ * A proposed one shows to the brothers too when a switch lets them reach it: with `openRows`
+ * they agree to it there (spec §5.1, #205), with `choreBidding` they bid on its first price (#209).
  */
 export function getTemplateDetail(
   db: Db | Tx,
   templateId: number,
   viewerId: number,
+  opts: BiddingOpts = BIDDING_OFF,
+  openRows = false,
 ): TemplateDetail | null {
   const row = db.select().from(templates).where(eq(templates.id, templateId)).get()
   if (!row) return null
   const viewer = findPerson(listPeople(db), viewerId)
-  if (row.status === 'proposed' && viewer?.role !== 'giver') return null
-  const [template] = views(db, [row])
+  if (viewer?.role !== 'giver' && viewer?.role !== 'taker') return null
+  const takerMay = opts.choreBidding || openRows
+  if (row.status === 'proposed' && viewer.role === 'taker' && !takerMay) return null
+  const [template] = views(db, [row], opts)
   if (!template) return null
   const names = nameMap(db)
   const thread = threadOf(db, templateId).map((e): ThreadEntry => ({
@@ -468,14 +486,23 @@ export function getTemplateDetail(
     at: e.createdAt,
     state: e.closedAs ?? 'open',
   }))
-  return { template, thread }
+  const waitingFor = templateWaitsFor(db, row, listPeople(db)).map((p) => ({
+    id: p.id,
+    name: names.get(p.id) ?? '',
+  }))
+  return { template, thread, waitingFor }
 }
 
 /**
  * "Čeká na tebe": agreed templates whose score change waits for this person's side. A taker
- * when the givers' offer is open (any taker may accept it); a giver when live bids are open.
+ * when the givers' offer is open (any taker may accept it); a giver when live bids are open. With
+ * `choreBidding` a giver also gets proposed templates with live bids, after the agreed ones (#209).
  */
-export function pendingTemplatePriceChanges(db: Db | Tx, userId: number): TemplateView[] {
+export function pendingTemplatePriceChanges(
+  db: Db | Tx,
+  userId: number,
+  opts: BiddingOpts = BIDDING_OFF,
+): TemplateView[] {
   const me = findPerson(listPeople(db), userId)
   if (!me || me.role === 'admin') return []
   const role = me.role
@@ -485,8 +512,39 @@ export function pendingTemplatePriceChanges(db: Db | Tx, userId: number): Templa
     .where(eq(templates.status, 'active'))
     .orderBy(asc(templates.id))
     .all()
-  return views(db, agreed).filter((t) =>
+  const changes = views(db, agreed, opts).filter((t) =>
     role === 'taker' ? t.change?.offer != null : (t.change?.bids.length ?? 0) > 0,
+  )
+  if (role !== 'giver' || !opts.choreBidding) return changes
+  const proposed = db
+    .select()
+    .from(templates)
+    .where(eq(templates.status, 'proposed'))
+    .orderBy(asc(templates.id))
+    .all()
+  return [...changes, ...views(db, proposed, opts).filter((t) => (t.bidding?.bids.length ?? 0) > 0)]
+}
+
+/**
+ * Who may still agree to a proposed template: the active people of each side that has no yes
+ * yet, minus those who said yes. Empty once it is agreed. Domů and the price page share it.
+ */
+export function templateWaitsFor(
+  db: Db | Tx,
+  row: TemplateRow,
+  people: readonly Person[],
+): Person[] {
+  if (row.status !== 'proposed') return []
+  const agreement = agreementOf(db, row)
+  if (agreement.status !== 'proposed') return []
+  const { proposal } = agreement
+  const missing = missingRoles(proposal, people)
+  return people.filter(
+    (p) =>
+      p.active &&
+      p.role !== 'admin' &&
+      missing.includes(p.role) &&
+      !proposal.approvedBy.includes(p.id),
   )
 }
 
@@ -494,22 +552,22 @@ export function pendingTemplatePriceChanges(db: Db | Tx, userId: number): Templa
  * "Čeká na tebe": proposed templates that still need this person's side and that they haven't
  * approved. Takers see every new one; a giver only when no current giver has approved.
  */
-export function pendingTemplateApprovals(db: Db | Tx, userId: number): TemplateView[] {
+export function pendingTemplateApprovals(
+  db: Db | Tx,
+  userId: number,
+  opts: BiddingOpts = BIDDING_OFF,
+): TemplateView[] {
   const people = listPeople(db)
   const me = findPerson(people, userId)
   if (!me || me.role === 'admin' || !me.active) return []
-  const role = me.role
   const proposed = db
     .select()
     .from(templates)
     .where(eq(templates.status, 'proposed'))
     .orderBy(asc(templates.id))
     .all()
-  const waiting = proposed.filter((row) => {
-    const agreement = agreementOf(db, row)
-    if (agreement.status !== 'proposed') return false
-    if (agreement.proposal.approvedBy.includes(userId)) return false
-    return missingRoles(agreement.proposal, people).includes(role)
-  })
-  return views(db, waiting)
+  const waiting = proposed.filter((row) =>
+    templateWaitsFor(db, row, people).some((p) => p.id === userId),
+  )
+  return views(db, waiting, opts)
 }

@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { SectionLabel } from '~/components/shell/SectionLabel'
+import { templateLink } from '~/components/tasks/rowLink'
 import { TaskRow } from '~/components/tasks/TaskRow'
 import { buttonVariants } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
@@ -16,9 +17,12 @@ import { templateChip } from './priceView'
 export function RecurringList({
   items,
   waiting,
+  links = false,
 }: {
   items: readonly TemplateView[]
   waiting: readonly TemplateView[]
+  /** The `openRows` switch (#205): each row opens its page. */
+  links?: boolean
 }) {
   const agreed = items.filter((t) => t.status === 'active' && !waiting.some((w) => w.id === t.id))
   if (agreed.length === 0) return null
@@ -45,6 +49,7 @@ export function RecurringList({
                     {cs.bids.otherPriceShort}
                   </Link>
                 }
+                link={links ? templateLink(t.id) : undefined}
               />
             </li>
           )
