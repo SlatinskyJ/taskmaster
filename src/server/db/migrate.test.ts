@@ -323,15 +323,15 @@ describe('data migrations', () => {
     sqlite.close()
   })
 
-  it("0033 and 0034 start each template's bid floor below its bids in flight", () => {
+  it("0034 and 0035 start each template's bid floor below its bids in flight", () => {
     const A = '2026-11-24T10:00:00.000Z'
     const dir = tempDir()
     const before = join(dir, 'm')
     cpSync('drizzle', before, { recursive: true })
-    // Keep migrations 0000–0032 only: the state of a database before the bid floor (#232).
+    // Keep migrations 0000–0033 only: the state of a database before the bid floor (#232).
     const path = join(before, 'meta', '_journal.json')
     const journal = JSON.parse(readFileSync(path, 'utf8')) as { entries: { idx: number }[] }
-    journal.entries = journal.entries.filter((e) => e.idx <= 32)
+    journal.entries = journal.entries.filter((e) => e.idx <= 33)
     writeFileSync(path, JSON.stringify(journal))
     const sqlite = new Database(join(dir, 'db.sqlite'))
     applyMigrations(sqlite, before)

@@ -18,6 +18,7 @@ export function GiverHome({
   bids,
   me,
   approveOnTop = false,
+  links = false,
 }: {
   points: PointsOverview
   tasks: readonly TaskView[]
@@ -26,13 +27,15 @@ export function GiverHome({
   me: Me
   /** Ke schválení already sits at the top of Domů (#206), so not here again. */
   approveOnTop?: boolean
+  /** The `openRows` switch (#205): each row opens its page. */
+  links?: boolean
 }) {
   return (
     <>
       <TakersPoints points={points} />
-      {!approveOnTop && <ToApprove items={toApprove} />}
-      <BidsToAnswer items={bids} />
-      <WaitingOnTakers items={waitingOnTakers(tasks, me)} me={me} />
+      {!approveOnTop && <ToApprove items={toApprove} links={links} />}
+      <BidsToAnswer items={bids} links={links} />
+      <WaitingOnTakers items={waitingOnTakers(tasks, me)} me={me} links={links} />
     </>
   )
 }

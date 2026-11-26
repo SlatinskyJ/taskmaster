@@ -177,7 +177,13 @@ export const getTemplateDetailFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
   .validator(parseTemplateId)
   .handler(({ data, context }): TemplateDetail | null =>
-    getTemplateDetail(getDb(), data.templateId, context.user.id, bidding(getDb())),
+    getTemplateDetail(
+      getDb(),
+      data.templateId,
+      context.user.id,
+      bidding(getDb()),
+      getFlags(getDb()).openRows,
+    ),
   )
 
 /** "Čeká na tebe": agreed templates whose score change waits for this person's side. */

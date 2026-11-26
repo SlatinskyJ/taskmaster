@@ -504,16 +504,47 @@ describe('reads', () => {
 })
 
 describe('template detail (price page)', () => {
-  it('a taker gets an agreed template, not a proposed one; a giver gets both', () => {
+  it('with openRows a brother gets a proposed template too (#205): he is a party who must agree; a giver gets both', () => {
     const { db, tata, starsi } = family()
     const id = must(createTemplate(db, tata, DISHES, T0)).id
     expect(getTemplateDetail(db, id, starsi)).toBeNull()
+    expect(getTemplateDetail(db, id, starsi, undefined, true)?.template.status).toBe('proposed')
     expect(getTemplateDetail(db, id, tata)).toEqual({
       template: listTemplates(db, tata)[0],
       thread: [],
+      waitingFor: [
+        { id: starsi, name: 'Starší' },
+        { id: expect.any(Number) as number, name: 'Mladší' },
+      ],
     })
     must(approveTemplateScore(db, starsi, id, DISHES.score, T0))
     expect(getTemplateDetail(db, id, starsi)?.template.status).toBe('active')
+  })
+
+  it('the admin gets null, proposed or agreed', () => {
+    const { db, admin, tata, starsi } = family()
+    const id = must(createTemplate(db, tata, DISHES, T0)).id
+    expect(getTemplateDetail(db, id, admin)).toBeNull()
+    must(approveTemplateScore(db, starsi, id, DISHES.score, T0))
+    expect(getTemplateDetail(db, id, admin)).toBeNull()
+  })
+
+  it('waitingFor: both brothers until one agrees, then nobody; Máma never (Táta’s yes is the givers’)', () => {
+    const { db, tata, mama, starsi, mladsi } = family()
+    const id = must(createTemplate(db, tata, BINS, T0)).id
+    const waits = (viewer: number) => getTemplateDetail(db, id, viewer, undefined, true)?.waitingFor
+    expect(waits(starsi)).toEqual([
+      { id: starsi, name: 'Starší' },
+      { id: mladsi, name: 'Mladší' },
+    ])
+    expect(waits(mama)?.map((p) => p.id)).not.toContain(mama)
+    // Domů asks the same people: the page and "Čeká na tebe" agree by id.
+    for (const who of [tata, mama, starsi, mladsi])
+      expect(pendingTemplateApprovals(db, who).some((t) => t.id === id)).toBe(
+        waits(who)?.some((p) => p.id === who) ?? false,
+      )
+    must(approveTemplateScore(db, starsi, id, BINS.score, T1))
+    expect(waits(mladsi)).toEqual([])
   })
 
   it('an unknown id gives null', () => {

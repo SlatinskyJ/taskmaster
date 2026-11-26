@@ -41,6 +41,11 @@ export const SEEDS = {
   launch: { pieces: [negotiation, points], features: [] },
   /** Done work to approve on Úkoly and the task page (#206). */
   approve: { pieces: [negotiation, points], features: ['approveAnywhere'] },
+  /** Rows that open their task or chore page (#205). */
+  rows: {
+    pieces: [negotiation, points, templates, instances],
+    features: ['recurring', 'week', 'openRows'],
+  },
   /** The task page (#36). */
   tasks: { pieces: [priceChange], features: [] },
   /** Saying no in bidding (#208): "Umýt auto" with two bids, the refusals switch on. */

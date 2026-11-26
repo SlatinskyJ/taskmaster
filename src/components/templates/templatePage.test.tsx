@@ -18,12 +18,14 @@ const page = vi.hoisted(() => {
     user: PageUser | null
     template: unknown
     thread: unknown[]
+    waitingFor: { id: number; name: string }[]
     disputes: boolean
     mark: unknown
   } = {
     user: null,
     template: null,
     thread: [],
+    waitingFor: [],
     disputes: false,
     mark: null,
   }
@@ -36,6 +38,7 @@ vi.mock('@tanstack/react-router', () => ({
     useLoaderData: () => ({
       template: page.template,
       thread: page.thread,
+      waitingFor: page.waitingFor,
       disputeMark: page.mark,
     }),
   }),
@@ -185,5 +188,51 @@ describe('template page: Rozporovat (#46)', () => {
     // Led by what it disputes, so it doesn't read as a reply to the bid above it.
     expect(html).toContain(`>${cs.disputes.what.template_score}<`)
     expect(render(TATA)).not.toContain('data-slot="dispute"')
+  })
+})
+
+describe('a proposed chore’s page (#205)', () => {
+  const bins: TemplateView = {
+    ...dishes,
+    id: 11,
+    title: 'Vynést koše',
+    status: 'proposed',
+    score: 4,
+    approvedBy: ['Táta'],
+    change: null,
+  }
+  const both = [
+    { id: 4, name: 'Starší' },
+    { id: 5, name: 'Mladší' },
+  ]
+
+  it('Starší, waited for: Návrh, the proposed score, who agreed, who it waits for, Souhlasím', () => {
+    page.waitingFor = both
+    const html = render(STARSI, [], bins)
+    page.waitingFor = []
+    expect(html).toContain('Návrh')
+    expect(html).toContain('Navržená cena: 4 b.')
+    expect(html).toContain('Začne platit, až souhlasí všichni.')
+    expect(html).not.toContain('Platí')
+    expect(html).toContain('Souhlasí: Táta')
+    expect(html).toContain('Čeká se na: tebe nebo Mladší')
+    expect(html).toMatch(new RegExp(`<button[^>]*>${cs.tasks.approve}</button>`))
+    expect(html).not.toContain('Historie ceny')
+    expect(html).not.toContain('Nová cena platí jen pro nově vzniklé úkoly.')
+  })
+
+  it('not waited for (a parent): who it waits for, no Souhlasím', () => {
+    page.waitingFor = both
+    const html = render(TATA, [], bins)
+    page.waitingFor = []
+    expect(html).toContain('Čeká se na: Starší nebo Mladší')
+    expect(html).not.toContain(`>${cs.tasks.approve}<`)
+  })
+
+  it('an agreed chore keeps its Platí line and history', () => {
+    const html = render(STARSI)
+    expect(html).toContain('Platí 3 b.')
+    expect(html).not.toContain('Navržená cena')
+    expect(html).toContain('Historie ceny')
   })
 })
