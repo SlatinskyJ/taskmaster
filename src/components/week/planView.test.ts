@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { fromPragueWallTime } from '~/domain/dates'
+import { cs } from '~/lib/strings'
+import { taskErrorMessage } from '~/lib/taskErrors'
 import type { PlanCopy, PlanRow, WeekPlan } from '~/server/instances/functions'
 import {
   cellKind,
@@ -9,6 +11,7 @@ import {
   isPast,
   listRowAction,
   listRowLabel,
+  reserveErrorMessage,
   rowMeta,
   tapAction,
 } from './planView'
@@ -148,6 +151,10 @@ describe('labels', () => {
     expect(cellLabel(t, WED, cellKind([copy(), copy({ id: 2 })], ME), ME)).toBe(
       'Prostřít stůl k večeři, St: 2 kopie, otevřít seznam',
     )
+    const five = [1, 2, 3, 4, 5].map((id) => copy({ id }))
+    expect(cellLabel(t, WED, cellKind(five, ME), ME)).toBe(
+      'Prostřít stůl k večeři, St: 5 kopií, otevřít seznam',
+    )
     expect(cellLabel(t, WED, cellKind([copy()], GIVER), GIVER)).toBe(
       'Prostřít stůl k večeři, St: volné',
     )
@@ -170,5 +177,12 @@ describe('labels', () => {
       what: 'Podle rozvrhu · rezervováno: Mladší',
       action: null,
     })
+  })
+})
+
+describe('reserveErrorMessage', () => {
+  it('a lost race (wrong_state) says a brother took it; the rest as everywhere', () => {
+    expect(reserveErrorMessage('wrong_state')).toBe(cs.tasks.errors.reservedByOther)
+    expect(reserveErrorMessage('not_found')).toBe(taskErrorMessage('not_found'))
   })
 })

@@ -35,6 +35,7 @@ async function releaseOwn(page: Page, title: string) {
   await expect(sheet.getByRole('button', { name: cs.plan.close, exact: true })).toBeVisible()
   await sheet.getByRole('button', { name: cs.work.release, exact: true }).click()
   await expect(page.getByText(cs.work.toast.released)).toBeVisible()
+  await expect(sheet).toBeHidden()
   await expect(cell).toHaveAttribute('aria-label', /: volné, rezervovat$/)
 }
 
@@ -81,7 +82,7 @@ test('a stale free cell says someone was faster and shows his avatar', async ({
 
   // Starší's table has not reloaded: the cell still says free.
   await today(page, TABLE).click()
-  await expect(page.getByText(cs.tasks.errors.gone)).toBeVisible()
+  await expect(page.getByText(cs.tasks.errors.reservedByOther)).toBeVisible()
   await expect(today(page, TABLE)).toHaveAttribute('aria-label', /: rezervováno, Mladší$/)
 
   await releaseOwn(brother, TABLE)
@@ -177,19 +178,27 @@ test('Starší: the list reserves and releases the extra copy', async ({ page })
   await expect(extra.getByRole('button', { name: cs.work.reserve, exact: true })).toBeVisible()
 })
 
-test('360×800: the long name wraps in the pinned column', async ({ page }) => {
-  await page.setViewportSize({ width: 360, height: 800 })
-  await openPlan(page, 'starsi')
-  const name = page.locator('[data-slot="plan-names"] > div').filter({ hasText: VACUUM })
-  await expect(name).toBeVisible()
-  const fits = await name.evaluate((el) => el.scrollWidth <= el.clientWidth)
-  expect(fits).toBe(true)
-  const nameBox = await name.boundingBox()
-  const cellBox = await today(page, VACUUM).boundingBox()
-  expect(nameBox?.height).toBeLessThanOrEqual(52)
-  // The name and its cells share one row height.
-  expect(Math.abs((nameBox?.y ?? 0) - (cellBox?.y ?? 0))).toBeLessThanOrEqual(4)
-})
+for (const width of [393, 360])
+  test(`${String(width)} px portrait: the long name shows whole in the pinned column`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: width === 360 ? 800 : PHONE.height })
+    await openPlan(page, 'starsi')
+    const name = page.locator('[data-slot="plan-names"] > div').filter({ hasText: VACUUM })
+    await expect(name).toBeVisible()
+    const fits = await name.evaluate((el) => el.scrollWidth <= el.clientWidth)
+    expect(fits).toBe(true)
+    // Not clamped: the title's whole text fits its box.
+    const title = name.locator('span').first()
+    const whole = await title.evaluate((el) => el.scrollHeight <= el.clientHeight)
+    expect(whole).toBe(true)
+    const nameBox = await name.boundingBox()
+    const cellBox = await today(page, VACUUM).boundingBox()
+    expect(nameBox?.height).toBeLessThanOrEqual(68)
+    expect(cellBox?.height).toBeGreaterThanOrEqual(44)
+    // The name and its cells share one row height.
+    expect(Math.abs((nameBox?.y ?? 0) - (cellBox?.y ?? 0))).toBeLessThanOrEqual(4)
+  })
 
 /** Today's weekday as the table's header shows it ("Čt"). */
 async function weekday(page: Page): Promise<string> {

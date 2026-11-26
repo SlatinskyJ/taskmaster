@@ -11,7 +11,15 @@ import { cn } from '~/lib/utils'
 import type { PlanCopy, PlanRow, WeekPlan } from '~/server/instances/functions'
 import { releaseTaskFn, reserveTaskFn } from '~/server/tasks/functions'
 import { CopyListSheet, ReleaseSheet } from './PlanSheets'
-import { cellKind, cellLabel, dayHeader, isPast, rowMeta, tapAction } from './planView'
+import {
+  cellKind,
+  cellLabel,
+  dayHeader,
+  isPast,
+  reserveErrorMessage,
+  rowMeta,
+  tapAction,
+} from './planView'
 import type { CellKind, TapAction, Viewer } from './planView'
 
 // The plan table (#258, spec §5.12, wireframes 2 and 4): chores × days of the running week.
@@ -20,8 +28,11 @@ import type { CellKind, TapAction, Viewer } from './planView'
 // static markup); `WeekPlanTable` adds the taps and sheets. Both are reused by the meeting's
 // step 3 (#259).
 
-/** One height for a row on both sides, so the pinned names and the days never drift apart. */
-const ROW_H = 'h-[52px] landscape:h-[48px]'
+/**
+ * One height for a row on both sides, so the pinned names and the days never drift apart.
+ * Portrait is tall enough for a three-line name and its days line.
+ */
+const ROW_H = 'h-[68px] landscape:h-[48px]'
 const HEADER_H = 'h-[44px]'
 
 const LEGEND: { label: string; swatch: string }[] = [
@@ -131,7 +142,8 @@ function DayCell({
   const action = tapAction(cell, viewer)
   const past = isPast(day, plan.today)
   const today = day === plan.today
-  const wrap = cn(ROW_H, 'p-0.5', past && 'opacity-50')
+  // A light dim: the past cell's text ("prošlo") stays readable, also in dark mode.
+  const wrap = cn(ROW_H, 'p-0.5', past && 'opacity-70')
   if (cell.kind === 'blank' || action === null)
     return <span aria-hidden className={cn(wrap, 'block')} />
   const look = cellLook(cell)
@@ -209,7 +221,7 @@ export function WeekPlanTableView({
               key={row.templateId}
               className={cn(ROW_H, 'flex flex-col justify-center overflow-hidden px-2')}
             >
-              <span className="line-clamp-2 text-[14px] leading-tight font-extrabold break-words">
+              <span className="line-clamp-3 text-[14px] leading-tight font-extrabold break-words landscape:line-clamp-2">
                 {row.title}
               </span>
               <span className="truncate text-[11px] leading-tight text-muted">{rowMeta(row)}</span>
@@ -298,6 +310,7 @@ export function WeekPlanTable({ plan, viewer }: { plan: WeekPlan; viewer: Viewer
       String(copy.id),
       () => reserveTaskFn({ data: { taskId: copy.id } }),
       () => cs.plan.reserved(dayHeader(day).weekday),
+      { errorMessage: reserveErrorMessage },
     )
   const release = (copy: PlanCopy) =>
     run(

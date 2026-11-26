@@ -63,20 +63,26 @@ describe('WeekPlanTableView (#258)', () => {
     expect(seven).toContain('repeat(7, 64px)')
   })
 
-  it("today's header is aria-current=date; past cells carry data-past and opacity-50", () => {
+  it("today's header is aria-current=date; past cells carry data-past and a light opacity-70 dim", () => {
     const html = render()
     const current = html.match(/<div[^>]*aria-current="date"[^>]*>/g) ?? []
     expect(current).toHaveLength(1)
     expect(attr(current[0] ?? '', 'data-day')).toBe(PLAN_TODAY)
     const past = buttons(html).filter((b) => b.includes('data-past'))
     expect(past.map((b) => attr(b, 'data-day'))).toEqual([PLAN_DAYS[1], PLAN_DAYS[2]])
-    expect(html).toMatch(/opacity-50"><button[^>]*data-past/)
+    expect(html).toMatch(/opacity-70"><button[^>]*data-past/)
+    expect(html).not.toContain('opacity-50')
     expect(buttons(html).filter((b) => b.includes('data-today'))).toHaveLength(2)
   })
 
-  it('long name: line-clamp-2 in the pinned column, full name in the aria label', () => {
+  it('long name: three lines in portrait, two in landscape, in the pinned column; full name in the aria label', () => {
     const html = render()
-    expect(html).toMatch(/line-clamp-2[^"]*break-words[^>]*>Vyluxovat celý obývák a chodbu</)
+    const title = /<span class="([^"]*)">Vyluxovat celý obývák a chodbu</
+      .exec(html)?.[1]
+      ?.split(' ')
+    expect(title).toEqual(
+      expect.arrayContaining(['line-clamp-3', 'landscape:line-clamp-2', 'break-words']),
+    )
     expect(html).toContain('aria-label="Vyluxovat celý obývák a chodbu, St:')
     expect(html).toMatch(/truncate[^>]*>Út, Pá</)
     expect(html).toMatch(/truncate[^>]*>každý den</)

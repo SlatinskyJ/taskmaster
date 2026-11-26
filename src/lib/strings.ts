@@ -587,7 +587,7 @@ export const cs = {
       confirmed: (name: string) => `hotovo, ${name}`,
       expired: 'prošlo',
       cancelled: 'zrušeno',
-      count: (n: number) => `${String(n)} kopie, otevřít seznam`,
+      count: (n: number) => `${String(n)} ${plural(n, copyWords)}, otevřít seznam`,
     },
   },
   /** Disputes on locked items (#46, spec §5.11, UI doc §7.1 TDispute). Chip text: `state.disputed`. */
@@ -1132,6 +1132,9 @@ export function plural(n: number, forms: PluralForms): string {
 
 /** `1 nový`, `3 nové`, `5 nových`: new suggestions on Správa. */
 export const newWords: PluralForms = { one: 'nový', few: 'nové', many: 'nových' }
+
+/** `2 kopie`, `5 kopií`: copies in one plan cell. */
+export const copyWords: PluralForms = { one: 'kopie', few: 'kopie', many: 'kopií' }
 
 export const keyWords: PluralForms = { one: 'klíč', few: 'klíče', many: 'klíčů' }
 

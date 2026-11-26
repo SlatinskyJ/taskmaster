@@ -2,6 +2,7 @@ import { dayMonth } from '~/components/period/periodView'
 import { dayLabel } from '~/components/tasks/taskView'
 import { formatPragueTime } from '~/lib/formatDate'
 import { cs } from '~/lib/strings'
+import { taskErrorMessage } from '~/lib/taskErrors'
 import { describeDays } from '~/lib/templateText'
 import type { PlanCopy, PlanRow, WeekPlan } from '~/server/instances/functions'
 
@@ -155,4 +156,9 @@ export function listRowLabel(
     what: `${origin} · ${copyState(copy, viewer)}`,
     action: act === 'reserve' ? cs.work.reserve : act === 'release' ? cs.work.release : null,
   }
+}
+
+/** A refused reserve: `wrong_state` from a free cell means a brother took it first (first tap wins). */
+export function reserveErrorMessage(error: string): string {
+  return error === 'wrong_state' ? cs.tasks.errors.reservedByOther : taskErrorMessage(error)
 }
