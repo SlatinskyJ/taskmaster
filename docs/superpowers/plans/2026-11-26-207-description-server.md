@@ -234,6 +234,7 @@ What each call writes, with `before`/`after` = `{ description, changeId? }`:
   - Review Focus 5: an instance made while the change waits gets the old text; after the OK, the next instance gets the new one;
   - `createTask` with `description: ' x\r\n'` stores `'x'`; with 1001 characters → `description_too_long`;
   - `changeDescriptionOf` by a taker → `not_a_giver`; on an instance → `not_changeable`; on a confirmed task → `description_frozen`.
+  - rollback: with `writeAudit` made to throw (the way `src/server/tasks/tasks.test.ts` does it), an applied change, a waiting change, an OK and a no each leave `tasks.description` and `description_changes` unchanged.
 - [ ] **Step 2:** Run `pnpm vitest run src/server/descriptions`. Expect FAIL.
 - [ ] **Step 3:** Implement. Each exported write runs in `db.transaction`, loads the row, `listPeople(tx)` and the open change, asks the domain, then writes the rows and `writeAudit` entries. In `lifecycle.ts`, call `discardStaleDescription(tx, saved, actor, now)` right after `discardStaleChange`.
 - [ ] **Step 4:** Run `pnpm vitest run src/server`. Expect PASS (existing create and instance tests keep passing; `description` is optional).
@@ -270,7 +271,8 @@ export const answerDescriptionFn   // POST, requireRole('taker')
   - switch off: a create with a description → `feature_off`, a create without one → ok;
   - switch off: `getTaskDetail(...).task.description` is null even when the column is set;
   - switch on: a full round trip (change on an open task → `waiting`, a taker's answer `yes` → `agreed`, and the detail shows the text);
-  - the parser cases above.
+  - the parser cases above;
+  - shape: `toStrictEqual` on a `TaskDetail.descriptionChange` and on `DescriptionResult`, so no extra field leaks; `waitingFor` holds ids only.
 - [ ] **Step 2:** Run `pnpm vitest run src/server/descriptions/functions.test.ts`. Expect FAIL.
 - [ ] **Step 3:** Implement, following `withdrawBidHandler` / `reopenBiddingHandler` in `src/server/tasks/functions.ts`.
 - [ ] **Step 4:** Run `pnpm test && pnpm typecheck && pnpm lint`. Expect all to pass.
