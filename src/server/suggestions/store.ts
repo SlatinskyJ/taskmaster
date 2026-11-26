@@ -1,7 +1,7 @@
 import { and, desc, eq } from 'drizzle-orm'
 import { toIsoUtc } from '~/domain/dates'
 import type { Person, SuggestionStatus, SuggestionTextError } from '~/domain'
-import { nextStatus, normaliseSuggestion } from '~/domain'
+import { findPerson, isActiveAdmin, nextStatus, normaliseSuggestion } from '~/domain'
 import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
 import type { Tx } from '~/server/audit'
@@ -44,8 +44,9 @@ const MINE = {
 const NEWEST_FIRST = [desc(suggestions.createdAt), desc(suggestions.id)] as const
 
 /** The second check after the server function's guard (as in ../users/manage). */
-export function isActiveAdmin(people: readonly Person[], id: number): boolean {
-  return people.some((p) => p.id === id && p.role === 'admin' && p.active)
+export function actsAsAdmin(people: readonly Person[], id: number): boolean {
+  const person = findPerson(people, id)
+  return person !== undefined && isActiveAdmin(person)
 }
 
 export function createSuggestionIn(
@@ -123,7 +124,7 @@ export function closeSuggestionIn(
 ): Result<{ id: number }, SuggestionError> {
   if (isSending(id)) return fail('busy')
   return db.transaction((tx) => {
-    if (!isActiveAdmin(listPeople(tx), adminId)) return fail('not_admin')
+    if (!actsAsAdmin(listPeople(tx), adminId)) return fail('not_admin')
     const current = tx
       .select({ status: suggestions.status })
       .from(suggestions)

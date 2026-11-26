@@ -145,6 +145,7 @@ describe('parse', () => {
       description: 'D',
     })
     expect(parseClose({ id: 3, move: 'done', closedBy: 1 })).toStrictEqual({ id: 3, move: 'done' })
+    expect(parseClose({ id: 3, move: 'dismiss' })).toStrictEqual({ id: 3, move: 'dismiss' })
     expect(parseSend({ id: 3, title: 'T', body: 'B', issueUrl: 'x' })).toStrictEqual({
       id: 3,
       title: 'T',

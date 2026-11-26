@@ -11,7 +11,7 @@ import { listPeople } from '~/server/users/people'
 import { createIssue } from './github'
 import type { FetchFn } from './github'
 import { claimSend, releaseSend } from './sending'
-import { isActiveAdmin } from './store'
+import { actsAsAdmin } from './store'
 import type { SuggestionError } from './store'
 
 // The admin sends a new suggestion to GitHub as an issue (spec §5.13). The text is the admin's
@@ -41,7 +41,7 @@ export async function sendSuggestion(
   if (!claimSend(id)) return fail('busy')
   try {
     const checked = db.transaction((tx) => {
-      if (!isActiveAdmin(listPeople(tx), adminId)) return fail('not_admin')
+      if (!actsAsAdmin(listPeople(tx), adminId)) return fail('not_admin')
       const row = tx
         .select({ status: suggestions.status })
         .from(suggestions)
