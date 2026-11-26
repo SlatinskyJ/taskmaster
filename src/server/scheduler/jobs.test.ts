@@ -1,6 +1,8 @@
+import { asc, eq } from 'drizzle-orm'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import { fromPragueWallTime } from '~/domain/dates'
+import { featureFlags, tasks } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { createOnDemandInstance } from '~/server/instances'
 import { listPeriods, rollPeriods } from '~/server/periods'
@@ -100,5 +102,61 @@ describe('schedulerJobs', () => {
     expect(more).toEqual([])
     expect(second?.startsAt).toEqual(first?.cutoffAt)
     s.stop()
+  })
+
+  describe('week copies (#257)', () => {
+    const weekPlanOn = (db: ReturnType<typeof createTestDb>) =>
+      db.update(featureFlags).set({ enabled: true }).where(eq(featureFlags.key, 'weekPlan')).run()
+    const daily = (f: ReturnType<typeof family>, agreedAt: Date) => {
+      const id = must(
+        createTemplate(
+          f.db,
+          f.tata,
+          {
+            title: 'Nakrmit kočku',
+            score: 3,
+            approvalRequired: true,
+            schedule: { days: [0, 1, 2, 3, 4, 5, 6], time: { hour: 18, minute: 0 } },
+            deadline: null,
+          },
+          T0,
+        ),
+      ).id
+      must(approveTemplateScore(f.db, f.starsi, id, 3, agreedAt))
+      return id
+    }
+    const copies = (f: ReturnType<typeof family>, id: number) =>
+      f.db.select().from(tasks).where(eq(tasks.templateId, id)).orderBy(asc(tasks.id)).all()
+
+    it('with weekPlan on, a tick after the cutoff rolls the period and makes the whole next week’s copies', () => {
+      const f = family()
+      weekPlanOn(f.db)
+      rollPeriods(f.db, prague(11, 23, 0, 30), D())
+      const cat = daily(f, prague(11, 23, 10))
+      expect(copies(f, cat)).toHaveLength(7)
+      const log = quietLog()
+      const at = prague(11, 30, 0, 0)
+      for (const job of schedulerJobs(f.db, D, log)) job.run(at)
+      expect(listPeriods(f.db)).toHaveLength(2)
+      const next = copies(f, cat).slice(7)
+      expect(next.map((r) => r.planDayAt)).toEqual(
+        [30, 1, 2, 3, 4, 5, 6].map((d) => prague(d === 30 ? 11 : 12, d, 0).toISOString()),
+      )
+      expect(next.every((r) => r.status === 'open' && r.weekRules)).toBe(true)
+      expect(log.info).toHaveBeenCalledWith('[scheduler] instances: 7')
+      expect(log.error).not.toHaveBeenCalled()
+    })
+
+    it('with weekPlan off, the instances job is the old one (one instance per slot, no plan_day_at)', () => {
+      const f = family()
+      rollPeriods(f.db, prague(11, 23, 0, 30), D())
+      const cat = daily(f, prague(11, 23, 10))
+      expect(copies(f, cat)).toEqual([])
+      const instances = schedulerJobs(f.db, D, quietLog()).find((j) => j.name === 'instances')
+      instances?.run(prague(11, 24, 18))
+      expect(copies(f, cat).map((r) => [r.planDayAt, r.weekRules, r.createdAt])).toEqual([
+        [null, false, prague(11, 24, 18).toISOString()],
+      ])
+    })
   })
 })

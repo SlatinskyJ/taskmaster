@@ -5,7 +5,8 @@ import type { Db } from '~/server/db'
 import { auditLog, featureFlags, periods, settlements, tasks, users } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { listPeriods, rollPeriods, savePeriodDefaults } from '~/server/periods'
-import { failAuditOn, family, json, must } from '~/server/tasks/testing'
+import { approveTemplateScore, createTemplate } from '~/server/templates'
+import { T0, failAuditOn, family, json, must } from '~/server/tasks/testing'
 import { getMeeting, settlePeriod, weekWaiting } from './meeting'
 import type { ShownTotal } from './meeting'
 import { adjustment, CUTOFF, doneTask, MEETING, plus, prague, SAT, week } from './testing'
@@ -466,5 +467,70 @@ describe('last day only (#211, spec §5.8)', () => {
 
   it('no takers or no week: nothing to show', () => {
     expect(getMeeting(family().db, WED, true)).toEqual({ period: null, runningCutoffAt: null })
+  })
+})
+
+describe('week copies at the settlement (#257, spec §5.12)', () => {
+  /** "Nakrmit kočku" every day at 21:00, agreed when P1 starts. */
+  function cat(f: ReturnType<typeof example>) {
+    const id = must(
+      createTemplate(
+        f.db,
+        f.tata,
+        {
+          title: 'Nakrmit kočku',
+          score: 3,
+          approvalRequired: true,
+          schedule: { days: [0, 1, 2, 3, 4, 5, 6], time: { hour: 21, minute: 0 } },
+          deadline: null,
+        },
+        T0,
+      ),
+    ).id
+    must(approveTemplateScore(f.db, f.starsi, id, 3, SAT))
+    return id
+  }
+  const weekPlan = (db: Db, on: boolean) =>
+    db.update(featureFlags).set({ enabled: on }).where(eq(featureFlags.key, 'weekPlan')).run()
+  const copies = (db: Db, id: number) =>
+    db.select().from(tasks).where(eq(tasks.templateId, id)).orderBy(asc(tasks.id)).all()
+  const day = (d: Date) => d.toISOString()
+
+  it('settlement on Sunday 20:00 makes Monday–Sunday copies in the same transaction; Sunday 21:00’s copy, made by the old week, is not made again', () => {
+    const f = example()
+    weekPlan(f.db, true)
+    const id = cat(f)
+    // The old week: Sat 21.11 21:00 … Sun 29.11 21:00.
+    expect(copies(f.db, id)).toHaveLength(9)
+    must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING, false))
+    const rows = copies(f.db, id)
+    expect(rows).toHaveLength(16)
+    expect(rows.slice(9).map((r) => r.planDayAt)).toEqual(
+      [30, 1, 2, 3, 4, 5, 6].map((d) => day(prague(2026, d === 30 ? 11 : 12, d))),
+    )
+    expect(rows.filter((r) => r.planDayAt === day(prague(2026, 11, 29)))).toHaveLength(1)
+    expect(rows.slice(9).every((r) => r.createdAt === MEETING.toISOString())).toBe(true)
+  })
+
+  it('a refused settlement leaves no copies', () => {
+    const f = example()
+    weekPlan(f.db, true)
+    const id = cat(f)
+    const before = copies(f.db, id).length
+    const seen = shown(f.db, MEETING).map((t) => ({ ...t, total: t.total + 1 }))
+    expect(settlePeriod(f.db, f.tata, f.p1.id, seen, MEETING, false)).toEqual({
+      ok: false,
+      error: 'totals_changed',
+    })
+    expect(copies(f.db, id)).toHaveLength(before)
+    expect(listPeriods(f.db)).toHaveLength(1)
+  })
+
+  it('settlement with the switch off and a scheduled template in the running period makes no week copies', () => {
+    const f = example()
+    const id = cat(f)
+    expect(copies(f.db, id)).toEqual([])
+    must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING, false))
+    expect(copies(f.db, id)).toEqual([])
   })
 })

@@ -34,6 +34,8 @@ import type { TemplateRow, TemplateStatus } from '~/server/db/schema'
 import { waitingDescriptionOf } from '~/server/descriptions/rows'
 import type { WaitingDescription } from '~/server/descriptions/rows'
 import type { ThreadEntry } from '~/server/threadEntry'
+import { getFlags } from '~/server/features'
+import { makeWeekCopiesWith } from '~/server/instances/weekCopyRows'
 import { listPeople } from '~/server/users/people'
 import { maskToDays } from './rules'
 import { closeThread, lastBids, markBidsFrom, openRows, threadOf } from './thread'
@@ -190,6 +192,9 @@ export function agreeIn(
     },
     at: now,
   })
+  // A chore agreed while the week plan is on gets its remaining copies of the week now (#257).
+  // None of them is over yet (their slots are from now on), so nothing needs expiring.
+  if (getFlags(tx).weekPlan) makeWeekCopiesWith(tx, now, { templateId: row.id }, null)
   return active
 }
 

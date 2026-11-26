@@ -24,7 +24,9 @@ Server-side time-driven work (#39, spec §5.3, §5.8). Started by the boot plugi
    window has ended (`instance.expired`, actor system).
 3. `instances`: `createScheduledInstances` makes one instance per schedule slot. After downtime
    only the latest missed slot counts; one already past its grace is made and expired at once.
-   `template_slots` remembers the last handled slot per template.
+   `template_slots` remembers the last handled slot per template. With the `weekPlan` switch on
+   (#257, spec §5.12) it runs `makeWeekCopies` instead: one copy per slot of the running period,
+   up to its cutoff and at most 14 days ahead, each marked with its Prague day.
 
 ## Adding a job
 

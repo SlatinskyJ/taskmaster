@@ -1,125 +1,24 @@
-import { and, eq, gt } from 'drizzle-orm'
-import { SYSTEM, copyDay, createInstance, instanceDeadline, weekSlots } from '~/domain'
-import { addPragueDays, parseIsoUtc, toIsoUtc } from '~/domain/dates'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
-import { templates, templateSlots } from '~/server/db/schema'
-import type { TaskRow, TemplateRow } from '~/server/db/schema'
-import { currentPeriod } from '~/server/periods'
+import type { TaskRow } from '~/server/db/schema'
 import { expireTask } from '~/server/tasks/lifecycle'
-import { deadlineRuleOf, scheduleOf } from '~/server/templates/rules'
-import { insertInstance } from './instances'
+import { makeWeekCopiesWith } from './weekCopyRows'
+import type { WeekCopiesOpts } from './weekCopyRows'
 
-// Week chore copies (#257, spec §5.12), made while the `weekPlan` switch is on. Every schedule
-// slot of the running period, from its start up to its cutoff and at most 14 days ahead of now,
-// gets its copy at once: one per slot, born open, marked with its Prague day (`plan_day_at`,
-// `week_rules` on). The deadline is counted from the slot. After downtime only the latest missed
-// slot is made (spec §11), and one already over is made and expired at once. `template_slots`
-// remembers the last slot made, so a slot is never made twice. Callers: the scheduler's
-// instances job, the settlement (the next week starts) and a template's agreement.
+export { WEEK_COPIES_AHEAD_DAYS } from './weekCopyRows'
+export type { WeekCopiesOpts } from './weekCopyRows'
 
-/** How far ahead of now copies are made (spec §5.12). */
-export const WEEK_COPIES_AHEAD_DAYS = 14
+// The week's chore copies (#257, spec §5.12) for the scheduler and the settlement: ./weekCopyRows
+// makes them, and a copy already over when it is made (after downtime) is expired at once by the
+// system (`instance.expired`), with the day rules on.
 
-/**
- * Makes the copies due at `at` (only `opts.templateId`'s when given); returns the rows made.
- * One transaction per template: one failing leaves the rest, logged.
- */
-export function makeWeekCopies(
-  db: Db | Tx,
-  at: Date,
-  opts: { templateId?: number; log?: Pick<Console, 'error'> } = {},
-): TaskRow[] {
-  const period = currentPeriod(db, at)
-  if (!period) return []
-  const ahead = addPragueDays(at, WEEK_COPIES_AHEAD_DAYS)
-  const until = ahead.getTime() < period.cutoffAt.getTime() ? ahead : period.cutoffAt
-  const chosen = db
-    .select()
-    .from(templates)
-    .where(
-      and(
-        eq(templates.status, 'active'),
-        gt(templates.scheduleDays, 0),
-        opts.templateId === undefined ? undefined : eq(templates.id, opts.templateId),
-      ),
-    )
-    .orderBy(templates.id)
-    .all()
-  const made: TaskRow[] = []
-  for (const template of chosen) {
-    try {
-      made.push(...db.transaction((tx) => copiesFor(tx, template, period.startsAt, at, until)))
-    } catch (err) {
-      ;(opts.log ?? console).error(
-        `[scheduler] week copies: template ${String(template.id)} failed`,
-        err,
-      )
-    }
-  }
-  return made
+const expireCopy = (tx: Tx, taskId: number, at: Date): TaskRow => {
+  const expired = expireTask(tx, taskId, at, true)
+  if (!expired.ok) throw new Error(`expiry refused: ${expired.error}`)
+  return expired.value
 }
 
-function copiesFor(
-  tx: Tx,
-  template: TemplateRow,
-  periodStart: Date,
-  at: Date,
-  until: Date,
-): TaskRow[] {
-  const schedule = scheduleOf(template)
-  if (!schedule || !template.agreedAt) return []
-  const agreedAt = parseIsoUtc(template.agreedAt)
-  const last = tx
-    .select()
-    .from(templateSlots)
-    .where(eq(templateSlots.templateId, template.id))
-    .get()
-  const slots = weekSlots({
-    schedule,
-    from: agreedAt.getTime() > periodStart.getTime() ? agreedAt : periodStart,
-    lastSlotAt: last ? parseIsoUtc(last.lastSlotAt) : null,
-    at,
-    until,
-  })
-  const lastSlot = slots.at(-1)
-  if (!lastSlot) return []
-  const rule = deadlineRuleOf(template)
-  const rows = slots.map((slot) => {
-    const day = copyDay(slot)
-    const item = createInstance(
-      SYSTEM,
-      'scheduled',
-      template.approvalRequired,
-      rule ? instanceDeadline(rule, slot) : null,
-      day,
-    )
-    if (!item.ok) throw new Error(`week copy refused: ${item.error}`)
-    const row = insertInstance(
-      tx,
-      {
-        actor: { kind: 'system' },
-        createdBy: template.createdBy,
-        // A row is never made in the future: a later slot's copy is born now (ruling 3).
-        createdAt: slot.getTime() < at.getTime() ? slot : at,
-        loggedAt: at,
-        planDayAt: day.startsAt,
-      },
-      template,
-      'scheduled',
-      item.value,
-      { slotAt: toIsoUtc(slot) },
-    )
-    const over = item.value.deadline ? item.value.deadline.graceEndsAt : day.endsAt
-    if (over.getTime() > at.getTime()) return row
-    const expired = expireTask(tx, row.id, at, true)
-    if (!expired.ok) throw new Error(`expiry refused: ${expired.error}`)
-    return expired.value
-  })
-  const lastSlotAt = toIsoUtc(lastSlot)
-  tx.insert(templateSlots)
-    .values({ templateId: template.id, lastSlotAt })
-    .onConflictDoUpdate({ target: templateSlots.templateId, set: { lastSlotAt } })
-    .run()
-  return rows
+/** Makes the copies due at `at` (only `opts.templateId`'s when given); returns the rows made. */
+export function makeWeekCopies(db: Db | Tx, at: Date, opts: WeekCopiesOpts = {}): TaskRow[] {
+  return makeWeekCopiesWith(db, at, opts, expireCopy)
 }
