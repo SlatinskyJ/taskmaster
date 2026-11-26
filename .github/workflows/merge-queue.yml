@@ -1,0 +1,121 @@
+name: merge-queue
+
+# The merge-me Action (#253): lands PRs Jakub labelled merge-me, on the commit he labelled.
+# Job record: a label run writes Jakub's signed approval, in its own lane per PR, so labelling
+# many PRs at once never drops one. Job queue: one step per run (update with main, merge, or
+# hand over to an agent) in a single lane; the next event runs the next step. Logic and tests: scripts/merge-queue/.
+#
+# Never checks out or runs PR code: every trigger below runs the default branch's workflow,
+# and the checkout is pinned to main.
+on:
+  pull_request_target:
+    # edited: GitHub retargets a stacked PR to main after the PR below it merges; that run
+    # picks it up (a push to main may run before the retarget).
+    types: [labeled, edited]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  record:
+    name: record approval
+    if: >-
+      github.event_name == 'pull_request_target' && github.event.action == 'labeled' &&
+      github.event.label.name == 'merge-me' && github.event.sender.login == 'SlatinskyJ'
+    # One lane per PR: a label on one PR never replaces the waiting label run of another.
+    concurrency:
+      group: merge-queue-record-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # Until Jakub adds the secrets the workflow stays green and does nothing.
+      - name: Check secrets
+        id: guard
+        env:
+          MERGE_TOKEN: ${{ secrets.MERGE_TOKEN }}
+          MERGE_MARKER_KEY: ${{ secrets.MERGE_MARKER_KEY }}
+        run: |
+          if [ -z "$MERGE_TOKEN" ] || [ -z "$MERGE_MARKER_KEY" ]; then
+            echo "merge-queue: secrets not set, nothing to do"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.guard.outputs.ready == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - if: steps.guard.outputs.ready == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      # A fine-grained PAT (secret MERGE_TOKEN: this repository only; Contents, Pull requests
+      # and Issues read and write, Metadata read), because work done with GITHUB_TOKEN starts no
+      # workflows: CI would not run after an update, nor `deploy prod` after a merge.
+      - if: steps.guard.outputs.ready == 'true'
+        name: Record the approval
+        env:
+          GH_TOKEN: ${{ secrets.MERGE_TOKEN }}
+          MERGE_MARKER_KEY: ${{ secrets.MERGE_MARKER_KEY }}
+          LABEL_PR: ${{ github.event.pull_request.number }}
+          LABEL_SHA: ${{ github.event.pull_request.head.sha }}
+          LABEL_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          LABEL_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: node scripts/merge-queue/run.ts
+
+  queue:
+    name: merge-queue
+    needs: record
+    # Runs after record on a label event (record skipped on every other event). A dropped waiting
+    # run here is harmless: every step looks at all labelled PRs.
+    if: >-
+      !cancelled() && needs.record.result != 'failure' &&
+      (github.event_name != 'pull_request_target' ||
+        (github.event.action == 'labeled' && github.event.label.name == 'merge-me' &&
+          github.event.sender.login == 'SlatinskyJ') ||
+        (github.event.action == 'edited' && github.event.changes.base != null)) &&
+      (github.event_name != 'workflow_dispatch' || github.actor == 'SlatinskyJ')
+    concurrency:
+      group: merge-queue
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # Until Jakub adds the secrets the workflow stays green and does nothing.
+      - name: Check secrets
+        id: guard
+        env:
+          MERGE_TOKEN: ${{ secrets.MERGE_TOKEN }}
+          MERGE_MARKER_KEY: ${{ secrets.MERGE_MARKER_KEY }}
+        run: |
+          if [ -z "$MERGE_TOKEN" ] || [ -z "$MERGE_MARKER_KEY" ]; then
+            echo "merge-queue: secrets not set, nothing to do"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.guard.outputs.ready == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - if: steps.guard.outputs.ready == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      # A fine-grained PAT (secret MERGE_TOKEN: this repository only; Contents, Pull requests
+      # and Issues read and write, Metadata read), because work done with GITHUB_TOKEN starts no
+      # workflows: CI would not run after an update, nor `deploy prod` after a merge.
+      - if: steps.guard.outputs.ready == 'true'
+        name: Run one merge-queue step
+        env:
+          GH_TOKEN: ${{ secrets.MERGE_TOKEN }}
+          MERGE_MARKER_KEY: ${{ secrets.MERGE_MARKER_KEY }}
+        run: node scripts/merge-queue/run.ts

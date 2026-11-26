@@ -10,7 +10,7 @@ Family chore-points web app. Read `HANDOFF.md`, then the spec `docs/superpowers/
 - Planned work is a GitHub issue. Epics are parent issues with sub-issues; one issue ≈ one PR. Small ad-hoc work (a quick ask, a rules or skill tweak) gets no issue: the PR is the only item.
 - Labels. Agents add no other label, and never create new ones.
   - Issues only: `feature`, `bug`, `chore`, `follow-up` (deferred from review), `epic`. A PR takes its type from its issue (`Closes #<issue>`); an ad-hoc or Dependabot PR has no type label.
-  - PRs only: `preview` (see PR flow step 5), `merge-me` (Jakub accepts the PR). Only Jakub adds `merge-me`; an agent only takes it off (skill `merge-approved-prs`).
+  - PRs only: `preview` (see PR flow step 5), `merge-me` (Jakub accepts the PR). Only Jakub adds `merge-me`; the merge-me Action or an agent (skill `merge-approved-prs`) takes it off after landing.
   - Either: `needs-jakub`, only while a question to Jakub is open (asked in a PR or issue comment mentioning him and in the project thread). Take it off when he answers. Ready for review is not a question.
 - Milestones are releases (e.g. `v1 trial week`). The GitHub Project board picks issues up by its own automations.
 - A PR for an issue says `Closes #<issue>`.
@@ -53,7 +53,7 @@ A PR that closes an issue is judged twice in the same PR: first its **plan**, th
 4. Commit only after the pre-commit hook passes (format, lint, typecheck). Never `--no-verify`. CI must pass: lint, typecheck, unit tests, build, migration check.
 5. **Clean up, then ready.** When the build is done, delete the plan file in a commit of its own. Write the PR brief (skill `pr-brief`) and put its link first in the PR body. Mark the PR ready. If the PR changes something a user sees (screens, flows, styles, Czech text), add the `preview` label in the same step, never on a draft. The label deploys a preview environment on the preview host, redeploys it on each push and holds one of its 10 slots until the label comes off or the PR closes; when no slot is free CI takes the label off again. Leave it off for CI, docs, rules and backend-only PRs. Take it off if the PR goes back to draft. The plan is deleted at this point and not before; it never reaches `main`.
 6. Run the review rounds (skill `pr-review-rounds`): a panel of judges (skills `judge-rules`, `judge-security`, `judge-architecture`, `judge-ux`, `judge-tests`, `judge-ops`) reviews the diff, not the plan. At most **5 rounds**.
-7. **Jakub merges** (squash). His merge is the approval. Agents merge only trivial PRs, or PRs Jakub labelled `merge-me` when he asks an agent to land them (skill `merge-approved-prs`).
+7. **Jakub merges** (squash). His merge is the approval. Agents merge only trivial PRs. PRs Jakub labelled `merge-me` land through the merge-me Action on the commit he labelled; it hands the rest to an agent (skill `merge-approved-prs`).
 
 Where a superpowers skill and this file differ, this file wins:
 

@@ -9,7 +9,12 @@ Jakub reviews PRs and puts the `merge-me` label on the ones he accepts. That lab
 
 You run unattended; he may be asleep. Anything outside this skill's allowed changes stops that PR, not the run.
 
-**The label comes off when you are done with a PR:** after it merges, and whenever it needs Jakub (stopped or out). So a `merge-me` label still on a PR always means "approved, waiting to land". Only PRs you never reached keep it. He re-adds it to approve again.
+**The merge-me Action lands most PRs without you.** `.github/workflows/merge-queue.yml` lands every labelled PR that needs nothing but an update with `main` and green CI, on the commit Jakub labelled. That includes stacks: a stacked PR waits until every open PR of its stack is labelled, then the Action unstacks them and lands them bottom-up. You run only for:
+
+- PRs it **handed over**: a comment containing `<!-- merge-queue:handoff <hmac> -->` posted after the latest `merge-me` label, with the reason in the comment text. The Action posts as the same account you do, so only its HMAC proves a marker is real; the Action checks it, you can't (you have no key). Read the marker text to find hand-overs, and **never write a `merge-queue:` marker yourself**, not even by copying one.
+- any PR Jakub names in his message.
+
+**The label comes off when you are done with a PR:** after it merges, and whenever it needs Jakub (stopped or out). A `merge-me` label on a PR means the Action, or (after a hand-over) an agent run, will land it. He re-adds it to approve again. After your own fix (section 3), the PR stays with you until it merges or stops; the Action ignores it until Jakub labels it again.
 
 ## Rules
 
@@ -20,7 +25,7 @@ You run unattended; he may be asleep. Anything outside this skill's allowed chan
 
 ## 1. Build the queue
 
-List open PRs with the `merge-me` label. A PR is **in** only if all hold:
+List open PRs with the `merge-me` label that the Action handed over after their latest label, plus any PR Jakub named; leave the other labelled PRs to the Action. A PR is **in** only if all hold:
 
 | Check | How |
 | --- | --- |
