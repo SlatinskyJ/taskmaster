@@ -15,7 +15,7 @@ import {
 } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { takerPoints } from '~/server/points'
-import { listTasks } from '~/server/tasks'
+import { getTaskDetail, listTasks } from '~/server/tasks'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import { fromPragueWallTime } from '~/domain/dates'
 import { listPeriods, proposalsView, rollPeriods } from '~/server/periods'
@@ -130,6 +130,12 @@ describe('the demo seed (previews)', () => {
       // #39: the boot tick expires that fish and makes today's; the water is still open.
       ['instance.expired', 'system'],
       ['instance.created', 'system'],
+      // #207: two tasks with a text; the open one gets Táta's new text, waiting.
+      ['task.created', 'user'],
+      ['task.created', 'user'],
+      ['task.score_approved', 'user'],
+      ['task.agreed', 'user'],
+      ['task.description_change_proposed', 'user'],
     ])
   })
 
@@ -145,10 +151,12 @@ describe('the demo seed (previews)', () => {
       ['Nakrmit kočku', 'confirmed'], // #45 past week
       ['Nakrmit rybičky', 'expired'], // #39 tick in the past week
       ['Nakrmit rybičky', 'open'], // #39 boot tick
+      ['Odnést krabice do sklepa', 'open'], // #207
       ['Posekat trávu', 'confirmed'], // #44 week
       ['Pověsit prádlo', 'confirmed'], // #40
       ['Shrabat listí na zahradě', 'open'], // #36 price change
       ['Uklidit garáž', 'confirmed'], // #45
+      ['Uklidit kolárnu', 'proposed'], // #207
       ['Uklidit koupelnu', 'confirmed'], // #44
       ['Uklidit pokoj po návštěvě', 'confirmed'], // #44, Mladší
       ['Uklidit pokoj', 'confirmed'], // #40, Starší
@@ -183,6 +191,7 @@ describe('the demo seed (previews)', () => {
     expect(
       all.map((t) => [t.title, t.status, t.score, t.bids.map((b) => [b.name, b.score])]),
     ).toEqual([
+      ['Uklidit kolárnu', 'proposed', 14, []], // #207, with a text
       ['Vyluxovat celý obývák a chodbu', 'reserved', 8, []],
       ['Uklidit sklep', 'proposed', 10, []],
       [
@@ -219,6 +228,7 @@ describe('the demo seed (previews)', () => {
     ])
     const open = listTasks(db).filter((t) => t.status === 'open')
     expect(open.map((t) => [t.title, t.score])).toEqual([
+      ['Odnést krabice do sklepa', 8], // #207, a new text waiting
       ['Nakrmit rybičky', 1], // #39 boot tick
       ['Nachystat tašku do školy', 2], // #38 + Teď
       ['Umýt okna v obýváku i v ložnici', 5],
@@ -244,7 +254,7 @@ describe('the demo seed (previews)', () => {
     expect(getFlags(db)).toEqual({ ...ALL_FEATURES, week: false })
   })
 
-  it('adds eight templates (#37, #38, #39, #209, #232): three waiting for agreement, five agreed', () => {
+  it('adds nine templates (#37, #38, #39, #209, #232, #207): three waiting for agreement, six agreed', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     expect(
@@ -299,6 +309,8 @@ describe('the demo seed (previews)', () => {
       { title: 'Zalít kytky', status: 'proposed', score: 4, days: 0, time: null, due: null },
       // #232's agreed chore with a price change of two bids.
       { title: 'Umýt koupelnu', status: 'active', score: 8, days: 0, time: null, due: null },
+      // #207's agreed chore with a text.
+      { title: 'Utřít prach v pokoji', status: 'active', score: 4, days: 0, time: null, due: null },
     ])
     const actions = db
       .select({ action: auditLog.action })
@@ -324,6 +336,7 @@ describe('the demo seed (previews)', () => {
       ...['template.created', 'template.bid_placed', 'template.bid_placed'],
       ...['template.created', 'template.score_approved', 'template.agreed'],
       ...['template.bid_placed', 'template.bid_placed'],
+      ...['template.created', 'template.score_approved', 'template.agreed'],
     ])
   })
 
@@ -352,7 +365,7 @@ describe('the demo seed (previews)', () => {
         .from(templates)
         .all()
         .map((t) => t.score),
-    ).toEqual([1, 1, 4, 3, 2, 10, 4, 8])
+    ).toEqual([1, 1, 4, 3, 2, 10, 4, 8, 4])
   })
 
   it('all or nothing: a failing template leaves no people either', () => {
@@ -601,5 +614,35 @@ describe('the demo seed: a chore in dispute (#222)', () => {
     expect([chore?.title, chore?.status]).toEqual(['Vyndat myčku', 'active'])
     const mladsi = db.select().from(users).where(eq(users.username, 'mladsi')).get()
     expect(rows[0]?.openedBy).toBe(mladsi?.id)
+  })
+})
+
+describe('the demo seed: descriptions (#207)', () => {
+  it('a proposed task and an agreed chore with a text, an open task with a new text waiting', () => {
+    const db = createTestDb()
+    seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: 'descriptions' }, T0)
+    const byTitle = (title: string) =>
+      getTaskDetail(db, listTasks(db).find((t) => t.title === title)?.id ?? 0, {
+        descriptions: true,
+      })
+    expect(byTitle('Uklidit kolárnu')?.task).toMatchObject({
+      status: 'proposed',
+      description: 'Zamést celou podlahu.\nKola pověsit na háky.',
+    })
+    const boxes = byTitle('Odnést krabice do sklepa')
+    expect(boxes?.task).toMatchObject({ status: 'open', description: 'Všechny krabice z chodby.' })
+    expect(boxes?.descriptionChange).toMatchObject({
+      description: 'Všechny krabice z chodby.\nPrázdné složit a dát k popelnicím.',
+      waitingForNames: ['Starší', 'Mladší'],
+    })
+    const dust = db
+      .select()
+      .from(templates)
+      .where(eq(templates.title, 'Utřít prach v pokoji'))
+      .get()
+    expect(dust).toMatchObject({
+      status: 'active',
+      description: 'Police, stůl i parapet. Hadr je pod dřezem.',
+    })
   })
 })

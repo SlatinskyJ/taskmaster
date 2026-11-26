@@ -108,3 +108,20 @@ describe('historyRounds (#212, Jakub 2026-11-26)', () => {
     ])
   })
 })
+
+describe('historyLine: descriptions (#207)', () => {
+  it.each([
+    ['task.description_changed', 'nový popis'],
+    ['task.description_change_proposed', 'návrh nového popisu'],
+    ['task.description_change_approved', 'souhlas s novým popisem'],
+    ['task.description_change_declined', 'nesouhlas s novým popisem'],
+    ['task.description_change_withdrawn', 'návrh popisu stažen'],
+  ] as const)('%s → "Táta: %s"', (action, text) => {
+    expect(historyLine(entry({ action, score: null }), 9)).toBe(`so 21. 11. 10:12 · Táta: ${text}`)
+  })
+
+  it('a discarded change by nobody has no name', () => {
+    const e = entry({ action: 'task.description_change_discarded', by: null, score: null })
+    expect(historyLine(e, 9)).toBe('so 21. 11. 10:12 · návrh popisu propadl')
+  })
+})

@@ -65,6 +65,18 @@ function phrase(e: HistoryEntry, meId: number): string {
       return h.changed(n)
     case 'task.score_change_discarded':
       return h.changeDiscarded(n)
+    case 'task.description_changed':
+      return h.descriptionChanged
+    case 'task.description_change_proposed':
+      return h.descriptionProposed
+    case 'task.description_change_approved':
+      return h.descriptionApproved
+    case 'task.description_change_declined':
+      return h.descriptionDeclined
+    case 'task.description_change_withdrawn':
+      return h.descriptionWithdrawn
+    case 'task.description_change_discarded':
+      return h.descriptionDiscarded
     case 'instance.created':
       return e.by ? h.instanceCreated(n) : h.scheduledCreated(n)
     case 'instance.expired':

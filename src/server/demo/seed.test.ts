@@ -91,6 +91,7 @@ describe('demo seed (#62)', () => {
       reopenBidding: false,
       choreBidding: false,
       openRows: false,
+      descriptions: false,
     })
   })
 
@@ -144,7 +145,7 @@ describe('demo seed (#62)', () => {
     for (const name of ['Home', 'nope', 'toString', 'constructor']) {
       const db = createTestDb()
       expect(() => seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: name }, T0)).toThrow(
-        `unknown TASKMASTER_SEED "${name}" (known: family, home, launch, approve, rows, tasks, bids, rebid, week, recurring, chores, chorechange, scheduler, proposals, disputes, corrections, password, demo)`,
+        `unknown TASKMASTER_SEED "${name}" (known: family, home, launch, approve, rows, tasks, bids, rebid, week, recurring, chores, chorechange, scheduler, proposals, disputes, corrections, descriptions, password, demo)`,
       )
       expect(db.select().from(users).all()).toHaveLength(0)
       expect(db.select().from(auditLog).all()).toHaveLength(0)
@@ -190,6 +191,7 @@ describe('demo seed (#62)', () => {
       proposals: { ...NO_FEATURES, week: true, periodProposals: true },
       disputes: { ...NO_FEATURES, week: true, disputes: true, recurring: true },
       corrections: { ...NO_FEATURES, week: true, disputes: true },
+      descriptions: { ...NO_FEATURES, descriptions: true, openRows: true, recurring: true },
       password: { ...NO_FEATURES, passwordChange: true },
       demo: ALL_FEATURES,
     }
@@ -235,6 +237,7 @@ describe('demo seed (#62)', () => {
       reopenBidding: false,
       choreBidding: false,
       openRows: false,
+      descriptions: false,
     })
   })
 })

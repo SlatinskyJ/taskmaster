@@ -21,6 +21,8 @@ const page = vi.hoisted(() => {
     waitingFor: { id: number; name: string }[]
     disputes: boolean
     allOn: boolean
+    descriptions: boolean
+    change: unknown
     mark: unknown
   } = {
     user: null,
@@ -29,6 +31,8 @@ const page = vi.hoisted(() => {
     waitingFor: [],
     disputes: false,
     allOn: false,
+    descriptions: false,
+    change: null,
     mark: null,
   }
   return state
@@ -40,6 +44,7 @@ vi.mock('@tanstack/react-router', () => ({
       user: page.user,
       features: {
         disputes: page.disputes,
+        descriptions: page.descriptions || page.allOn,
         bidRefusals: page.allOn,
         choreBidding: page.allOn,
         openRows: page.allOn,
@@ -52,6 +57,7 @@ vi.mock('@tanstack/react-router', () => ({
       thread: page.thread,
       waitingFor: page.waitingFor,
       disputeMark: page.mark,
+      descriptionChange: page.change,
     }),
   }),
   notFound: () => new Error('not found'),
@@ -67,6 +73,10 @@ vi.mock('./priceCalls', () => ({ callPrice: vi.fn(), PRICE_CALLS: {} }))
 vi.mock('~/server/templates/functions', () => ({
   getTemplateDetailFn: vi.fn(() => Promise.resolve({ template: page.template, thread: [] })),
 }))
+vi.mock('~/server/descriptions/functions', () => ({
+  changeDescriptionFn: vi.fn(),
+  answerDescriptionFn: vi.fn(),
+}))
 vi.mock('~/server/disputes/functions', () => ({
   getItemMarkFn: vi.fn(() => Promise.resolve(null)),
   openDisputeFn: vi.fn(),
@@ -78,6 +88,7 @@ const { getItemMarkFn } = await import('~/server/disputes/functions')
 const dishes: TemplateView = {
   id: 9,
   title: 'Vyluxovat celý obývák a chodbu',
+  description: null,
   status: 'active',
   score: 3,
   approvalRequired: true,
@@ -311,5 +322,38 @@ describe('chore page: the admin reads it, never acts (#222)', () => {
 
   it('the same switches for a parent still show Rozporovat: the gate bites only the admin', () => {
     expect(allOn(() => render(TATA))).toContain(`>${cs.disputes.action}<`)
+  })
+})
+
+describe('chore page: description (#207)', () => {
+  const TATA = { id: 2, role: 'giver', displayName: 'Táta' } as const
+  const described = { ...dishes, description: 'Talíře do myčky.\nHrnce ručně.' }
+
+  it('switch off: no Popis block', () => {
+    expect(render(TATA, thread, described)).not.toContain('data-slot="description"')
+  })
+
+  it('switch on: the text, Upravit popis for Táta only, the waiting card', () => {
+    page.descriptions = true
+    page.change = {
+      id: 3,
+      description: null,
+      proposedBy: 2,
+      createdAt: '2026-11-26T10:00:00.000Z',
+      waitingFor: [4],
+      waitingForNames: ['Starší'],
+    }
+    try {
+      const giver = render(TATA, thread, described)
+      expect(giver).toContain('Talíře do myčky.\nHrnce ručně.')
+      expect(giver).toContain(`>${cs.description.edit}<`)
+      expect(giver).toContain(cs.description.waitingRemove)
+      const brother = render(STARSI, thread, described)
+      expect(brother).not.toContain(cs.description.edit)
+      expect(brother).toContain(`>${cs.description.agree}<`)
+    } finally {
+      page.descriptions = false
+      page.change = null
+    }
   })
 })

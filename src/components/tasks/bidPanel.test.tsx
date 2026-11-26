@@ -63,6 +63,7 @@ const TATA = { id: 2, role: 'giver' } as const
 const view = (over: Partial<TaskView>): TaskView => ({
   id: 1,
   title: 'Umýt auto',
+  description: null,
   status: 'proposed',
   score: 18,
   approvalRequired: true,
@@ -173,6 +174,7 @@ describe('WaitingForYou with bids', () => {
     const mine = { ...bids, id: 2 }
     const html = renderToStaticMarkup(
       <WaitingForYou
+        descriptionChanges={[]}
         priceChanges={[]}
         taskPriceChanges={[]}
         items={[view({}), mine]}
@@ -239,7 +241,13 @@ describe('what a tap sends (#34)', () => {
   })
   it("a Domů row's Souhlasím approves the offer (open for both)", () => {
     renderToStaticMarkup(
-      <WaitingForYou priceChanges={[]} taskPriceChanges={[]} items={[view({})]} me={STARSI} />,
+      <WaitingForYou
+        priceChanges={[]}
+        taskPriceChanges={[]}
+        descriptionChanges={[]}
+        items={[view({})]}
+        me={STARSI}
+      />,
     )
     expect(tap('Souhlasím')).toMatchObject({
       action: 'approveOffer',

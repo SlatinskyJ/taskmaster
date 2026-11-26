@@ -7,7 +7,13 @@ import type { TemplateView } from '~/server/templates/functions'
 // templates (the app shell's `context.features`) is tested where it is read. Lives here, not in src/routes,
 // because the router generator treats every file there as a route.
 const page = vi.hoisted((): { data: Record<string, unknown> } => ({ data: {} }))
-const features = vi.hoisted(() => ({ recurring: true, log: true, week: true, meeting: true }))
+const features = vi.hoisted(() => ({
+  recurring: true,
+  log: true,
+  week: true,
+  meeting: true,
+  descriptions: false,
+}))
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (opts: Record<string, unknown>) => ({
     ...opts,
@@ -55,6 +61,7 @@ function show(route: unknown) {
 
 beforeEach(() => {
   features.recurring = true
+  features.descriptions = false
   page.data = { list: [], templates: [flowers] }
 })
 
@@ -79,6 +86,18 @@ describe('Úkoly', () => {
 })
 
 describe('Nový úkol', () => {
+  it('descriptions off: no description field', () => {
+    expect(show(NewRoute)).not.toContain('name="description"')
+  })
+
+  it('descriptions on: an optional field capped at 1000, with its hint', () => {
+    features.descriptions = true
+    const html = show(NewRoute)
+    expect(html).toMatch(/<textarea[^>]*name="description"[^>]*maxLength="1000"/i)
+    expect(html).toContain('Popis (nepovinné)')
+    expect(html).toContain('Kluci to uvidí, než souhlasí.')
+  })
+
   it('offers Jednorázový and Opakovaný when recurring is on', () => {
     const html = show(NewRoute)
     expect(html).toContain('Opakovaný')

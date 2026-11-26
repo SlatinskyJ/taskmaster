@@ -2,10 +2,12 @@ import { and, asc, desc, eq } from 'drizzle-orm'
 import {
   approveTemplate,
   findPerson,
+  isStaleDescription,
   isValidScore,
   liveBook,
   liveTemplateBook,
   missingRoles,
+  normaliseDescription,
   proposeTemplate,
   resolveTemplate,
   validateTemplateDefinition,
@@ -29,6 +31,8 @@ import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { templates, templateScoreApprovals, users } from '~/server/db/schema'
 import type { TemplateRow, TemplateStatus } from '~/server/db/schema'
+import { waitingDescriptionOf } from '~/server/descriptions/rows'
+import type { WaitingDescription } from '~/server/descriptions/rows'
 import type { ThreadEntry } from '~/server/threadEntry'
 import { listPeople } from '~/server/users/people'
 import { closeThread, lastBids, markBidsFrom, openRows, threadOf } from './thread'
@@ -37,7 +41,8 @@ import { closeThread, lastBids, markBidsFrom, openRows, threadOf } from './threa
 // src/domain (agreement + templates); this module loads the rows, asks the domain, and writes
 // the result with its audit entries in one transaction. Score changes after agreement: ./scoreChange.
 
-export type TemplateError = AgreementError | TemplateDefinitionError | 'invalid_title' | 'not_found'
+export type TemplateError =
+  AgreementError | TemplateDefinitionError | 'invalid_title' | 'not_found' | 'description_too_long'
 
 export interface NewTemplate {
   title: string
@@ -45,6 +50,8 @@ export interface NewTemplate {
   approvalRequired: boolean
   schedule: TemplateSchedule | null
   deadline: DeadlineRule | null
+  /** What done means (#207); normalised, blank = none. Copied to each instance. */
+  description?: string | null
 }
 
 // ── Storage helpers ─────────────────────────────────────────────────────────────────────
@@ -219,6 +226,8 @@ export function createTemplateIn(
   if (!isValidScore(input.score)) return fail('invalid_score')
   const def = validateTemplateDefinition({ schedule: input.schedule, deadline: input.deadline })
   if (!def.ok) return def
+  const description = normaliseDescription(input.description ?? '')
+  if (!description.ok) return description
   const people = listPeople(tx)
   const agreement = proposeTemplate(people, giverId, input.score)
   if (!agreement.ok) return agreement
@@ -229,6 +238,7 @@ export function createTemplateIn(
     .insert(templates)
     .values({
       title,
+      description: description.value,
       status: agreement.value.status === 'agreed' ? 'active' : 'proposed',
       score: input.score,
       approvalRequired: input.approvalRequired,
@@ -266,8 +276,12 @@ export function approveTemplateScore(
   templateId: number,
   score: number,
   now: Date = new Date(),
+  /** The description the person's page showed (#207 ruling 8); undefined = not checked. */
+  seenDescription?: string | null,
 ): Result<TemplateRow, TemplateError> {
-  return db.transaction((tx) => approveTemplateScoreIn(tx, userId, templateId, score, now))
+  return db.transaction((tx) =>
+    approveTemplateScoreIn(tx, userId, templateId, score, now, seenDescription),
+  )
 }
 
 /** `approveTemplateScore` inside a caller's transaction (the demo seed). */
@@ -277,9 +291,11 @@ export function approveTemplateScoreIn(
   templateId: number,
   score: number,
   now: Date,
+  seenDescription?: string | null,
 ): Result<TemplateRow, TemplateError> {
   const row = tx.select().from(templates).where(eq(templates.id, templateId)).get()
   if (!row) return fail('not_found')
+  if (isStaleDescription(row.description, seenDescription)) return fail('offer_changed')
   if (row.status !== 'proposed') return fail('not_proposed')
   if (row.score !== score) return fail('offer_changed')
   const result = approveTemplate(agreementOf(tx, row), listPeople(tx), userId)
@@ -321,6 +337,8 @@ export function resolveProposedTemplates(tx: Tx, people: Person[], now: Date): v
 export interface TemplateView {
   id: number
   title: string
+  /** What done means (#207); null = none, or the `descriptions` switch is off. */
+  description: string | null
   status: TemplateStatus
   score: number
   approvalRequired: boolean
@@ -420,11 +438,13 @@ export function deadlineRuleOf(row: TemplateRow): DeadlineRule | null {
 
 /**
  * The launch switches a read or an action follows. Off by default. `choreBidding` (#209): bidding
- * on a proposed chore's first price; `bidRefusals` (#232): Nechci and turn-down on a price change.
+ * on a proposed chore's first price; `bidRefusals` (#232): Nechci and turn-down on a price change;
+ * `descriptions` (#207): reads show descriptions.
  */
 export interface BiddingOpts {
   choreBidding: boolean
   bidRefusals: boolean
+  descriptions?: boolean
 }
 const BIDDING_OFF: BiddingOpts = { choreBidding: false, bidRefusals: false }
 
@@ -448,6 +468,7 @@ function viewOf(
   return {
     id: t.id,
     title: t.title,
+    description: opts.descriptions ? t.description : null,
     status: t.status,
     score: t.score,
     approvalRequired: t.approvalRequired,
@@ -492,6 +513,8 @@ export interface TemplateDetail {
   thread: ThreadEntry[]
   /** Who may still agree to a proposed template; any one of them per missing side (#205). */
   waitingFor: { id: number; name: string }[]
+  /** A description change waiting for a taker (#207); null with none, or the switch off. */
+  descriptionChange: WaitingDescription | null
 }
 
 /**
@@ -528,7 +551,10 @@ export function getTemplateDetail(
     id: p.id,
     name: names.get(p.id) ?? '',
   }))
-  return { template, thread, waitingFor }
+  const descriptionChange = opts.descriptions
+    ? waitingDescriptionOf(db, { kind: 'template', id: templateId })
+    : null
+  return { template, thread, waitingFor, descriptionChange }
 }
 
 /**

@@ -53,6 +53,11 @@ export const tasks = sqliteTable(
     id: integer('id').primaryKey({ autoIncrement: true }),
     /** What to do, in the family's words, e.g. "Umýt auto". */
     title: text('title').notNull(),
+    /**
+     * What done means (#207): plain text, up to 1000 characters (limit in the domain). Null = none.
+     * An instance's is its template's at creation.
+     */
+    description: text('description'),
     status: text('status', { enum: TASK_STATUSES }).notNull(),
     /** Whole points from 1: the current offer while proposed, then the agreed score. */
     score: integer('score').notNull(),

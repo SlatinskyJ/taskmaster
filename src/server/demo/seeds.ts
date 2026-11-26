@@ -7,6 +7,7 @@ import {
   choreChange,
   corrections,
   choreDispute,
+  descriptions,
   disputes,
   instances,
   negotiation,
@@ -78,6 +79,11 @@ export const SEEDS = {
     pieces: [pastWeek, thisWeek, disputes, corrections],
     features: ['week', 'disputes'],
   },
+  /** Descriptions (#207): a proposed and an open task with a text, one with a change waiting. */
+  descriptions: {
+    pieces: [descriptions, points],
+    features: ['descriptions', 'openRows', 'recurring'],
+  },
   /** Changing your own password on Profil (#210): the demo people, the switch on. */
   password: { pieces: [], features: ['passwordChange'] },
   /** Previews and dev: everything. */
@@ -99,6 +105,8 @@ export const SEEDS = {
       instances,
       proposals,
       bootTick,
+      // Last, so the other pieces keep their ids (e2e opens pages by id).
+      descriptions,
     ],
     features: FEATURE_KEYS,
   },

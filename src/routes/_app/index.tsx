@@ -19,6 +19,7 @@ import {
   listTasksFn,
 } from '~/server/tasks/functions'
 import { waitingProposals } from '~/components/proposals/proposalView'
+import { listDescriptionChangesWaitingFn } from '~/server/descriptions/functions'
 import { getProposalsFn } from '~/server/periods/functions'
 import { getPointsFn } from '~/server/points/functions'
 import {
@@ -40,7 +41,12 @@ export const Route = createFileRoute('/_app/')({
     // Proposals for next week (#43): only with the launch switch on, so off means no call.
     const proposals = context.features.periodProposals ? await getProposalsFn() : null
     if (context.user.role === 'taker') {
+      // Waiting description changes (#207 ruling 6): only a brother answers them, only with the switch on.
+      const descriptionChanges = context.features.descriptions
+        ? await listDescriptionChangesWaitingFn()
+        : []
       return {
+        descriptionChanges,
         waiting,
         waitingTemplates,
         priceChanges,
@@ -55,6 +61,7 @@ export const Route = createFileRoute('/_app/')({
       }
     }
     return {
+      descriptionChanges: [],
       waiting,
       waitingTemplates,
       priceChanges,
@@ -77,6 +84,7 @@ export const Route = createFileRoute('/_app/')({
 function Home() {
   const { user, features } = Route.useRouteContext()
   const {
+    descriptionChanges,
     waiting,
     waitingTemplates,
     priceChanges,
@@ -115,6 +123,7 @@ function Home() {
         templates={shownTemplates}
         priceChanges={shownPriceChanges}
         taskPriceChanges={taskPriceChanges}
+        descriptionChanges={descriptionChanges}
         proposals={proposalRows}
         me={{ id: user.id, role: user.role }}
         links={links}

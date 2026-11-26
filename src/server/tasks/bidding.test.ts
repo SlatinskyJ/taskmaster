@@ -711,6 +711,7 @@ describe('what screens get (PR B)', () => {
       task: {
         id,
         title: 'Umýt auto',
+        description: null,
         status: 'proposed',
         score: 18,
         approvalRequired: true,
@@ -764,6 +765,7 @@ describe('what screens get (PR B)', () => {
         },
       ],
       history: expect.any(Array) as unknown,
+      descriptionChange: null,
     })
     expect(getTaskDetail(f.db, 999)).toBeNull()
   })

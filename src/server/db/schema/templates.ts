@@ -27,6 +27,8 @@ export const templates = sqliteTable(
     id: integer('id').primaryKey({ autoIncrement: true }),
     /** What to do, e.g. "Vynést koše". */
     title: text('title').notNull(),
+    /** What done means (#207); copied to each instance at creation. Null = none. */
+    description: text('description'),
     status: text('status', { enum: TEMPLATE_STATUSES }).notNull(),
     /**
      * Whole points from 1: the current offer while proposed (a giver's counter moves it, #209),

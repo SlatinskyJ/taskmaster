@@ -5,8 +5,16 @@ import type { Result } from '~/domain/result'
 import type { Db } from '~/server/db'
 import { getDb } from '~/server/db'
 import type { TemplateRow, TemplateStatus } from '~/server/db/schema'
+import { STALE, seenOf, unseen } from '~/server/descriptions/seen'
 import { getFlags } from '~/server/features'
-import { parseApproval, parseNewTemplate, parseTemplateId, parseTemplateTurnDown } from './parse'
+import { hasDescription } from '~/server/descriptions/parse'
+import {
+  parseApproval,
+  parseNewTemplate,
+  parseSeenScore,
+  parseTemplateId,
+  parseTemplateTurnDown,
+} from './parse'
 import {
   acceptLowestBidOnTemplate,
   acceptOfferOnTemplate,
@@ -47,27 +55,47 @@ const answered = (result: Result<TemplateRow, TemplateError>): TemplateActionRes
     ? { ok: true, id: result.value.id, score: result.value.score, status: result.value.status }
     : result
 
-/** The switches `choreBidding` (#209) and `bidRefusals` (#232) as the score actions take them. */
+/**
+ * The switches the reads and score actions take: `choreBidding` (#209), `bidRefusals` (#232) and
+ * `descriptions` (#207).
+ */
 const bidding = (db: Db): BiddingOpts => {
-  const { choreBidding, bidRefusals } = getFlags(db)
-  return { choreBidding, bidRefusals }
+  const { choreBidding, bidRefusals, descriptions } = getFlags(db)
+  return { choreBidding, bidRefusals, descriptions }
 }
 
-/** A giver proposes a new recurring template (spec §5.1). */
+const OFF = { ok: false, error: 'feature_off' } as const
+
+/** A giver proposes a new recurring template (spec §5.1); a description needs the switch. */
+export function createTemplateHandler(
+  db: Db,
+  userId: number,
+  data: NewTemplate,
+  now: Date,
+): TemplateActionResult | typeof OFF {
+  if (!getFlags(db).descriptions && hasDescription(data.description ?? undefined)) return OFF
+  return answered(createTemplate(db, userId, data, now))
+}
+
+/** A giver or taker approves the template score they were shown (spec §3). */
+export function approveTemplateScoreHandler(db: Db, userId: number, data: Seen, now: Date) {
+  if (unseen(db, data)) return STALE
+  return answered(
+    approveTemplateScore(db, userId, data.templateId, data.score, now, seenOf(db, data)),
+  )
+}
+
 export const createTemplateFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver')])
   .validator(parseNewTemplate)
-  .handler(({ data, context }): TemplateActionResult => {
-    return answered(createTemplate(getDb(), context.user.id, data))
-  })
+  .handler(({ data, context }) => createTemplateHandler(getDb(), context.user.id, data, new Date()))
 
-/** A giver or taker approves the template score they were shown (spec §3). */
 export const approveTemplateScoreFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver', 'taker')])
-  .validator(parseApproval)
-  .handler(({ data, context }): TemplateActionResult => {
-    return answered(approveTemplateScore(getDb(), context.user.id, data.templateId, data.score))
-  })
+  .validator(parseSeenScore)
+  .handler(({ data, context }) =>
+    approveTemplateScoreHandler(getDb(), context.user.id, data, new Date()),
+  )
 
 /** Templates for the Úkoly screen: every one for a giver, agreed ones for a taker. */
 export const listTemplatesFn = createServerFn({ method: 'GET' })
@@ -87,9 +115,14 @@ interface Score {
   score: number
 }
 
+/** A taker's number, with the text his page showed (#207 ruling 8). */
+type Seen = Score & { seenDescription?: string | null }
+
 /** A taker bids a score. */
-export function bidTemplateScoreHandler(db: Db, userId: number, data: Score, now: Date) {
-  return answered(bidOnTemplate(db, userId, data.templateId, data.score, now, bidding(db)))
+export function bidTemplateScoreHandler(db: Db, userId: number, data: Seen, now: Date) {
+  if (unseen(db, data)) return STALE
+  const opts = { ...bidding(db), seenDescription: seenOf(db, data) }
+  return answered(bidOnTemplate(db, userId, data.templateId, data.score, now, opts))
 }
 
 /** A giver counters with a new offer to every taker (at an open bid it agrees at it). */
@@ -104,8 +137,10 @@ export function acceptTemplateBidHandler(db: Db, userId: number, data: Score, no
 }
 
 /** A taker accepts the giver side's offer he saw. */
-export function acceptTemplateOfferHandler(db: Db, userId: number, data: Score, now: Date) {
-  return answered(acceptOfferOnTemplate(db, userId, data.templateId, data.score, now, bidding(db)))
+export function acceptTemplateOfferHandler(db: Db, userId: number, data: Seen, now: Date) {
+  if (unseen(db, data)) return STALE
+  const opts = { ...bidding(db), seenDescription: seenOf(db, data) }
+  return answered(acceptOfferOnTemplate(db, userId, data.templateId, data.score, now, opts))
 }
 
 /** A taker's Nechci: his open bid closes (a proposed chore, or a price change with `bidRefusals`). */
@@ -133,7 +168,7 @@ export function turnDownTemplateBidsHandler(
 
 export const bidTemplateScoreFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('taker')])
-  .validator(parseApproval)
+  .validator(parseSeenScore)
   .handler(({ data, context }) =>
     bidTemplateScoreHandler(getDb(), context.user.id, data, new Date()),
   )
@@ -154,7 +189,7 @@ export const acceptTemplateBidFn = createServerFn({ method: 'POST' })
 
 export const acceptTemplateOfferFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('taker')])
-  .validator(parseApproval)
+  .validator(parseSeenScore)
   .handler(({ data, context }) =>
     acceptTemplateOfferHandler(getDb(), context.user.id, data, new Date()),
   )

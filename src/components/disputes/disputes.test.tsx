@@ -166,7 +166,13 @@ describe('DisputeList (Rozporováno)', () => {
 describe('TaskRow footer', () => {
   it('renders inside the row card', () => {
     const html = renderToStaticMarkup(
-      <TaskRow name="Vysát auto" state="confirmed" points={22} footer={<i>patička</i>} />,
+      <TaskRow
+        described={false}
+        name="Vysát auto"
+        state="confirmed"
+        points={22}
+        footer={<i>patička</i>}
+      />,
     )
     expect(html).toMatch(/data-slot="task-row"[^]*<i>patička<\/i>[^]*<\/div>$/)
   })

@@ -22,6 +22,7 @@ import { tasks } from '~/server/db/schema'
 import type { TaskRow } from '~/server/db/schema'
 import { listPeople } from '~/server/users/people'
 import { saveItem, toItem } from './item'
+import { settleStaleDescription } from '~/server/descriptions/descriptions'
 import { discardStaleChange } from './scoreChange'
 import { reopenOffer } from './tasks'
 
@@ -71,19 +72,19 @@ function runStep(
     const next = step(toItem(row), stepActor, now)
     if (!next.ok) return next
     const { row: stepped, accepted, closed } = saveItem(tx, row, next.value, {}, now)
-    const saved = opts.extra ? opts.extra(tx, row, stepped, people) : stepped
+    const extended = opts.extra ? opts.extra(tx, row, stepped, people) : stepped
     writeAudit(tx, {
       actor,
       action,
       entityType: 'task',
       entityId: taskId,
       before: auditView(row),
-      after: { ...auditView(saved), accepted, closed },
+      after: { ...auditView(extended), accepted, closed },
       reason: opts.reason,
       at: now,
     })
     // A reopened round (#212) ends when the task leaves open: its own history line.
-    if (row.biddingFrom !== null && saved.biddingFrom === null) {
+    if (row.biddingFrom !== null && extended.biddingFrom === null) {
       writeAudit(tx, {
         actor,
         action: 'task.bidding_closed',
@@ -95,8 +96,9 @@ function runStep(
     }
     // A score change in flight ends once the task can't change score any more (spec §5.2);
     // logged after the step that ends it, so the history reads cause, then effect.
-    discardStaleChange(tx, saved, actor, people, now)
-    return ok(saved)
+    discardStaleChange(tx, extended, actor, people, now)
+    // A waiting description change applies or is discarded the same way (#207, rulings 1–2).
+    return ok(settleStaleDescription(tx, extended, actor, now))
   })
 }
 

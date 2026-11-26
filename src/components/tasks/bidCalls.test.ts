@@ -32,9 +32,9 @@ describe('callBid', () => {
     vi.clearAllMocks()
   })
   it.each([
-    { action: 'approveOffer', data: { taskId: 1, score: 18 } },
-    { action: 'acceptOffer', data: { taskId: 1, score: 18 } },
-    { action: 'placeBid', data: { taskId: 1, score: 24 } },
+    { action: 'approveOffer', data: { taskId: 1, score: 18, seenDescription: null } },
+    { action: 'acceptOffer', data: { taskId: 1, score: 18, seenDescription: 'Celý obývák.' } },
+    { action: 'placeBid', data: { taskId: 1, score: 24, seenDescription: null } },
     { action: 'acceptLowestTaskBid', data: { taskId: 1, score: 22, bidders: [4] } },
     { action: 'counterOffer', data: { taskId: 1, score: 21, bidders: [] } },
     { action: 'withdrawBid', data: { taskId: 1 } },

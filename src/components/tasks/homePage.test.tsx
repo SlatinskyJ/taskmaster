@@ -80,6 +80,9 @@ const points = vi.hoisted(() => ({
     }[],
   },
 }))
+vi.mock('~/server/descriptions/functions', () => ({
+  listDescriptionChangesWaitingFn: vi.fn(() => Promise.resolve(['descriptionChanges'])),
+}))
 vi.mock('~/server/periods/functions', () => ({
   getProposalsFn: vi.fn(() => Promise.resolve('proposals')),
 }))
@@ -97,6 +100,7 @@ const { Route } = await import('~/routes/_app/index')
 const dishes: TemplateView = {
   id: 9,
   title: 'Vyndat myčku',
+  description: null,
   status: 'active',
   score: 3,
   approvalRequired: true,
@@ -133,6 +137,7 @@ const bins = (bids: { takerId: number; name: string; score: number }[]): Templat
 function render(user: PageUser, recurring: TemplateView[], over: Record<string, unknown> = {}) {
   page.user = user
   page.data = {
+    descriptionChanges: [],
     waiting: [],
     waitingTemplates: [],
     priceChanges: [dishes],
@@ -194,6 +199,7 @@ describe('Domů', () => {
     const change: TaskView = {
       id: 7,
       title: 'Vyluxovat celý obývák a chodbu',
+      description: null,
       status: 'open',
       score: 10,
       approvalRequired: true,
@@ -320,11 +326,14 @@ describe('Domů points (#40)', () => {
 
 describe('Domů loader', () => {
   type Loader = (args: {
-    context: { user: { role: string }; features: { periodProposals: boolean } }
+    context: {
+      user: { role: string }
+      features: { periodProposals: boolean; descriptions: boolean }
+    }
   }) => Promise<Record<string, unknown>>
-  const load = (role: string, periodProposals = false) =>
+  const load = (role: string, periodProposals = false, descriptions = false) =>
     (Route as unknown as { loader: Loader }).loader({
-      context: { user: { role }, features: { periodProposals } },
+      context: { user: { role }, features: { periodProposals, descriptions } },
     })
   beforeEach(() => {
     vi.mocked(getProposalsFn).mockClear()
@@ -340,8 +349,15 @@ describe('Domů loader', () => {
     expect(getProposalsFn).toHaveBeenCalledTimes(2)
   })
 
+  it('descriptions (#207 ruling 6): a brother gets his waiting changes only with the switch on', async () => {
+    expect((await load('taker')).descriptionChanges).toEqual([])
+    expect((await load('taker', false, true)).descriptionChanges).toEqual(['descriptionChanges'])
+    expect((await load('giver', false, true)).descriptionChanges).toEqual([])
+  })
+
   it('a brother gets the price changes and the recurring chores', async () => {
     expect(await load('taker')).toEqual({
+      descriptionChanges: [],
       waiting: ['waiting'],
       waitingTemplates: ['waitingTemplates'],
       priceChanges: ['priceChanges'],
@@ -358,6 +374,7 @@ describe('Domů loader', () => {
 
   it('a parent gets the price changes, every taker’s points and the task list, no recurring list', async () => {
     expect(await load('giver')).toEqual({
+      descriptionChanges: [],
       waiting: ['waiting'],
       waitingTemplates: ['waitingTemplates'],
       priceChanges: ['priceChanges'],

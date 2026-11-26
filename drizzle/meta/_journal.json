@@ -253,6 +253,20 @@
       "when": 1795686419083,
       "tag": "0035_template_bids_from_open_bids",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1795688411420,
+      "tag": "0036_descriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1795688417594,
+      "tag": "0037_descriptions_switch",
+      "breakpoints": true
     }
   ]
 }

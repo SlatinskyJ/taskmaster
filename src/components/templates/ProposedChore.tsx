@@ -23,7 +23,11 @@ export function choreWaitingText(waitingFor: readonly Person[], me: Me): string 
  * Souhlasím on a proposed chore's page (#205), for someone it waits for. The same call, toast
  * and reload as the Domů row (WaitingForYou).
  */
-export function AgreeToChore({ template }: { template: Pick<TemplateView, 'id' | 'score'> }) {
+export function AgreeToChore({
+  template,
+}: {
+  template: Pick<TemplateView, 'id' | 'score' | 'description'>
+}) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
   return (

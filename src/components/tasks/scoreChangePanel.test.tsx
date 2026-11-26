@@ -51,6 +51,7 @@ const MLADSI = { id: 4, role: 'taker' } as const
 const pending: TaskView = {
   id: 1,
   title: 'Vyluxovat celý obývák a chodbu',
+  description: null,
   status: 'open',
   score: 18,
   approvalRequired: true,

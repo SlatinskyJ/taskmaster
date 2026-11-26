@@ -47,6 +47,7 @@ export function TakerBoard({
               <li key={t.id}>
                 {canWorkOn(t, { id: me, role: 'taker' }) ? (
                   <TaskRow
+                    described={t.description !== null}
                     name={t.title}
                     state="reserved"
                     points={t.score}
@@ -56,6 +57,7 @@ export function TakerBoard({
                   />
                 ) : (
                   <TaskRow
+                    described={t.description !== null}
                     name={t.title}
                     state="pending"
                     points={t.score}
@@ -76,6 +78,7 @@ export function TakerBoard({
             {free.map((t) => (
               <li key={t.id}>
                 <TaskRow
+                  described={t.description !== null}
                   name={
                     !links && rebid && t.origin === 'one_time' ? (
                       <TaskLink id={t.id} title={t.title} />

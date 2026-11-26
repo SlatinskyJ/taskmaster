@@ -73,7 +73,9 @@ describe('StateChip', () => {
 
 describe('TaskRow', () => {
   it('has the left stripe, chip, name and points', () => {
-    const html = renderToStaticMarkup(<TaskRow name="Vyndat myčku" state="reserved" points={15} />)
+    const html = renderToStaticMarkup(
+      <TaskRow described={false} name="Vyndat myčku" state="reserved" points={15} />,
+    )
     expect(html).toContain('border-l-4')
     expect(html).toContain('border-l-state-reserved')
     expect(html).toContain(cs.state.reserved)
@@ -86,6 +88,7 @@ describe('TaskRow chip and meta line', () => {
   it('wraps the meta under the chip instead of squeezing it', () => {
     const html = renderToStaticMarkup(
       <TaskRow
+        described={false}
         name="Vyluxovat celý obývák a chodbu"
         state="pending"
         points={5}
@@ -101,7 +104,9 @@ describe('TaskRow chip and meta line', () => {
   })
 
   it('renders no meta span without meta', () => {
-    const html = renderToStaticMarkup(<TaskRow name="Vynést koš" state="open" points={5} />)
+    const html = renderToStaticMarkup(
+      <TaskRow described={false} name="Vynést koš" state="open" points={5} />,
+    )
     expect(html).not.toContain('data-slot="task-meta"')
   })
 })
@@ -111,12 +116,16 @@ describe('TaskRow points colour', () => {
     ['pending', 'text-state-pending-text'],
     ['confirmed', 'text-state-confirmed-text'],
   ] as const)('%s points use the state text colour', (state, cls) => {
-    const html = renderToStaticMarkup(<TaskRow name="Vynést koš" state={state} points={5} />)
+    const html = renderToStaticMarkup(
+      <TaskRow described={false} name="Vynést koš" state={state} points={5} />,
+    )
     expect(html).toMatch(new RegExp(`class="[^"]*num[^"]*${cls}[^"]*">5<`))
   })
 
   it('open points stay ink', () => {
-    const html = renderToStaticMarkup(<TaskRow name="Vynést koš" state="open" points={5} />)
+    const html = renderToStaticMarkup(
+      <TaskRow described={false} name="Vynést koš" state="open" points={5} />,
+    )
     expect(html).toMatch(/class="num text-base font-bold whitespace-nowrap">5</)
   })
 })
@@ -143,7 +152,13 @@ describe('PointsBar', () => {
 describe('TaskRow for templates (#37)', () => {
   it('stateLabel overrides the chip text', () => {
     const html = renderToStaticMarkup(
-      <TaskRow name="Vyndat myčku" state="confirmed" stateLabel="Platí" points={3} />,
+      <TaskRow
+        described={false}
+        name="Vyndat myčku"
+        state="confirmed"
+        stateLabel="Platí"
+        points={3}
+      />,
     )
     expect(html).toContain('>Platí<')
     expect(html).not.toContain(`>${cs.state.confirmed}<`)
@@ -153,7 +168,7 @@ describe('TaskRow for templates (#37)', () => {
     const detail =
       'Po, Út, St, Čt, Pá, So, Ne v 18:00 · do dalšího dne 7:00 (+2 h) · schvaluje rodič'
     const html = renderToStaticMarkup(
-      <TaskRow name="Vynést koše" state="proposed" points={4} detail={detail} />,
+      <TaskRow described={false} name="Vynést koše" state="proposed" points={4} detail={detail} />,
     )
     const line = /<p[^>]*data-slot="task-detail"[^>]*>([^<]*)<\/p>/.exec(html)
     expect(line?.[1]).toBe(detail)
@@ -166,6 +181,7 @@ describe('WaitingForYou with templates (#37)', () => {
   const task = {
     id: 1,
     title: 'Umýt auto',
+    description: null,
     status: 'proposed' as const,
     score: 18,
     approvalRequired: true,
@@ -192,6 +208,7 @@ describe('WaitingForYou with templates (#37)', () => {
   const template = {
     id: 1,
     title: 'Vynést koše',
+    description: null,
     status: 'proposed' as const,
     score: 4,
     approvalRequired: true,
@@ -207,6 +224,7 @@ describe('WaitingForYou with templates (#37)', () => {
   it('counts tasks and templates and shows the full template detail', () => {
     const html = renderToStaticMarkup(
       <WaitingForYou
+        descriptionChanges={[]}
         priceChanges={[]}
         taskPriceChanges={[]}
         items={[task]}
@@ -225,6 +243,7 @@ describe('WaitingForYou with templates (#37)', () => {
     expect(
       renderToStaticMarkup(
         <WaitingForYou
+          descriptionChanges={[]}
           priceChanges={[]}
           taskPriceChanges={[]}
           items={[]}
@@ -234,12 +253,71 @@ describe('WaitingForYou with templates (#37)', () => {
       ),
     ).toBe('')
   })
+
+  const wfy = (p: Partial<Parameters<typeof WaitingForYou>[0]>) =>
+    renderToStaticMarkup(
+      <WaitingForYou
+        descriptionChanges={[]}
+        priceChanges={[]}
+        taskPriceChanges={[]}
+        items={[]}
+        me={{ id: 3, role: 'taker' }}
+        {...p}
+      />,
+    )
+
+  it('ruling 1: a proposed task with a description → "Přečíst a souhlasit" to its page, no Souhlasím', () => {
+    const html = wfy({ items: [{ ...task, description: 'I kufr.' }] })
+    expect(html).toContain(`href="/ukol/${String(task.id)}">${cs.description.readAndAgree}<`)
+    expect(html).not.toContain(`>${cs.tasks.approve}<`)
+    expect(html).toContain(`aria-label="${cs.description.hasIcon}"`)
+    // The row's footer line, under the row, so the name keeps the row's width (UX round 1).
+    expect(html).toContain(
+      `</div><a href="/ukol/${String(task.id)}">${cs.description.readAndAgree}</a></div></li>`,
+    )
+  })
+
+  it('ruling 1: without a description Souhlasím stays', () => {
+    const html = wfy({ items: [task] })
+    expect(html).toContain(cs.tasks.approve)
+    expect(html).not.toContain(cs.description.readAndAgree)
+  })
+
+  it('ruling 1: the same for a proposed chore', () => {
+    const html = wfy({ templates: [{ ...template, description: 'Koše i tříděný.' }] })
+    expect(html).toContain(`href="/sablona/1">${cs.description.readAndAgree}<`)
+    expect(html).toContain(
+      `</div><a href="/sablona/1">${cs.description.readAndAgree}</a></div></li>`,
+    )
+    expect(html).not.toContain(`>${cs.tasks.approve}<`)
+    const plain = wfy({ templates: [template] })
+    expect(plain).toContain(`>${cs.tasks.approve}<`)
+    expect(plain).not.toContain(cs.description.readAndAgree)
+  })
+
+  it('ruling 6: a waiting description change → a row linking to its page', () => {
+    const html = wfy({
+      descriptionChanges: [
+        { target: { kind: 'task', id: 8 }, name: 'Vynést věci na půdu', score: 12, changeId: 2 },
+        { target: { kind: 'template', id: 4 }, name: 'Vyndat myčku', score: 3, changeId: 3 },
+      ],
+    })
+    expect(html).toContain(`${cs.home.waiting} (2)`)
+    expect(html).toContain(cs.description.homeRow)
+    expect(html).toContain(`href="/ukol/8">${cs.bids.answer}<`)
+    expect(html).toContain(`href="/sablona/4">${cs.bids.answer}<`)
+  })
+
+  it('ruling 6: nothing waiting → no section', () => {
+    expect(wfy({})).toBe('')
+  })
 })
 
 describe('ToApprove', () => {
   const item: TaskView = {
     id: 1,
     title: 'Vyluxovat celý obývák a chodbu',
+    description: null,
     status: 'done_unconfirmed',
     score: 5,
     approvalRequired: true,
@@ -299,6 +377,7 @@ describe('template price change: ways in', () => {
   const dishes: TemplateView = {
     id: 9,
     title: 'Vyndat myčku',
+    description: null,
     status: 'active',
     score: 3,
     approvalRequired: true,
@@ -319,6 +398,7 @@ describe('template price change: ways in', () => {
   it('"Čeká na tebe" for a brother: the offer, Odpovědět to the page, counted', () => {
     const html = renderToStaticMarkup(
       <WaitingForYou
+        descriptionChanges={[]}
         items={[]}
         priceChanges={[dishes]}
         taskPriceChanges={[]}
@@ -335,6 +415,7 @@ describe('template price change: ways in', () => {
     const task: TaskView = {
       id: 7,
       title: 'Vyluxovat celý obývák a chodbu',
+      description: null,
       status: 'open',
       score: 10,
       approvalRequired: true,
@@ -366,6 +447,7 @@ describe('template price change: ways in', () => {
     }
     const html = renderToStaticMarkup(
       <WaitingForYou
+        descriptionChanges={[]}
         items={[]}
         priceChanges={[]}
         taskPriceChanges={[task]}
@@ -381,6 +463,7 @@ describe('template price change: ways in', () => {
   it('"Čeká na tebe" for a parent: the bid to answer, not his own offer', () => {
     const html = renderToStaticMarkup(
       <WaitingForYou
+        descriptionChanges={[]}
         items={[]}
         priceChanges={[dishes]}
         taskPriceChanges={[]}
@@ -425,6 +508,7 @@ describe('Úkoly: a proposed chore with first-price bidding (#209)', () => {
         template={{
           id: 9,
           title: 'Vynést koš',
+          description: null,
           status: 'proposed',
           score: 10,
           approvalRequired: true,
@@ -462,6 +546,7 @@ describe('TakerBoard Moje row (#148)', () => {
   const reserved: TaskView = {
     id: 1,
     title: 'Vyluxovat celý obývák a chodbu',
+    description: null,
     status: 'reserved',
     score: 18,
     approvalRequired: true,

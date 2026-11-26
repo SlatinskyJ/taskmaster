@@ -25,6 +25,7 @@ vi.mock('@tanstack/react-router', () => ({ useRouter: () => ({ invalidate: vi.fn
 const done: TaskView = {
   id: 7,
   title: 'Vyluxovat celý obývák a chodbu',
+  description: null,
   status: 'done_unconfirmed',
   score: 8,
   approvalRequired: true,
