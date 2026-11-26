@@ -35,7 +35,8 @@ export function frameHeader(win: Named | undefined): Record<string, string> {
 /**
  * A frame's document was loaded without its token (e.g. the service worker reloads it after a
  * redeploy), so the server saw nobody: the same URL with `tmFrame=<token>`, or null when the
- * URL is already right or this is not a frame with a token.
+ * URL is already right or this is not a frame with a token. The root route re-enters through
+ * `guardedReentryUrl`, which caps how often.
  */
 export function frameReentryUrl(win: Named & { location: { href: string } }): string | null {
   const token = frameToken(win)
@@ -44,6 +45,35 @@ export function frameReentryUrl(win: Named & { location: { href: string } }): st
   if (url.searchParams.get(FRAME_QUERY) === token) return null
   url.searchParams.set(FRAME_QUERY, token)
   return url.toString()
+}
+
+/** How long a frame remembers the address it re-entered: the same one again within it is refused. */
+export const REENTRY_WINDOW_MS = 5000
+
+export type ReentryStore = Pick<Storage, 'getItem' | 'setItem'>
+
+/**
+ * `frameReentryUrl`, at most once per address per REENTRY_WINDOW_MS in each frame: a redirect
+ * that keeps dropping the token then leaves the frame logged out instead of reloading it
+ * forever. The memory (per tab, keyed by the frame's name) is in `store`; without a working
+ * store there is no cap.
+ */
+export function guardedReentryUrl(
+  win: Named & { location: { href: string } },
+  store: ReentryStore | undefined,
+  now: number,
+): string | null {
+  const url = frameReentryUrl(win)
+  if (url === null) return null
+  const key = 'tm.frameReentry:' + win.name
+  try {
+    const last = JSON.parse(store?.getItem(key) ?? 'null') as { url: string; at: number } | null
+    if (last?.url === url && now - last.at < REENTRY_WINDOW_MS) return null
+    store?.setItem(key, JSON.stringify({ url, at: now }))
+  } catch {
+    // Storage blocked or memory unreadable: re-enter unguarded, as without a store.
+  }
+  return url
 }
 
 /** After a login or logout in a frame: remember the new token (or none) in its name. */
