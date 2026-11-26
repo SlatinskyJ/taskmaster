@@ -87,7 +87,7 @@ export function TextDiff({ before, after }: { before: string; after: string }) {
               {part.text}
             </ins>
           ) : (
-            <del key={k} className="text-state-rejected-text decoration-2">
+            <del key={k} className="mr-1 text-state-rejected-text decoration-2">
               <span className="sr-only">{cs.description.diffRemoved} </span>
               {part.text}
             </del>
