@@ -204,6 +204,8 @@ interface World {
   behindBy?: number
   /** full_name of the head repo; null = deleted fork. */
   headRepo?: string | null
+  /** base.ref of the PR; default main. */
+  baseRef?: string
 }
 
 function world(w: World = {}): Record<string, Reply> {
@@ -242,6 +244,7 @@ function world(w: World = {}): Record<string, Reply> {
               ? { full_name: 'SlatinskyJ/taskmaster' }
               : w.headRepo && { full_name: w.headRepo },
         },
+        base: { ref: w.baseRef ?? 'main' },
         mergeable_state: 'clean',
         labels: [{ name: 'merge-me' }],
       },
@@ -296,6 +299,17 @@ describe('labelledPrs: head repository', () => {
   })
 })
 
+describe('labelledPrs: base branch', () => {
+  it('a PR on main has baseIsMain', async () => {
+    const [pr] = await factsOf({})
+    expect(pr?.baseIsMain).toBe(true)
+  })
+  it('a PR on another branch (an unlinked stack) has not', async () => {
+    const [pr] = await factsOf({ baseRef: '41-lower-step' })
+    expect(pr?.baseIsMain).toBe(false)
+  })
+})
+
 const BASE_COMMITS = [
   commit(OLD, []),
   commit(A, [OLD], { committer: { name: 'Jakub', email: 'j@x' } }),
@@ -308,6 +322,7 @@ describe('labelledPrs', () => {
         number: 9,
         draft: false,
         fromFork: false,
+        baseIsMain: true,
         approvedSha: A,
         labelEventId: LABEL_ID,
         headSha: A,
@@ -463,6 +478,7 @@ describe('labelledPrs', () => {
         number: 9,
         draft: false,
         head: { sha: A, repo: { full_name: 'SlatinskyJ/taskmaster' } },
+        base: { ref: 'main' },
         mergeable_state: 'clean',
         labels: [{ name: 'merge-me' }, { name: 'needs-jakub' }],
       },
@@ -493,6 +509,7 @@ describe('labelledPrs', () => {
         number: 9,
         draft: false,
         head: { sha: A, repo: { full_name: 'SlatinskyJ/taskmaster' } },
+        base: { ref: 'main' },
         mergeable_state: 'clean',
         labels: [],
       },
@@ -512,6 +529,7 @@ describe('behind', () => {
         number: 9,
         draft: false,
         head: { sha: A, repo: { full_name: 'SlatinskyJ/taskmaster' } },
+        base: { ref: 'main' },
         mergeable_state: 'unknown',
         labels: [],
       },

@@ -103,6 +103,7 @@ interface PullDetail {
   number: number
   draft: boolean
   head: { sha: string; repo: { full_name: string } | null }
+  base: { ref: string }
   labels: { name: string }[]
 }
 
@@ -273,6 +274,7 @@ export function makeGh(
       number: pr,
       draft: detail.draft,
       fromFork: detail.head.repo?.full_name !== repo,
+      baseIsMain: detail.base.ref === 'main',
       approvedSha,
       labelEventId: label.id,
       headSha: detail.head.sha,

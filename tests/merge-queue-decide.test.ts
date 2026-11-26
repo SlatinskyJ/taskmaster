@@ -18,6 +18,7 @@ function facts(over: Partial<PrFacts> = {}): PrFacts {
     ci: 'green',
     unresolvedThreads: 0,
     fromFork: false,
+    baseIsMain: true,
     inStack: false,
     behind: false,
     handedOver: false,
@@ -64,6 +65,10 @@ describe('entryCheck', () => {
   })
   it('fails a PR from a fork (its author could rewrite an update merge in the web editor)', () => {
     expect(entryCheck(facts({ fromFork: true }))).toEqual({ ok: false, reason: 'PR from a fork' })
+    expect(entryCheck(facts({ baseIsMain: false }))).toEqual({
+      ok: false,
+      reason: 'base is not main',
+    })
   })
   it('fails a PR in a GitHub stack', () => {
     expect(entryCheck(facts({ inStack: true }))).toEqual({

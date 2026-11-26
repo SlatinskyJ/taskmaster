@@ -8,6 +8,8 @@ export interface PrFacts {
   draft: boolean
   /** Head branch lives outside this repository (a fork, or a deleted head repo). */
   fromFork: boolean
+  /** The PR targets main (a PR on another branch is a stack, linked or not). */
+  baseIsMain: boolean
   /** From the Action's HMAC-signed approval marker after the latest qualifying label; null = not recorded. */
   approvedSha: string | null
   /** Id of the latest qualifying merge-me label event; signs this PR's hand-over marker. */
@@ -42,6 +44,7 @@ export const NOT_RECORDED = 'approval not recorded: add merge-me again'
 export function entryCheck(pr: PrFacts): { ok: true } | { ok: false; reason: string } {
   if (pr.draft) return { ok: false, reason: 'draft' }
   if (pr.fromFork) return { ok: false, reason: 'PR from a fork' }
+  if (!pr.baseIsMain) return { ok: false, reason: 'base is not main' }
   if (pr.needsJakubAfterLabel) return { ok: false, reason: 'open question (needs-jakub)' }
   if (!pr.headIsApproved) return { ok: false, reason: 'new commits after the label' }
   if (pr.ci === 'red') return { ok: false, reason: 'CI red' }

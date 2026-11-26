@@ -14,6 +14,7 @@ function facts(over: Partial<PrFacts> = {}): PrFacts {
     number: 9,
     draft: false,
     fromFork: false,
+    baseIsMain: true,
     approvedSha: X,
     labelEventId: 501,
     headSha: X,
