@@ -1,7 +1,15 @@
 import { asc, sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { login } from '~/server/auth'
-import { auditLog, periods, settlements, tasks, templates, users } from '~/server/db/schema'
+import {
+  auditLog,
+  periods,
+  settlements,
+  suggestions,
+  tasks,
+  templates,
+  users,
+} from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { bootstrapAdmin } from '~/server/users'
 import { ALL_FEATURES, NO_FEATURES } from '~/lib/features'
@@ -146,7 +154,7 @@ describe('demo seed (#62)', () => {
     for (const name of ['Home', 'nope', 'toString', 'constructor']) {
       const db = createTestDb()
       expect(() => seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: name }, T0)).toThrow(
-        `unknown TASKMASTER_SEED "${name}" (known: family, home, launch, approve, rows, tasks, bids, rebid, week, recurring, chores, chorechange, scheduler, proposals, disputes, corrections, descriptions, password, demo)`,
+        `unknown TASKMASTER_SEED "${name}" (known: family, home, launch, approve, rows, tasks, bids, rebid, week, recurring, chores, chorechange, scheduler, proposals, disputes, corrections, descriptions, password, suggestions, demo)`,
       )
       expect(db.select().from(users).all()).toHaveLength(0)
       expect(db.select().from(auditLog).all()).toHaveLength(0)
@@ -194,6 +202,7 @@ describe('demo seed (#62)', () => {
       corrections: { ...NO_FEATURES, week: true, disputes: true },
       descriptions: { ...NO_FEATURES, descriptions: true, openRows: true, recurring: true },
       password: { ...NO_FEATURES, passwordChange: true },
+      suggestions: { ...NO_FEATURES, suggestions: true },
       demo: ALL_FEATURES,
     }
     for (const name of Object.keys(SEEDS) as SeedName[]) {
@@ -241,5 +250,42 @@ describe('demo seed (#62)', () => {
       descriptions: false,
       suggestions: false,
     })
+  })
+})
+
+describe('suggestions piece (#247)', () => {
+  const rows = (seed: SeedName) => {
+    const db = createTestDb()
+    seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: seed }, T0)
+    const byId = new Map(
+      db
+        .select()
+        .from(users)
+        .all()
+        .map((u) => [u.id, u.username]),
+    )
+    const list = db
+      .select()
+      .from(suggestions)
+      .orderBy(asc(suggestions.id))
+      .all()
+      .map((s) => ({ by: byId.get(s.authorId), title: s.title, status: s.status }))
+    return { db, list }
+  }
+  const expected = [
+    { by: 'starsi', title: 'Tmavý režim i na obrazovce Týden', status: 'new' },
+    { by: 'mladsi', title: 'Zvuk, když dokončím úkol', status: 'new' },
+    { by: 'tata', title: 'Připomenout v neděli schůzku', status: 'done' },
+    { by: 'starsi', title: 'Víc bodů za vynesení koše', status: 'dismissed' },
+  ]
+
+  it('the suggestions seed: two new, one done, one dismissed, and the switch on', () => {
+    const { db, list } = rows('suggestions')
+    expect(list).toEqual(expected)
+    expect(getFlags(db).suggestions).toBe(true)
+  })
+
+  it('demo has them too', () => {
+    expect(rows('demo').list).toEqual(expected)
   })
 })

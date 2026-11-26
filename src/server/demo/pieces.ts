@@ -21,6 +21,7 @@ import {
   rollPeriods,
 } from '~/server/periods'
 import { getMeeting, settlePeriod } from '~/server/settlement/meeting'
+import { closeSuggestionIn, createSuggestionIn } from '~/server/suggestions/store'
 import {
   acceptOffer,
   approveTask,
@@ -592,4 +593,24 @@ export const proposals: Piece = ({ tx, id, now }) => {
     'propose default week',
     proposeDefaultsChange(tx, id('tata'), { ...defaults, lengthDays: 14, levels }, now),
   )
+}
+
+/**
+ * #247: four suggestions from Profil. Two still new (Starší's with a two-line description,
+ * Mladší's with none), Táta's marked done and one of Starší's dismissed by the admin. None sent:
+ * that needs GitHub.
+ */
+export const suggestions: Piece = ({ tx, id, now }) => {
+  const suggest = (by: string, title: string, description = '') =>
+    step(`suggest "${title}"`, createSuggestionIn(tx, id(by), { title, description }, now))
+  suggest(
+    'starsi',
+    'Tmavý režim i na obrazovce Týden',
+    'Večer mě to světlo oslňuje.\nNa Domů už tmavý režim funguje.',
+  )
+  suggest('mladsi', 'Zvuk, když dokončím úkol')
+  const meeting = suggest('tata', 'Připomenout v neděli schůzku')
+  const bins = suggest('starsi', 'Víc bodů za vynesení koše')
+  step('done', closeSuggestionIn(tx, id('admin'), meeting.id, 'done', now))
+  step('dismiss', closeSuggestionIn(tx, id('admin'), bins.id, 'dismiss', now))
 }

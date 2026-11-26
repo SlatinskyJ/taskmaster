@@ -17,6 +17,7 @@ import {
   priceChange,
   proposals,
   rebidding,
+  suggestions,
   templates,
   thisWeek,
 } from './pieces'
@@ -86,6 +87,8 @@ export const SEEDS = {
   },
   /** Changing your own password on Profil (#210): the demo people, the switch on. */
   password: { pieces: [], features: ['passwordChange'] },
+  /** Suggestions on Profil and Správa (#247): two new, one done, one dismissed. */
+  suggestions: { pieces: [suggestions], features: ['suggestions'] },
   /** Previews and dev: everything. */
   demo: {
     pieces: [
@@ -107,6 +110,7 @@ export const SEEDS = {
       bootTick,
       // Last, so the other pieces keep their ids (e2e opens pages by id).
       descriptions,
+      suggestions,
     ],
     features: FEATURE_KEYS,
   },
