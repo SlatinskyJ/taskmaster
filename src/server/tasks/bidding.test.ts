@@ -735,6 +735,7 @@ describe('what screens get (PR B)', () => {
           { id: f.mladsi, name: 'Mladší' },
         ],
         scoreChange: null,
+        rebidding: null,
       },
       thread: [
         {

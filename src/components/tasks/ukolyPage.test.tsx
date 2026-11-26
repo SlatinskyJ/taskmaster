@@ -60,6 +60,7 @@ const task = (id: number, title: string, over: Partial<TaskView>): TaskView => (
   createdAt: '2026-11-17T10:00:00.000Z',
   waitingFor: [],
   scoreChange: null,
+  rebidding: null,
   ...over,
 })
 
@@ -106,6 +107,29 @@ describe('Úkoly grouped by state (#41)', () => {
     expect(html).toContain(cs.work.doneSelf)
     expect(html).toContain(cs.bids.open)
     expect(html).toContain('Čeká se na: Starší nebo Mladší')
+  })
+
+  it('with reopenBidding on a free task’s name links to its page, others do not (#212)', () => {
+    const html = render(all)
+    expect(html).toContain('<a>Volný</a>')
+    expect(html).not.toContain('<a>Rezervovaný</a>')
+    expect(html).not.toContain('<a>Hotový</a>')
+  })
+
+  it('a free chore copy stays unlinked; a round with bids gets Odpovědět, not Hotovo bez bodů', () => {
+    const chore = task(7, 'Vynést koš', { status: 'open', origin: 'on_demand', templateId: 1 })
+    expect(render([chore])).not.toContain('<a>Vynést koš</a>')
+    const bid = { takerId: 4, name: 'Mladší', score: 15 }
+    const round = task(8, 'Vynést věci na půdu', {
+      status: 'open',
+      bids: [bid],
+      rebidding: { offer: 12, offeredBy: null },
+    })
+    const html = render([round])
+    expect(html).toContain(`<a>${cs.bids.answer}</a>`)
+    expect(html).not.toContain(cs.work.doneSelf)
+    // No bids yet: the parent can still close it, and reaches the round through the name.
+    expect(render([{ ...round, bids: [] }])).toContain(cs.work.doneSelf)
   })
 
   it('switch on: Čeká na potvrzení rows get ✓ Schválit and ✕ Zamítnout; other rows keep theirs (#206)', () => {

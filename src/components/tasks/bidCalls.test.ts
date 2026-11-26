@@ -5,6 +5,7 @@ import {
   approveTaskOfferFn,
   counterOfferFn,
   placeBidFn,
+  reopenBiddingFn,
   turnDownBidsFn,
   withdrawBidFn,
 } from '~/server/tasks/functions'
@@ -21,6 +22,7 @@ vi.mock('~/server/tasks/functions', () => {
     acceptLowestTaskBidFn: fn(),
     counterOfferFn: fn(),
     withdrawBidFn: fn(),
+    reopenBiddingFn: fn(),
     turnDownBidsFn: fn(),
   }
 })
@@ -37,6 +39,7 @@ describe('callBid', () => {
     { action: 'counterOffer', data: { taskId: 1, score: 21, bidders: [] } },
     { action: 'withdrawBid', data: { taskId: 1 } },
     { action: 'turnDownBids', data: { taskId: 1, bids: [{ takerId: 3, score: 25 }] } },
+    { action: 'reopenBidding', data: { taskId: 3 } },
   ] satisfies BidCall[])(
     'callBid sends $action to its own server function only, with its data as is',
     async (call) => {
@@ -49,6 +52,7 @@ describe('callBid', () => {
         counterOffer: counterOfferFn,
         withdrawBid: withdrawBidFn,
         turnDownBids: turnDownBidsFn,
+        reopenBidding: reopenBiddingFn,
       }
       for (const [action, fn] of Object.entries(fns)) {
         if (action === call.action) expect(fn).toHaveBeenCalledExactlyOnceWith({ data: call.data })
@@ -65,6 +69,7 @@ describe('callBid', () => {
       counterOffer: counterOfferFn,
       withdrawBid: withdrawBidFn,
       turnDownBids: turnDownBidsFn,
+      reopenBidding: reopenBiddingFn,
     })
   })
 })

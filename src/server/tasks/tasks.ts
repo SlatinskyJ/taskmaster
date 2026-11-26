@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, or } from 'drizzle-orm'
 import {
   approveOneTimeOffer,
   isAgreedOneTime,
@@ -27,7 +27,7 @@ import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
 import { toIsoUtc } from '~/domain/dates'
 import { normaliseTitle, TASK_TITLE_MAX } from '~/lib/taskLimits'
-import { writeAudit } from '~/server/audit'
+import { entityLog, writeAudit } from '~/server/audit'
 import type { Actor, Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { taskScoreApprovals, tasks, users } from '~/server/db/schema'
@@ -348,12 +348,18 @@ export interface TaskView {
   approvedBy: string[]
   /** The ids behind `approvedBy`, same order. */
   approverIds: number[]
-  /** Proposed only: current takers' open bids, lowest score first, then oldest. Else []. */
+  /**
+   * Proposed, or open in a reopened round (#212): current takers' open bids, lowest score first,
+   * then oldest. Else [].
+   */
   bids: { takerId: number; name: string; score: number }[]
-  /** Proposed with a bid: the lowest bid and who holds it, as a giver's accept sends it back. */
+  /**
+   * Proposed or in a round, with a bid: the lowest bid and who holds it, as a giver's accept
+   * sends it back.
+   */
   lowest: { score: number; bidders: { id: number; name: string }[] } | null
   /**
-   * Proposed only: each taker's previous bid in this round (open or withdrawn), the number he may
+   * Proposed or in a round: each taker's previous bid in this round (open or withdrawn), the number he may
    * not send again until the giver side changes the offer (Jakub 2026-11-24). Else [].
    */
   lastBids: { takerId: number; score: number }[]
@@ -379,6 +385,11 @@ export interface TaskView {
   waitingFor: { id: number; name: string }[]
   /** Open or reserved with a new score in flight (spec §5.2): who proposed, agreed, is awaited. */
   scoreChange: ScoreChangeView | null
+  /**
+   * Open in a reopened round (#212): the round's current offer (the agreed score until a parent
+   * counters, by nobody) and who countered. `score` stays the agreed score. Else null.
+   */
+  rebidding: { offer: number; offeredBy: { id: number; name: string } | null } | null
 }
 
 export interface ScoreChangeView {
@@ -409,7 +420,9 @@ function views(db: Db | Tx, rows: TaskRow[]): TaskView[] {
   return rows.map((t) => {
     const agreement = agreementOf(db, t)
     const proposed = agreement.status === 'proposed' ? agreement : null
-    const book = proposed ? liveBook(proposed.book, people) : { bids: [] }
+    const round = agreement.status === 'rebidding' ? agreement : null
+    const bidding = proposed ?? round
+    const book = bidding ? liveBook(bidding.book, people) : { bids: [] }
     const lowest = lowestBid(book)
     const approverIds = [...(proposed?.offer.approvedBy ?? [])]
     const missing = proposed ? missingRoles(proposed.offer, people) : []
@@ -430,7 +443,7 @@ function views(db: Db | Tx, rows: TaskRow[]): TaskView[] {
         score: lowest.score,
         bidders: lowest.bidders.map((id) => ({ id, name: name(id) })),
       },
-      lastBids: (proposed?.lastBids ?? []).map((b) => ({ takerId: b.by, score: b.score })),
+      lastBids: (bidding?.lastBids ?? []).map((b) => ({ takerId: b.by, score: b.score })),
       reservedBy: t.reservedBy === null ? null : { id: t.reservedBy, name: name(t.reservedBy) },
       completedBy: t.completedBy === null ? null : { id: t.completedBy, name: name(t.completedBy) },
       completedAt: t.completedAt,
@@ -444,6 +457,11 @@ function views(db: Db | Tx, rows: TaskRow[]): TaskView[] {
         .filter((p) => p.active && missing.some((role) => role === p.role))
         .map((p) => ({ id: p.id, name: name(p.id) })),
       scoreChange: scoreChangeView(db, t, people, name),
+      rebidding: round && {
+        offer: round.offer.score,
+        offeredBy:
+          round.offer.by === null ? null : { id: round.offer.by, name: name(round.offer.by) },
+      },
     }
   })
 }
@@ -497,23 +515,49 @@ export function getTaskDetail(db: Db | Tx, taskId: number): TaskDetail | null {
   const [task] = views(db, [row])
   if (!task) return null
   const name = namesOf(db)
-  const thread = threadOf(db, taskId).map((e): ThreadEntry => ({
-    id: e.id,
-    side: e.side,
-    by: { id: e.userId, name: name(e.userId) },
-    score: e.score,
-    at: e.createdAt,
-    state: e.closedAs ?? 'open',
-  }))
+  const from = threadFrom(db, row)
+  const thread = threadOf(db, taskId)
+    .filter((e) => e.id > from)
+    .map((e): ThreadEntry => ({
+      id: e.id,
+      side: e.side,
+      by: { id: e.userId, name: name(e.userId) },
+      score: e.score,
+      at: e.createdAt,
+      state: e.closedAs ?? 'open',
+    }))
   return { task, thread, history: taskHistory(db, taskId, name) }
 }
 
-/** Proposed tasks with at least one current open bid, oldest task first (a giver answers them). */
+/**
+ * The thread rows a task page shows (spec §5.2: earlier rounds are not shown): those after the
+ * running round's marker, else after the newest reopen's marker (`task.bidding_reopened`
+ * `after.biddingFrom`, also once that round ended), else all.
+ */
+function threadFrom(db: Db | Tx, task: TaskRow): number {
+  if (task.biddingFrom !== null) return task.biddingFrom
+  const reopens = entityLog(db, 'task', task.id).filter((e) => e.action === 'task.bidding_reopened')
+  const newest = reopens.at(-1)
+  if (!newest?.after) return 0
+  const after: unknown = JSON.parse(newest.after)
+  const from =
+    typeof after === 'object' && after !== null
+      ? (after as Record<string, unknown>).biddingFrom
+      : undefined
+  return typeof from === 'number' && Number.isSafeInteger(from) ? from : 0
+}
+
+/**
+ * Proposed tasks, and open ones in a reopened round (#212), with at least one current open bid,
+ * oldest task first (a giver answers them).
+ */
 export function listBidsToAnswer(db: Db | Tx): TaskView[] {
   const proposed = db
     .select()
     .from(tasks)
-    .where(eq(tasks.status, 'proposed'))
+    .where(
+      or(eq(tasks.status, 'proposed'), and(eq(tasks.status, 'open'), isNotNull(tasks.biddingFrom))),
+    )
     .orderBy(asc(tasks.id))
     .all()
   return views(db, proposed).filter((t) => t.bids.length > 0)

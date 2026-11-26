@@ -86,3 +86,19 @@ export function historyLine(e: HistoryEntry, meId: number): string {
 export function historyReason(e: HistoryEntry): string | null {
   return e.reason ? `„${e.reason}“` : null
 }
+
+/**
+ * Where each bidding round starts in a task's history (#212, Jakub 2026-11-26: Historie shows
+ * every round, clearly split). Only once the price was reopened: the first entry starts round 1
+ * and each reopen the next. Entry id → round number.
+ */
+export function historyRounds(entries: readonly HistoryEntry[]): ReadonlyMap<number, number> {
+  const starts = new Map<number, number>()
+  const first = entries[0]
+  if (!first || !entries.some((e) => e.action === 'task.bidding_reopened')) return starts
+  starts.set(first.id, 1)
+  for (const e of entries) {
+    if (e.action === 'task.bidding_reopened') starts.set(e.id, starts.size + 1)
+  }
+  return starts
+}

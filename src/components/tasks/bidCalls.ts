@@ -4,6 +4,7 @@ import {
   approveTaskOfferFn,
   counterOfferFn,
   placeBidFn,
+  reopenBiddingFn,
   turnDownBidsFn,
   withdrawBidFn,
 } from '~/server/tasks/functions'
@@ -26,6 +27,7 @@ export const BID_CALLS: { [A in BidAction]: CallFor<A> } = {
   counterOffer: counterOfferFn,
   withdrawBid: withdrawBidFn,
   turnDownBids: turnDownBidsFn,
+  reopenBidding: reopenBiddingFn,
 }
 
 export function callBid(call: BidCall): Promise<RefusalResult> {
@@ -44,5 +46,7 @@ export function callBid(call: BidCall): Promise<RefusalResult> {
       return BID_CALLS.withdrawBid({ data: call.data })
     case 'turnDownBids':
       return BID_CALLS.turnDownBids({ data: call.data })
+    case 'reopenBidding':
+      return BID_CALLS.reopenBidding({ data: call.data })
   }
 }
