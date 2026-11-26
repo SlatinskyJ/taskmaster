@@ -19,6 +19,7 @@ import { Screen } from '~/components/shell/Screen'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
 import { Card } from '~/components/ui/card'
+import { liveSubs } from '~/lib/liveSubs'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { userErrorMessage } from '~/lib/userErrors'
@@ -44,14 +45,16 @@ export const Route = createFileRoute('/_app/sprava')({
     guardScreen(context.user.role, '/sprava')
   },
   loader: async () => {
+    // Live subscriptions (#299) as each call answers; a failed Sporné or Opravit load takes none.
+    const live = liveSubs()
     const [people, passkeys, defaults, disputes, fixable] = await Promise.all([
-      listUsersFn(),
+      listUsersFn().then(live.take),
       listPasskeyCountsFn(),
-      getPeriodDefaultsFn(),
-      loadAdminDisputes(() => getAdminDisputesFn()),
-      loadFixable(() => getFixableFn()),
+      getPeriodDefaultsFn().then(live.take),
+      loadAdminDisputes(() => getAdminDisputesFn().then(live.take)),
+      loadFixable(() => getFixableFn().then(live.take)),
     ])
-    return { people, passkeys, defaults, disputes, fixable }
+    return { people, passkeys, defaults, disputes, fixable, live: live.all() }
   },
   component: Sprava,
 })

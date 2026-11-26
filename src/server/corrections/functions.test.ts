@@ -13,6 +13,7 @@ import {
   adjustPointsHandler,
   correctSettlementHandler,
   fixableHandler,
+  fixableRead,
   parseAdjustPoints,
   parseCorrectSettlement,
 } from './functions'
@@ -173,5 +174,31 @@ describe('fixableHandler', () => {
       },
       { id: f.mladsi, name: 'Mladší', total: 0, weeks: [expect.any(Object)] },
     ])
+  })
+})
+
+describe('topics (#299)', () => {
+  const admin = (id: number) => ({
+    id,
+    username: 'admin',
+    displayName: 'Admin',
+    role: 'admin' as const,
+  })
+
+  it("Opravit: people and each boy's points the sheet shows", () => {
+    const f = withSwitch(true)
+    const data = fixableRead.read(f.db, admin(f.admin), undefined, MONDAY)
+    expect(fixableRead.topics(admin(f.admin), data, f.db)).toEqual([
+      'people',
+      `points:${String(f.starsi)}`,
+      `points:${String(f.mladsi)}`,
+    ])
+  })
+
+  it('disputes off: Opravit issues nothing', () => {
+    const f = withSwitch(false)
+    const data = fixableRead.read(f.db, admin(f.admin), undefined, MONDAY)
+    expect(data).toEqual({ error: 'feature_off' })
+    expect(fixableRead.topics(admin(f.admin), data, f.db)).toEqual([])
   })
 })

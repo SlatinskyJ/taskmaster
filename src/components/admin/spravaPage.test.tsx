@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
+import { marker, withMarker } from '~/lib/liveSubs.testing'
 import { cs } from '~/lib/strings'
 import { listPasskeyCountsFn } from '~/server/passkeys/functions'
 import { getAdminDisputesFn } from '~/server/disputes/functions'
@@ -24,7 +25,7 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
 }))
 vi.mock('~/server/users/functions', () => ({
-  listUsersFn: vi.fn(() => Promise.resolve([])),
+  listUsersFn: vi.fn(() => Promise.resolve(withMarker('listUsersFn', []))),
   createUserFn: vi.fn(),
   updateUserFn: vi.fn(),
   resetPasswordFn: vi.fn(),
@@ -34,16 +35,16 @@ vi.mock('~/server/passkeys/functions', () => ({
   removeUserPasskeysFn: vi.fn(),
 }))
 vi.mock('~/server/disputes/functions', () => ({
-  getAdminDisputesFn: vi.fn(() => Promise.resolve([])),
+  getAdminDisputesFn: vi.fn(() => Promise.resolve(withMarker('getAdminDisputesFn', []))),
   dismissDisputeFn: vi.fn(),
 }))
 vi.mock('~/server/corrections/functions', () => ({
-  getFixableFn: vi.fn(() => Promise.resolve([])),
+  getFixableFn: vi.fn(() => Promise.resolve(withMarker('getFixableFn', []))),
   adjustPointsFn: vi.fn(),
   correctSettlementFn: vi.fn(),
 }))
 vi.mock('~/server/periods/functions', () => ({
-  getPeriodDefaultsFn: vi.fn(() => Promise.resolve('defaults')),
+  getPeriodDefaultsFn: vi.fn(() => Promise.resolve(withMarker('getPeriodDefaultsFn', 'defaults'))),
   savePeriodDefaultsFn: vi.fn(),
 }))
 
@@ -61,6 +62,9 @@ describe('Správa route', () => {
       defaults: 'defaults',
       disputes: [],
       fixable: [],
+      live: ['listUsersFn', 'getPeriodDefaultsFn', 'getAdminDisputesFn', 'getFixableFn'].map(
+        marker,
+      ),
     })
     expect(getPeriodDefaultsFn).toHaveBeenCalled()
     expect(listUsersFn).toHaveBeenCalled()
@@ -73,6 +77,14 @@ describe('Správa route', () => {
     await expect(route.loader()).resolves.toMatchObject({
       defaults: 'defaults',
       disputes: { error: 'load' },
+    })
+  })
+
+  it('a failed Sporné load keeps the other subscriptions', async () => {
+    vi.mocked(getAdminDisputesFn).mockRejectedValueOnce(new Error('net'))
+    await expect(route.loader()).resolves.toMatchObject({
+      disputes: { error: 'load' },
+      live: ['listUsersFn', 'getPeriodDefaultsFn', 'getFixableFn'].map(marker),
     })
   })
 

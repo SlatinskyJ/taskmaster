@@ -7,6 +7,8 @@ import type { Db } from '~/server/db'
 import { SETTLEMENT_LEVELS } from '~/server/db/schema'
 import { kindOf, parseSeenValue, positiveId } from '~/server/disputes/functions'
 import { getFlags } from '~/server/features'
+import { idTopic, liveRead, serveLive } from '~/server/live'
+import type { Topic } from '~/server/live'
 import { record } from '~/server/periods/validators'
 import { adjustPointsIn, correctSettlementIn } from './corrections'
 import { getFixable } from './fixable'
@@ -124,6 +126,13 @@ export function fixableHandler(db: Db): FixTaker[] | { error: 'feature_off' } {
   return getFixable(db)
 }
 
+/** The boys the sheet shows, and the list of them; switch off: nothing subscribed. */
+export const fixableRead = liveRead({
+  read: (db) => fixableHandler(db),
+  topics: (_viewer, data): Topic[] =>
+    'error' in data ? [] : ['people', ...data.map((t) => idTopic('points', t.id))],
+})
+
 export const getFixableFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('admin')])
-  .handler(() => fixableHandler(getDb()))
+  .handler(({ context }) => serveLive(fixableRead, context.user, undefined))

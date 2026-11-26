@@ -197,6 +197,12 @@ export const dismissDisputeFn = createServerFn({ method: 'POST' })
   .validator(parseDismissDispute)
   .handler(({ data, context }) => dismissDisputeHandler(getDb(), context.user.id, data, new Date()))
 
+/** Every open dispute for Sporné; switch off: nothing read, nothing subscribed. */
+export const adminDisputesRead = liveRead({
+  read: (db) => adminDisputesHandler(db),
+  topics: (_viewer, data): Topic[] => ('error' in data ? [] : ['disputes']),
+})
+
 export const getAdminDisputesFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('admin')])
-  .handler(() => adminDisputesHandler(getDb()))
+  .handler(({ context }) => serveLive(adminDisputesRead, context.user, undefined))

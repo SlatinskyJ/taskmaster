@@ -14,6 +14,7 @@ import {
   parseItemMarkRef,
   parseOpenDispute,
   disputeListRead,
+  adminDisputesRead,
 } from './functions'
 
 // The dispute server functions (#46): thin wrappers over ./disputes.ts and ./list.ts behind the
@@ -354,5 +355,27 @@ describe('topics (#299)', () => {
       expect(data).toEqual({ error: 'feature_off' })
       expect(disputeListRead.topics(v, data, f.db)).toEqual([])
     }
+  })
+})
+
+describe('Sporné topics (#299)', () => {
+  const admin = (id: number) => ({
+    id,
+    username: 'admin',
+    displayName: 'Admin',
+    role: 'admin' as const,
+  })
+
+  it('on: disputes', () => {
+    const f = withSwitch(true)
+    const data = adminDisputesRead.read(f.db, admin(f.admin), undefined, MEETING)
+    expect(adminDisputesRead.topics(admin(f.admin), data, f.db)).toEqual(['disputes'])
+  })
+
+  it('disputes off: Sporné issues nothing', () => {
+    const f = withSwitch(false)
+    const data = adminDisputesRead.read(f.db, admin(f.admin), undefined, MEETING)
+    expect(data).toEqual({ error: 'feature_off' })
+    expect(adminDisputesRead.topics(admin(f.admin), data, f.db)).toEqual([])
   })
 })

@@ -3,6 +3,7 @@ import type { PeriodDefaults } from '~/domain'
 import type { Result } from '~/domain/result'
 import { requireRole } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
+import { liveRead, serveLive } from '~/server/live'
 import { getPeriodDefaults, plainDefaults, savePeriodDefaults } from './defaults'
 import type { SetDefaultsError } from './defaults'
 
@@ -35,9 +36,14 @@ export function saveResult(r: Result<PeriodDefaults, SetDefaultsError>): SaveDef
   return r.ok ? { ok: true } : { ok: false, error: r.error }
 }
 
+export const periodDefaultsRead = liveRead({
+  read: (db): PeriodDefaults => defaultsView(getPeriodDefaults(db)),
+  topics: () => ['settings'] as const,
+})
+
 export const getPeriodDefaultsFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('admin')])
-  .handler((): PeriodDefaults => defaultsView(getPeriodDefaults(getDb())))
+  .handler(({ context }) => serveLive(periodDefaultsRead, context.user, undefined))
 
 export const savePeriodDefaultsFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('admin')])
