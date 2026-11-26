@@ -51,8 +51,11 @@ const sendText: Record<Exclude<ErrorOf<SendResult>, 'sent_not_saved'>, string> =
   github_failed: e.github_failed,
 }
 
+/** Every code a Správa call can refuse with; typed so a renamed code fails the typecheck. */
+type AdminError = ErrorOf<CloseResult> | ErrorOf<SendResult>
+
 /** The row no longer matches the server (gone, closed, already sent): close and reload. */
-const STALE: readonly string[] = ['not_found', 'closed', 'not_new']
+const STALE: readonly AdminError[] = ['not_found', 'closed', 'not_new']
 
 /** The sheet's own check before sending: a title of only spaces is no title. */
 export function checkSuggestion(v: { title: string }): string | null {
@@ -72,10 +75,10 @@ export async function sendNewSuggestion(
   }
 }
 
-function refused(error: string, text: Record<string, string>): AdminOutcome {
+function refused<E extends AdminError>(error: E, text: Record<E, string>): AdminOutcome {
   return STALE.includes(error)
     ? { ok: false, message: cs.suggestions.stale, reload: true }
-    : { ok: false, message: text[error] ?? e.generic, reload: false }
+    : { ok: false, message: text[error], reload: false }
 }
 
 /** Hotovo or Zamítnout. */
