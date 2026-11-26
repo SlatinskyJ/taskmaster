@@ -20,7 +20,12 @@ function Meeting() {
   const { meeting, plan } = Route.useLoaderData()
   return (
     <Screen title={cs.nav.meeting} user={user}>
-      <MeetingScreen meeting={meeting} plan={plan} otherLevels={features.periodProposals} />
+      <MeetingScreen
+        meeting={meeting}
+        plan={plan}
+        otherLevels={features.periodProposals}
+        viewerId={user.id}
+      />
     </Screen>
   )
 }

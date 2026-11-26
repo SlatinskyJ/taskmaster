@@ -50,6 +50,7 @@ function render(
   ui: MeetingUi = START,
   plan: TaskView[] = [],
   otherLevels = false,
+  weekPlan?: ReactNode,
 ) {
   pressed.clear()
   const dispatch = vi.fn<(e: MeetingEvent) => void>()
@@ -62,6 +63,7 @@ function render(
       dispatch={dispatch}
       onConfirm={onConfirm}
       otherLevels={otherLevels}
+      weekPlan={weekPlan}
     />,
   )
   return { html, dispatch, onConfirm }
@@ -240,5 +242,26 @@ describe('step 3: Plánovat', () => {
   it('with no tasks shows the empty state', () => {
     const { html } = render(week(), done)
     expect(html).toContain('Na tento týden zatím nic. Přidej úkol.')
+  })
+})
+
+describe('the week plan slot (#259)', () => {
+  const slot = <div data-slot="week-plan-slot">PLAN</div>
+  it('step 3 renders the weekPlan slot after the open tasks and before Ukončit schůzku', () => {
+    for (const plan of [[], [task({ id: 21, title: 'Umýt auto', status: 'open' })]]) {
+      const { html } = render(week(), done, plan, false, slot)
+      const at = html.indexOf('data-slot="week-plan-slot"')
+      expect(at).toBeGreaterThan(-1)
+      expect(at).toBeGreaterThan(html.indexOf(cs.meeting.planTasks))
+      const tasks = plan.length > 0 ? html.indexOf('Umýt auto') : html.indexOf(cs.meeting.planEmpty)
+      expect(at).toBeGreaterThan(tasks)
+      expect(at).toBeLessThan(html.indexOf(cs.meeting.newTask))
+      expect(at).toBeLessThan(html.indexOf(cs.meeting.end))
+    }
+  })
+
+  it('steps 1 and 2 never render the slot', () => {
+    expect(render(pendingWeek(), START, [], false, slot).html).not.toContain('week-plan-slot')
+    expect(render(week(), step2, [], false, slot).html).not.toContain('week-plan-slot')
   })
 })
