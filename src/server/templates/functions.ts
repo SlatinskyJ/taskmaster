@@ -208,8 +208,10 @@ export const turnDownTemplateBidsFn = createServerFn({ method: 'POST' })
     turnDownTemplateBidsHandler(getDb(), context.user.id, data, new Date()),
   )
 
-/** A template's price page: the template and every offer and bid, or null (not found). */
-/** The admin reads it only while `disputes` is on (#222); every write stays giver or taker. */
+/**
+ * A template's price page: the template and every offer and bid, or null (not found). The admin
+ * reads it only while `disputes` is on (#222); every write stays giver or taker.
+ */
 export function templateDetailHandler(
   db: Db,
   viewer: { id: number; role: Role },
