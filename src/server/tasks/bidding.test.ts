@@ -605,7 +605,7 @@ describe('first agreement wins (spec §5.2; issue "Done when")', () => {
     const task = row(f.db, id)
     if (!task) throw new Error('no task')
     const cancelled = must(
-      cancelItem(toItem(task), byPerson({ id: f.tata, role: 'giver', active: true })),
+      cancelItem(toItem(task, false), byPerson({ id: f.tata, role: 'giver', active: true })),
     )
     const saved = f.db.transaction((tx) => saveItem(tx, task, cancelled, {}, T2))
     expect(saved.row.status).toBe('cancelled')

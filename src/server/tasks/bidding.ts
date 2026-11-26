@@ -381,7 +381,7 @@ function acceptBids(
 function endRound(tx: Tx, task: TaskRow, giverId: number, now: Date): TaskRow {
   const bids = openBids(tx, task.id)
   const counter = openOfferOrNull(tx, task.id)
-  const { row } = saveItem(tx, task, toItem(task), { endBidding: true }, now)
+  const { row } = saveItem(tx, task, toItem(task, false), { endBidding: true }, now)
   writeAudit(tx, {
     actor: { kind: 'user', userId: giverId },
     action: 'task.bids_turned_down',

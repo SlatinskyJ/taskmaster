@@ -56,7 +56,7 @@ describe('toItem / columnsOf on instances', () => {
     must(rejectTask(f.db, f.tata, r.id, undefined, T2))
     const rejected = row(f.db, r.id)
     if (!rejected) throw new Error('missing row')
-    const item = toItem(rejected)
+    const item = toItem(rejected, false)
     expect(item).toMatchObject({
       origin: 'self_logged',
       status: 'rejected',
@@ -73,7 +73,7 @@ describe('toItem / columnsOf on instances', () => {
   it('an expired instance maps both ways with no reservation or completion', () => {
     const f = family()
     const r = instance(f, { status: 'expired' })
-    const item = toItem(r)
+    const item = toItem(r, false)
     expect(item.status).toBe('expired')
     expect(columnsOf(item)).toMatchObject({
       status: 'expired',
@@ -85,7 +85,7 @@ describe('toItem / columnsOf on instances', () => {
   it('an on-demand row with a deadline gives the deadline as dates', () => {
     const f = family()
     const r = instance(f, { dueAt: iso(T2), graceEndsAt: iso(T3) })
-    expect(toItem(r)).toMatchObject({
+    expect(toItem(r, false)).toMatchObject({
       origin: 'on_demand',
       deadline: { dueAt: T2, graceEndsAt: T3 },
     })
@@ -95,7 +95,21 @@ describe('toItem / columnsOf on instances', () => {
     const f = family()
     const r = row(f.db, car(f))
     if (!r) throw new Error('missing row')
-    expect(toItem(r)).toMatchObject({ origin: 'one_time', deadline: null })
+    expect(toItem(r, false)).toMatchObject({ origin: 'one_time', deadline: null })
+  })
+
+  it('a week copy has its day only with dayRules and week_rules both on (#257)', () => {
+    const f = family()
+    const planDayAt = '2026-12-02T23:00:00.000Z'
+    const day = {
+      startsAt: new Date(planDayAt),
+      endsAt: new Date('2026-12-03T23:00:00.000Z'),
+    }
+    const marked = instance(f, { planDayAt, weekRules: true })
+    expect(toItem(marked, true).day).toEqual(day)
+    expect(toItem(marked, false).day).toBeNull()
+    expect(toItem(instance(f, { planDayAt, weekRules: false }), true).day).toBeNull()
+    expect(toItem(instance(f, {}), true).day).toBeNull()
   })
 })
 

@@ -55,6 +55,11 @@ export interface InstanceBirth {
   createdBy: number
   createdAt: Date
   loggedAt?: Date
+  /**
+   * A week-plan copy's day (spec §5.12): the instant its Prague day starts. Set → the row is
+   * marked `plan_day_at` and `week_rules` on.
+   */
+  planDayAt?: Date
 }
 
 /**
@@ -87,6 +92,7 @@ export function insertInstance(
       createdAt: toIsoUtc(birth.createdAt),
       updatedAt: at,
       agreedAt: template.agreedAt,
+      ...(birth.planDayAt ? { planDayAt: toIsoUtc(birth.planDayAt), weekRules: true } : {}),
     })
     .returning()
     .get()
@@ -99,6 +105,7 @@ export function insertInstance(
     dueAt: row.dueAt,
     graceEndsAt: row.graceEndsAt,
     approvalRequired: row.approvalRequired,
+    ...(row.planDayAt !== null ? { planDayAt: row.planDayAt } : {}),
   }
   writeAudit(tx, {
     actor: birth.actor,

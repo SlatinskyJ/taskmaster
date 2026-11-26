@@ -134,7 +134,9 @@ export function agree(
     agreed.status === 'reserved' ? { takerId: agreed.takerId, giverId: agreed.giverId } : null
   // A reopened round (#212) agrees an open task; otherwise the task leaves `proposed`.
   const inRound = task.status === 'open'
-  const item = inRound ? markRebidAgreed(toItem(task), bid) : markAgreed(toItem(task), bid)
+  const item = inRound
+    ? markRebidAgreed(toItem(task, false), bid)
+    : markAgreed(toItem(task, false), bid)
   if (!item.ok) throw new Error(`task ${String(task.id)} cannot be agreed: ${item.error}`)
   const offerRound = agreed.score === task.score ? task.offerRound : task.offerRound + 1
   const saved = saveItem(
@@ -502,7 +504,7 @@ function scoreChangeView(
     score: change.score,
     proposedBy: named(change.proposedBy),
     approvedBy: change.approvedBy.map(named),
-    waitingFor: oneTimeChangeWaitingFor(toItem(task), change, people).map(named),
+    waitingFor: oneTimeChangeWaitingFor(toItem(task, false), change, people).map(named),
   }
 }
 

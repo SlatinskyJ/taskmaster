@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm'
+import { copyDay } from '~/domain'
 import type { Item, Reservation } from '~/domain'
 import { parseIsoUtc, toIsoUtc } from '~/domain/dates'
 import type { Tx } from '~/server/audit'
@@ -10,8 +11,12 @@ import { closeThread } from './thread'
 // place that writes a task's state: every lifecycle step and every agreement saves through
 // `saveItem`, so a task that leaves `proposed` always closes its negotiation thread.
 
-/** The domain's view of a task row. Only states past agreement have lifecycle meaning here. */
-export function toItem(row: TaskRow): Item {
+/**
+ * The domain's view of a task row. Only states past agreement have lifecycle meaning here.
+ * `dayRules` (the `weekPlan` switch, read by the caller at its entry point) fills `day` for a
+ * week-plan copy whose rules still apply (spec §5.12); off, every row follows the old rules.
+ */
+export function toItem(row: TaskRow, dayRules: boolean): Item {
   const base = {
     origin: row.origin,
     approvalRequired: row.approvalRequired,
@@ -19,7 +24,10 @@ export function toItem(row: TaskRow): Item {
       row.dueAt !== null && row.graceEndsAt !== null
         ? { dueAt: parseIsoUtc(row.dueAt), graceEndsAt: parseIsoUtc(row.graceEndsAt) }
         : null,
-    day: null,
+    day:
+      dayRules && row.weekRules && row.planDayAt !== null
+        ? copyDay(parseIsoUtc(row.planDayAt))
+        : null,
   }
   const reservation = reservationOf(row)
   switch (row.status) {
