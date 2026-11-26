@@ -74,6 +74,11 @@ describe('MySuggestions', () => {
     expect(html).toContain(`>${t.issueLink}</a>`)
   })
 
+  it('the link reads apart from the Na GitHubu chip on the same row', () => {
+    expect(t.issueLink).toBe('Otevřít na GitHubu')
+    expect(t.issueLink).not.toBe(t.status.sent)
+  })
+
   it('long text is never cut: a 120-character title whole, line breaks kept', () => {
     const long = 'Dlouhý název '.repeat(10).slice(0, 120)
     const html = renderToStaticMarkup(

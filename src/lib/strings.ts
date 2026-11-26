@@ -891,7 +891,7 @@ export const cs = {
     mine: 'Moje návrhy',
     mineEmpty: 'Zatím žádný návrh.',
     status: { new: 'Nový', sent: 'Na GitHubu', done: 'Hotovo', dismissed: 'Zamítnutý' },
-    issueLink: 'Na GitHubu',
+    issueLink: 'Otevřít na GitHubu',
     /** `Návrhy`, `Návrhy · 1 nový`, `Návrhy · 3 nové`, `Návrhy · 5 nových`. */
     adminTitle: (newCount: number) =>
       newCount === 0 ? 'Návrhy' : `Návrhy · ${String(newCount)} ${plural(newCount, newWords)}`,
