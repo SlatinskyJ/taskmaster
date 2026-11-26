@@ -80,6 +80,10 @@ export const SUITES: readonly Suite[] = [
   { name: 'descriptions', spec: 'descriptions.spec.ts', seed: 'descriptions' },
   // The description fields (#207) with the keyboard open. Read-only: nothing is sent.
   { name: 'keyboard-descriptions', spec: 'keyboard-descriptions.spec.ts', seed: 'descriptions' },
+  // Its own server: it suggests, closes and checks the send preview for good (#247).
+  { name: 'suggestions', spec: 'suggestions.spec.ts', seed: 'suggestions' },
+  // The suggestion sheets (#247) with the keyboard open. Read-only: nothing is sent.
+  { name: 'keyboard-suggestions', spec: 'keyboard-suggestions.spec.ts', seed: 'suggestions' },
   // Czech letters in the app's fonts (#246). Read-only.
   { name: 'fonts', spec: 'fonts.spec.ts', seed: 'demo' },
   // Viewer frames (#265) and the CSRF check: logs in and out, so its own server.

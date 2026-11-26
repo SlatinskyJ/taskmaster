@@ -761,8 +761,8 @@ export const cs = {
       on: 'Zapnuto',
       off: 'Vypnuto',
       note: 'Ostatní uvidí změnu, až aplikaci znovu otevřou (nejpozději do hodiny).',
-      turnOnTitle: (name: string) => `Zapnout ${name}?`,
-      turnOffTitle: (name: string) => `Vypnout ${name}?`,
+      turnOnTitle: (name: string) => `Zapnout „${name}“?`,
+      turnOffTitle: (name: string) => `Vypnout „${name}“?`,
       forFamily: 'Změna platí pro celou rodinu.',
       /** Turning weekPlan off drops the copies' day rules on the next scheduler tick (15 min). */
       weekPlanOff: 'Než ho znovu zapneš, nech ho aspoň 15 minut vypnutý.',
@@ -942,6 +942,60 @@ export const cs = {
       failed: 'Nepovedlo se. Zkus to znovu.',
     },
   },
+  /** Suggestions (#247, spec §5.13): Navrhnout zlepšení on Profil, Návrhy on Správa. */
+  suggestions: {
+    section: 'Nápady na zlepšení',
+    row: 'Navrhnout zlepšení',
+    sheetTitle: 'Navrhnout zlepšení',
+    titleLabel: 'Název',
+    descriptionLabel: 'Popis (nepovinné)',
+    note: 'Návrh uvidí správce aplikace.',
+    send: 'Odeslat',
+    sending: 'Odesílám…',
+    sent: 'Návrh je odeslaný. Díky!',
+    mine: 'Moje návrhy',
+    mineEmpty: 'Zatím žádný návrh.',
+    status: { new: 'Nový', sent: 'Na GitHubu', done: 'Hotovo', dismissed: 'Zamítnutý' },
+    issueLink: 'Otevřít na GitHubu',
+    /** `Návrhy`, `Návrhy · 1 nový`, `Návrhy · 3 nové`, `Návrhy · 5 nových`. */
+    adminTitle: (newCount: number) =>
+      newCount === 0 ? 'Návrhy' : `Návrhy · ${String(newCount)} ${plural(newCount, newWords)}`,
+    adminEmpty: 'Žádné návrhy.',
+    done: 'Hotovo',
+    dismiss: 'Zamítnout',
+    confirmDone: 'Označit návrh jako hotový?',
+    confirmDismiss: 'Zamítnout návrh?',
+    confirmFinal: 'Tohle už nejde vrátit.',
+    cancel: 'Zpět',
+    sendRow: 'Poslat na GitHub',
+    previewTitle: 'Poslat na GitHub',
+    issueTitleLabel: 'Název issue',
+    issueBodyLabel: 'Text issue',
+    publicNote: 'Issue bude veřejné. Zkontroluj, že v textu nejsou jména.',
+    noToken: 'Server nemá GitHub token, poslat teď nejde.',
+    sendIssue: 'Poslat na GitHub',
+    sentToast: 'Návrh je na GitHubu.',
+    notSaved:
+      'Issue na GitHubu vzniklo, ale aplikace si ho neuložila. Neposílej ho znovu, označ návrh jako hotový.',
+    loadError: 'Návrhy se nepodařilo načíst.',
+    retry: 'Zkusit znovu',
+    stale: 'Návrh se mezitím změnil, seznam je obnovený.',
+    errors: {
+      title_empty: 'Napiš název.',
+      title_too_long: 'Název je moc dlouhý (nejvýš 120 znaků).',
+      description_too_long: 'Popis je moc dlouhý (nejvýš 2000 znaků).',
+      body_too_long: 'Text je moc dlouhý (nejvýš 4000 znaků).',
+      not_found: 'Návrh už neexistuje.',
+      not_admin: 'Tohle může jen správce.',
+      not_new: 'Návrh už byl odeslaný.',
+      closed: 'Návrh je už vyřízený.',
+      busy: 'Návrh se právě odesílá, chvilku počkej.',
+      no_token: 'Server nemá GitHub token, poslat teď nejde.',
+      github_failed: 'GitHub teď neodpovídá. Zkus to znovu.',
+      feature_off: 'Návrhy jsou teď vypnuté.',
+      generic: 'Nepodařilo se to odeslat. Zkus to znovu.',
+    },
+  },
   roles: {
     taker: 'Bere úkoly',
     giver: 'Zadává úkoly',
@@ -1032,6 +1086,9 @@ export function plural(n: number, forms: PluralForms): string {
   if (abs >= 2 && abs <= 4) return forms.few
   return forms.many
 }
+
+/** `1 nový`, `3 nové`, `5 nových`: new suggestions on Správa. */
+export const newWords: PluralForms = { one: 'nový', few: 'nové', many: 'nových' }
 
 export const keyWords: PluralForms = { one: 'klíč', few: 'klíče', many: 'klíčů' }
 

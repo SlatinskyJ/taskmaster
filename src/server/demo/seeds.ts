@@ -17,6 +17,7 @@ import {
   priceChange,
   proposals,
   rebidding,
+  suggestions,
   templates,
   thisWeek,
   weekChores,
@@ -89,6 +90,8 @@ export const SEEDS = {
   password: { pieces: [], features: ['passwordChange'] },
   /** The week plan (#257): the week's chore copies, Domů and Zapsat by their day. */
   weekplan: { pieces: [weekChores, points], features: ['recurring', 'log', 'weekPlan'] },
+  /** Suggestions on Profil and Správa (#247): two new, one done, one dismissed. */
+  suggestions: { pieces: [suggestions], features: ['suggestions'] },
   /** Previews and dev: everything. */
   demo: {
     pieces: [
@@ -111,6 +114,7 @@ export const SEEDS = {
       // Last, so the other pieces keep their ids (e2e opens pages by id).
       descriptions,
       weekChores,
+      suggestions,
     ],
     features: FEATURE_KEYS,
   },
