@@ -409,6 +409,31 @@ export const disputes: Piece = ({ tx, id, now }) => {
   )
 }
 
+export const CHORE_DISPUTE_REASON = 'Myčka je plná každý den, 3 body jsou málo.'
+
+/**
+ * A chore's score in dispute (#222), after `templates` and `disputes`: Mladší disputes the agreed
+ * "Vyndat myčku", so Sporné on Správa has a chore card that opens the chore's page.
+ */
+export const choreDispute: Piece = ({ tx, id, now }) => {
+  const dishes = tx
+    .select({ id: templateTable.id })
+    .from(templateTable)
+    .where(and(eq(templateTable.title, 'Vyndat myčku'), eq(templateTable.status, 'active')))
+    .get()
+  if (!dishes) throw new Error('Demo seed: no active "Vyndat myčku"')
+  step(
+    'dispute "Vyndat myčku"',
+    openDisputeIn(
+      tx,
+      id('mladsi'),
+      { kind: 'template_score', id: dishes.id },
+      CHORE_DISPUTE_REASON,
+      now,
+    ),
+  )
+}
+
 export const ADJUSTMENT_REASON = 'Pomohl s velkým nákupem navíc a odnesl tašky až nahoru.'
 export const CORRECTION_REASON = 'Kapesné za minulý týden nedostal, body se mu vrací.'
 

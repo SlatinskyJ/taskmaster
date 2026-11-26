@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest'
 import { APP_PATHS } from '~/lib/nav'
 
 // Every screen behind login (src/routes/_app/) gates itself with `guardScreen(role, '<its own
-// path>')`, and every path in `APP_PATHS` has a screen. A copied route with the wrong path, or a
+// path>')` (or `guardDisputeReader`, which ends in it, #222), and every path in `APP_PATHS` has a
+// screen. A copied route with the wrong path, or a
 // new screen without a gate, fails here. The role matrix itself is tested in src/lib/nav.test.ts.
 
 const DIR = join(import.meta.dirname, '..', 'src', 'routes', '_app')
@@ -25,7 +26,12 @@ const screens = routeFiles(DIR)
 describe('screen gates', () => {
   it.each(screens)('$path calls guardScreen with its own path', ({ file, path }) => {
     const text = readFileSync(file, 'utf8')
-    const calls = [...text.matchAll(/guardScreen\(\s*context\.user\.role,\s*'([^']*)'\s*\)/g)]
+    const calls = [
+      ...text.matchAll(/guardScreen\(\s*context\.user\.role,\s*'([^']*)'\s*\)/g),
+      ...text.matchAll(
+        /guardDisputeReader\(\s*context\.user\.role,\s*'([^']*)',\s*context\.features\.disputes\s*\)/g,
+      ),
+    ]
     expect(calls.map((m) => m[1])).toEqual([path])
   })
 

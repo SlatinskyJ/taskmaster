@@ -23,7 +23,7 @@ import { rejectionsSince } from '~/server/tasks/rejections'
 import { getMeeting } from '~/server/settlement/meeting'
 import { ALL_FEATURES } from '~/lib/features'
 import { getFlags } from '~/server/features'
-import { CORRECTION_REASON } from './pieces'
+import { CHORE_DISPUTE_REASON, CORRECTION_REASON } from './pieces'
 import { DEMO_PASSWORD, seedDemo } from './seed'
 
 const T0 = new Date('2026-11-17T10:00:00.000Z')
@@ -584,7 +584,8 @@ describe('the demo seed: corrections (#48)', () => {
         .where(eq(disputes.status, 'open'))
         .orderBy(asc(disputes.id))
         .all()
-        .filter((d) => d.itemKind !== 'completion')
+        // Not the completions (the disputes piece) nor the chore score (choreDispute, #222).
+        .filter((d) => d.itemKind !== 'completion' && d.itemKind !== 'template_score')
       expect(open.map((d) => [d.itemKind, d.itemId, name(d.openedBy)])).toEqual([
         ['settlement', record?.id, 'mladsi'],
         ['adjustment', adjustments[0]?.id, 'starsi'],
@@ -597,6 +598,23 @@ describe('the demo seed: corrections (#48)', () => {
       expect(actions).toEqual(expect.arrayContaining(['points.adjusted', 'settlement.corrected']))
     },
   )
+})
+
+describe('the demo seed: a chore in dispute (#222)', () => {
+  it.each(['demo', 'disputes'])('%s: Mladší disputes the agreed "Vyndat myčku", open', (seed) => {
+    const db = createTestDb()
+    seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: seed }, T0)
+    const rows = db.select().from(disputes).where(eq(disputes.itemKind, 'template_score')).all()
+    expect(rows.map((d) => [d.status, d.reason])).toEqual([['open', CHORE_DISPUTE_REASON]])
+    const chore = db
+      .select()
+      .from(templates)
+      .where(eq(templates.id, rows[0]?.itemId ?? 0))
+      .get()
+    expect([chore?.title, chore?.status]).toEqual(['Vyndat myčku', 'active'])
+    const mladsi = db.select().from(users).where(eq(users.username, 'mladsi')).get()
+    expect(rows[0]?.openedBy).toBe(mladsi?.id)
+  })
 })
 
 describe('the demo seed: descriptions (#207)', () => {

@@ -105,6 +105,7 @@ describe('Správa: Sporné (#47)', () => {
     reason: 'Vysával jsem i kufr.',
     openedAt: '2026-11-22T10:00:00.000Z',
     value: { score: 8 },
+    page: null,
   }
   const render = (disputes: unknown, fixable: unknown = []) => {
     page.data = { people: [], passkeys: {}, defaults: DEFAULT_PERIOD_DEFAULTS, disputes, fixable }

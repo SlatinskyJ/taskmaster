@@ -268,6 +268,7 @@ describe('admin handlers (#47)', () => {
         openedAt: MEETING.toISOString(),
         value: { score: 22 },
         takerId: f.starsi,
+        page: { kind: 'task', id: f.confirmed },
       },
     ])
   })

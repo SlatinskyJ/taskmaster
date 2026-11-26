@@ -13,9 +13,11 @@ import {
   reopenBiddingHandler,
   turnDownBidsHandler,
   withdrawBidHandler,
+  taskDetailHandler,
 } from './functions'
 import { eq } from 'drizzle-orm'
 import { featureFlags } from '~/server/db/schema'
+import { ForbiddenError } from '~/server/auth/guards'
 import { placeBid } from './bidding'
 import { reserveTask } from './lifecycle'
 import { approveTaskOffer } from './tasks'
@@ -223,5 +225,28 @@ describe('the reopenBidding switch (#212)', () => {
       id,
       status: 'open',
     })
+  })
+})
+
+describe("the admin reads a task's page only while disputes is on (#222)", () => {
+  const withDisputes = (enabled: boolean) => {
+    const f = family()
+    f.db.update(featureFlags).set({ enabled }).where(eq(featureFlags.key, 'disputes')).run()
+    return { f, id: car(f) }
+  }
+  const admin = (f: ReturnType<typeof family>) => ({ id: f.admin, role: 'admin' as const })
+  it('off: the admin is refused; a giver and a taker still read it', () => {
+    const { f, id } = withDisputes(false)
+    expect(() => taskDetailHandler(f.db, admin(f), { taskId: id })).toThrow(ForbiddenError)
+    expect(taskDetailHandler(f.db, { id: f.tata, role: 'giver' }, { taskId: id })?.task.id).toBe(id)
+    expect(taskDetailHandler(f.db, { id: f.starsi, role: 'taker' }, { taskId: id })?.task.id).toBe(
+      id,
+    )
+  })
+  it('on: the admin gets the same detail a giver gets', () => {
+    const { f, id } = withDisputes(true)
+    expect(taskDetailHandler(f.db, admin(f), { taskId: id })).toEqual(
+      taskDetailHandler(f.db, { id: f.tata, role: 'giver' }, { taskId: id }),
+    )
   })
 })
