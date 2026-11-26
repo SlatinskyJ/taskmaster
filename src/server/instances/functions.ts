@@ -58,7 +58,10 @@ export const listLoggableTemplatesFn = createServerFn({ method: 'GET' })
   })
 
 /** The plan table on Týden (#258, spec §5.12), behind the `weekPlan` switch; no viewer: one board. */
-export function weekPlanHandler(db: Db, now: Date): WeekPlan | { error: 'feature_off' } {
+/** What `getWeekPlanFn` answers: the plan, or `feature_off` while the `weekPlan` switch is off. */
+export type PlanAnswer = WeekPlan | { error: 'feature_off' }
+
+export function weekPlanHandler(db: Db, now: Date): PlanAnswer {
   return getFlags(db).weekPlan ? getWeekPlan(db, now) : { error: 'feature_off' }
 }
 
