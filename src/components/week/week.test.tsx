@@ -4,14 +4,18 @@ import { describe, expect, it, vi } from 'vitest'
 import type { DisputeListEntry } from '~/server/disputes/functions'
 import { cs } from '~/lib/strings'
 import { takerWeek, week } from './fixtures'
-import { rejectionLine, WeekBody, WeekScreen } from './WeekScreen'
+import { PlanCard, rejectionLine, WeekBody, WeekScreen } from './WeekScreen'
 import type { WeekTab } from './WeekScreen'
 
 // Týden (#45): every state of both tabs, rendered statically.
 
 vi.mock('@tanstack/react-router', () => ({
   useRouter: () => ({ invalidate: vi.fn() }),
-  Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
+  Link: ({ to, children, className }: { to?: string; children: ReactNode; className?: string }) => (
+    <a href={to} className={className}>
+      {children}
+    </a>
+  ),
 }))
 vi.mock('~/server/disputes/functions', () => ({ openDisputeFn: vi.fn() }))
 
@@ -299,5 +303,17 @@ describe('Rozporovat on Týden (#46)', () => {
       expect(out).not.toContain('data-slot="dispute"')
       expect(out).not.toContain(cs.disputes.list)
     }
+  })
+})
+
+describe('Plán týdne card (#258)', () => {
+  it('PlanCard has min-h-tap and the chevron, and links to /tyden/plan', () => {
+    const out = renderToStaticMarkup(<PlanCard free={3} viewerRole="taker" />)
+    expect(out).toMatch(/<a href="\/tyden\/plan" class="[^"]*min-h-tap/)
+    expect(out).toContain('lucide-chevron-right')
+    expect(out).toContain('Rozděl si úkoly na dny. Volných: 3')
+    expect(renderToStaticMarkup(<PlanCard free={0} viewerRole="giver" />)).toContain(
+      'Kdo co dělá který den. Volných: 0',
+    )
   })
 })

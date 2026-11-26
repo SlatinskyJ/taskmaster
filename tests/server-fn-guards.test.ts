@@ -37,6 +37,7 @@ const EXPECTED_ROLES: Record<string, string> = {
   createInstanceFn: 'giver',
   selfLogFn: 'taker',
   listLoggableTemplatesFn: 'taker',
+  getWeekPlanFn: 'giver,taker',
   approveTaskOfferFn: 'giver,taker',
   listPendingApprovalsFn: 'giver,taker',
   listTasksFn: 'giver',
@@ -91,6 +92,7 @@ const EXPECTED_ROLES: Record<string, string> = {
   getAdminSuggestionsFn: 'admin',
   closeSuggestionFn: 'admin',
   sendSuggestionFn: 'admin',
+  setSwitchFn: 'admin',
 }
 
 const SRC = join(import.meta.dirname, '..', 'src')

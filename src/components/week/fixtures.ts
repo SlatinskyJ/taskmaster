@@ -1,3 +1,4 @@
+import type { PlanCopy, WeekPlan } from '~/server/instances/functions'
 import type { Week, WeekItem } from '~/server/settlement/functions'
 
 // Week screen fixtures (#45): the demo family, Starší 3, Mladší 4.
@@ -105,5 +106,90 @@ export function takerWeek(): Week {
     ...w,
     takers: w.takers.filter((t) => t.id === 3),
     history: w.history.map((h) => ({ ...h, records: h.records.filter((r) => r.takerId === 3) })),
+  }
+}
+
+// ── The plan table (#258) ─────────────────────────────────────────────────────────────────
+
+/** Prague day starts: Sunday 29. 11. … Sunday 6. 12. (a Sunday-evening week has 8 days). */
+export const PLAN_DAYS = [
+  '2026-11-28T23:00:00.000Z',
+  '2026-11-29T23:00:00.000Z',
+  '2026-11-30T23:00:00.000Z',
+  '2026-12-01T23:00:00.000Z',
+  '2026-12-02T23:00:00.000Z',
+  '2026-12-03T23:00:00.000Z',
+  '2026-12-04T23:00:00.000Z',
+  '2026-12-05T23:00:00.000Z',
+]
+/** Wednesday 2. 12. */
+export const PLAN_TODAY = PLAN_DAYS[3] ?? ''
+
+export const planCopy = (over: Partial<PlanCopy> = {}): PlanCopy => ({
+  id: 100,
+  status: 'open',
+  score: 2,
+  origin: 'scheduled',
+  createdAt: '2026-11-29T19:00:00.000Z',
+  person: null,
+  ...over,
+})
+
+const STARSI = { id: 3, name: 'Starší' }
+const MLADSI = { id: 4, name: 'Mladší' }
+
+/**
+ * Two chores over 8 days, seen by Starší (id 3). "Prostřít stůl k večeři": Sun blank, Mon
+ * expired, Tue confirmed (Starší), Wed (today) free, Thu mine, Fri Mladší's, Sat pending
+ * (Mladší), Sun cancelled. "Vyluxovat celý obývák a chodbu": two copies today, the rest blank.
+ */
+export function planFixture(over: Partial<WeekPlan> = {}): WeekPlan {
+  return {
+    period: { startsAt: '2026-11-29T19:00:00.000Z', cutoffAt: '2026-12-06T19:00:00.000Z' },
+    today: PLAN_TODAY,
+    days: PLAN_DAYS,
+    rows: [
+      {
+        templateId: 1,
+        title: 'Prostřít stůl k večeři',
+        scheduleDays: [0, 1, 2, 3, 4, 5, 6],
+        cells: [
+          [],
+          [planCopy({ id: 101, status: 'expired' })],
+          [planCopy({ id: 102, status: 'confirmed', person: STARSI })],
+          [planCopy({ id: 103 })],
+          [planCopy({ id: 104, status: 'reserved', person: STARSI })],
+          [planCopy({ id: 105, status: 'reserved', person: MLADSI })],
+          [planCopy({ id: 106, status: 'done_unconfirmed', person: MLADSI })],
+          [planCopy({ id: 107, status: 'cancelled' })],
+        ],
+      },
+      {
+        templateId: 2,
+        title: 'Vyluxovat celý obývák a chodbu',
+        scheduleDays: [2, 5],
+        cells: [
+          [],
+          [],
+          [],
+          [
+            planCopy({ id: 201, score: 6 }),
+            planCopy({
+              id: 202,
+              score: 6,
+              origin: 'on_demand',
+              createdAt: '2026-12-02T13:20:00.000Z',
+              status: 'reserved',
+              person: STARSI,
+            }),
+          ],
+          [],
+          [],
+          [],
+          [],
+        ],
+      },
+    ],
+    ...over,
   }
 }

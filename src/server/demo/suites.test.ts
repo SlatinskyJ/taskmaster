@@ -9,6 +9,9 @@ import { getMeeting } from '~/server/settlement/meeting'
 import { listTasks } from '~/server/tasks'
 import { rejectionsSince } from '~/server/tasks/rejections'
 import { getFlags } from '~/server/features/flags'
+import { getWeekPlan } from '~/server/instances/weekPlan'
+import { auditLog } from '~/server/db/schema'
+import { fromPragueWallTime } from '~/domain/dates'
 import { NO_FEATURES } from '~/lib/features'
 import { listTemplates } from '~/server/templates/templates'
 import { seedDemo } from './seed'
@@ -196,4 +199,53 @@ describe('e2e seeds (#183)', () => {
       ['Mladší', 11],
     ])
   })
+  it.each([
+    ['Wed 2. 12.', 12, 2, [12, 1], 6],
+    ['Mon 30. 11.', 11, 30, [11, 29], 8],
+  ])(
+    "plantable (#258) at %s 10:00: yesterday's column, today Mladší holds the long chore, Starší's flowers wait, the table is free",
+    (_name, month, d, yesterday, columns) => {
+      const now = fromPragueWallTime({ year: 2026, month, day: d, hour: 10, minute: 0 })
+      const db = createTestDb()
+      seedDemo(db, { TASKMASTER_ENV: 'preview', TASKMASTER_SEED: 'plantable' }, now)
+      const plan = getWeekPlan(db, now)
+      const [ym = 0, yd = 0] = yesterday
+      const start = fromPragueWallTime({ year: 2026, month: ym, day: yd, hour: 0, minute: 0 })
+      // The week starts at yesterday's midnight; on a Monday that is a Sunday: 8 columns.
+      expect(plan.period?.startsAt).toBe(start.toISOString())
+      expect(plan.days).toHaveLength(columns)
+      expect(plan.rows.map((r) => r.title)).toEqual([
+        'Prostřít stůl k večeři',
+        'Vyluxovat celý obývák a chodbu',
+        'Vynést koš na plasty',
+        'Zalít kytky na balkoně',
+      ])
+      const at = plan.days.indexOf(plan.today)
+      expect(at).toBe(1)
+      const cell = (row: number, col: number) =>
+        plan.rows[row]?.cells[col]?.map((c) => [c.status, c.person?.name ?? null])
+      // Yesterday: the table free (no job has run yet), the vacuum expired, the flowers confirmed.
+      expect([cell(0, 0), cell(1, 0), cell(3, 0)]).toEqual([
+        [['open', null]],
+        [['expired', null]],
+        [['confirmed', 'Starší']],
+      ])
+      // Today.
+      expect([cell(0, at), cell(1, at), cell(3, at)]).toEqual([
+        [['open', null]],
+        [['reserved', 'Mladší']],
+        [['done_unconfirmed', 'Starší']],
+      ])
+      // Tomorrow's vacuum is Starší's.
+      expect(cell(1, at + 1)).toEqual([['reserved', 'Starší']])
+      expect(getFlags(db)).toEqual({ ...NO_FEATURES, recurring: true, week: true, weekPlan: true })
+      const log = db
+        .select({ at: auditLog.at })
+        .from(auditLog)
+        .orderBy(auditLog.id)
+        .all()
+        .map((r) => r.at)
+      expect(log).toEqual([...log].sort())
+    },
+  )
 })

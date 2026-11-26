@@ -14,7 +14,8 @@ import { Avatar } from './Avatar'
  * `back` adds a back button before the title (sub-screens such as Nový úkol); `action` sits
  * next to the avatar (e.g. "+ Nový"). `back="history"` (a task or chore page, #205) goes back
  * to where the person came from in the app, else to Domů. `fullTitle` (a task or chore page,
- * #264) wraps the whole name; elsewhere the title is cut at two lines.
+ * #264) wraps the whole name; elsewhere the title is cut at two lines. `wide` (the plan table,
+ * #258) lets a phone turned sideways use its whole width, so a week's days fit.
  */
 
 /** The history back arrow: back within the app if it can, else the link's own `/`. */
@@ -32,6 +33,7 @@ export function Screen({
   back,
   action,
   fullTitle = false,
+  wide = false,
   children,
 }: {
   title: ReactNode
@@ -39,11 +41,12 @@ export function Screen({
   back?: StaticAppPath | 'history'
   action?: ReactNode
   fullTitle?: boolean
+  wide?: boolean
   children: ReactNode
 }) {
   const router = useRouter()
   return (
-    <div className="mx-auto grid w-full max-w-md gap-3.5">
+    <div className={cn('mx-auto grid w-full max-w-md gap-3.5', wide && 'landscape:max-w-3xl')}>
       <header className="flex items-center gap-2.5 px-4 pt-5 pb-2">
         {back && (
           <Link
