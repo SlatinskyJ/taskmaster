@@ -107,7 +107,8 @@ test('a price change offers no Nechci or turn-down with bidRefusals off (#232)',
 test('Souhlasím on a proposed chore’s Domů row agrees it, choreBidding off (#244)', async ({
   page,
 }) => {
-  // "Vynést koše" (/sablona/1) waits for one brother's yes. With the switch off its row has
+  // Keep this test last: it agrees "Vynést koše" for good, and the #209 test above needs it
+  // still proposed. "Vynést koše" (/sablona/1) waits for one brother's yes. With the switch off its row has
   // only Souhlasím, no Jiná cena.
   await passwordLogin(page, 'starsi')
   await expect(page).toHaveURL(/\/$/)
