@@ -44,8 +44,15 @@ Rulings 1 and 7 are open questions to Jakub (decision cards in the project threa
 4. **Instances** are not changeable (`not_changeable`). Their text is a copy from creation.
 5. **Changing back.** A giver who sets the text that is in force while a change waits closes that change as `withdrawn`, and nothing else changes. With no change waiting, the same text is `same_description`.
 6. **Normalising.** `\r\n` and `\r` become `\n`, and the whole text is trimmed. Empty means no description (`null`). The length is counted after normalising, in UTF-16 code units (`String.length`, like the 1000-character limits elsewhere). Control characters other than `\n` and `\t` (U+0000–U+001F, U+007F) and the bidi controls (U+202A–U+202E, U+2066–U+2069) are removed first.
-7. **A change while proposed resets the agreement** (asked Jakub; recommended). The description is what done means, so yeses and bids given on the old text must not count. A change to a proposed task or template (applied at once) also closes every open bid and starts a new offer round at the same score, with the changing giver as the offerer. For a task that is `closeRows` + `newOfferRound` in `src/server/tasks/bidding.ts`, as `turnDownBids` does; for a template, the same steps as `turnDownTemplateBidsIn` in `src/server/templates/scoreChange.ts`. One audit entry, `*.description_changed`, with `offerRound` and the closed `entryIds` in `before`/`after`. If Jakub picks "keep", these two calls go and the entry loses those keys.
+7. **A change while proposed resets the agreement** (asked Jakub; recommended). The description is what done means, so yeses and bids given on the old text must not count. A change to a proposed task or template (applied at once) also closes every open bid and starts a new offer round at the same score, with the changing giver as the offerer. No third writer of offer rounds: each bidding module gets one shared helper that the turn-down already needs, and both the turn-down and the description path call it.
+   - `src/server/tasks/bidding.ts`: `export function resetOfferRound(tx: Tx, task: TaskRow, giverId: number, now: Date): { saved: TaskRow; entry: ThreadRow; old: ThreadRow; closedIds: number[] }` closes the open bids (`closeRows`) and calls `newOfferRound` at `task.score`. `turnDownBids` is refactored to call it (its tests keep passing unchanged).
+   - `src/server/templates/scoreChange.ts`: `export function resetTemplateOffer(tx: Tx, row: TemplateRow, giverId: number, now: Date)` with the same shape, taken out of `turnDownTemplateBidsIn`, which then calls it.
+   - The entry `*.description_changed` logs the same keys as the turn-down: `before: { description, score, offerRound, entryIds, offerEntryId }` (a template: its replaced offer as `turnDownTemplateBidsIn` logs it), `after: { description, score, offerRound, entryId }`.
+   - If Jakub picks "keep", the call goes and the entry loses those keys.
 8. **Stale page on a proposed task or chore.** Every taker sees the new text before he agrees or bids (§5.2). So a taker's yes, pick or bid carries `seenDescription` (the text his page showed, `null` for none). With the switch on, the server compares it with the current description, after normalising, and refuses a mismatch with `offer_changed`. This covers `approveTaskOfferFn`, `acceptOfferFn`, `placeBidFn` and the template yes, accept and bid functions. In this PR the field is optional (a missing field is not checked), so today's screens keep working with the switch on; PR 2 sends it from every one of those screens and makes it required when the switch is on.
+   - Where the switch is read: only in the server function layer. Each of those handlers reads `getFlags(db).descriptions` and passes `seenDescription` on to the inner function only when it is on (otherwise `undefined`). The tasks and templates modules never read the switch.
+   - Parsers: `parseApproval` (task yes), the task bid and accept parsers, and the template yes, accept and bid parsers take an optional `seenDescription`: a string of at most 4000 raw characters, or `null`; anything else throws.
+   - Handlers: `src/server/tasks/functions.ts` gets exported `approveTaskOfferHandler`, `acceptOfferHandler` and `placeBidHandler` (today those server functions are inline), following `withdrawBidHandler`. `src/server/templates/functions.ts` changes `acceptTemplateOfferHandler`, `bidTemplateScoreHandler` and the template yes handler (adding `approveTemplateScoreHandler` if it is inline).
 
 ## Review Focus
 
@@ -97,7 +104,9 @@ Here `pending` is the waiting change's text: `undefined` means no change is wait
     - `'a'.repeat(1001)` → `fail('description_too_long')`;
     - `'a\u0000b\u0007\tc\u007f'` → `ok('ab\tc')`;
     - `'\u0000'.repeat(5)` → `ok(null)`;
-    - `'a\u202Eb\u2066c'` → `ok('abc')`.
+    - `'a\u202Eb\u2066c'` → `ok('abc')`;
+    - the range ends: `\u001F`, `\u007F`, `\u202A`, `\u2069` are removed; `\u0020` inside the text, `\u2029` and `\u2070` stay;
+    - length after stripping: `'a'.repeat(1000) + '\u0000'.repeat(5)` → ok, 1000 characters.
   - `taskDescriptionRule`:
     - proposed → direct;
     - open → any_taker;
@@ -233,7 +242,7 @@ A template's entries use the `template.*` names and `entityType: 'template'`.
 
 - [ ] **Step 1: Write the failing tests** in `descriptions.test.ts`, using the task and template helpers in `src/server/tasks/testing.ts` and `src/server/templates/testing.ts`:
   - a proposed task: a giver's change applies at once, with one `task.description_changed` entry;
-  - an open task: the change waits, `tasks.description` is unchanged, and `waitingFor` is both takers. Either taker's OK applies it with one `approved` entry, and `tasks.score` is unchanged;
+  - an open task: the change waits, `tasks.description` is unchanged, and `waitingFor` is both takers. Either taker's OK applies it with one `approved` entry; `tasks.score`, `tasks.offerRound` and the `task_thread` rows are unchanged (ruling 7 runs only on a proposed target);
   - an open task in a reopened round (`biddingFrom` set): still waits (Review Focus, open not proposed);
   - a reserved task: the other taker's OK → `not_involved`; the reserver's OK applies it;
   - Review Focus 2: a reserved task with a waiting change, then release → open, then the other taker's OK applies it;
@@ -251,8 +260,8 @@ A template's entries use the `template.*` names and `entityType: 'template'`.
   - removal: on a proposed task `''` clears it to `null`; on an open task a removal waits, and a taker's OK sets `tasks.description` to `null`;
   - template entries: each of applied, waiting, OK, no and withdrawn writes exactly one entry with the `template.*` action and `entityType: 'template'`, `entityId` = the template's id, and no `task.*` entry;
   - instance birth entry: `instance.created` (on demand) and `instance.self_logged` carry `after.description` = the template's text at that moment;
-  - ruling 7: a proposed task with Mladší's open bid; a giver changes the text. Then the bid is closed, `offerRound` went up by one, the changing giver's approval is the only one in the new round, and there is one `task.description_changed` entry with the closed `entryIds`. A giver's accept of the lowest bid afterwards → `no_bids`. The same for a proposed template with a bid (when `choreBidding` is on) and with no bid (only `offerRound` moves);
-  - ruling 8: `approveTaskOffer(..., seenDescription: 'old')` after a change → `offer_changed` and nothing written; with the current text → ok; with no field → ok; with the switch off the field is ignored. The same for `placeBid`, `acceptOffer` and the template yes and bid;
+  - ruling 7: a proposed task with Mladší's open bid; a giver changes the text. Then the bid is closed, `offerRound` went up by one, the changing giver's approval is the only one in the new round, and there is one `task.description_changed` entry whose `before` has the closed `entryIds` and the old `offerEntryId`, and whose `after` has the new `offerRound` and the new giver row's `entryId`. A giver's accept of the lowest bid afterwards → `no_bids`. The same for a proposed template with a bid (when `choreBidding` is on) and with no bid (only `offerRound` moves);
+  - ruling 8: `approveTaskOffer(..., seenDescription: 'old')` after a change → `offer_changed` and nothing written; with the current text → ok; with no field → ok. The same for `placeBid`, `acceptOffer`, and the template yes (`approveTemplateScore`), accept (`acceptOfferOnTemplate`) and bid (`bidOnTemplate`);
   - rollback: with `writeAudit` made to throw (the way `src/server/tasks/tasks.test.ts` does it), an applied change, a waiting change, an OK and a no each leave `tasks.description` and `description_changes` unchanged.
 - [ ] **Step 2:** Run `pnpm vitest run src/server/descriptions`. Expect FAIL.
 - [ ] **Step 3:** Implement. Each exported write runs in `db.transaction`, loads the row, `listPeople(tx)` and the open change, asks the domain, then writes the rows and `writeAudit` entries. In `lifecycle.ts`, call `discardStaleDescription(tx, saved, actor, now)` right after `discardStaleChange`.
@@ -294,7 +303,8 @@ export const answerDescriptionFn   // POST, requireRole('taker')
   - switch on: a full round trip (change on an open task → `waiting`, a taker's answer `yes` → `agreed`, and the detail shows the text);
   - the parser cases above, plus the cap: 4000 raw characters parse, 4001 throw (for `parseDescriptionChange` and the create parsers);
   - templates: switch off → a template create with a description → `feature_off`; switch on → a 1001-character one → `description_too_long`; `listTemplates` and `getTemplateDetail` mask `description` and `descriptionChange` with the switch off;
-  - every masked list: with the switch off, `listBoard` and `listTasks` rows have `description: null` though the column is set;
+  - every masked list: with the switch off, `listBoard` and `listTasks` rows have `description: null` though the column is set; with it on, the same rows carry the text;
+  - ruling 8 through the real entry points: each of `approveTaskOfferHandler`, `acceptOfferHandler`, `placeBidHandler`, `acceptTemplateOfferHandler`, `bidTemplateScoreHandler` and the template yes handler, fed by its parser from a raw `{ ..., seenDescription: 'old' }`, returns `offer_changed` after a change with the switch on, and goes through with the switch off; each parser throws on a 4001-character or a numeric `seenDescription`;
   - `waitingFor` on a reserved task is exactly `[reserverId]`;
   - shape: `toStrictEqual` on a `TaskDetail.descriptionChange` and on `DescriptionResult`, so no extra field leaks; `waitingFor` holds ids only.
 - [ ] **Step 2:** Run `pnpm vitest run src/server/descriptions/functions.test.ts`. Expect FAIL.
@@ -309,4 +319,4 @@ export const answerDescriptionFn   // POST, requireRole('taker')
 
 ## Size
 
-About 420 changed lines without tests and migrations: domain ~120, server ~200 (with rulings 7 and 8), functions and views ~100. Just over the 400 goal. It stays one PR because the server pieces are one rule set: the waiting change, the proposed-time reset and the stale check all decide when a text counts, and splitting them would ship a switch whose rules are half there. The fixture edits for the new view fields are mechanical (`description: null`).
+About 460 changed lines without tests and migrations: domain ~120, server ~210 (with rulings 7 and 8), functions, handlers and views ~130. Just over the 400 goal. It stays one PR because the server pieces are one rule set: the waiting change, the proposed-time reset and the stale check all decide when a text counts, and splitting them would ship a switch whose rules are half there. The fixture edits for the new view fields are mechanical (`description: null`).
