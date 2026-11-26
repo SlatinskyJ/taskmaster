@@ -1,6 +1,6 @@
 import { HeadContent, Scripts, createRootRoute, useRouter } from '@tanstack/react-router'
 import { useEffect, type ReactNode } from 'react'
-import { frameReentryUrl } from '~/lib/frame'
+import { guardedReentryUrl } from '~/lib/frame'
 import { trackVisualViewport } from '~/lib/visualViewport'
 import { Toaster } from '~/components/ui/sonner'
 import { themeBootScript } from '~/lib/theme'
@@ -28,8 +28,9 @@ function RootDocument({ children }: { children: ReactNode }) {
   }, [router])
   useEffect(() => trackVisualViewport(window), [])
   useEffect(() => {
-    // A viewer frame loaded without its token (dev and previews): load it again with it.
-    const url = frameReentryUrl(window)
+    // A viewer frame loaded without its token (dev and previews): load it again with it, at
+    // most once per address in a few seconds, so a redirect that drops it can't loop.
+    const url = guardedReentryUrl(window, sessionStorageOrUndefined(), Date.now())
     if (url) location.replace(url)
   }, [])
   return (
@@ -49,4 +50,13 @@ function RootDocument({ children }: { children: ReactNode }) {
       </body>
     </html>
   )
+}
+
+/** `window.sessionStorage`, or undefined where reading it throws (blocked storage). */
+function sessionStorageOrUndefined(): Storage | undefined {
+  try {
+    return window.sessionStorage
+  } catch {
+    return undefined
+  }
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { frameHeader, frameReentryUrl, keepFrameToken } from './frame'
+import { frameHeader, frameReentryUrl, guardedReentryUrl, keepFrameToken } from './frame'
+import type { ReentryStore } from './frame'
 
 const at = (name: string, href: string) => ({ name, location: { href } })
 
@@ -62,5 +63,68 @@ describe('keepFrameToken', () => {
     expect(() => {
       keepFrameToken(undefined, 'abc')
     }).not.toThrow()
+  })
+})
+
+describe('guardedReentryUrl', () => {
+  const fakeStore = () => {
+    const map = new Map<string, string>()
+    const store: ReentryStore = {
+      getItem: (k) => map.get(k) ?? null,
+      setItem: (k, v) => {
+        map.set(k, v)
+      },
+    }
+    return { map, store }
+  }
+  const SPRAVA = at('tm-frame:abc', 'http://x/sprava')
+  const WANT = 'http://x/sprava?tmFrame=abc'
+
+  it('re-enters once, refuses again within 5 s, and re-enters after', () => {
+    const { map, store } = fakeStore()
+    expect(guardedReentryUrl(SPRAVA, store, 1000)).toBe(WANT)
+    expect(map.get('tm.frameReentry:tm-frame:abc')).toBe(JSON.stringify({ url: WANT, at: 1000 }))
+    expect(guardedReentryUrl(SPRAVA, store, 1000 + 4999)).toBeNull()
+    expect(guardedReentryUrl(SPRAVA, store, 1000 + 5000)).toBe(WANT)
+  })
+
+  it('another address in the same frame is its own', () => {
+    const { store } = fakeStore()
+    guardedReentryUrl(SPRAVA, store, 1000)
+    expect(guardedReentryUrl(at('tm-frame:abc', 'http://x/ukoly'), store, 1001)).toBe(
+      'http://x/ukoly?tmFrame=abc',
+    )
+  })
+
+  it('another frame at the same address has its own memory', () => {
+    const { store } = fakeStore()
+    guardedReentryUrl(SPRAVA, store, 1000)
+    expect(guardedReentryUrl(at('tm-frame:def', 'http://x/sprava'), store, 1001)).toBe(
+      'http://x/sprava?tmFrame=def',
+    )
+  })
+
+  it('no storage, a throwing one or unreadable memory: re-enters every time', () => {
+    expect(guardedReentryUrl(SPRAVA, undefined, 1000)).toBe(WANT)
+    expect(guardedReentryUrl(SPRAVA, undefined, 1001)).toBe(WANT)
+    const throwing: ReentryStore = {
+      getItem: () => {
+        throw new Error('blocked')
+      },
+      setItem: () => {
+        throw new Error('blocked')
+      },
+    }
+    expect(guardedReentryUrl(SPRAVA, throwing, 1000)).toBe(WANT)
+    expect(guardedReentryUrl(SPRAVA, throwing, 1001)).toBe(WANT)
+    const broken: ReentryStore = { getItem: () => '{', setItem: () => undefined }
+    expect(guardedReentryUrl(SPRAVA, broken, 1000)).toBe(WANT)
+  })
+
+  it('not a frame, or no token: null, and the store is not touched', () => {
+    const { map, store } = fakeStore()
+    expect(guardedReentryUrl(at('', 'http://x/sprava'), store, 1000)).toBeNull()
+    expect(guardedReentryUrl(at('tm-frame:', 'http://x/sprava'), store, 1000)).toBeNull()
+    expect(map.size).toBe(0)
   })
 })

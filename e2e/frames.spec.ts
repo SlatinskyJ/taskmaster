@@ -171,3 +171,32 @@ test('a logged-in frame redirected from /login keeps its token', async ({ page }
   // One load: the server's redirect kept the token, so the client had nothing to re-enter.
   expect(loads()).toBe(1)
 })
+
+test.describe('without the service worker', () => {
+  // The service worker re-fetches a page load with Sec-Fetch-Dest: empty, so the server can't
+  // tell it is a frame's and reads the page's cookie. Without it, a frame's load that lost its
+  // token is a frame with no token (the login screen).
+  test.use({ serviceWorkers: 'block' })
+
+  test('a redirect that keeps dropping tmFrame cannot reload-loop the frame', async ({ page }) => {
+    await signedInAsTata(page)
+    await frameLogin(page)
+    // Every token-carrying page load of the frame is answered with a 307 to the same address
+    // without the token: a redirect the server middleware doesn't see.
+    await page.route(/[?&]tmFrame=/, async (route) => {
+      const request = route.request()
+      if (!request.isNavigationRequest() || !request.frame().name().startsWith('tm-frame:')) {
+        return route.fallback()
+      }
+      const url = new URL(request.url())
+      url.searchParams.delete('tmFrame')
+      await route.fulfill({ status: 307, headers: { location: url.pathname + url.search } })
+    })
+    const loads = countFrameLoads(page)
+    await openInFrame(page, '/')
+    await page.waitForTimeout(5000)
+    expect(loads()).toBeLessThanOrEqual(3)
+    const frame = page.frameLocator('#viewer')
+    await expect(frame.getByLabel(cs.login.username)).toBeVisible()
+  })
+})
