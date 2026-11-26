@@ -36,7 +36,7 @@ Success means the family uses it every week instead of the whiteboard bookkeepin
 ### Non-goals (v1, possible later)
 - **Stretch:** shared tablet by the home whiteboard with quick user switching (name + PIN, auto-logout). v1 auth must not block adding this later.
 - **Stretch:** installable PWA and push notifications. iOS supports web push for home-screen PWAs (16.4+), so this is a viable later path.
-- No in-app notifications beyond what is visible when a user opens the app (badges/counts are fine).
+- No in-app notifications beyond what is visible when a user opens the app (badges/counts are fine), except the live change banner (Jakub, 2026-11-26): when someone else changes data an open screen loaded, a banner says so and the person chooses when to update the screen. Design: `2026-11-26-live-changes-design.md`.
 - No money amounts in the app. The app reports the level reached; money is handled outside.
 - No per-person levels. Both takers share the same levels.
 - User management is admin-only, in the admin console (section 6). No self-signup.
@@ -264,7 +264,7 @@ Behind its own launch switch (`weekPlan`, off in production until Jakub flips it
 - **[call]** Days already past are greyed out. Before the first period starts the table is empty.
 - Nobody "accepts" the plan: reservations are real the moment they are made (Jakub: no proposal stage). No bidding on copies; bidding stays for one-time tasks (5.2).
 
-**At the meeting.** Step 3 (Plan, 5.9) shows the same table for the week the settlement just started, next to the open one-time tasks. The brothers reserve on their own phones (Týden), the giver's screen updates when reloaded **[call]**.
+**At the meeting.** Step 3 (Plan, 5.9) shows the same table for the week the settlement just started, next to the open one-time tasks. The brothers reserve on their own phones (Týden), the giver's screen shows the live change banner and updates when the giver taps it (Jakub, 2026-11-26; `2026-11-26-live-changes-design.md`).
 
 Left for later (Jakub, 2026-11-26): Schůzka as an event in the family Google Calendar.
 
@@ -318,6 +318,7 @@ Creating a suggestion and every state change (sent with its issue link and text,
   - **Dispute**: mark a locked item as disputed, with a reason (takers and givers).
   - **Suggest**: suggest a change to the app, from Profil, and see my own suggestions (5.13).
   - **Admin**: settings, open disputes, corrections, adjustments, people (admin console), launch switches, suggestions and sending them to GitHub (5.13).
+- **Live change banner** (Jakub, 2026-11-26): an open screen tells its viewer when someone else (or the same person on another device) changed data it loaded: one change shows who did what, more show a count since the last refresh. It never updates the screen by itself; tapping it reloads the screen's data in place, keeping typed inputs. Details: `2026-11-26-live-changes-design.md`.
 - The UI design (theme, tokens, effects, screen inventory) is in `2026-11-16-taskmaster-ui-design.md`.
 
 Rough home screen sketch (taker):
@@ -405,6 +406,7 @@ Jakub prefers TypeScript and React and wants to explore TanStack. Next.js was re
 - **Sessions [call]:** long-lived (about 90 days, sliding) on personal phones, so logging in is rare anyway.
 - **Auth [call]:** own small session auth, no auth framework. Passwords hashed with argon2id (`@node-rs/argon2`), random session tokens stored hashed in the DB, cookie `HttpOnly; Secure; SameSite=Lax`, login rate limit per user and IP kept in SQLite. The tablet name+PIN mode (stretch) becomes a second login method on the same session table. No Cloudflare Access gate in v1, because it adds too much friction for the 13-year-old.
 - **Scheduler [call]:** in-process `croner` with zone Europe/Prague. It creates scheduled instances, expires deadline instances, and rolls periods. Jobs are idempotent and catch up on boot after downtime; a caught-up instance takes its due time from its slot (5.3).
+- **Live changes** (Jakub, 2026-11-26): Server-Sent Events over HTTPS from the one server; a screen subscribes to the topics its data came from, events come from audit entries after commit (`2026-11-26-live-changes-design.md`).
 - **PWA [call]:** v1 ships a web manifest and a small service worker (app shell cache only, no offline writes), so the app is installable. Push notifications (stretch) come later via `web-push` with VAPID keys; on iOS they need the app added to the home screen. Profil has a section *Aplikace* with *Nainstalovat aplikaci* (Jakub, 2026-11-26): where the browser offers installing (`beforeinstallprompt`: Chrome, Edge, Android) it opens that prompt; on iPhone and iPad, which have no install API, it opens three steps (*Sdílet* → *Přidat na plochu* → *Přidat*). The section is hidden when the app already runs from the home screen and in browsers that can't install it. No launch switch.
 - **UI:** Tailwind CSS v4 (Jakub, 2026-11-16; chosen for maintainability over plain CSS). The Hřiště/Pastelky tokens from the mockups (`/ui-design/` in the project files) go in `@theme` as CSS variables, with light and dark modes following the system. Keyframes and gamified effects live in one small CSS file; `canvas-confetti` handles confetti. Components: **shadcn/ui** (Jakub, 2026-11-16), copied into the repo so we own and restyle them; its CSS variables are mapped to the Hřiště/Pastelky tokens, so it must not keep the default neutral look. Likely set [call]: Button, Card, Badge, Progress (XP bar), Drawer (mobile bottom sheets for task actions), Dialog, Tabs, Sonner (toasts), form inputs, Input OTP (tablet PIN later). Czech strings are kept in one module [call].
 - **Dates [call]:** all schedule, cutoff, and deadline maths in Europe/Prague via one helper module (`date-fns` + `@date-fns/tz`); UTC instants are stored in the DB.
