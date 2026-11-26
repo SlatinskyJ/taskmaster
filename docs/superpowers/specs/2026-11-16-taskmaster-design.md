@@ -268,9 +268,27 @@ Behind its own launch switch (`weekPlan`, off in production until Jakub flips it
 
 Left for later (Jakub, 2026-11-26): Schůzka as an event in the family Google Calendar.
 
+### 5.13 Suggestions (Jakub, 2026-11-26)
+Why: the family should be able to say what to change in the app, from the app. The repo is public, so suggestions stay private in the app; only the admin picks one and sends it to GitHub as an issue.
+
+Behind its own launch switch (`suggestions`, off in production until Jakub flips it).
+
+**Suggesting.** Anyone signed in (taker, giver, admin) opens a form from Profil (*Navrhnout zlepšení*): a title (*Název*, required) and a description (*Popis*). On send it is stored with its author and time, and a short confirmation shows. **[call]** Title 1 to 120 characters, description up to 2,000 (may be empty). **[call]** Below the button, Profil lists my own suggestions, newest first, with their state, and the GitHub link once sent; nobody else's.
+
+**States.** *Nový* (new) → *Na GitHubu* (sent) or *Zamítnutý* (dismissed); new or sent → *Hotovo* (done). Done and dismissed are final **[call]**. Only the admin changes a state. A suggestion is never deleted (5.10).
+
+**Admin (Správa).** A list of all suggestions, newest first: author, title, description, time, state, GitHub link. The admin marks one done or dismissed. **[call]** The Správa entry shows the count of new ones.
+
+**Send to GitHub (admin only).** *Poslat na GitHub* opens a preview with the issue title and body, filled from the suggestion **without the author's name**, which the admin can edit, because the issue is public. Confirming opens an issue in the app's own repository, stores its link and the text that went out, and sets the state to sent. The suggestion's own text stays as written. If GitHub refuses or is unreachable, nothing changes and an error shows; the admin can try again. A suggestion is sent at most once.
+- The server sends with a GitHub token given as a runtime secret (environment variable, like `ADMIN_PASSWORD`), never committed: a fine-grained token limited to this repository with only *Issues: read and write*. The issue shows the token owner (Jakub) as its author.
+- Without the token (dev, PR previews, production before it is set) the button is disabled with a short note; the rest works.
+- **[call]** The issue gets no label; Jakub sorts it on GitHub.
+
+Creating a suggestion and every state change (sent with its issue link and text, done, dismissed) are audit-logged.
+
 ### 5.10 Audit log
 - **Append-only.** Every state-changing action writes an entry: actor (user), timestamp, action type, entity type and ID, before/after values (or the relevant payload), and optional reason.
-- Covers at least: logins (**[call]** success and failure), task/template/instance creation, score offers/counters/approvals/changes, reservations/releases, completions, approvals/rejections, expiries, cancellations, period proposals/agreements, default-setting proposals/agreements, disputes (opened, corrected, dismissed), settlements, admin corrections, adjustments, user and settings changes.
+- Covers at least: logins (**[call]** success and failure), task/template/instance creation, score offers/counters/approvals/changes, reservations/releases, completions, approvals/rejections, expiries, cancellations, period proposals/agreements, default-setting proposals/agreements, disputes (opened, corrected, dismissed), suggestions (created, sent, done, dismissed), settlements, admin corrections, adjustments, user and settings changes.
 - No UI. It must be queryable by the admin (direct DB access or a simple export is enough).
 - **[call]** Domain data is never hard-deleted; cancellation/expiry are states. Running totals must be reproducible from the log + settlement records.
 
@@ -297,7 +315,8 @@ Left for later (Jakub, 2026-11-26): Schůzka as an event in the family Google Ca
   - **Week plan**: the table of chores by day for the running week; takers reserve from it (5.12).
   - **Period settings**: propose length/levels for an upcoming period, propose a change to the defaults (givers), approve proposals.
   - **Dispute**: mark a locked item as disputed, with a reason (takers and givers).
-  - **Admin**: settings, open disputes, corrections, adjustments, people (admin console).
+  - **Suggest**: suggest a change to the app, from Profil, and see my own suggestions (5.13).
+  - **Admin**: settings, open disputes, corrections, adjustments, people (admin console), suggestions and sending them to GitHub (5.13).
 - The UI design (theme, tokens, effects, screen inventory) is in `2026-11-16-taskmaster-ui-design.md`.
 
 Rough home screen sketch (taker):

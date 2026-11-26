@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { DIAL_STEP_PX, dialKey, dialStep, ScoreDial } from './ScoreDial'
+import { DIAL_STEP_PX, dialKey, dialStep, dialStepPx, ScoreDial } from './ScoreDial'
 
 describe('dialStep', () => {
   it('swiping left adds points, swiping right takes them away', () => {
@@ -21,6 +21,27 @@ describe('dialStep', () => {
   it('stops at the ends with no offset', () => {
     expect(dialStep(2, DIAL_STEP_PX * 5, 1, 999)).toEqual({ value: 1, offset: 0 })
     expect(dialStep(998, -DIAL_STEP_PX * 5, 1, 999)).toEqual({ value: 999, offset: 0 })
+  })
+})
+
+describe('dialStepPx', () => {
+  it('keeps the base gap while the current number and the next one have at most two digits', () => {
+    expect(dialStepPx(1)).toBe(DIAL_STEP_PX)
+    expect(dialStepPx(98)).toBe(DIAL_STEP_PX)
+  })
+
+  it('widens the gap from 99 up, when a three-digit number sits next to or in the middle (#190)', () => {
+    expect(dialStepPx(99)).toBe(52)
+    expect(dialStepPx(100)).toBe(52)
+    expect(dialStepPx(998)).toBe(52)
+  })
+})
+
+describe('dialStep with a wider gap', () => {
+  it('counts swipe steps in the gap it is given', () => {
+    expect(dialStep(100, -52 * 2, 1, 999, 52).value).toBe(102)
+    expect(dialStep(100, -DIAL_STEP_PX * 2, 1, 999, 52).value).toBe(101)
+    expect(dialStep(100, -52 * 0.4, 1, 999, 52)).toEqual({ value: 100, offset: -52 * 0.4 })
   })
 })
 
@@ -51,5 +72,21 @@ describe('ScoreDial', () => {
     expect(html).not.toMatch(/>0</)
     expect(html).toMatch(/>7</)
     expect(html).toMatch(/<output aria-live="polite"[^>]*>2<\/output>/)
+  })
+
+  it('spaces the neighbours by the base gap for small values', () => {
+    const html = renderToStaticMarkup(
+      <ScoreDial value={10} min={1} max={999} onChange={() => undefined} label="Body" />,
+    )
+    expect(html).toContain('left:calc(50% + 36px)')
+  })
+
+  it("spaces three-digit neighbours wider, so they don't run into the middle number (#190)", () => {
+    const html = renderToStaticMarkup(
+      <ScoreDial value={100} min={1} max={999} onChange={() => undefined} label="Body" />,
+    )
+    expect(html).toContain('left:calc(50% + 52px)')
+    expect(html).toContain('left:calc(50% + -52px)')
+    expect(html).not.toContain('left:calc(50% + 36px)')
   })
 })
