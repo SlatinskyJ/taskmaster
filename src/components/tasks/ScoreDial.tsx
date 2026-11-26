@@ -125,7 +125,7 @@ export function ScoreDial({
               key={n}
               aria-hidden="true"
               className={cn(
-                'absolute top-1/2 grid -translate-1/2 justify-items-center gap-1 num font-display font-bold',
+                'absolute top-1/2 grid -translate-1/2 justify-items-center gap-1 num font-bold',
                 !dragging &&
                   'transition-[left] duration-200 ease-out motion-reduce:transition-none',
                 distance === 0 ? 'text-points text-ink' : 'text-lg text-muted',
