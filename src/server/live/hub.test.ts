@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { withAudit, writeAudit } from '~/server/audit'
 import type { AuditEntry } from '~/server/audit'
-import { settlements } from '~/server/db/schema'
+import { disputes, pointAdjustments, settlements } from '~/server/db/schema'
 import { MEETING, week } from '~/server/settlement/testing'
 import { createHub, STREAMS_PER_SESSION, STREAMS_TOTAL } from './hub'
 import type { Hub, LiveEvent, Stream } from './hub'
 import * as mapping from './mapping'
+import { idTopic } from './topics'
 import type { Topic } from './topics'
 
 // The in-process hub (#299): committed changes to matching streams, once, grouped.
@@ -145,8 +146,10 @@ describe('delivery', () => {
   it("settlement with two taker entries is one event; id is the newest entry id; action is the first entry's", async () => {
     const f = await setup()
     const hub = hubOf(f)
-    const s = stream(['week'])
+    const s = stream([idTopic('points', f.starsi), idTopic('points', f.mladsi)])
+    const weekOnly = stream(['week'])
     hub.attach(s, 0)
+    hub.attach(weekOnly, 0)
     const [a, b] = settlementsIn(f)
     change(f, [
       { ...taskEntry(f, a), action: 'settlement.created', entityType: 'settlement' },
@@ -159,6 +162,8 @@ describe('delivery', () => {
     expect(e?.action).toBe('settlement.created')
     expect(e?.entityId).toBe(String(a))
     expect(e?.id).toBe((e?.change ?? 0) + 2)
+    // A week-only stream sees the change through the period's entry, never a settlement's.
+    expect(weekOnly.got.map((g) => [g.action, g.id])).toEqual([['period.ended', e?.id]])
   })
 
   it('the origin tab is skipped; another tab of the same user gets it', async () => {
@@ -191,35 +196,63 @@ describe('delivery', () => {
     }
   })
 
-  it("a dispute.corrected change seen by a week-only stream carries the points entry's action, entity and actor, not the dispute's", async () => {
-    const f = await setup()
-    const hub = hubOf(f)
-    const boy = stream(['week'])
-    const admin = stream(['disputes'])
-    hub.attach(boy, 0)
-    hub.attach(admin, 0)
-    const adminActor = { kind: 'user', userId: f.admin } as const
-    // The real order (src/server/corrections): the correction's entry, then the dispute's.
-    change(f, [
-      taskEntry(f, 9, {
+  it.each(['correction first', 'dispute first'] as const)(
+    "a dispute.corrected change for starsi (%s): nothing on week, his brother's points get nothing, starsi's points and disputes get one event",
+    async (order) => {
+      const f = await setup()
+      const hub = hubOf(f)
+      const brother = stream(['week', idTopic('points', f.mladsi)])
+      const starsi = stream([idTopic('points', f.starsi)])
+      const admin = stream(['disputes'])
+      for (const s of [brother, starsi, admin]) hub.attach(s, 0)
+      const adj = f.db
+        .insert(pointAdjustments)
+        .values({
+          takerId: f.starsi,
+          points: 2,
+          reason: 'Oprava.',
+          madeBy: f.admin,
+          madeAt: MEETING.toISOString(),
+        })
+        .returning()
+        .get().id
+      const dispute = f.db
+        .insert(disputes)
+        .values({
+          itemKind: 'adjustment',
+          itemId: adj,
+          openedBy: f.starsi,
+          reason: 'Málo.',
+          openedAt: MEETING.toISOString(),
+          status: 'open',
+        })
+        .returning()
+        .get().id
+      const adminActor = { kind: 'user', userId: f.admin } as const
+      const points = taskEntry(f, adj, {
         actor: adminActor,
         action: 'points.adjusted',
         entityType: 'adjustment',
-        after: { takerId: f.starsi },
-      }),
-      taskEntry(f, 5, { actor: adminActor, action: 'dispute.corrected', entityType: 'dispute' }),
-    ])
-    await settle()
-    expect(boy.got).toHaveLength(1)
-    expect(boy.got[0]).toMatchObject({
-      action: 'points.adjusted',
-      entityType: 'adjustment',
-      entityId: '9',
-      actor: adminActor,
-    })
-    expect(admin.got[0]).toMatchObject({ action: 'dispute.corrected', entityId: '5' })
-    expect(boy.got[0]?.id).toBe(admin.got[0]?.id)
-  })
+      })
+      const corrected = taskEntry(f, dispute, {
+        actor: adminActor,
+        action: 'dispute.corrected',
+        entityType: 'dispute',
+        after: { status: 'corrected', correction: { kind: 'adjustment', id: adj } },
+      })
+      change(f, order === 'correction first' ? [points, corrected] : [corrected, points])
+      await settle()
+      expect(brother.got).toEqual([])
+      expect(starsi.got).toHaveLength(1)
+      expect(admin.got).toHaveLength(1)
+      expect(admin.got[0]).toMatchObject({ action: 'dispute.corrected', entityId: String(dispute) })
+      // Starsi sees the change through its first entry on his points, whichever that is.
+      expect(starsi.got[0]?.action).toBe(
+        order === 'correction first' ? 'points.adjusted' : 'dispute.corrected',
+      )
+      expect(starsi.got[0]?.id).toBe(admin.got[0]?.id)
+    },
+  )
 
   it('every event has exactly the LiveEvent keys', async () => {
     const f = await setup()

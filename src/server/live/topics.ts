@@ -5,7 +5,10 @@
 // The rule: a broad topic (`disputes`, `suggestions`, `templates:proposed`) is only for viewers
 // who may load every row of it; a viewer who may load only a slice subscribes to the slice
 // topics (`disputes:about:<taker>`, `disputes:by:<user>`, `suggestions:by:<author>`). A change
-// fires the broad topic and every slice it belongs to. The data function that issues a topic is
+// fires the broad topic and every slice it belongs to. A per-taker fact (a settlement, a points
+// adjustment, a dispute or correction of either) goes only on `points:<taker>`, never on `week`:
+// both boys hold `week`, so it would tell one about his brother (src/server/live/mapping.ts
+// falls back to `week` only when the taker's row is gone). The data function that issues a topic is
 // the one that checked the viewer may read it: the stream only accepts topics the server signed
 // (./subscription.ts).
 

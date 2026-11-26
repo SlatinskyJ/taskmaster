@@ -268,25 +268,35 @@ describe('periods, proposals, settings and people', () => {
 
 describe('settlement and points', () => {
   it.each(['settlement.created', 'settlement.corrected'] as const)(
-    '%s fires week and the taker',
+    '%s fires only the taker',
     (action) => {
       const f = week()
       const id = settlement(f, f.mladsi)
       const row = log(f, { action, entityType: 'settlement', entityId: id })
-      expect(of(f, row)).toEqual([`points:${f.mladsi}`, 'week'])
+      expect(of(f, row)).toEqual([`points:${f.mladsi}`])
     },
   )
 
-  it('points.adjusted fires week and the taker', () => {
+  it('a settlement for starsi never fires week', () => {
+    const f = week()
+    const id = settlement(f, f.starsi)
+    for (const action of ['settlement.created', 'settlement.corrected'] as const) {
+      const topics = of(f, log(f, { action, entityType: 'settlement', entityId: id }))
+      expect(topics).not.toContain('week')
+      expect(topics).toEqual([`points:${f.starsi}`])
+    }
+  })
+
+  it('points.adjusted fires only the taker', () => {
     const f = week()
     const id = adjustment(f, f.starsi, 5, MEETING)
     const row = log(f, { action: 'points.adjusted', entityType: 'adjustment', entityId: id })
-    expect(of(f, row)).toEqual([`points:${f.starsi}`, 'week'])
+    expect(of(f, row)).toEqual([`points:${f.starsi}`])
   })
 })
 
 describe('disputes', () => {
-  it("a dispute about mladsi's settlement opened by tata fires disputes, disputes:by:<tata>, disputes:about:<mladsi>, week, points:<mladsi>", () => {
+  it("a dispute about mladsi's settlement opened by tata fires disputes, disputes:by:<tata>, disputes:about:<mladsi>, points:<mladsi> (no week)", () => {
     const f = week()
     const id = dispute(f, 'settlement', settlement(f, f.mladsi))
     const row = log(f, { action: 'dispute.opened', entityType: 'dispute', entityId: id })
@@ -295,7 +305,6 @@ describe('disputes', () => {
         'disputes',
         `disputes:by:${f.tata}`,
         `disputes:about:${f.mladsi}`,
-        'week',
         `points:${f.mladsi}`,
       ].sort(),
     )
@@ -331,7 +340,7 @@ describe('disputes', () => {
     )
   })
 
-  it('an adjustment dispute fires week and the taker', () => {
+  it('an adjustment dispute fires the taker, not week', () => {
     const f = week()
     const id = dispute(f, 'adjustment', adjustment(f, f.starsi, -3, MEETING))
     const row = log(f, { action: 'dispute.opened', entityType: 'dispute', entityId: id })
@@ -341,12 +350,11 @@ describe('disputes', () => {
         `disputes:about:${f.starsi}`,
         `disputes:by:${f.tata}`,
         `points:${f.starsi}`,
-        'week',
       ].sort(),
     )
   })
 
-  it("dispute.corrected adds the corrected taker's points and week (adjustment link)", () => {
+  it("dispute.corrected adds only the corrected taker's points (adjustment link)", () => {
     const f = week()
     const tpl = template(f, 'active')
     const id = dispute(f, 'template_score', tpl)
@@ -363,7 +371,6 @@ describe('disputes', () => {
         'disputes:about:none',
         `disputes:by:${f.tata}`,
         `template:${tpl}`,
-        'week',
         `points:${f.mladsi}`,
       ].sort(),
     )
@@ -397,7 +404,6 @@ describe('disputes', () => {
         `disputes:about:${f.starsi}`,
         `disputes:by:${f.mladsi}`,
         `points:${f.starsi}`,
-        'week',
       ].sort(),
     )
     expect(f.db.select().from(pointAdjustments).all()).toEqual([])
@@ -444,5 +450,16 @@ describe('gone targets', () => {
     expect(of(f, task)).toEqual(['task:4242', 'tasks', 'week'])
     const tpl = log(f, { action: 'template.updated', entityType: 'template', entityId: 4242 })
     expect(of(f, tpl)).toEqual(['template:4242', 'templates:proposed'])
+    // A per-taker fact with no taker row falls back to week (never happens: never deleted).
+    const s = log(f, { action: 'settlement.created', entityType: 'settlement', entityId: 4242 })
+    expect(of(f, s)).toEqual(['week'])
+    const a = log(f, { action: 'points.adjusted', entityType: 'adjustment', entityId: 4242 })
+    expect(of(f, a)).toEqual(['week'])
+    const onGone = log(f, {
+      action: 'dispute.opened',
+      entityType: 'dispute',
+      entityId: dispute(f, 'settlement', 4242),
+    })
+    expect(of(f, onGone)).toEqual(['disputes', `disputes:by:${f.tata}`, 'week'])
   })
 })

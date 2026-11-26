@@ -120,6 +120,16 @@ const SILENT_ENTITIES = new Set<string>(['app_meta', 'session'])
 
 const points = (id: number): Topic => idTopic('points', id)
 
+/**
+ * A per-taker fact (a settlement, an adjustment, a dispute or correction of one) goes only on
+ * `points:<taker>`, never on `week`: both boys hold `week`, so it would tell one about his
+ * brother (topics.ts). Without a taker (its row gone) it falls back to `week` so the change is
+ * not missed; that can't happen in practice, as settlements and adjustments are never deleted.
+ */
+function takerFact(out: Set<Topic>, taker: number | null): void {
+  out.add(taker === null ? 'week' : points(taker))
+}
+
 function idOf(entityId: string): number | null {
   const n = Number(entityId)
   return Number.isSafeInteger(n) && n > 0 ? n : null
@@ -239,22 +249,17 @@ function disputeTopics(db: Db, row: AuditLogRow, id: number, out: Set<Topic>): v
   if (d) {
     out.add(idTopic('disputes:by', d.openedBy))
     const loaded = loadTarget(db, { kind: d.itemKind, id: d.itemId })
+    const perTaker = d.itemKind === 'settlement' || d.itemKind === 'adjustment'
+    const taker = loaded?.about.takerId ?? null
     if (loaded) {
-      const taker = loaded.about.takerId
       out.add(taker === null ? 'disputes:about:none' : idTopic('disputes:about', taker))
       // The disputed item's own page shows the mark.
       const page = loaded.about.page
       if (page) out.add(idTopic(page.kind, page.id))
-      if ((d.itemKind === 'settlement' || d.itemKind === 'adjustment') && taker !== null) {
-        out.add('week').add(points(taker))
-      }
     }
+    if (perTaker) takerFact(out, taker)
   }
-  if (row.action === 'dispute.corrected') {
-    out.add('week')
-    const taker = correctedTaker(db, row)
-    if (taker !== null) out.add(points(taker))
-  }
+  if (row.action === 'dispute.corrected') takerFact(out, correctedTaker(db, row))
 }
 
 function suggestionTopics(db: Db, id: number, out: Set<Topic>): void {
@@ -291,19 +296,18 @@ export function topicsOf(db: Db, row: AuditLogRow): Topic[] {
     case 'defaults':
       out.add('proposals').add('week')
       break
-    case 'settlement': {
-      out.add('week')
-      const taker =
-        (id === null ? null : settlementTaker(db, id)) ?? userIdIn(json(row.after).takerId)
-      if (taker !== null) out.add(points(taker))
+    case 'settlement':
+      takerFact(
+        out,
+        (id === null ? null : settlementTaker(db, id)) ?? userIdIn(json(row.after).takerId),
+      )
       break
-    }
-    case 'points': {
-      out.add('week')
-      const taker = id === null ? userIdIn(json(row.after).takerId) : adjustmentTaker(db, id)
-      if (taker !== null) out.add(points(taker))
+    case 'points':
+      takerFact(
+        out,
+        (id === null ? null : adjustmentTaker(db, id)) ?? userIdIn(json(row.after).takerId),
+      )
       break
-    }
     case 'dispute':
       if (id !== null) disputeTopics(db, row, id, out)
       else out.add('disputes')
