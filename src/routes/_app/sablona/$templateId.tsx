@@ -68,6 +68,13 @@ function TemplatePage() {
                 : cs.templatePrice.now(t.score)}
           </span>
         </div>
+        {proposed && <p className="text-meta text-muted">{cs.templatePrice.startsWhenAll}</p>}
+        {meta && <p className="font-bold break-words">{meta}</p>}
+        <p className="text-meta break-words text-muted">{templateDetail(t)}</p>
+        {t.status === 'active' && (
+          <p className="text-meta text-muted">{cs.templatePrice.futureOnly}</p>
+        )}
+        {waiting && <p className="font-bold break-words">{waiting}</p>}
         {features.descriptions && (
           <DescriptionBlock
             text={t.description}
@@ -78,13 +85,6 @@ function TemplatePage() {
             me={me}
           />
         )}
-        {proposed && <p className="text-meta text-muted">{cs.templatePrice.startsWhenAll}</p>}
-        {meta && <p className="font-bold break-words">{meta}</p>}
-        <p className="text-meta break-words text-muted">{templateDetail(t)}</p>
-        {t.status === 'active' && (
-          <p className="text-meta text-muted">{cs.templatePrice.futureOnly}</p>
-        )}
-        {waiting && <p className="font-bold break-words">{waiting}</p>}
         {/* With first-price bidding (#209) the price panel below has Souhlasím. */}
         {proposed && !t.bidding && waitingFor.some((p) => p.id === user.id) && (
           <AgreeToChore template={t} />

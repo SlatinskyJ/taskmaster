@@ -23,7 +23,7 @@ async function login(page: Page, who: string) {
 const history = (page: Page) => page.getByRole('region', { name: cs.history.title })
 const block = (page: Page) => page.locator('[data-slot="description"]')
 const toast = (page: Page, text: string) =>
-  page.locator('[data-sonner-toast]').getByText(text, { exact: true })
+  page.locator('[data-sonner-toast]').getByText(text, { exact: true }).last()
 
 test('Táta gives a task with a text; Starší reads it before he agrees', async ({ page }) => {
   await login(page, 'tata')
@@ -60,6 +60,10 @@ test('Mladší OKs Táta’s new text from Domů; the text changes and the histo
   await row.getByRole('link', { name: cs.bids.answer }).click()
   await expect(page).toHaveURL(/\/ukol\/2$/)
   await expect(page.getByText(cs.description.waitingTitle)).toBeVisible()
+  // What changes, before he says yes (Jakub 2026-11-26): the new line is marked as added.
+  const diff = page.locator('[data-slot="description-diff"]')
+  await expect(diff.locator('ins')).toContainText(NEW)
+  await expect(diff.getByText(cs.description.diffHint)).toBeVisible()
   await page.getByRole('button', { name: cs.description.agree, exact: true }).click()
   await expect(toast(page, cs.description.toast.agreed)).toBeVisible()
   await expect(page.getByText(cs.description.waitingTitle)).toHaveCount(0)
@@ -68,9 +72,21 @@ test('Mladší OKs Táta’s new text from Domů; the text changes and the histo
   await expect(history(page)).toContainText(cs.history.descriptionApproved)
 })
 
-test('Táta edits the open task; Mladší says no and the old text stays', async ({ page }) => {
+test('Táta edits the open task and takes it back; then Mladší says no to the next', async ({
+  page,
+}) => {
   await login(page, 'tata')
   await page.goto('/ukol/2')
+  await page.getByRole('button', { name: cs.description.edit, exact: true }).click()
+  await page.getByRole('dialog').getByLabel(cs.description.field).fill('Jen ty malé.')
+  await page.getByRole('dialog').getByRole('button', { name: cs.description.save }).click()
+  await expect(toast(page, cs.description.toast.waiting)).toBeVisible()
+  await page.getByRole('button', { name: cs.description.takeBack, exact: true }).click()
+  await expect(toast(page, cs.description.toast.withdrawn)).toBeVisible()
+  await expect(page.getByText(cs.description.waitingTitle)).toHaveCount(0)
+  await expect(block(page)).toContainText(NEW)
+  await expect(history(page)).toContainText(cs.history.descriptionWithdrawn)
+
   await page.getByRole('button', { name: cs.description.edit, exact: true }).click()
   const sheet = page.getByRole('dialog')
   await expect(sheet.getByText(cs.description.waitWarn)).toBeVisible()

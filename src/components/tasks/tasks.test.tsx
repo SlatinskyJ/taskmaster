@@ -271,6 +271,10 @@ describe('WaitingForYou with templates (#37)', () => {
     expect(html).toContain(`href="/ukol/${String(task.id)}">${cs.description.readAndAgree}<`)
     expect(html).not.toContain(`>${cs.tasks.approve}<`)
     expect(html).toContain(`aria-label="${cs.description.hasIcon}"`)
+    // The row's footer line, under the row, so the name keeps the row's width (UX round 1).
+    expect(html).toContain(
+      `</div><a href="/ukol/${String(task.id)}">${cs.description.readAndAgree}</a></div></li>`,
+    )
   })
 
   it('ruling 1: without a description Souhlasím stays', () => {
@@ -282,6 +286,9 @@ describe('WaitingForYou with templates (#37)', () => {
   it('ruling 1: the same for a proposed chore', () => {
     const html = wfy({ templates: [{ ...template, description: 'Koše i tříděný.' }] })
     expect(html).toContain(`href="/sablona/1">${cs.description.readAndAgree}<`)
+    expect(html).toContain(
+      `</div><a href="/sablona/1">${cs.description.readAndAgree}</a></div></li>`,
+    )
     expect(html).not.toContain(`>${cs.tasks.approve}<`)
     expect(wfy({ templates: [template] })).toContain(`>${cs.tasks.approve}<`)
   })

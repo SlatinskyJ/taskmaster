@@ -69,11 +69,14 @@ describe('TaskRow link (#205)', () => {
 })
 
 describe('TaskRow described (#207)', () => {
-  it('one icon after the name, read as "Má popis"', () => {
+  it('one icon after the name, read as "Má popis", outside the two-line cut', () => {
     const html = renderToStaticMarkup(
       <TaskRow described name="Umýt okna" state="open" points={5} />,
     )
     expect(html.match(/role="img"/g)).toHaveLength(1)
-    expect(html).toMatch(/Umýt okna<svg[^>]*role="img"[^>]*aria-label="Má popis"/)
+    // The name's clamped block closes before the icon, so a long name never hides it.
+    expect(html).toMatch(
+      /<div class="line-clamp-2[^"]*">Umýt okna<\/div><svg[^>]*role="img"[^>]*aria-label="Má popis"/,
+    )
   })
 })

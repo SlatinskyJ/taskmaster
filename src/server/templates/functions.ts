@@ -4,6 +4,7 @@ import type { Result } from '~/domain/result'
 import type { Db } from '~/server/db'
 import { getDb } from '~/server/db'
 import type { TemplateRow, TemplateStatus } from '~/server/db/schema'
+import { STALE, seenOf, unseen } from '~/server/descriptions/seen'
 import { getFlags } from '~/server/features'
 import { hasDescription } from '~/server/descriptions/parse'
 import {
@@ -63,18 +64,6 @@ const bidding = (db: Db): BiddingOpts => {
 }
 
 const OFF = { ok: false, error: 'feature_off' } as const
-
-/** A taker's page's text, checked only with the `descriptions` switch on (ruling 8). */
-const seenOf = (db: Db, data: { seenDescription?: string | null }) =>
-  getFlags(db).descriptions ? data.seenDescription : undefined
-
-/**
- * Ruling 2 (#207): with the switch on a brother's yes or bid must say what text it saw. One
- * without it comes from a page loaded before the switch or the deploy: refused as stale.
- */
-const unseen = (db: Db, data: { seenDescription?: string | null }) =>
-  getFlags(db).descriptions && data.seenDescription === undefined
-const STALE = { ok: false, error: 'offer_changed' } as const
 
 /** A giver proposes a new recurring template (spec §5.1); a description needs the switch. */
 export function createTemplateHandler(

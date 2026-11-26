@@ -34,6 +34,8 @@ import {
   turnDownBids,
   withdrawBid,
 } from './bidding'
+import { STALE, seenOf, unseen } from '~/server/descriptions/seen'
+import type { Seen as SeenText } from '~/server/descriptions/seen'
 import { getFlags } from '~/server/features'
 import { hasDescription, optionalDescription, seenDescriptionOf } from '~/server/descriptions/parse'
 import type { Db } from '~/server/db'
@@ -170,26 +172,13 @@ export function answered(result: Result<TaskRow, TaskError>): TaskActionResult {
 
 // ── Descriptions (#207, behind the `descriptions` switch) ────────────────────────────────
 
-interface Seen {
+interface Seen extends SeenText {
   taskId: number
   score: number
-  seenDescription?: string | null
 }
 
 /** The switch, as the views take it: descriptions are shown only with it on. */
 const shown = (db: Db) => ({ descriptions: getFlags(db).descriptions })
-
-/** The page's text, checked only with the switch on (ruling 8). */
-const seenOf = (db: Db, data: Seen) =>
-  getFlags(db).descriptions ? data.seenDescription : undefined
-
-/**
- * Ruling 2 (#207): with the switch on a brother's yes or bid must say what text it saw. One
- * without it comes from a page loaded before the switch or the deploy: refused as stale.
- */
-const unseen = (db: Db, data: { seenDescription?: string | null }) =>
-  getFlags(db).descriptions && data.seenDescription === undefined
-const STALE = { ok: false, error: 'offer_changed' } as const
 
 /** A giver creates a one-time task with an offer (spec §5.2); a description needs the switch. */
 export function createTaskHandler(

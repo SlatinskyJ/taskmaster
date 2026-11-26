@@ -6,6 +6,7 @@ import { approveOutcome, approveTemplate } from '~/components/templates/actions'
 import { myTemplateBid, priceMeta, templateChip } from '~/components/templates/priceView'
 import { Button, buttonVariants } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
+import { cn } from '~/lib/utils'
 import { templateDetail } from '~/lib/templateText'
 import type { DescriptionWaitingRow } from '~/server/descriptions/functions'
 import type { ProposalKind } from '~/server/periods/functions'
@@ -33,7 +34,8 @@ const targetLink = (t: DescriptionWaitingRow['target']): RowLink =>
  * A price change of an agreed template (#138) waiting for this person's side links to its page;
  * so does a new price of an agreed one-time task waiting for this person (#36), and a new
  * description waiting for his OK (#207 ruling 6). A proposed item with a description links to its
- * page ("Přečíst a souhlasit") instead of Souhlasím, so he reads the text first (ruling 1).
+ * page ("Přečíst a souhlasit", a full-width line under the row so the name keeps its width)
+ * instead of Souhlasím, so he reads the text first (ruling 1, Jakub 2026-11-26).
  */
 export function WaitingForYou({
   items,
@@ -105,12 +107,12 @@ export function WaitingForYou({
     )
   }
 
-  function answerLink(t: TemplateView, label: string) {
+  function answerLink(t: TemplateView, label: string, wide = false) {
     return (
       <Link
         to="/sablona/$templateId"
         params={{ templateId: String(t.id) }}
-        className={buttonVariants({ variant: 'ghost' })}
+        className={cn(buttonVariants({ variant: 'ghost' }), wide && 'w-full')}
       >
         {label}
       </Link>
@@ -122,7 +124,6 @@ export function WaitingForYou({
    * page like a Návrh: Jiná cena next to it, or only Otevřít once he has a bid.
    */
   function templateActions(t: TemplateView) {
-    if (t.description !== null) return answerLink(t, cs.description.readAndAgree)
     const key = `template-${String(t.id)}`
     const yes = approveButton(key, () => approveTemplate(t))
     if (!t.bidding) return yes
@@ -135,12 +136,12 @@ export function WaitingForYou({
     )
   }
 
-  function pageLink(task: TaskView, label: string) {
+  function pageLink(task: TaskView, label: string, wide = false) {
     return (
       <Link
         to="/ukol/$taskId"
         params={{ taskId: String(task.id) }}
-        className={buttonVariants({ variant: 'ghost' })}
+        className={cn(buttonVariants({ variant: 'ghost' }), wide && 'w-full')}
       >
         {label}
       </Link>
@@ -148,7 +149,6 @@ export function WaitingForYou({
   }
 
   function taskActions(task: TaskView) {
-    if (task.description !== null) return pageLink(task, cs.description.readAndAgree)
     const approve = bidButtons(task, me).find((b) => b.key === 'approve')
     if (myBid(task, me) !== null || !approve) return pageLink(task, cs.bids.open)
     const key = `task-${String(task.id)}`
@@ -187,7 +187,12 @@ export function WaitingForYou({
               state={taskChipState(task)}
               points={task.score}
               meta={waitingMeta(task, me)}
-              action={taskActions(task)}
+              action={task.description === null ? taskActions(task) : undefined}
+              footer={
+                task.description === null
+                  ? undefined
+                  : pageLink(task, cs.description.readAndAgree, true)
+              }
               link={links ? taskLink(task.id) : undefined}
             />
           </li>
@@ -201,7 +206,12 @@ export function WaitingForYou({
               points={t.score}
               meta={(t.bidding && priceMeta(t, me)) ?? cs.templates.recurringMeta}
               detail={templateDetail(t)}
-              action={templateActions(t)}
+              action={t.description === null ? templateActions(t) : undefined}
+              footer={
+                t.description === null
+                  ? undefined
+                  : answerLink(t, cs.description.readAndAgree, true)
+              }
               link={links ? templateLink(t.id) : undefined}
             />
           </li>
