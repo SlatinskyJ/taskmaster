@@ -18,6 +18,7 @@ import { Route as AppSchuzkaRouteImport } from './routes/_app/schuzka'
 import { Route as AppSpravaRouteImport } from './routes/_app/sprava'
 import { Route as AppZapsatRouteImport } from './routes/_app/zapsat'
 import { Route as ApiHealthRouteImport } from './routes/api/health'
+import { Route as DevMultiRouteImport } from './routes/dev/multi'
 import { Route as DevUiRouteImport } from './routes/dev/ui'
 import { Route as AppSablonaTemplateIdRouteImport } from './routes/_app/sablona/$templateId'
 import { Route as AppTydenIndexRouteImport } from './routes/_app/tyden/index'
@@ -71,6 +72,11 @@ const ApiHealthRoute = ApiHealthRouteImport.update({
   path: '/api/health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DevMultiRoute = DevMultiRouteImport.update({
+  id: '/dev/multi',
+  path: '/dev/multi',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DevUiRoute = DevUiRouteImport.update({
   id: '/dev/ui',
   path: '/dev/ui',
@@ -121,6 +127,7 @@ export interface FileRoutesByFullPath {
   '/sprava': typeof AppSpravaRoute
   '/zapsat': typeof AppZapsatRoute
   '/api/health': typeof ApiHealthRoute
+  '/dev/multi': typeof DevMultiRoute
   '/dev/ui': typeof DevUiRoute
   '/sablona/$templateId': typeof AppSablonaTemplateIdRoute
   '/tyden/pristi': typeof AppTydenPristiRoute
@@ -138,6 +145,7 @@ export interface FileRoutesByTo {
   '/sprava': typeof AppSpravaRoute
   '/zapsat': typeof AppZapsatRoute
   '/api/health': typeof ApiHealthRoute
+  '/dev/multi': typeof DevMultiRoute
   '/dev/ui': typeof DevUiRoute
   '/': typeof AppIndexRoute
   '/sablona/$templateId': typeof AppSablonaTemplateIdRoute
@@ -158,6 +166,7 @@ export interface FileRoutesById {
   '/_app/sprava': typeof AppSpravaRoute
   '/_app/zapsat': typeof AppZapsatRoute
   '/api/health': typeof ApiHealthRoute
+  '/dev/multi': typeof DevMultiRoute
   '/dev/ui': typeof DevUiRoute
   '/_app/': typeof AppIndexRoute
   '/_app/sablona/$templateId': typeof AppSablonaTemplateIdRoute
@@ -179,6 +188,7 @@ export interface FileRouteTypes {
     | '/sprava'
     | '/zapsat'
     | '/api/health'
+    | '/dev/multi'
     | '/dev/ui'
     | '/sablona/$templateId'
     | '/tyden/pristi'
@@ -196,6 +206,7 @@ export interface FileRouteTypes {
     | '/sprava'
     | '/zapsat'
     | '/api/health'
+    | '/dev/multi'
     | '/dev/ui'
     | '/'
     | '/sablona/$templateId'
@@ -215,6 +226,7 @@ export interface FileRouteTypes {
     | '/_app/sprava'
     | '/_app/zapsat'
     | '/api/health'
+    | '/dev/multi'
     | '/dev/ui'
     | '/_app/'
     | '/_app/sablona/$templateId'
@@ -230,6 +242,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
   ApiHealthRoute: typeof ApiHealthRoute
+  DevMultiRoute: typeof DevMultiRoute
   DevUiRoute: typeof DevUiRoute
 }
 
@@ -296,6 +309,13 @@ declare module '@tanstack/react-router' {
       path: '/api/health'
       fullPath: '/api/health'
       preLoaderRoute: typeof ApiHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev/multi': {
+      id: '/dev/multi'
+      path: '/dev/multi'
+      fullPath: '/dev/multi'
+      preLoaderRoute: typeof DevMultiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/dev/ui': {
@@ -395,6 +415,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
   ApiHealthRoute: ApiHealthRoute,
+  DevMultiRoute: DevMultiRoute,
   DevUiRoute: DevUiRoute,
 }
 export const routeTree = rootRouteImport
