@@ -30,7 +30,7 @@ import { openChangeOf } from './changeRows'
 import { taskHistory } from './history'
 import type { HistoryEntry } from './history'
 import { saveItem, toItem } from './item'
-import { addEntry, openBids, openOffer, threadOf } from './thread'
+import { addEntry, lastBids, openBids, openOffer, threadOf } from './thread'
 
 // One-time tasks and their score agreement (spec §5.2 path 1, §5.5). The rules live in
 // src/domain (agreement + lifecycle); this module loads the rows, asks the domain, and writes
@@ -83,6 +83,7 @@ export function agreementOf(tx: Db | Tx, task: TaskRow): OneTimeAgreement {
       approvedBy: currentApprovers(tx, task),
     },
     book: { bids: openBids(tx, task.id).map((b) => ({ by: b.userId, score: b.score })) },
+    lastBids: lastBids(tx, task.id).map((b) => ({ by: b.userId, score: b.score })),
   }
 }
 
@@ -308,6 +309,11 @@ export interface TaskView {
   bids: { takerId: number; name: string; score: number }[]
   /** Proposed with a bid: the lowest bid and who holds it, as a giver's accept sends it back. */
   lowest: { score: number; bidders: { id: number; name: string }[] } | null
+  /**
+   * Proposed only: each taker's previous bid in this round (open or withdrawn), the number he may
+   * not send again until the giver side changes the offer (Jakub 2026-11-24). Else [].
+   */
+  lastBids: { takerId: number; score: number }[]
   /** The reserving taker (also kept through completion, spec §5.5), or null. */
   reservedBy: { id: number; name: string } | null
   /** Who marked it done, and when (UTC ISO), or null. */
@@ -381,6 +387,7 @@ function views(db: Db | Tx, rows: TaskRow[]): TaskView[] {
         score: lowest.score,
         bidders: lowest.bidders.map((id) => ({ id, name: name(id) })),
       },
+      lastBids: (proposed?.lastBids ?? []).map((b) => ({ takerId: b.by, score: b.score })),
       reservedBy: t.reservedBy === null ? null : { id: t.reservedBy, name: name(t.reservedBy) },
       completedBy: t.completedBy === null ? null : { id: t.completedBy, name: name(t.completedBy) },
       completedAt: t.completedAt,

@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { eq, lte } from 'drizzle-orm'
+import { and, eq, lte, ne } from 'drizzle-orm'
 import { parseIsoUtc, toIsoUtc } from '~/domain/dates'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
@@ -119,6 +119,14 @@ export function deleteSession(tx: Db | Tx, sessionId: number): void {
 /** Ends every session of a user (password reset, spec §6). Returns how many ended. */
 export function endUserSessions(tx: Db | Tx, userId: number): number {
   return tx.delete(sessions).where(eq(sessions.userId, userId)).run().changes
+}
+
+/** Ends every session of a user except `keepId` (own password change, spec §6). Returns how many ended. */
+export function endOtherSessions(tx: Db | Tx, userId: number, keepId: number): number {
+  return tx
+    .delete(sessions)
+    .where(and(eq(sessions.userId, userId), ne(sessions.id, keepId)))
+    .run().changes
 }
 
 /** Deletes sessions past their expiry. Called on login, so the table can't grow forever. */

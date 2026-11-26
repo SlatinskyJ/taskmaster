@@ -47,7 +47,14 @@ export interface MeetingTaker {
 }
 
 export type Meeting =
-  | { period: null }
+  | {
+      period: null
+      /**
+       * The running week's cutoff (ISO UTC) when only the last-day rule keeps it from the meeting
+       * (#211): the screen says when the week ends. Null when there is nothing to settle at all.
+       */
+      runningCutoffAt: string | null
+    }
   | {
       period: {
         id: number
@@ -93,10 +100,11 @@ function settledIds(db: Db | Tx): Set<PeriodId> {
 
 /**
  * Whether an ended week still waits for its meeting (#48, ruling 8): the week the meeting would
- * settle next has ended. The running week, settleable early, does not count.
+ * settle next has ended. The running week never counts, so the last-day rule (#211) changes
+ * nothing here: it is left off.
  */
 export function weekWaiting(db: Db | Tx, now: Date): boolean {
-  const target = periodToSettle(listPeriods(db), settledIds(db), now)
+  const target = periodToSettle(listPeriods(db), settledIds(db), now, false)
   return target !== undefined && !isRunning(target, now)
 }
 
@@ -142,16 +150,26 @@ function preview(
   return ok({ end, pending, records })
 }
 
-/** What the meeting screen shows now (read-only). `{ period: null }` = nothing to settle. */
-export function getMeeting(db: Db | Tx, now: Date): Meeting {
+/**
+ * What the meeting screen shows now (read-only). `period: null` = nothing to settle; then
+ * `runningCutoffAt` is set when the running week could be settled but for `lastDayOnly` (the
+ * `settleLastDay` switch, #211: only on the week's last day).
+ */
+export function getMeeting(db: Db | Tx, now: Date, lastDayOnly: boolean): Meeting {
   const people = listPeople(db)
-  const target = periodToSettle(listPeriods(db), settledIds(db), now)
+  const periods = listPeriods(db)
+  const settled = settledIds(db)
+  const target = periodToSettle(periods, settled, now, lastDayOnly)
   // The preview needs a giver for the domain's `settle`; with none there is nobody to settle.
   const giver = people.find(isActiveGiver)
   // No takers yet (accounts still being set up): nothing to settle, so no week is ended for it.
-  if (!target || !giver || takersOf(db, people).length === 0) return { period: null }
+  if (!giver || takersOf(db, people).length === 0) return NOTHING
+  if (!target) {
+    const waiting = lastDayOnly ? periodToSettle(periods, settled, now, false) : undefined
+    return { period: null, runningCutoffAt: waiting ? toIsoUtc(waiting.cutoffAt) : null }
+  }
   const p = preview(db, people, giver.id, target, now)
-  if (!p.ok) return { period: null }
+  if (!p.ok) return NOTHING
   return {
     period: {
       id: target.id,
@@ -173,6 +191,8 @@ export function getMeeting(db: Db | Tx, now: Date): Meeting {
   }
 }
 
+const NOTHING: Meeting = { period: null, runningCutoffAt: null }
+
 function sameTotals(records: readonly SettlementRecord[], shown: readonly ShownTotal[]): boolean {
   if (records.length !== shown.length) return false
   return records.every((r) =>
@@ -191,7 +211,8 @@ class Refused extends Error {
  * that period is the one to settle now, nothing is pending before its end, and the totals are
  * unchanged. Writes a final record and a `settlement.created` audit entry per active taker; if
  * the week is still running, ends it now and starts the next one with the default week stored
- * at that moment (read inside this transaction). Refused with `no_takers` while there is no active taker: settled
+ * at that moment (read inside this transaction). `lastDayOnly` (#211): the running week only on its
+ * last day, else `nothing_to_settle`. Refused with `no_takers` while there is no active taker: settled
  * is read from the records, so a week settled with none would be offered again forever. One
  * transaction.
  */
@@ -201,6 +222,7 @@ export function settlePeriod(
   periodId: number,
   shown: readonly ShownTotal[],
   now: Date,
+  lastDayOnly: boolean,
 ): Result<{ period: Period; records: SettlementRow[]; next: Period | null }, SettleError> {
   try {
     return db.transaction((tx) => {
@@ -211,7 +233,7 @@ export function settlePeriod(
       if (!periods.some((p) => p.id === periodId)) return fail('not_found')
       const settled = settledIds(tx)
       if (settled.has(periodId)) return fail('already_settled')
-      const target = periodToSettle(periods, settled, now)
+      const target = periodToSettle(periods, settled, now, lastDayOnly)
       if (!target) return fail('nothing_to_settle')
       if (target.id !== periodId) return fail('wrong_period')
       const p = preview(tx, people, giverId, target, now)

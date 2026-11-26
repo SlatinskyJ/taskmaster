@@ -65,6 +65,7 @@ const view = (over: Partial<TaskView>): TaskView => ({
   approverIds: [2, 3],
   bids: [],
   lowest: null,
+  lastBids: [],
   reservedBy: { id: 3, name: 'Starší' },
   completedBy: null,
   completedAt: null,
