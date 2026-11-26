@@ -1,8 +1,7 @@
 import { useRef, useState } from 'react'
-import type { AdminOutcome } from '~/components/disputes/disputeCalls'
 import { sectionLabelClass } from '~/components/shell/SectionLabel'
-import { issueInput } from '~/components/suggestions/suggestionForms'
-import type { NotSaved } from '~/components/suggestions/suggestionForms'
+import { afterSend, canSendIssue, issueInput } from '~/components/suggestions/suggestionForms'
+import type { SendOutcome } from '~/components/suggestions/suggestionForms'
 import { Button } from '~/components/ui/button'
 import {
   Drawer,
@@ -25,7 +24,6 @@ import type { AdminSuggestion } from '~/server/suggestions/functions'
 
 const t = cs.suggestions
 
-export type SendOutcome = AdminOutcome | NotSaved
 export interface IssueFields {
   title: string
   body: string
@@ -49,13 +47,13 @@ export function SendForm({
   onField: (patch: Partial<IssueFields>) => void
   onSend: () => void
 }) {
-  const blocked = !canSend || notSavedUrl !== null
+  const ready = canSendIssue({ canSend, busy, notSavedUrl })
   return (
     <form
       className="flex min-h-0 flex-1 flex-col"
       onSubmit={(e) => {
         e.preventDefault()
-        if (!blocked && !busy) onSend()
+        if (ready) onSend()
       }}
     >
       <DrawerBody className="flex flex-1 flex-col gap-3 pb-1">
@@ -114,13 +112,7 @@ export function SendForm({
             {error}
           </p>
         )}
-        <Button
-          type="submit"
-          size="lg"
-          disabled={blocked || busy}
-          aria-busy={busy}
-          className="w-full"
-        >
+        <Button type="submit" size="lg" disabled={!ready} aria-busy={busy} className="w-full">
           {busy ? t.sending : t.sendIssue}
         </Button>
       </DrawerFooter>
@@ -156,12 +148,10 @@ export function SendPreview({
     const outcome = await onSend(issueInput(item, fields))
     sending.current = false
     setBusy(false)
-    if ('notSaved' in outcome) setNotSavedUrl(outcome.url)
-    else if (!outcome.ok && !outcome.reload) {
-      setError(outcome.message)
-      return
-    }
-    await onSettled(outcome)
+    const next = afterSend(outcome)
+    setNotSavedUrl(next.notSavedUrl)
+    setError(next.error)
+    if (next.settle) await onSettled(outcome)
   }
 
   return (

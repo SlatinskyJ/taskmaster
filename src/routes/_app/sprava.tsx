@@ -10,9 +10,9 @@ import { FixDrawer } from '~/components/admin/FixDrawer'
 import { CloseSuggestionDialog } from '~/components/admin/CloseSuggestionDialog'
 import type { CloseMove } from '~/components/admin/CloseSuggestionDialog'
 import { SendSuggestionDrawer } from '~/components/admin/SendSuggestionDrawer'
-import type { SendOutcome } from '~/components/admin/SendSuggestionDrawer'
+import type { SendOutcome } from '~/components/suggestions/suggestionForms'
 import { loadAdminSuggestions, SuggestionsCard } from '~/components/admin/SuggestionsCard'
-import { sendClose, sendIssue } from '~/components/suggestions/suggestionForms'
+import { sendClose, sendIssue, settleSend } from '~/components/suggestions/suggestionForms'
 import type { FixStart } from '~/components/admin/fixDraft'
 import { sendDismiss } from '~/components/disputes/disputeCalls'
 import { adminDisputeLines } from '~/components/disputes/disputeProps'
@@ -160,14 +160,10 @@ function Sprava() {
   }
 
   async function sendSettled(outcome: SendOutcome) {
-    if ('notSaved' in outcome) {
-      // The issue exists: the sheet stays with its link, the list catches up.
-      await router.invalidate()
-      return
-    }
-    setSendOpen(false)
-    if (outcome.ok) toast.success(cs.suggestions.sentToast)
-    else toast.error(outcome.message)
+    // Made but not saved: the sheet stays with its link while the list catches up.
+    const next = settleSend(outcome)
+    if (next.close) setSendOpen(false)
+    if (next.toast) toast[next.toast.kind](next.toast.text)
     await router.invalidate()
   }
 

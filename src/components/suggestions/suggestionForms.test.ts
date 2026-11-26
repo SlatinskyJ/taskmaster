@@ -3,11 +3,14 @@ import { issueDraft } from '~/domain'
 import { cs } from '~/lib/strings'
 import type { AdminSuggestion } from '~/server/suggestions/functions'
 import {
+  afterSend,
+  canSendIssue,
   checkSuggestion,
   issueInput,
   sendClose,
   sendIssue,
   sendNewSuggestion,
+  settleSend,
 } from './suggestionForms'
 
 // The sheets' checks and the one place the suggestion screens reach the server (#247).
@@ -158,6 +161,85 @@ describe('sendIssue', () => {
       ok: false,
       message: e.generic,
       reload: false,
+    })
+  })
+})
+
+describe('afterSend: what the send sheet does with the answer', () => {
+  const url = 'https://github.com/SlatinskyJ/taskmaster/issues/400'
+
+  it('ok: the page settles (closes, toasts), no error, no link', () => {
+    expect(afterSend({ ok: true })).toEqual({ notSavedUrl: null, error: null, settle: true })
+  })
+
+  it('a stale refusal: the page settles (closes, toasts, reloads)', () => {
+    expect(afterSend({ ok: false, message: t.stale, reload: true })).toEqual({
+      notSavedUrl: null,
+      error: null,
+      settle: true,
+    })
+  })
+
+  it('another refusal stays in the sheet with its message', () => {
+    expect(afterSend({ ok: false, message: e.github_failed, reload: false })).toEqual({
+      notSavedUrl: null,
+      error: e.github_failed,
+      settle: false,
+    })
+  })
+
+  it('sent_not_saved shows the link and lets the page reload the list', () => {
+    expect(afterSend({ ok: false, notSaved: true, url })).toEqual({
+      notSavedUrl: url,
+      error: null,
+      settle: true,
+    })
+  })
+
+  it('after sent_not_saved a second send is blocked', () => {
+    const { notSavedUrl } = afterSend({ ok: false, notSaved: true, url })
+    expect(canSendIssue({ canSend: true, busy: false, notSavedUrl })).toBe(false)
+  })
+
+  it('after another refusal the admin can send again', () => {
+    const { notSavedUrl } = afterSend({ ok: false, message: e.busy, reload: false })
+    expect(canSendIssue({ canSend: true, busy: false, notSavedUrl })).toBe(true)
+  })
+})
+
+describe("canSendIssue: the send sheet's guard", () => {
+  it('with a token, not busy, nothing sent yet: may send', () => {
+    expect(canSendIssue({ canSend: true, busy: false, notSavedUrl: null })).toBe(true)
+  })
+
+  it.each([
+    ['no token', { canSend: false, busy: false, notSavedUrl: null }],
+    ['busy', { canSend: true, busy: true, notSavedUrl: null }],
+    ['issue made, not saved', { canSend: true, busy: false, notSavedUrl: 'https://x' }],
+  ])('%s: blocked', (_, state) => {
+    expect(canSendIssue(state)).toBe(false)
+  })
+})
+
+describe('settleSend: what Správa does once the sheet settles', () => {
+  it('sent: closes the sheet with the sent toast', () => {
+    expect(settleSend({ ok: true })).toEqual({
+      close: true,
+      toast: { kind: 'success', text: t.sentToast },
+    })
+  })
+
+  it('stale: closes the sheet with the stale toast', () => {
+    expect(settleSend({ ok: false, message: t.stale, reload: true })).toEqual({
+      close: true,
+      toast: { kind: 'error', text: t.stale },
+    })
+  })
+
+  it('issue made, not saved: the sheet stays open with its link, no toast', () => {
+    expect(settleSend({ ok: false, notSaved: true, url: 'https://x' })).toEqual({
+      close: false,
+      toast: null,
     })
   })
 })

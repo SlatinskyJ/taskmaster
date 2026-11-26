@@ -116,6 +116,46 @@ export async function sendIssue(
   }
 }
 
+export type SendOutcome = AdminOutcome | NotSaved
+
+/** The send sheet's guard: never without a token, while sending, or once GitHub has the issue. */
+export function canSendIssue(s: {
+  canSend: boolean
+  busy: boolean
+  notSavedUrl: string | null
+}): boolean {
+  return s.canSend && !s.busy && s.notSavedUrl === null
+}
+
+/**
+ * The send sheet's next state from the server's answer. `settle` hands it to the page (sent,
+ * stale, or made but not saved); any other refusal stays in the sheet with its message.
+ */
+export function afterSend(outcome: SendOutcome): {
+  notSavedUrl: string | null
+  error: string | null
+  settle: boolean
+} {
+  if ('notSaved' in outcome) return { notSavedUrl: outcome.url, error: null, settle: true }
+  if (!outcome.ok && !outcome.reload)
+    return { notSavedUrl: null, error: outcome.message, settle: false }
+  return { notSavedUrl: null, error: null, settle: true }
+}
+
+/** What Správa does once the send sheet settles. Made but not saved: the sheet keeps its link. */
+export function settleSend(outcome: SendOutcome): {
+  close: boolean
+  toast: { kind: 'success' | 'error'; text: string } | null
+} {
+  if ('notSaved' in outcome) return { close: false, toast: null }
+  return {
+    close: true,
+    toast: outcome.ok
+      ? { kind: 'success', text: cs.suggestions.sentToast }
+      : { kind: 'error', text: outcome.message },
+  }
+}
+
 /** The send request from the admin's edited fields (never the draft again). */
 export function issueInput(
   item: AdminSuggestion,
