@@ -93,6 +93,8 @@ export const SUITES: readonly Suite[] = [
   // The multi-user viewer (#265): logs frames in and out and proposes tasks, so its own server.
   // `week`: the boys' Týden tab is on.
   { name: 'multi', spec: 'multi.spec.ts', seed: 'week' },
+  // Profil → Aplikace (#302): a fake install event. Read-only: changes no data.
+  { name: 'install', spec: 'install.spec.ts', seed: 'family' },
 ]
 
 /** Passkeys on (localhost) for the `on` suite only, at its own port. */
