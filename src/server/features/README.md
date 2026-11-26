@@ -16,6 +16,7 @@ only on its last day, #211), on: Jakub asked for it to be flipped at merge.
 rules of existing copies on the next scheduler tick, so leave it off for one tick (15 min)
 before turning it on again.
 0040 adds `suggestions` (in-app suggestions, #247), off.
+0041 adds `liveChanges` (live change notices: the event stream, #299), off.
 
 - `flags.ts`: `getFlags(db)`. A switch with no row reads as off; an unknown row is ignored.
 - `functions.ts`: `getFeaturesFn`, signed-in users only. The app shell (`src/routes/_app.tsx`)

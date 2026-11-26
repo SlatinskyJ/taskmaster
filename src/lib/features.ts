@@ -38,6 +38,8 @@ export const FEATURE_KEYS = [
   'weekPlan',
   /** Suggestions from Profil, sent to GitHub by the admin (#247). */
   'suggestions',
+  /** Live change notices (#299): the server's event stream and, with its screens, the banner. */
+  'liveChanges',
 ] as const
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number]
@@ -63,6 +65,7 @@ export const NO_FEATURES: Readonly<Features> = {
   descriptions: false,
   weekPlan: false,
   suggestions: false,
+  liveChanges: false,
 }
 
 /** Every switch on: the full app as designed (UI doc §6). */
@@ -83,4 +86,5 @@ export const ALL_FEATURES: Readonly<Features> = {
   descriptions: true,
   weekPlan: true,
   suggestions: true,
+  liveChanges: true,
 }

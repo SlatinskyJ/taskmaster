@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm'
 import type { Db } from '~/server/db'
 import { auditLog } from '~/server/db/schema'
 import type { AuditAction, EntityType } from './actions'
@@ -57,12 +58,49 @@ function toJson(value: unknown): string | null {
 /** Rejects promise-returning changes at compile time (better-sqlite3 transactions are sync). */
 type NotAsync<T> = T extends PromiseLike<unknown> ? never : T
 
+/** What a write listener hears: the new entry's id and its change (`null`: it starts one). */
+export interface AuditWritten {
+  id: number
+  changeId: number | null
+}
+
+type AuditListener = (row: AuditWritten) => void
+const listeners = new Set<AuditListener>()
+
+/**
+ * Calls `listener` synchronously after every audit insert, inside the writer's transaction
+ * (which may still roll back: a listener must read the log only after the current synchronous
+ * run, e.g. in a microtask). Returns the unsubscribe. A throwing listener is logged and never
+ * breaks the write. The live hub (~/server/live) is the one user.
+ */
+export function onAuditWritten(listener: AuditListener): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
+/**
+ * The first entry of the current change: one change is one synchronous run (README). Reset in a
+ * microtask, so the next request or tick starts a new change.
+ */
+let currentChange: number | null = null
+
+/** The run's change is still in the log, i.e. its first entry was not rolled back. */
+function changeAlive(tx: Tx, id: number): boolean {
+  return (
+    tx.select({ id: auditLog.id }).from(auditLog).where(eq(auditLog.id, id)).get() !== undefined
+  )
+}
+
 /**
  * Appends one audit entry inside an open transaction. Use it when one change needs several
  * entries (e.g. settlement per taker); otherwise prefer `withAudit`.
  */
 export function writeAudit(tx: Tx, entry: AuditEntry): void {
-  tx.insert(auditLog)
+  const changeId = currentChange !== null && changeAlive(tx, currentChange) ? currentChange : null
+  const { id } = tx
+    .insert(auditLog)
     .values({
       at: (entry.at ?? new Date()).toISOString(),
       actorKind: entry.actor.kind,
@@ -73,8 +111,25 @@ export function writeAudit(tx: Tx, entry: AuditEntry): void {
       before: toJson(entry.before),
       after: toJson(entry.after),
       reason: entry.reason ?? null,
+      changeId,
     })
-    .run()
+    .returning({ id: auditLog.id })
+    .get()
+  if (changeId === null) {
+    if (currentChange === null) {
+      queueMicrotask(() => {
+        currentChange = null
+      })
+    }
+    currentChange = id
+  }
+  for (const listener of listeners) {
+    try {
+      listener({ id, changeId })
+    } catch (err) {
+      console.error('[audit] write listener failed', err)
+    }
+  }
 }
 
 /**

@@ -94,6 +94,8 @@ describe('sendSuggestion', () => {
           body,
         }),
         reason: null,
+        // Sent after the GitHub call's await: its own change, not the creation's.
+        changeId: null,
       },
     ])
     expect(isSending(f.id)).toBe(false)
