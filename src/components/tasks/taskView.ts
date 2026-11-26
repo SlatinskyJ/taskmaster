@@ -1,4 +1,4 @@
-import { toPragueWallTime } from '~/domain/dates'
+import { parseIsoUtc, toPragueWallTime } from '~/domain/dates'
 import type { Role } from '~/domain/parties'
 import { formatDue, formatPragueTime, formatSince } from '~/lib/formatDate'
 import { cs } from '~/lib/strings'
@@ -68,6 +68,20 @@ export function canWorkOn(task: Pick<TaskView, 'status' | 'reservedBy'>, me: Me)
 /** Rezervovat and Hotovo on a free task's page (spec §5.4, #195): a brother, on an open task. */
 export function canTakeFree(task: Pick<TaskView, 'status'>, me: Me): boolean {
   return me.role === 'taker' && task.status === 'open'
+}
+
+/**
+ * A week copy of a later day (#257, spec §5.12): it can be reserved or released already, but
+ * Hotovo only from its day on.
+ */
+export function laterDay(task: Pick<TaskView, 'planDay'>, now: Date): boolean {
+  return task.planDay !== null && parseIsoUtc(task.planDay).getTime() > now.getTime()
+}
+
+/** A week copy's day as its row shows it: the short weekday, capitalised ("Čt"). */
+export function dayLabel(planDay: string): string {
+  const day = cs.weekdays[toPragueWallTime(parseIsoUtc(planDay)).weekday]
+  return day.charAt(0).toUpperCase() + day.slice(1)
 }
 
 /** ✓ Schválit / ✕ Zamítnout (spec §5.5, #206): a parent, on done work not yet confirmed. */

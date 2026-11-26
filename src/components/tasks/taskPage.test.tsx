@@ -97,6 +97,7 @@ const { Route } = await import('~/routes/_app/ukol/$taskId')
 const { getItemMarkFn } = await import('~/server/disputes/functions')
 
 const reserved: TaskView = {
+  planDay: null,
   id: 1,
   title: 'Vyluxovat celý obývák a chodbu',
   description: null,
@@ -380,6 +381,13 @@ describe('task page: Rezervovat on a free task (#195), the chore link (#205)', (
     const parent = render(TATA, free)
     expect(parent).not.toContain(`>${cs.work.reserve}<`)
     expect(parent).not.toContain(`>${cs.work.done}<`)
+  })
+
+  it('a later free copy shows Rezervovat but no Hotovo (#257)', () => {
+    const later: TaskView = { ...copy, origin: 'scheduled', planDay: '2098-12-31T23:00:00.000Z' }
+    const html = render(STARSI, later)
+    expect(html).toContain(`>${cs.work.reserve}<`)
+    expect(html).not.toContain(`>${cs.work.done}<`)
   })
 
   it('the other brother on a task his brother reserved: neither', () => {

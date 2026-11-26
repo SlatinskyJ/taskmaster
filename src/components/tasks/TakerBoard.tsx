@@ -4,7 +4,7 @@ import { cs } from '~/lib/strings'
 import type { TaskView } from '~/server/tasks/functions'
 import { taskLink } from './rowLink'
 import { TaskLink } from './TaskLink'
-import { canWorkOn, instanceMeta, taskChipState } from './taskView'
+import { canWorkOn, dayLabel, instanceMeta, laterDay, taskChipState } from './taskView'
 import { TaskRow } from './TaskRow'
 import { useTaskAction } from './useTaskAction'
 import { DoneButton, ReserveButton, WorkButtons } from './WorkButtons'
@@ -16,7 +16,8 @@ import { DoneButton, ReserveButton, WorkButtons } from './WorkButtons'
  * 44 px icon button (↶ Uvolnit on "Moje", Rezervovat on "Volné"), so a long name and the chip
  * read in full at 360 px (mockup Main, #148). The task page keeps both labelled. With `rebid`
  * (switch `reopenBidding`, #212) a free one-time task's name links to its page, where a brother
- * reopens or answers the bidding.
+ * reopens or answers the bidding. A later day's week copy he reserved (#257) shows its weekday
+ * and only Uvolnit: Hotovo comes on its day.
  */
 export function TakerBoard({
   items,
@@ -51,8 +52,14 @@ export function TakerBoard({
                     name={t.title}
                     state="reserved"
                     points={t.score}
-                    meta={instanceMeta(t, now)}
-                    action={<WorkButtons task={t} busy={busy} run={run} />}
+                    meta={
+                      t.planDay !== null && laterDay(t, now)
+                        ? dayLabel(t.planDay)
+                        : instanceMeta(t, now)
+                    }
+                    action={
+                      <WorkButtons task={t} busy={busy} run={run} canFinish={!laterDay(t, now)} />
+                    }
                     link={links ? taskLink(t.id) : undefined}
                   />
                 ) : (

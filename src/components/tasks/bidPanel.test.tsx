@@ -61,6 +61,7 @@ vi.mock('@tanstack/react-router', () => ({
 const STARSI = { id: 3, role: 'taker' } as const
 const TATA = { id: 2, role: 'giver' } as const
 const view = (over: Partial<TaskView>): TaskView => ({
+  planDay: null,
   id: 1,
   title: 'Umýt auto',
   description: null,

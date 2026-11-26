@@ -737,6 +737,7 @@ describe('what screens get (PR B)', () => {
         ],
         scoreChange: null,
         rebidding: null,
+        planDay: null,
       },
       thread: [
         {

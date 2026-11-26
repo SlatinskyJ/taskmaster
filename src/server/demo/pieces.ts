@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm'
 import type { Tx } from '~/server/audit'
 import { nextPeriod } from '~/domain'
+import { startOfPragueDay } from '~/domain/dates'
 import { settlements, tasks as taskTable, templates as templateTable } from '~/server/db/schema'
 import { adjustPointsIn, correctSettlementIn } from '~/server/corrections'
 import { changeDescriptionOf } from '~/server/descriptions/descriptions'
@@ -9,6 +10,7 @@ import {
   createOnDemandInstance,
   createScheduledInstances,
   expireOverdueInstances,
+  makeWeekCopies,
   selfLogInstance,
 } from '~/server/instances'
 import {
@@ -592,4 +594,49 @@ export const proposals: Piece = ({ tx, id, now }) => {
     'propose default week',
     proposeDefaultsChange(tx, id('tata'), { ...defaults, lengthDays: 14, levels }, now),
   )
+}
+
+/** The week plan's chores (#257): one every day, one twice a week with a deadline. */
+export const WEEK_CHORES: readonly NewTemplate[] = [
+  {
+    title: 'Nakrmit kočku',
+    score: 3,
+    approvalRequired: true,
+    schedule: { days: [0, 1, 2, 3, 4, 5, 6], time: null },
+    deadline: null,
+  },
+  {
+    title: 'Vynést tříděný odpad',
+    score: 4,
+    approvalRequired: true,
+    schedule: { days: [2, 5], time: { hour: 18, minute: 0 } },
+    deadline: { dayOffset: 1, due: { hour: 7, minute: 0 }, graceMinutes: 60 },
+  },
+]
+
+/**
+ * #257: Táta's two week-plan chores, agreed by Starší, and the running week's copies of them
+ * (the `weekPlan` switch is set after the pieces, so this piece makes them itself). With no week
+ * running yet it starts one at today's 00:00 Prague and agrees the chores then, so today's slot
+ * is inside the window whatever the hour; inside a seed that already runs a week (`demo`) they
+ * are agreed now, so the audit log stays in time order, and their copies start with the next slot.
+ */
+export const weekChores: Piece = ({ tx, id, now }) => {
+  const defaults = getPeriodDefaults(tx)
+  let agreeAt = now
+  if (!currentPeriod(tx, now)) {
+    agreeAt = startOfPragueDay(now)
+    rollPeriods(tx, agreeAt, defaults)
+  }
+  const made = WEEK_CHORES.map((input) => {
+    const t = step(`template "${input.title}"`, createTemplateIn(tx, id('tata'), input, agreeAt))
+    step(
+      `approve "${input.title}"`,
+      approveTemplateScoreIn(tx, id('starsi'), t.id, t.score, agreeAt),
+    )
+    return t
+  })
+  rollPeriods(tx, now, defaults)
+  // Only these chores: the other pieces' scheduled chores keep their old-rule instances.
+  for (const t of made) makeWeekCopies(tx, now, { templateId: t.id, log: SEED_LOG })
 }

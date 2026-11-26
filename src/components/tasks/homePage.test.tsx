@@ -197,6 +197,7 @@ describe('Domů', () => {
     // Mamka's new price on a one-time task waits for Táta; it is not behind any launch switch.
     features.recurring = false
     const change: TaskView = {
+      planDay: null,
       id: 7,
       title: 'Vyluxovat celý obývák a chodbu',
       description: null,
@@ -397,6 +398,7 @@ describe('Giver Domů (GHome, #41)', () => {
     { id: 5, name: 'Mladší' },
   ]
   const task = (over: Record<string, unknown>) => ({
+    planDay: null,
     id: 1,
     title: 'Úkol',
     status: 'proposed',
@@ -571,6 +573,7 @@ describe('switch openRows (#205): every row opens its page', () => {
   const tata = { id: 2, role: 'giver', displayName: 'Táta' } as const
   const starsi = { id: 4, role: 'taker', displayName: 'Starší' } as const
   const task = (over: Partial<TaskView>) => ({
+    planDay: null,
     id: 1,
     title: 'Úkol',
     status: 'proposed',

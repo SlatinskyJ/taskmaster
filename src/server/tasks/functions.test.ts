@@ -13,6 +13,7 @@ import {
   proposeTaskScoreChangeHandler,
   reopenBiddingHandler,
   reserveTaskHandler,
+  shown,
   turnDownBidsHandler,
   withdrawBidHandler,
   taskDetailHandler,
@@ -284,5 +285,14 @@ describe('the weekPlan switch on Hotovo and Rezervovat (#257)', () => {
       id: taskId,
       status: 'reserved',
     })
+  })
+})
+
+describe('the views a screen reads (shown, #257)', () => {
+  it("listBoardFn's opts (shown(db)) set weekPlanAt only with the switch on", () => {
+    const f = weekFamily()
+    expect(shown(f.db, WED_NOON)).toEqual({ descriptions: false, weekPlanAt: WED_NOON })
+    setWeekPlan(f.db, false)
+    expect(shown(f.db, WED_NOON)).toEqual({ descriptions: false, weekPlanAt: undefined })
   })
 })

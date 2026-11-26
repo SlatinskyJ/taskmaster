@@ -9,8 +9,10 @@ import {
   canWorkOn,
   changeAnswer,
   changeHint,
+  dayLabel,
   detailMeta,
   instanceMeta,
+  laterDay,
   lowestText,
   myBid,
   refuseButton,
@@ -29,6 +31,7 @@ import type { BidAction, BidCall } from './taskView'
 // Every decision the bidding screens make (#34). Components only render what these return.
 
 const view = (over: Partial<TaskView>): TaskView => ({
+  planDay: null,
   id: 1,
   title: 'Vyluxovat celý obývák a chodbu',
   description: null,
@@ -629,5 +632,25 @@ describe('taker calls carry the text the page showed (#207)', () => {
       score: 22,
       seenDescription: description,
     })
+  })
+})
+
+describe("a week copy's day (#257)", () => {
+  // Thursday 2026-12-03 Prague starts 2026-12-02T23:00Z.
+  const THURSDAY = '2026-12-02T23:00:00.000Z'
+  const WEDNESDAY = '2026-12-01T23:00:00.000Z'
+  const wedNoon = new Date('2026-12-02T11:00:00.000Z')
+
+  it("laterDay / dayLabel: Thursday's day on Wednesday → true, 'Čt'; today's → false", () => {
+    expect(laterDay({ planDay: THURSDAY }, wedNoon)).toBe(true)
+    expect(dayLabel(THURSDAY)).toBe('Čt')
+    expect(laterDay({ planDay: WEDNESDAY }, wedNoon)).toBe(false)
+    expect(dayLabel(WEDNESDAY)).toBe('St')
+  })
+
+  it('no day is never later; the day is later until its first instant', () => {
+    expect(laterDay({ planDay: null }, wedNoon)).toBe(false)
+    expect(laterDay({ planDay: THURSDAY }, new Date(Date.parse(THURSDAY) - 1))).toBe(true)
+    expect(laterDay({ planDay: THURSDAY }, new Date(THURSDAY))).toBe(false)
   })
 })
