@@ -92,7 +92,13 @@ function SwitchConfirmDialog({
   const [busy, setBusy] = useState(false)
   const copy = flip ? confirmCopy(flip.key, flip.turnOn) : null
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        // Stays open while the switch is being saved, so the outcome lands on a known state.
+        if (!busy) onOpenChange(next)
+      }}
+    >
       <DialogContent>
         {flip && copy && (
           <div className="grid gap-4">
@@ -102,7 +108,7 @@ function SwitchConfirmDialog({
             </DialogHeader>
             <DialogFooter>
               <DialogClose asChild>
-                <Button type="button" variant="ghost">
+                <Button type="button" variant="ghost" disabled={busy}>
                   {cs.admin.cancel}
                 </Button>
               </DialogClose>
