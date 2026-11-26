@@ -101,12 +101,15 @@ export function priceButtons(t: TemplateView, me: Me): PriceButton[] {
 }
 
 /**
- * The no button on a proposed chore (#208 rules): a brother's Nechci closes his own bid; a
- * parent's turn-down closes every bid he sees (sent back exactly), the offer stays.
+ * The no button (#208 rules): a brother's Nechci closes his own bid; a parent's turn-down closes
+ * every bid he sees (sent back exactly). On a proposed chore (#209) the offer stays; on an agreed
+ * chore's price change (#232, only with `refusals`: switch `bidRefusals`) the old price stays.
  */
-export function priceRefusal(t: TemplateView, me: Me): PriceButton | null {
-  if (!canBid(t, me) || !t.bidding) return null
-  const { bids, offer } = t.bidding
+export function priceRefusal(t: TemplateView, me: Me, refusals = false): PriceButton | null {
+  const first = canBid(t, me) ? t.bidding : null
+  const book = first ?? (refusals && canChange(t, me) ? t.change : null)
+  if (!book) return null
+  const { bids } = book
   if (me.role === 'taker') {
     if (myTemplateBid(t, me) === null) return null
     return {
@@ -118,18 +121,27 @@ export function priceRefusal(t: TemplateView, me: Me): PriceButton | null {
     }
   }
   if (bids.length === 0) return null
+  // A price change is turned down only to a parents' offer (Jakub 2026-11-26).
+  const offer = first ? null : t.change?.offer
+  if (!first && !offer) return null
   return {
     key: 'turnDown',
     action: 'turnDown',
     data: { templateId: t.id, bids: bids.map((b) => ({ takerId: b.takerId, score: b.score })) },
     label: cs.bids.turnDown,
-    hint: cs.bids.turnDownHint(offer?.score ?? t.score),
+    hint: offer
+      ? cs.bids.turnDownChangeHint(t.score, offer.score)
+      : cs.bids.turnDownHint(first?.offer?.score ?? t.score),
   }
 }
 
-/** A brother's last bid since the offer last changed: the same number is refused again. */
+/**
+ * A brother's last bid since bids last reset or the offer last changed: the same number is
+ * refused again. A proposed chore's bidding carries its own (#209), an agreed chore's view its
+ * price change's (#232).
+ */
 const lastBid = (t: TemplateView, me: Me) =>
-  t.bidding?.lastBids.find((b) => b.takerId === me.id)?.score ?? null
+  (t.bidding?.lastBids ?? t.lastBids).find((b) => b.takerId === me.id)?.score ?? null
 
 /** The send button on a proposed chore: a brother bids, a parent counters or, at a bid, accepts. */
 function firstPriceSend(t: TemplateView, me: Me, value: number): PriceSend {
@@ -166,12 +178,13 @@ export function priceSend(t: TemplateView, me: Me, value: number): PriceSend | n
   const data = { templateId: t.id, score: value }
   const offer = t.change?.offer?.score ?? null
   if (me.role === 'taker') {
+    const same = value === lastBid(t, me)
     return {
       action: 'bid',
       data,
       label: cs.bids.send,
-      hint: cs.bids.bidHint,
-      disabled: value === t.score || value === offer || value === myTemplateBid(t, me),
+      hint: same ? cs.bids.sameAgainHint : cs.bids.bidHint,
+      disabled: value === t.score || value === offer || same || value === myTemplateBid(t, me),
     }
   }
   const accepts = value === t.change?.lowest

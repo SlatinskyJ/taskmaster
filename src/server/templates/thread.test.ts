@@ -5,7 +5,7 @@ import { templates } from '~/server/db/schema'
 import { addGiver, family, T1, T2 } from '~/server/tasks/testing'
 import { agreementOf } from './templates'
 import { agreedTemplate, threadRows } from './testing'
-import { addEntry, closeThread, lastBids, openRows } from './thread'
+import { addEntry, closeThread, lastBids, markBidsFrom, openRows } from './thread'
 
 function setup() {
   const f = family()
@@ -63,11 +63,28 @@ describe('template thread rows', () => {
     expect(threadRows(s.f.db, s.id).map((r) => r[3])).toEqual(['accepted', 'closed', 'closed'])
   })
 
+  it('markBidsFrom moves the floor to the newest row and returns it before and after (#232)', () => {
+    const s = setup()
+    const floor = () =>
+      s.f.db.select().from(templates).where(eq(templates.id, s.id)).get()?.bidsFrom
+    expect(s.tx((t) => markBidsFrom(t, s.id))).toEqual({ before: 0, after: 0 })
+    s.add(s.f.starsi, 'taker', 4)
+    const newest = s.add(s.f.mladsi, 'taker', 6).entry.id
+    expect(s.tx((t) => markBidsFrom(t, s.id))).toEqual({ before: 0, after: newest })
+    expect(floor()).toBe(newest)
+    expect(lastBids(s.f.db, s.id, newest)).toEqual([])
+  })
+
   it('agreementOf reads the open offer and bids as the change in flight', () => {
     const s = setup()
     const active = row(s)
     if (!active) throw new Error('no template')
-    expect(agreementOf(s.f.db, active)).toEqual({ status: 'agreed', score: 3, change: null })
+    expect(agreementOf(s.f.db, active)).toEqual({
+      status: 'agreed',
+      score: 3,
+      change: null,
+      lastBids: [],
+    })
     s.add(s.f.starsi, 'taker', 4)
     s.add(s.f.mladsi, 'taker', 6)
     s.add(s.f.tata, 'giver', 5)
@@ -81,6 +98,8 @@ describe('template thread rows', () => {
           { by: s.f.mladsi, score: 6 },
         ],
       },
+      // The newer giver row is the floor: neither bid blocks its number (#232).
+      lastBids: [],
     })
   })
 
@@ -93,6 +112,7 @@ describe('template thread rows', () => {
       status: 'agreed',
       score: 3,
       change: { offer: null, bids: [{ by: s.f.starsi, score: 4 }] },
+      lastBids: [{ by: s.f.starsi, score: 4 }],
     })
   })
 })

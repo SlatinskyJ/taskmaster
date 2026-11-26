@@ -173,13 +173,18 @@ describe('approveTemplateScore (spec §3 score agreement)', () => {
       ['template.agreed', starsi],
     ])
     expect(JSON.parse(entries[1]?.after ?? 'null')).toEqual({ score: 4, offerRound: 1 })
-    expect(JSON.parse(entries[2]?.before ?? 'null')).toEqual({ status: 'proposed', score: 4 })
+    expect(JSON.parse(entries[2]?.before ?? 'null')).toEqual({
+      status: 'proposed',
+      score: 4,
+      bidsFrom: 0,
+    })
     expect(JSON.parse(entries[2]?.after ?? 'null')).toEqual({
       status: 'active',
       score: 4,
       by: 'approval',
       entryIds: [],
       closedIds: [],
+      bidsFrom: 0,
     })
   })
 
@@ -316,6 +321,7 @@ describe('reads', () => {
         deadline: { dayOffset: 1, due: '07:00', graceMinutes: 120 },
         change: null,
         bidding: null,
+        lastBids: [],
       },
     ])
     expect(Object.keys(list[0] ?? {}).sort()).toEqual(
@@ -327,6 +333,7 @@ describe('reads', () => {
         'createdByName',
         'deadline',
         'id',
+        'lastBids',
         'schedule',
         'score',
         'status',
@@ -349,7 +356,7 @@ describe('reads', () => {
       .returning()
       .get().id
     const { id } = must(createTemplate(db, tata, BINS, T0))
-    const on = { choreBidding: true }
+    const on = { choreBidding: true, bidRefusals: false }
     must(bidOnTemplate(db, starsi, id, 7, T1, on))
     must(bidOnTemplate(db, mladsi, id, 6, T1, on))
     must(counterOnTemplate(db, mama, id, 5, T1, on))
@@ -376,9 +383,9 @@ describe('reads', () => {
   it('a proposed chore has bidding only with choreBidding on, in every read (#209)', () => {
     const { db, tata, starsi } = family()
     const { id } = must(createTemplate(db, tata, BINS, T0))
-    const on = { choreBidding: true }
+    const on = { choreBidding: true, bidRefusals: false }
     must(bidOnTemplate(db, starsi, id, 6, T1, on))
-    const off = { choreBidding: false }
+    const off = { choreBidding: false, bidRefusals: false }
     for (const opts of [off, undefined]) {
       expect(listTemplates(db, tata, opts)[0]?.bidding).toBeNull()
       expect(getTemplateDetail(db, id, tata, opts)?.template.bidding).toBeNull()
@@ -392,16 +399,18 @@ describe('reads', () => {
   it("a brother opens a proposed chore's page only with choreBidding on; an admin never (#209)", () => {
     const { db, admin, tata, starsi } = family()
     const { id } = must(createTemplate(db, tata, BINS, T0))
-    const on = { choreBidding: true }
+    const on = { choreBidding: true, bidRefusals: false }
     expect(getTemplateDetail(db, id, starsi)).toBeNull()
-    expect(getTemplateDetail(db, id, starsi, { choreBidding: false })).toBeNull()
+    expect(
+      getTemplateDetail(db, id, starsi, { choreBidding: false, bidRefusals: false }),
+    ).toBeNull()
     expect(getTemplateDetail(db, id, starsi, on)?.template.id).toBe(id)
     expect(getTemplateDetail(db, id, admin, on)).toBeNull()
   })
 
   it("a parent's Vyjednávání takes a proposed chore with bids only with the switch on (#209)", () => {
     const { db, tata, starsi } = family()
-    const on = { choreBidding: true }
+    const on = { choreBidding: true, bidRefusals: false }
     const withBid = must(createTemplate(db, tata, BINS, T0)).id
     must(createTemplate(db, tata, { ...BINS, title: 'Zalít kytky' }, T0))
     const agreed = must(createTemplate(db, tata, DISHES, T0)).id
@@ -495,16 +504,47 @@ describe('reads', () => {
 })
 
 describe('template detail (price page)', () => {
-  it('a taker gets an agreed template, not a proposed one; a giver gets both', () => {
+  it('with openRows a brother gets a proposed template too (#205): he is a party who must agree; a giver gets both', () => {
     const { db, tata, starsi } = family()
     const id = must(createTemplate(db, tata, DISHES, T0)).id
     expect(getTemplateDetail(db, id, starsi)).toBeNull()
+    expect(getTemplateDetail(db, id, starsi, undefined, true)?.template.status).toBe('proposed')
     expect(getTemplateDetail(db, id, tata)).toEqual({
       template: listTemplates(db, tata)[0],
       thread: [],
+      waitingFor: [
+        { id: starsi, name: 'Starší' },
+        { id: expect.any(Number) as number, name: 'Mladší' },
+      ],
     })
     must(approveTemplateScore(db, starsi, id, DISHES.score, T0))
     expect(getTemplateDetail(db, id, starsi)?.template.status).toBe('active')
+  })
+
+  it('the admin gets null, proposed or agreed', () => {
+    const { db, admin, tata, starsi } = family()
+    const id = must(createTemplate(db, tata, DISHES, T0)).id
+    expect(getTemplateDetail(db, id, admin)).toBeNull()
+    must(approveTemplateScore(db, starsi, id, DISHES.score, T0))
+    expect(getTemplateDetail(db, id, admin)).toBeNull()
+  })
+
+  it('waitingFor: both brothers until one agrees, then nobody; Máma never (Táta’s yes is the givers’)', () => {
+    const { db, tata, mama, starsi, mladsi } = family()
+    const id = must(createTemplate(db, tata, BINS, T0)).id
+    const waits = (viewer: number) => getTemplateDetail(db, id, viewer, undefined, true)?.waitingFor
+    expect(waits(starsi)).toEqual([
+      { id: starsi, name: 'Starší' },
+      { id: mladsi, name: 'Mladší' },
+    ])
+    expect(waits(mama)?.map((p) => p.id)).not.toContain(mama)
+    // Domů asks the same people: the page and "Čeká na tebe" agree by id.
+    for (const who of [tata, mama, starsi, mladsi])
+      expect(pendingTemplateApprovals(db, who).some((t) => t.id === id)).toBe(
+        waits(who)?.some((p) => p.id === who) ?? false,
+      )
+    must(approveTemplateScore(db, starsi, id, BINS.score, T1))
+    expect(waits(mladsi)).toEqual([])
   })
 
   it('an unknown id gives null', () => {

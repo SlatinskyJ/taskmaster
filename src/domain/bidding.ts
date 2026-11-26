@@ -148,7 +148,7 @@ function agreeAt(
 }
 
 /** The same takers (or bids), in any order. A list that names one twice is never a match. */
-function sameTakers<T>(a: readonly T[], b: readonly T[]): boolean {
+export function sameTakers<T>(a: readonly T[], b: readonly T[]): boolean {
   const set = new Set(a)
   return (
     a.length === b.length &&

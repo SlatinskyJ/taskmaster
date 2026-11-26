@@ -244,7 +244,7 @@ describe('the demo seed (previews)', () => {
     expect(getFlags(db)).toEqual({ ...ALL_FEATURES, week: false })
   })
 
-  it('adds seven templates (#37, #38, #39, #209): three waiting for agreement, four agreed', () => {
+  it('adds eight templates (#37, #38, #39, #209, #232): three waiting for agreement, five agreed', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     expect(
@@ -297,6 +297,8 @@ describe('the demo seed (previews)', () => {
       // #209's proposed chores, open for bids.
       { title: 'Vynést kompost', status: 'proposed', score: 10, days: 0, time: null, due: null },
       { title: 'Zalít kytky', status: 'proposed', score: 4, days: 0, time: null, due: null },
+      // #232's agreed chore with a price change of two bids.
+      { title: 'Umýt koupelnu', status: 'active', score: 8, days: 0, time: null, due: null },
     ])
     const actions = db
       .select({ action: auditLog.action })
@@ -320,6 +322,8 @@ describe('the demo seed (previews)', () => {
       'template.agreed',
       'template.created',
       ...['template.created', 'template.bid_placed', 'template.bid_placed'],
+      ...['template.created', 'template.score_approved', 'template.agreed'],
+      ...['template.bid_placed', 'template.bid_placed'],
     ])
   })
 
@@ -338,6 +342,9 @@ describe('the demo seed (previews)', () => {
       // #209: the bids on "Zalít kytky".
       ['starsi', 'taker', 6, null],
       ['mladsi', 'taker', 7, null],
+      // #232: the price change on "Umýt koupelnu".
+      ['starsi', 'taker', 10, null],
+      ['mladsi', 'taker', 11, null],
     ])
     expect(
       db
@@ -345,7 +352,7 @@ describe('the demo seed (previews)', () => {
         .from(templates)
         .all()
         .map((t) => t.score),
-    ).toEqual([1, 1, 4, 3, 2, 10, 4])
+    ).toEqual([1, 1, 4, 3, 2, 10, 4, 8])
   })
 
   it('all or nothing: a failing template leaves no people either', () => {

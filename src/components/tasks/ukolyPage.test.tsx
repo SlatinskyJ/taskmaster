@@ -4,23 +4,46 @@ import { describe, expect, it, vi } from 'vitest'
 import { ALL_FEATURES } from '~/lib/features'
 import { cs } from '~/lib/strings'
 import type { TaskView } from '~/server/tasks/functions'
+import type { TemplateView } from '~/server/templates/functions'
 
 // Úkoly itself (#41), rendered statically through its route: one-time tasks grouped by state.
 // Lives here, not in src/routes, because the router generator treats every file there as a route.
-const page = vi.hoisted(() => ({ data: {}, approveAnywhere: true }))
+const page = vi.hoisted(() => ({ data: {}, approveAnywhere: true, openRows: false }))
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (opts: Record<string, unknown>) => ({
     ...opts,
     useRouteContext: () => ({
       user: { id: 2, role: 'giver', displayName: 'Táta' },
-      features: { ...ALL_FEATURES, approveAnywhere: page.approveAnywhere },
+      features: {
+        ...ALL_FEATURES,
+        approveAnywhere: page.approveAnywhere,
+        openRows: page.openRows,
+      },
     }),
     useLoaderData: () => page.data,
   }),
   redirect: vi.fn(),
   useRouter: () => ({ invalidate: vi.fn() }),
   useRouterState: () => ({ location: { pathname: '/ukoly' } }),
-  Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
+  // With params (a row's page, #205) the href is built, so a test can see where a row goes.
+  Link: ({
+    to,
+    params,
+    children,
+    className,
+  }: {
+    to?: string
+    params?: Record<string, string>
+    children: ReactNode
+    className?: string
+  }) =>
+    params && to ? (
+      <a href={to.replace(/\$(\w+)/g, (_, k: string) => params[k] ?? '')} className={className}>
+        {children}
+      </a>
+    ) : (
+      <a>{children}</a>
+    ),
 }))
 vi.mock('./useTaskAction', () => ({ useTaskAction: () => ({ busy: null, run: vi.fn() }) }))
 vi.mock('~/server/tasks/functions', () => ({
@@ -64,8 +87,8 @@ const task = (id: number, title: string, over: Partial<TaskView>): TaskView => (
   ...over,
 })
 
-function render(list: TaskView[]) {
-  page.data = { list, templates: [] }
+function render(list: TaskView[], templates: TemplateView[] = []) {
+  page.data = { list, templates }
   const Page = (Route as unknown as { component: () => ReactNode }).component
   return renderToStaticMarkup(<Page />)
 }
@@ -111,14 +134,14 @@ describe('Úkoly grouped by state (#41)', () => {
 
   it('with reopenBidding on a free task’s name links to its page, others do not (#212)', () => {
     const html = render(all)
-    expect(html).toContain('<a>Volný</a>')
-    expect(html).not.toContain('<a>Rezervovaný</a>')
-    expect(html).not.toContain('<a>Hotový</a>')
+    expect(html).toContain('underline-offset-4">Volný</a>')
+    expect(html).not.toContain('underline-offset-4">Rezervovaný</a>')
+    expect(html).not.toContain('underline-offset-4">Hotový</a>')
   })
 
   it('a free chore copy stays unlinked; a round with bids gets Odpovědět, not Hotovo bez bodů', () => {
     const chore = task(7, 'Vynést koš', { status: 'open', origin: 'on_demand', templateId: 1 })
-    expect(render([chore])).not.toContain('<a>Vynést koš</a>')
+    expect(render([chore])).not.toContain('underline-offset-4">Vynést koš</a>')
     const bid = { takerId: 4, name: 'Mladší', score: 15 }
     const round = task(8, 'Vynést věci na půdu', {
       status: 'open',
@@ -126,7 +149,7 @@ describe('Úkoly grouped by state (#41)', () => {
       rebidding: { offer: 12, offeredBy: null },
     })
     const html = render([round])
-    expect(html).toContain(`<a>${cs.bids.answer}</a>`)
+    expect(html).toContain(`>${cs.bids.answer}</a>`)
     expect(html).not.toContain(cs.work.doneSelf)
     // No bids yet: the parent can still close it, and reaches the round through the name.
     expect(render([{ ...round, bids: [] }])).toContain(cs.work.doneSelf)
@@ -152,5 +175,49 @@ describe('Úkoly grouped by state (#41)', () => {
 
   it('shows the empty line when there are no tasks', () => {
     expect(render([])).toContain(cs.tasks.empty)
+  })
+})
+
+describe('switch openRows (#205): Úkoly rows open their page', () => {
+  const chore: TemplateView = {
+    id: 9,
+    title: 'Vyndat myčku',
+    status: 'active',
+    score: 3,
+    approvalRequired: true,
+    createdByName: 'Táta',
+    approvedBy: [],
+    schedule: null,
+    deadline: null,
+    change: null,
+    bidding: null,
+    lastBids: [],
+  }
+  const list = [
+    task(4, 'Čekající', { status: 'done_unconfirmed', completedBy: boys[1] ?? null }),
+    task(3, 'Rezervovaný', { status: 'reserved', reservedBy: boys[0] ?? null }),
+    task(2, 'Volný', { status: 'open' }),
+    task(1, 'Uklidit sklep', { status: 'proposed', waitingFor: boys }),
+  ]
+  const linked = (html: string, href: string, name: string) => {
+    expect(html, name).toMatch(
+      new RegExp(`<a href="${href}" class="[^"]*after:inset-0[^"]*">${name}</a>`),
+    )
+  }
+
+  it('switch on: every group’s row and each chore, also Čeká na potvrzení with ✓ / ✕', () => {
+    page.openRows = true
+    for (const approve of [true, false]) {
+      page.approveAnywhere = approve
+      const html = render(list, [chore])
+      for (const t of list) linked(html, `/ukol/${String(t.id)}`, t.title)
+      linked(html, '/sablona/9', 'Vyndat myčku')
+    }
+    page.approveAnywhere = true
+    page.openRows = false
+  })
+
+  it('switch off: no row is a link', () => {
+    expect(render(list, [chore])).not.toContain('after:inset-0')
   })
 })
