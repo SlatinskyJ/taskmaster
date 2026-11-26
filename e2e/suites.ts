@@ -38,6 +38,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'approve', spec: 'approve.spec.ts', seed: 'approve' },
   // Its own server: a round changes the task for good (#212).
   { name: 'rebid', spec: 'rebidding.spec.ts', seed: 'rebid' },
+  // Its own server: it reserves and agrees for good (#205).
+  { name: 'rows', spec: 'rows.spec.ts', seed: 'rows' },
   { name: 'week', spec: 'week.spec.ts', seed: 'week' },
   // Its own server: settling changes the week for good.
   { name: 'meeting', spec: 'meeting.spec.ts', seed: 'week' },

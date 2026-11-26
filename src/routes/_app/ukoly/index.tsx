@@ -132,6 +132,7 @@ function Tasks() {
             action={action}
             linked={(t) => features.reopenBidding && t.status === 'open' && t.origin === 'one_time'}
             approve={features.approveAnywhere ? { busy, run } : undefined}
+            links={features.openRows}
           />
         )}
       </section>
@@ -147,6 +148,7 @@ function Tasks() {
                   <TemplateRow
                     template={t}
                     busy={busy !== null}
+                    links={features.openRows}
                     onNow={() => {
                       void run(
                         `now-${String(t.id)}`,

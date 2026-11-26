@@ -9,7 +9,14 @@ import { useTaskAction } from './useTaskAction'
  * ✓ Schválit counts the points; ✕ Zamítnout opens a reason field (optional) and sends the task
  * back to its taker (ApprovableRow). Renders nothing when nothing waits.
  */
-export function ToApprove({ items }: { items: readonly TaskView[] }) {
+export function ToApprove({
+  items,
+  links = false,
+}: {
+  items: readonly TaskView[]
+  /** The `openRows` switch (#205): each row opens its page. */
+  links?: boolean
+}) {
   const { busy, run } = useTaskAction()
   if (items.length === 0) return null
 
@@ -21,7 +28,7 @@ export function ToApprove({ items }: { items: readonly TaskView[] }) {
       <ul className="grid gap-2">
         {items.map((t) => (
           <li key={t.id}>
-            <ApprovableRow task={t} busy={busy} run={run} />
+            <ApprovableRow task={t} busy={busy} run={run} links={links} />
           </li>
         ))}
       </ul>

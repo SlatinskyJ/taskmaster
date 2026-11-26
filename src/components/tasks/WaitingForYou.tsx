@@ -13,6 +13,7 @@ import type { TemplateView } from '~/server/templates/functions'
 import { callBid } from './bidCalls'
 import type { Me } from './taskView'
 import { bidButtons, myBid, taskChipState, toastFor, waitingMeta } from './taskView'
+import { taskLink, templateLink } from './rowLink'
 import { TaskRow } from './TaskRow'
 import { useTaskAction } from './useTaskAction'
 
@@ -34,6 +35,7 @@ export function WaitingForYou({
   taskPriceChanges,
   proposals = [],
   me,
+  links = false,
 }: {
   items: readonly TaskView[]
   templates?: readonly TemplateView[]
@@ -44,6 +46,8 @@ export function WaitingForYou({
   /** Proposals for next week or the default week waiting for this person (#43). */
   proposals?: readonly ProposalKind[]
   me: Me
+  /** The `openRows` switch (#205): each row opens its page. */
+  links?: boolean
 }) {
   const router = useRouter()
   const [busyKey, setBusyKey] = useState<string | null>(null)
@@ -90,7 +94,7 @@ export function WaitingForYou({
     )
   }
 
-  function templateLink(t: TemplateView, label: string) {
+  function answerLink(t: TemplateView, label: string) {
     return (
       <Link
         to="/sablona/$templateId"
@@ -110,11 +114,11 @@ export function WaitingForYou({
     const key = `template-${String(t.id)}`
     const yes = approveButton(key, () => approveTemplate(t))
     if (!t.bidding) return yes
-    if (myTemplateBid(t, me) !== null) return templateLink(t, cs.bids.open)
+    if (myTemplateBid(t, me) !== null) return answerLink(t, cs.bids.open)
     return (
       <div className="flex flex-col items-stretch gap-1.5">
         {yes}
-        {templateLink(t, cs.bids.otherPriceShort)}
+        {answerLink(t, cs.bids.otherPriceShort)}
       </div>
     )
   }
@@ -170,6 +174,7 @@ export function WaitingForYou({
               points={task.score}
               meta={waitingMeta(task, me)}
               action={taskActions(task)}
+              link={links ? taskLink(task.id) : undefined}
             />
           </li>
         ))}
@@ -182,6 +187,7 @@ export function WaitingForYou({
               meta={(t.bidding && priceMeta(t, me)) ?? cs.templates.recurringMeta}
               detail={templateDetail(t)}
               action={templateActions(t)}
+              link={links ? templateLink(t.id) : undefined}
             />
           </li>
         ))}
@@ -192,7 +198,8 @@ export function WaitingForYou({
               state="negotiating"
               points={t.score}
               meta={priceMeta(t, me)}
-              action={templateLink(t, cs.bids.answer)}
+              action={answerLink(t, cs.bids.answer)}
+              link={links ? templateLink(t.id) : undefined}
             />
           </li>
         ))}
@@ -204,6 +211,7 @@ export function WaitingForYou({
               points={t.score}
               meta={cs.taskPrice.rowMeta(t.score, t.scoreChange?.score ?? t.score)}
               action={pageLink(t, cs.bids.answer)}
+              link={links ? taskLink(t.id) : undefined}
             />
           </li>
         ))}
