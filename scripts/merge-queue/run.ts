@@ -5,8 +5,8 @@ import { pathToFileURL } from 'node:url'
 import { nextActions, type PrFacts } from './decide.ts'
 import { FOOTER, LABEL, approvedMarker, handoffMarker, makeGh, type Gh } from './github.ts'
 
-function approvalBody(key: string, pr: number, sha: string): string {
-  return `${approvedMarker(key, pr, sha)}\nThe merge-me Action recorded \`merge-me\` on commit ${sha}. It lands this PR on that commit only, after updating it with \`main\` if needed.\n\n${FOOTER}`
+function approvalBody(key: string, pr: number, labelEventId: number, sha: string): string {
+  return `${approvedMarker(key, pr, labelEventId, sha)}\nThe merge-me Action recorded \`merge-me\` on commit ${sha}. It lands this PR on that commit only, after updating it with \`main\` if needed.\n\n${FOOTER}`
 }
 
 function handOverBody(key: string, pr: PrFacts, reason: string): string {
@@ -20,8 +20,13 @@ export async function run(
   labelEvent?: { pr: number; sha: string },
 ): Promise<void> {
   if (labelEvent) {
-    await gh.comment(labelEvent.pr, approvalBody(markerKey, labelEvent.pr, labelEvent.sha))
-    log(`merge-queue: #${labelEvent.pr} approved on ${labelEvent.sha}`)
+    const { pr, sha } = labelEvent
+    const labelId = await gh.latestLabelEventId(pr)
+    if (labelId === null) log(`merge-queue: #${pr} has no merge-me label by SlatinskyJ`)
+    else {
+      await gh.comment(pr, approvalBody(markerKey, pr, labelId, sha))
+      log(`merge-queue: #${pr} approved on ${sha}`)
+    }
   }
   const prs = await gh.labelledPrs()
   const byNumber = new Map<number, PrFacts>(prs.map((p) => [p.number, p]))

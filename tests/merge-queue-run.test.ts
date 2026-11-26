@@ -33,11 +33,16 @@ interface Options {
   update?: 'ok' | 'conflict'
   merge?: 'merged' | 'refused'
   onComment?: () => void
+  labelId?: number | null
 }
 
 function fakeGh(o: Options) {
   const calls: { op: string; args: unknown[] }[] = []
   const gh: Gh = {
+    latestLabelEventId: (pr) => {
+      calls.push({ op: 'latestLabelEventId', args: [pr] })
+      return Promise.resolve(o.labelId === undefined ? 501 : o.labelId)
+    },
     labelledPrs: () => {
       calls.push({ op: 'labelledPrs', args: [] })
       return Promise.resolve(typeof o.prs === 'function' ? o.prs() : o.prs)
@@ -60,7 +65,7 @@ function fakeGh(o: Options) {
       return Promise.resolve()
     },
   }
-  const writes = () => calls.filter((c) => c.op !== 'labelledPrs')
+  const writes = () => calls.filter((c) => c.op !== 'labelledPrs' && c.op !== 'latestLabelEventId')
   const comments = () => calls.filter((c) => c.op === 'comment').map((c) => c.args[1] as string)
   return { gh, calls, writes, comments }
 }
@@ -74,11 +79,11 @@ describe('run', () => {
   it('records the approval for the labelled commit first, whatever the head is now', async () => {
     const f = fakeGh({ prs: [facts({ headSha: Y, approvedSha: X, headIsApproved: false })] })
     await run(f.gh, log, KEY, { pr: 9, sha: X })
-    const first = f.calls[0]
+    const first = f.writes()[0]
     expect(first?.op).toBe('comment')
     expect(first?.args[0]).toBe(9)
     const body = first?.args[1] as string
-    expect(body.startsWith(approvedMarker(KEY, 9, X))).toBe(true)
+    expect(body.startsWith(approvedMarker(KEY, 9, 501, X))).toBe(true)
     expect(body.endsWith(FOOTER)).toBe(true)
   })
 
@@ -91,8 +96,18 @@ describe('run', () => {
       },
     })
     await run(f.gh, log, KEY, { pr: 9, sha: X })
-    expect(f.calls.map((c) => c.op).slice(0, 2)).toEqual(['comment', 'labelledPrs'])
+    expect(f.calls.map((c) => c.op).slice(0, 3)).toEqual([
+      'latestLabelEventId',
+      'comment',
+      'labelledPrs',
+    ])
     expect(f.comments().some((b) => b.includes('approval not recorded'))).toBe(false)
+  })
+
+  it('writes no approval when the PR has no qualifying label event', async () => {
+    const f = fakeGh({ prs: [], labelId: null })
+    await run(f.gh, log, KEY, { pr: 9, sha: X })
+    expect(f.writes()).toEqual([])
   })
 
   it('does nothing for an unrecorded approval while the label is under 15 minutes old', async () => {

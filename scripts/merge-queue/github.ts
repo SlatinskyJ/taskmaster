@@ -14,8 +14,9 @@ function verify(key: string, text: string, mac: string): boolean {
   const got = Buffer.from(mac, 'hex')
   return got.length === want.length && timingSafeEqual(got, want)
 }
-export function approvedMarker(key: string, pr: number, sha: string): string {
-  return `<!-- merge-queue:approved ${sha} ${sign(key, `approved:${pr}:${sha}`)} -->`
+/** Signed for one label event, so a marker copied after a re-label does not verify. */
+export function approvedMarker(key: string, pr: number, labelEventId: number, sha: string): string {
+  return `<!-- merge-queue:approved ${sha} ${sign(key, `approved:${pr}:${labelEventId}:${sha}`)} -->`
 }
 export function handoffMarker(key: string, pr: number, labelEventId: number): string {
   return `<!-- merge-queue:handoff ${sign(key, `handoff:${pr}:${labelEventId}`)} -->`
@@ -44,6 +45,8 @@ export interface GhCheckRun {
 }
 
 export interface Gh {
+  /** Id of SlatinskyJ's latest merge-me `labeled` event on the PR; null if there is none. */
+  latestLabelEventId(pr: number): Promise<number | null>
   labelledPrs(): Promise<PrFacts[]>
   updateBranch(pr: number, expectedHead: string): Promise<'ok' | 'conflict'>
   merge(pr: number, sha: string): Promise<'merged' | 'refused'>
@@ -235,11 +238,15 @@ export function makeGh(
     return true // unknown shape: treat as stacked, so the PR is handed over, never merged
   }
 
-  async function factsFor(pr: number): Promise<PrFacts | null> {
-    const events = await getAll<IssueEvent>(`${base}/issues/${pr}/events`)
-    const label = events.findLast(
+  function qualifyingLabel(events: IssueEvent[]): IssueEvent | undefined {
+    return events.findLast(
       (e) => e.event === 'labeled' && e.label?.name === LABEL && e.actor?.login === JAKUB,
     )
+  }
+
+  async function factsFor(pr: number): Promise<PrFacts | null> {
+    const events = await getAll<IssueEvent>(`${base}/issues/${pr}/events`)
+    const label = qualifyingLabel(events)
     if (!label) return null
     const labelledAt = Date.parse(label.created_at)
     const since = (await getAll<IssueComment>(`${base}/issues/${pr}/comments`)).filter(
@@ -251,7 +258,8 @@ export function makeGh(
       const h = HANDOFF_RE.exec(c.body ?? '')
       if (h?.[1] && verify(markerKey, `handoff:${pr}:${label.id}`, h[1])) handedOver = true
       const a = APPROVED_RE.exec(c.body ?? '')
-      if (a?.[1] && a[2] && verify(markerKey, `approved:${pr}:${a[1]}`, a[2])) approvedSha = a[1]
+      if (a?.[1] && a[2] && verify(markerKey, `approved:${pr}:${label.id}:${a[1]}`, a[2]))
+        approvedSha = a[1]
     }
     const detail = await getJson<PullDetail>(`${base}/pulls/${pr}`)
     const needsJakubAfterLabel =
@@ -296,6 +304,9 @@ export function makeGh(
   }
 
   return {
+    async latestLabelEventId(pr) {
+      return qualifyingLabel(await getAll<IssueEvent>(`${base}/issues/${pr}/events`))?.id ?? null
+    },
     async labelledPrs() {
       const open = await getAll<{ number: number; labels: { name: string }[] }>(
         `${base}/pulls?state=open`,

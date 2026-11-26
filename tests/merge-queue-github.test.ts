@@ -191,7 +191,8 @@ function comment(body: string, at = '2026-11-26T10:00:05Z') {
   return { user: { login: 'SlatinskyJ' }, body, created_at: at }
 }
 const hmac = (text: string) => createHmac('sha256', KEY).update(text).digest('hex')
-const approvedOk = (sha = A, pr = 9) => comment(approvedMarker(KEY, pr, sha))
+const approvedOk = (sha = A, pr = 9, labelId = LABEL_ID) =>
+  comment(approvedMarker(KEY, pr, labelId, sha))
 
 interface World {
   events?: unknown[]
@@ -330,7 +331,9 @@ describe('labelledPrs', () => {
 
   it('accepts an approved marker with a valid HMAC from any author', async () => {
     const [pr] = await factsOf({
-      comments: [comment(`<!-- merge-queue:approved ${A} ${hmac(`approved:9:${A}`)} -->`)],
+      comments: [
+        comment(`<!-- merge-queue:approved ${A} ${hmac(`approved:9:${LABEL_ID}:${A}`)} -->`),
+      ],
     })
     expect(pr).toMatchObject({ approvedSha: A, headIsApproved: true })
   })
@@ -354,9 +357,20 @@ describe('labelledPrs', () => {
 
   it('ignores an approved marker from before the latest label', async () => {
     const [pr] = await factsOf({
-      comments: [comment(approvedMarker(KEY, 9, A), '2026-11-26T09:00:00Z')],
+      comments: [comment(approvedMarker(KEY, 9, LABEL_ID, A), '2026-11-26T09:00:00Z')],
     })
     expect(pr).toMatchObject({ approvedSha: null })
+  })
+
+  it('ignores an approval signed for an earlier label, even when posted after the latest one', async () => {
+    const [pr] = await factsOf({
+      events: [
+        labelEvent('SlatinskyJ', '2026-11-26T08:00:00Z', 'merge-me', 400),
+        labelEvent('SlatinskyJ', '2026-11-26T11:00:00Z', 'merge-me', 600),
+      ],
+      comments: [comment(approvedMarker(KEY, 9, 400, A), '2026-11-26T11:00:03Z')],
+    })
+    expect(pr).toMatchObject({ approvedSha: null, labelEventId: 600 })
   })
 
   it('leaves out a PR whose merge-me label someone else added', async () => {
@@ -369,7 +383,7 @@ describe('labelledPrs', () => {
         labelEvent('somebody', '2026-11-26T08:00:00Z', 'merge-me', 400),
         labelEvent('SlatinskyJ', '2026-11-26T11:00:00Z', 'merge-me', 600),
       ],
-      comments: [comment(approvedMarker(KEY, 9, A), '2026-11-26T11:00:03Z')],
+      comments: [comment(approvedMarker(KEY, 9, 600, A), '2026-11-26T11:00:03Z')],
     })
     expect(pr).toMatchObject({ approvedSha: A, labelAgeMinutes: 60, labelEventId: 600 })
   })
@@ -474,6 +488,25 @@ describe('behind', () => {
   it('is false when the head already contains main', async () => {
     const [pr] = await factsOf({ behindBy: 0 })
     expect(pr).toMatchObject({ behind: false })
+  })
+})
+
+describe('latestLabelEventId', () => {
+  it("returns the id of SlatinskyJ's latest merge-me label event", async () => {
+    const routes = world({
+      events: [
+        labelEvent('SlatinskyJ', '2026-11-26T08:00:00Z', 'merge-me', 400),
+        labelEvent('SlatinskyJ', '2026-11-26T09:00:00Z', 'merge-me', 600),
+        labelEvent('somebody', '2026-11-26T10:00:00Z', 'merge-me', 700),
+      ],
+    })
+    const { impl } = fakeFetch(routes)
+    expect(await makeGh('t', KEY, impl).latestLabelEventId(9)).toBe(600)
+  })
+
+  it('returns null when SlatinskyJ never added merge-me', async () => {
+    const { impl } = fakeFetch(world({ events: [labelEvent('somebody')] }))
+    expect(await makeGh('t', KEY, impl).latestLabelEventId(9)).toBeNull()
   })
 })
 
