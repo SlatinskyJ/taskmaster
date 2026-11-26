@@ -7,6 +7,8 @@ type Fetch = typeof fetch
 const FIRE_URL_RE =
   /^https:\/\/api\.anthropic\.com\/v1\/claude_code\/routines\/trig_[A-Za-z0-9]+\/fire$/
 
+export const FIRE_TIMEOUT_MS = 15_000
+
 export type AlertResult = 'sent' | 'skipped' | 'bad-url' | 'failed'
 
 export function alertText(repo: string, prs: number[], runUrl: string): string {
@@ -35,6 +37,8 @@ export async function alertHandback(
         'content-type': 'application/json',
       },
       body: JSON.stringify({ text: alertText(repo, prs, runUrl) }),
+      // A hung endpoint must not hold the queue job until its 5-minute limit.
+      signal: AbortSignal.timeout(FIRE_TIMEOUT_MS),
     })
     return res.ok ? 'sent' : 'failed'
   } catch {

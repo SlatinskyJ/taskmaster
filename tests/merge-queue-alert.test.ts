@@ -29,6 +29,7 @@ describe('hand-over alert', () => {
     if (!call) throw new Error('no call')
     expect(call.url).toBe(URL_OK)
     expect(call.init.method).toBe('POST')
+    expect(call.init.signal).toBeInstanceOf(AbortSignal)
     const headers = call.init.headers as Record<string, string>
     expect(headers.Authorization).toBe('Bearer tok')
     expect(headers['anthropic-beta']).toBe('experimental-cc-routine-2026-04-01')
