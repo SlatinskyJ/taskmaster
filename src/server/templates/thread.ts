@@ -2,7 +2,7 @@ import { and, asc, desc, eq, gt, isNull } from 'drizzle-orm'
 import { toIsoUtc } from '~/domain/dates'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
-import { templateThread } from '~/server/db/schema'
+import { templates, templateThread } from '~/server/db/schema'
 import type { TemplateThreadRow } from '~/server/db/schema'
 
 // A template's bidding thread (spec §5.1): giver-side offers and takers' bids, on a proposed
@@ -125,6 +125,29 @@ export function closeRows(tx: Tx, ids: readonly number[], now: Date): void {
       .where(and(eq(templateThread.id, id), isNull(templateThread.closedAt)))
       .run()
   }
+}
+
+/**
+ * Bids reset (#232): the same-number floor `templates.bids_from` moves to the template's newest
+ * thread row, so no bid made so far blocks its number again. Runs after an agreement or a
+ * turn-down wrote its rows. Returns the floor before and after, for the audit entry.
+ */
+export function markBidsFrom(tx: Tx, templateId: number): { before: number; after: number } {
+  const row = tx
+    .select({ bidsFrom: templates.bidsFrom })
+    .from(templates)
+    .where(eq(templates.id, templateId))
+    .get()
+  const newest = tx
+    .select({ id: templateThread.id })
+    .from(templateThread)
+    .where(eq(templateThread.templateId, templateId))
+    .orderBy(desc(templateThread.id))
+    .get()
+  const before = row?.bidsFrom ?? 0
+  const after = Math.max(before, newest?.id ?? 0)
+  tx.update(templates).set({ bidsFrom: after }).where(eq(templates.id, templateId)).run()
+  return { before, after }
 }
 
 /** Every row of the template's thread, oldest first. */

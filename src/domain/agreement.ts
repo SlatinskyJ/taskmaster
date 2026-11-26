@@ -113,9 +113,16 @@ export type TemplateAgreement =
   /**
    * Agreed at `score`. A score change in flight (`change`: takers' open bids and the giver side's
    * current offer) leaves `score` in force until someone accepts (spec §5.1; `scoreChange.ts`).
-   * One change at a time.
+   * One change at a time. `lastBids` (#232): each taker's newest bid since bids last reset (an
+   * agreement, a turn-down) or the giver side last changed the offer, open or withdrawn: the
+   * same-number rule. Absent means none (the domain's own agreements, which reset it).
    */
-  | { status: 'agreed'; score: number; change: TemplateChange | null }
+  | {
+      status: 'agreed'
+      score: number
+      change: TemplateChange | null
+      lastBids?: readonly OpenBid[]
+    }
 
 /** A template score change in flight: takers' open bids, and the giver side's offer (if any). */
 export interface TemplateChange extends BidBook {

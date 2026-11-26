@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Me } from '~/components/tasks/taskView'
+import { cs } from '~/lib/strings'
 import type { TemplateView } from '~/server/templates/functions'
 import {
   priceButtons,
@@ -33,6 +34,7 @@ const base: TemplateView = {
   schedule: null,
   deadline: null,
   bidding: null,
+  lastBids: [],
   change: null,
 }
 const demo: TemplateView = {
@@ -349,5 +351,113 @@ describe('a proposed chore with first-price bidding (#209)', () => {
     expect(priceError(at('counter', 11))('offer_changed')).not.toBe(
       'Mezitím přišla nová nabídka. Podívej se na ni.',
     )
+  })
+})
+
+describe('Nechci, turn-down and the same number on a price change (#232)', () => {
+  // "Umýt koupelnu" agreed at 10: Starší bids 12, Mladší 13; no parents' offer.
+  const mladsi13 = { takerId: MLADSI.id, name: 'Mladší', score: 13 }
+  const change: TemplateView = {
+    ...base,
+    score: 10,
+    change: {
+      offer: null,
+      bids: [{ takerId: STARSI.id, name: 'Starší', score: 12 }, mladsi13],
+      lowest: 12,
+    },
+    lastBids: [
+      { takerId: STARSI.id, score: 12 },
+      { takerId: MLADSI.id, score: 13 },
+    ],
+  }
+
+  it('a brother with a bid in a change gets Nechci; refusals off: none', () => {
+    expect(priceRefusal(change, STARSI, true)).toEqual({
+      key: 'withdraw',
+      action: 'withdraw',
+      data: { templateId: 7 },
+      label: cs.bids.withdraw,
+      hint: cs.bids.withdrawHint,
+    })
+    expect(priceRefusal(change, STARSI)).toBeNull()
+    expect(priceRefusal(change, STARSI, false)).toBeNull()
+    const noBid = { ...change, change: { offer: null, bids: [], lowest: null } }
+    expect(priceRefusal(noBid, STARSI, true)).toBeNull()
+  })
+
+  it('a parent with bids and an offer turns down exactly the bids shown; the offer stays', () => {
+    const withOffer = {
+      ...change,
+      change: { bids: change.change?.bids ?? [], lowest: 12, offer: { score: 11, byName: 'Máma' } },
+    }
+    expect(priceRefusal(withOffer, TATA, true)).toEqual({
+      key: 'turnDown',
+      action: 'turnDown',
+      data: {
+        templateId: 7,
+        bids: [
+          { takerId: STARSI.id, score: 12 },
+          { takerId: MLADSI.id, score: 13 },
+        ],
+      },
+      label: cs.bids.turnDown,
+      hint: cs.bids.turnDownChangeHint(10, 11),
+    })
+    // No parents' offer: nothing to turn down to, no button (Jakub 2026-11-26).
+    expect(priceRefusal(change, TATA, true)).toBeNull()
+    const offer = { score: 11, byName: 'Táta' }
+    const offerOnly = { ...change, change: { offer, bids: [], lowest: null } }
+    expect(priceRefusal(offerOnly, TATA, true)).toBeNull()
+    expect(priceRefusal(base, TATA, true)).toBeNull()
+    expect(priceRefusal(withOffer, ADMIN, true)).toBeNull()
+    expect(priceRefusal(withOffer, TATA, false)).toBeNull()
+    expect(priceRefusal(withOffer, TATA)).toBeNull()
+  })
+
+  it('a proposed chore keeps Nechci and Odmítnout nabídky with refusals off (#209)', () => {
+    const first: TemplateView = {
+      ...proposed,
+      score: 10,
+      bidding: {
+        offer: { score: 10, byName: 'Táta' },
+        bids: [{ takerId: STARSI.id, name: 'Starší', score: 12 }],
+        lowest: 12,
+        lastBids: [{ takerId: STARSI.id, score: 12 }],
+      },
+    }
+    expect(priceRefusal(first, STARSI, false)?.action).toBe('withdraw')
+    expect(priceRefusal(first, TATA, false)?.action).toBe('turnDown')
+  })
+
+  it("a brother's stepper is greyed at his last bid with the same-again hint", () => {
+    const withdrawn: TemplateView = {
+      ...change,
+      change: { offer: null, bids: [mladsi13], lowest: 13 },
+    }
+    expect(priceSend(withdrawn, STARSI, 12)).toMatchObject({
+      disabled: true,
+      hint: cs.bids.sameAgainHint,
+    })
+    // Mladší's number is open to Starší; Starší's own 12 is open to Mladší.
+    expect(priceSend(withdrawn, STARSI, 13)).toMatchObject({
+      disabled: false,
+      hint: cs.bids.bidHint,
+    })
+    expect(priceSend(withdrawn, MLADSI, 12)).toMatchObject({ disabled: false })
+    // No change in flight: the last bid still counts until bids reset.
+    expect(priceSend({ ...base, score: 10, lastBids: change.lastBids }, STARSI, 12)).toMatchObject({
+      disabled: true,
+      hint: cs.bids.sameAgainHint,
+    })
+  })
+
+  it('toasts on an agreed chore: withdrawn, turned down, a stale turn-down', () => {
+    const kept = { ok: true as const, id: 7, score: 10, status: 'active' as const }
+    expect(priceToast({ action: 'withdraw', data: { templateId: 7 } }, kept)).toBe(
+      cs.bids.toast.withdrawn,
+    )
+    const down = { action: 'turnDown' as const, data: { templateId: 7, bids: [] } }
+    expect(priceToast(down, kept)).toBe(cs.bids.toast.turnedDown)
+    expect(priceError(down)('offer_changed')).toBe(cs.bids.turnDownChanged)
   })
 })

@@ -79,7 +79,7 @@ describe('switch off', () => {
     expect(getTaskDetail(f.db, id)?.task.description).toBeNull()
     expect(listBoard(f.db, off)[0]?.description).toBeNull()
     expect(listTasks(f.db, off)[0]?.description).toBeNull()
-    const bOff = { choreBidding: false, descriptions: false }
+    const bOff = { choreBidding: false, bidRefusals: false, descriptions: false }
     expect(listTemplates(f.db, f.tata, bOff)[0]?.description).toBeNull()
     expect(getTemplateDetail(f.db, tid, f.tata, bOff)?.template.description).toBeNull()
     expect(getTemplateDetail(f.db, tid, f.tata, bOff)?.descriptionChange).toBeNull()
@@ -88,7 +88,7 @@ describe('switch off', () => {
     expect(listBoard(f.db, shown)[0]?.description).toBe('tajné')
     expect(listTasks(f.db, shown)[0]?.description).toBe('tajné')
     expect(getTaskDetail(f.db, id, shown)?.descriptionChange?.description).toBe('nové')
-    const bOn = { choreBidding: false, descriptions: true }
+    const bOn = { choreBidding: false, bidRefusals: false, descriptions: true }
     expect(listTemplates(f.db, f.tata, bOn)[0]?.description).toBe('tajné')
     expect(getTemplateDetail(f.db, tid, f.tata, bOn)?.descriptionChange?.description).toBe('nové')
   })

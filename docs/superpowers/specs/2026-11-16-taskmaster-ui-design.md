@@ -55,7 +55,7 @@ Each state has a dot colour and a text colour. Text colours are darkened to reac
 State is shown in three places, the same way everywhere: a **chip** (rounded pill, dot + label, background 15 % of the dot colour), a **4 px stripe** on the left edge of a row, and the points colour where it applies.
 
 ### 2.3 Type, shape, spacing
-- **Fredoka** (500–700) for headings and all numbers (tabular figures). **Nunito** (500–800) for body text.
+- **Baloo 2** (500–800) for headings, buttons, tabs and titles. **Fredoka** (500–700) for all numbers (tabular figures); Fredoka has no `ě č ř ů ť ď ň`, so a Czech letter next to a number falls back to Baloo 2. **Nunito** (500–800) for body text. (Jakub 2026-11-26, #246: Fredoka drew Czech letters in a system font.)
 - Sizes: page title 26 px, row name 15 px, meta 13 px, chip 11 px, big points 40 px+.
 - Radius 16 px for cards, 12 px for buttons, full pill for chips and avatars.
 - Shadow: a flat `0 2px 0 shadow`, no blur. No gradients except the pending stripes.
@@ -108,6 +108,7 @@ The screens mockup has one row per role. Names are the artboard names.
 | TReserve | Reservation states: open, mine, pending, someone else's | 5.4 |
 | TApprove | Approve a new template, a new one-time task, or a price change | 5.1, 5.2 |
 | TWeek | This week and history; "Rozporovat" on locked items | 5.8, 5.9, 5.11 |
+| Plan | Week plan table, chores × days, landscape; tap a free cell to reserve (givers see it too and open a copy from it) | 5.12 |
 | TDispute | Dispute drawer: what, current value, reason | 5.11 |
 
 ### 7.2 Giver
@@ -127,7 +128,7 @@ The screens mockup has one row per role. Names are the artboard names.
 |---|---|---|
 | M1Pending | Approve or reject everything pending before the cutoff; step 2 stays locked until it is empty | 5.9 step 1 |
 | M2Settle | Per taker: total, level reached, points deducted, carry-over; confirm | 5.9 step 2 |
-| M3Plan | Open tasks for the coming week, optional proposal for the week after | 5.9 step 3 |
+| M3Plan | Open tasks and the week plan table for the coming week, optional proposal for the week after | 5.9 step 3, 5.12 |
 
 ### 7.4 Login and profile
 | Screen | What it does | Spec |

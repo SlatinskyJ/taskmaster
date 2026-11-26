@@ -35,7 +35,7 @@ import { waitingDescriptionOf } from '~/server/descriptions/rows'
 import type { WaitingDescription } from '~/server/descriptions/rows'
 import type { ThreadEntry } from '~/server/threadEntry'
 import { listPeople } from '~/server/users/people'
-import { closeThread, lastBids, openRows, threadOf } from './thread'
+import { closeThread, lastBids, markBidsFrom, openRows, threadOf } from './thread'
 
 // Recurring templates and their first score agreement (spec §5.1, §5.3). The rules live in
 // src/domain (agreement + templates); this module loads the rows, asks the domain, and writes
@@ -91,13 +91,18 @@ function approvers(db: Db | Tx, templateId: number, offerRound: number): number[
  * read from the open thread rows (null when none are open).
  */
 export function agreementOf(db: Db | Tx, row: TemplateRow): TemplateAgreement {
+  const last = (since: number) =>
+    lastBids(db, row.id, since).map((r) => ({ by: r.userId, score: r.score }))
   if (row.status === 'active') {
     const rows = openRows(db, row.id)
-    if (rows.length === 0) return { status: 'agreed', score: row.score, change: null }
+    // Each taker's last bid since bids last reset (#232): the same number is refused again.
+    const lastBids = last(row.bidsFrom)
+    if (rows.length === 0) return { status: 'agreed', score: row.score, change: null, lastBids }
     const offer = rows.find((r) => r.side === 'giver')
     return {
       status: 'agreed',
       score: row.score,
+      lastBids,
       change: {
         offer: offer ? { score: offer.score, proposedBy: offer.userId } : null,
         bids: rows.filter((r) => r.side === 'taker').map((r) => ({ by: r.userId, score: r.score })),
@@ -118,7 +123,7 @@ export function agreementOf(db: Db | Tx, row: TemplateRow): TemplateAgreement {
       approvedBy: approvers(db, row.id, row.offerRound),
     },
     book: { bids: bids(rows.filter((r) => r.side === 'taker')) },
-    lastBids: bids(lastBids(db, row.id)),
+    lastBids: last(row.bidsFrom),
   }
 }
 
@@ -166,6 +171,8 @@ export function agreeIn(
     .at(0)
   if (!active) return undefined
   const { accepted, closed } = closeThread(tx, row.id, acceptedIds, now)
+  // An agreement resets bids (#232): no first-price bid blocks its number in a later change.
+  const floor = markBidsFrom(tx, row.id)
   writeAudit(tx, {
     actor,
     action: 'template.agreed',
@@ -176,8 +183,16 @@ export function agreeIn(
       score: row.score,
       // A counter that agreed replaced the open offer row before the thread closed (§5.10).
       ...(replaced && { replacedOffer: { entryId: replaced.id, score: replaced.score } }),
+      bidsFrom: floor.before,
     },
-    after: { status: 'active', score, by, entryIds: accepted, closedIds: closed },
+    after: {
+      status: 'active',
+      score,
+      by,
+      entryIds: accepted,
+      closedIds: closed,
+      bidsFrom: floor.after,
+    },
     at: now,
   })
   return active
@@ -338,6 +353,11 @@ export interface TemplateView {
   change: TemplateChangeView | null
   /** Proposed only: the first-price bidding (#209), else null. */
   bidding: TemplateBiddingView | null
+  /**
+   * Agreed only: each taker's last bid since bids last reset or the offer last changed, open or
+   * withdrawn (#232): the same number is refused again. Empty for a proposed chore (see bidding).
+   */
+  lastBids: { takerId: number; score: number }[]
 }
 
 /** A score change as screens show it: current takers' bids only (live), lowest first. */
@@ -357,12 +377,10 @@ export type TemplateBiddingView = TemplateChangeView & {
 }
 
 function biddingView(
-  db: Db | Tx,
-  row: TemplateRow,
+  agreement: TemplateAgreement,
   people: Person[],
   name: (id: number) => string,
 ): TemplateBiddingView | null {
-  const agreement = agreementOf(db, row)
   if (agreement.status !== 'proposed') return null
   const { proposal, lastBids: last } = agreement
   const live = [...liveBook(agreement.book, people).bids].sort((a, b) => a.score - b.score)
@@ -374,13 +392,16 @@ function biddingView(
   }
 }
 
+function agreedLastBids(agreement: TemplateAgreement): TemplateView['lastBids'] {
+  if (agreement.status !== 'agreed') return []
+  return (agreement.lastBids ?? []).map((b) => ({ takerId: b.by, score: b.score }))
+}
+
 function changeView(
-  db: Db | Tx,
-  row: TemplateRow,
+  agreement: TemplateAgreement,
   people: Person[],
   name: (id: number) => string,
 ): TemplateChangeView | null {
-  const agreement = agreementOf(db, row)
   if (agreement.status !== 'agreed' || !agreement.change) return null
   const { offer, bids } = liveTemplateBook(agreement.change, people)
   // Bids are oldest first; a stable sort keeps that order among equal scores.
@@ -415,21 +436,36 @@ export function deadlineRuleOf(row: TemplateRow): DeadlineRule | null {
   return { dayOffset: row.dueDayOffset, due: { hour, minute }, graceMinutes: row.graceMinutes }
 }
 
-/** The launch switches a read or an action follows (#209, #207). Off by default. */
+/**
+ * The launch switches a read or an action follows. Off by default. `choreBidding` (#209): bidding
+ * on a proposed chore's first price; `bidRefusals` (#232): Nechci and turn-down on a price change;
+ * `descriptions` (#207): reads show descriptions.
+ */
 export interface BiddingOpts {
   choreBidding: boolean
-  /** Reads show descriptions (#207). */
+  bidRefusals: boolean
   descriptions?: boolean
 }
-const BIDDING_OFF: BiddingOpts = { choreBidding: false }
+const BIDDING_OFF: BiddingOpts = { choreBidding: false, bidRefusals: false }
 
 /** With `choreBidding` off a proposed template has `bidding: null`: no screen offers bidding. */
 function views(db: Db | Tx, rows: TemplateRow[], opts: BiddingOpts): TemplateView[] {
   if (rows.length === 0) return []
   const names = nameMap(db)
   const people = listPeople(db)
+  return rows.map((t) => viewOf(db, t, agreementOf(db, t), people, names, opts))
+}
+
+function viewOf(
+  db: Db | Tx,
+  t: TemplateRow,
+  agreement: TemplateAgreement,
+  people: Person[],
+  names: Map<number, string>,
+  opts: BiddingOpts,
+): TemplateView {
   const name = (id: number) => names.get(id) ?? ''
-  return rows.map((t) => ({
+  return {
     id: t.id,
     title: t.title,
     description: opts.descriptions ? t.description : null,
@@ -447,9 +483,10 @@ function views(db: Db | Tx, rows: TemplateRow[], opts: BiddingOpts): TemplateVie
       t.dueDayOffset === null || t.dueTime === null || t.graceMinutes === null
         ? null
         : { dayOffset: t.dueDayOffset, due: t.dueTime, graceMinutes: t.graceMinutes },
-    change: changeView(db, t, people, name),
-    bidding: opts.choreBidding ? biddingView(db, t, people, name) : null,
-  }))
+    change: changeView(agreement, people, name),
+    bidding: opts.choreBidding ? biddingView(agreement, people, name) : null,
+    lastBids: agreedLastBids(agreement),
+  }
 }
 
 /**

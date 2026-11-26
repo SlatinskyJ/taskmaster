@@ -11,7 +11,9 @@ import {
   isStaleDescription,
   placeProposedTemplateBid,
   turnDownProposedTemplateBids,
+  turnDownTemplateChangeBids,
   withdrawProposedTemplateBid,
+  withdrawTemplateChangeBid,
 } from '~/domain'
 import type { Person, TemplateAgreement } from '~/domain'
 import { toIsoUtc } from '~/domain/dates'
@@ -25,7 +27,7 @@ import type { TemplateRow, TemplateThreadRow } from '~/server/db/schema'
 import { listPeople } from '~/server/users/people'
 import type { AgreedBy, BiddingOpts, TemplateError } from './templates'
 import { agreeIn, agreementOf, approveIn, offerRowIds } from './templates'
-import { addEntry, closeRows, closeThread, openRows } from './thread'
+import { addEntry, closeRows, closeThread, markBidsFrom, openRows } from './thread'
 
 // Changing the score of an agreed template (spec §5.1: runs like bidding, §5.2; Jakub
 // 2026-11-17/18). The rules live in src/domain/scoreChange.ts; each action loads the template,
@@ -49,7 +51,7 @@ import { addEntry, closeRows, closeThread, openRows } from './thread'
 
 // The switch the caller read (#209). Off by default: the demo seed and older callers.
 export type { BiddingOpts }
-const OFF: BiddingOpts = { choreBidding: false }
+const OFF: BiddingOpts = { choreBidding: false, bidRefusals: false }
 
 /**
  * An action's options: the switch, and the description a taker's page showed (#207 ruling 8;
@@ -137,15 +139,17 @@ function newOffer(tx: Tx, row: TemplateRow, giverId: number, score: number, now:
 
 /**
  * A proposed template's agreement starts over at the same score: every open bid closes and
- * `giverId` offers `row.score` again in a new offer round. Shared by a turn-down and a
- * description change (#207 ruling 7). Writes no audit entry; the caller logs it.
+ * `giverId` offers `row.score` again in a new offer round; the same-number floor moves past it
+ * (`floor`). Shared by a turn-down and a description change (#207 ruling 7). Writes no audit
+ * entry; the caller logs it.
  */
 export function resetTemplateOffer(tx: Tx, row: TemplateRow, giverId: number, now: Date) {
   const closedIds = openRows(tx, row.id)
     .filter((r) => r.side === 'taker')
     .map((r) => r.id)
   closeRows(tx, closedIds, now)
-  return { ...newOffer(tx, row, giverId, row.score, now), closedIds }
+  const offer = newOffer(tx, row, giverId, row.score, now)
+  return { ...offer, closedIds, floor: markBidsFrom(tx, row.id) }
 }
 
 /** A proposed template agreed at `score`; throws (rolling back) if it left proposed meanwhile. */
@@ -196,18 +200,21 @@ function changeScore(
   // synchronous transaction. Throwing rolls back every write of the action.
   if (!saved) throw new Error(`template ${String(row.id)} not active mid-transaction`)
   const { accepted, closed } = closeThread(tx, row.id, acceptedIds, now)
+  // An agreement resets bids (#232): no bid of this change blocks its number in the next one.
+  const floor = markBidsFrom(tx, row.id)
   writeAudit(tx, {
     actor,
     action: 'template.score_changed',
     entityType: 'template',
     entityId: row.id,
-    before: replacedOffer
-      ? {
-          score: row.score,
-          replacedOffer: { entryId: replacedOffer.id, score: replacedOffer.score },
-        }
-      : { score: row.score },
-    after: { score, entryIds: accepted, closedIds: closed, by },
+    before: {
+      score: row.score,
+      ...(replacedOffer && {
+        replacedOffer: { entryId: replacedOffer.id, score: replacedOffer.score },
+      }),
+      bidsFrom: floor.before,
+    },
+    after: { score, entryIds: accepted, closedIds: closed, by, bidsFrom: floor.after },
     at: now,
   })
   return saved
@@ -378,8 +385,38 @@ function acceptOfferActive(
   )
 }
 
-// ── A proposed template only (#209): a taker's Nechci, a giver's turn-down ────────────────────
-// On an agreed template both are `not_proposed` (its score changes get them in #232).
+// ── A taker's Nechci, a giver's turn-down ──────────────────────────────────────────────────
+// On a proposed template (#209, switch `choreBidding`) and on an agreed one's score change
+// (#232, switch `bidRefusals`; off → `not_proposed`, as before the switch existed).
+
+/** Runs `proposed` on a proposed template, `active` on an agreed one when `bidRefusals` is on. */
+function byRefusal(
+  tx: Tx,
+  templateId: number,
+  opts: BiddingOpts,
+  proposed: (ctx: Ctx) => Result<TemplateRow, TemplateError>,
+  active: (ctx: Ctx) => Result<TemplateRow, TemplateError>,
+): Result<TemplateRow, TemplateError> {
+  return byStatus(tx, templateId, opts, proposed, (ctx) =>
+    opts.bidRefusals ? active(ctx) : fail('not_proposed'),
+  )
+}
+
+/** Closes the taker's open bid and writes `template.bid_withdrawn`. */
+function closeBid(tx: Tx, takerId: number, templateId: number, now: Date) {
+  const bid = openRows(tx, templateId).find((r) => r.side === 'taker' && r.userId === takerId)
+  // Unreachable: the domain found his open bid in this same transaction.
+  if (!bid) throw new Error('a withdrawn bid is open')
+  closeRows(tx, [bid.id], now)
+  writeAudit(tx, {
+    actor: { kind: 'user', userId: takerId },
+    action: 'template.bid_withdrawn',
+    entityType: 'template',
+    entityId: templateId,
+    before: { entryId: bid.id, score: bid.score },
+    at: now,
+  })
+}
 
 /** A taker says no (Nechci): his open bid closes, other bids stay. */
 export function withdrawTemplateBidIn(
@@ -389,34 +426,30 @@ export function withdrawTemplateBidIn(
   now: Date,
   opts: BiddingOpts = OFF,
 ): Result<TemplateRow, TemplateError> {
-  return byStatus(
+  return byRefusal(
     tx,
     templateId,
     opts,
     (ctx) => {
       const result = withdrawProposedTemplateBid(ctx.agreement, ctx.people, takerId)
       if (!result.ok) return result
-      const bid = openRows(tx, templateId).find((r) => r.side === 'taker' && r.userId === takerId)
-      // Unreachable: the domain found his open bid in this same transaction.
-      if (!bid) throw new Error('a withdrawn bid is open')
-      closeRows(tx, [bid.id], now)
-      writeAudit(tx, {
-        actor: { kind: 'user', userId: takerId },
-        action: 'template.bid_withdrawn',
-        entityType: 'template',
-        entityId: templateId,
-        before: { entryId: bid.id, score: bid.score },
-        at: now,
-      })
+      closeBid(tx, takerId, templateId, now)
       return ok(ctx.row)
     },
-    () => fail('not_proposed'),
+    (ctx) => {
+      const result = withdrawTemplateChangeBid(ctx.agreement, ctx.people, takerId)
+      if (!result.ok) return result
+      closeBid(tx, takerId, templateId, now)
+      return ok(ctx.row)
+    },
   )
 }
 
 /**
- * A giver turns the bidding down: every open bid closes and he offers the current score again in
- * a new offer round. `seen` are the bids he saw; if they changed meanwhile, `offer_changed`.
+ * A giver turns the bidding down: every open bid closes. On a proposed template he offers the
+ * current score again in a new offer round; on a score change the giver offer is offered again by
+ * him (no offer: `no_offer`, Jakub 2026-11-26). Bids reset (#232). `seen` are the bids he saw; if
+ * they changed meanwhile, `offer_changed`.
  */
 export function turnDownTemplateBidsIn(
   tx: Tx,
@@ -426,15 +459,24 @@ export function turnDownTemplateBidsIn(
   now: Date,
   opts: BiddingOpts = OFF,
 ): Result<TemplateRow, TemplateError> {
-  return byStatus(
+  const book = seen.map((b) => ({ by: b.takerId, score: b.score }))
+  const closeBids = () => {
+    const bids = openRows(tx, templateId).filter((r) => r.side === 'taker')
+    closeRows(
+      tx,
+      bids.map((b) => b.id),
+      now,
+    )
+    return bids.map((b) => b.id)
+  }
+  return byRefusal(
     tx,
     templateId,
     opts,
     (ctx) => {
-      const book = seen.map((b) => ({ by: b.takerId, score: b.score }))
       const result = turnDownProposedTemplateBids(ctx.agreement, ctx.people, giverId, book)
       if (!result.ok) return result
-      const { saved, entry, replacedOffer, closedIds } = resetTemplateOffer(
+      const { saved, entry, replacedOffer, closedIds, floor } = resetTemplateOffer(
         tx,
         ctx.row,
         giverId,
@@ -450,13 +492,52 @@ export function turnDownTemplateBidsIn(
           offerRound: ctx.row.offerRound,
           entryIds: closedIds,
           ...replacedOffer,
+          bidsFrom: floor.before,
         },
-        after: { score: saved.score, offerRound: saved.offerRound, entryId: entry.id },
+        after: {
+          score: saved.score,
+          offerRound: saved.offerRound,
+          entryId: entry.id,
+          bidsFrom: floor.after,
+        },
         at: now,
       })
       return ok(saved)
     },
-    () => fail('not_proposed'),
+    (ctx) => {
+      const result = turnDownTemplateChangeBids(ctx.agreement, ctx.people, giverId, book)
+      if (!result.ok) return result
+      const entryIds = closeBids()
+      // The offer stays in flight, now his (a new giver row). The domain refuses a turn-down
+      // with no parent offer (`no_offer`), so there always is one.
+      const offer = result.value.status === 'agreed' ? result.value.change?.offer : null
+      if (!offer) throw new Error('turn-down without a parent offer')
+      const reissued = addEntry(
+        tx,
+        { templateId, userId: giverId, side: 'giver', score: offer.score },
+        now,
+      )
+      const floor = markBidsFrom(tx, templateId)
+      const replaced = reissued.replaced
+      writeAudit(tx, {
+        actor: { kind: 'user', userId: giverId },
+        action: 'template.bids_turned_down',
+        entityType: 'template',
+        entityId: templateId,
+        before: {
+          score: ctx.row.score,
+          entryIds,
+          ...(replaced && { replacedOffer: { entryId: replaced.id, score: replaced.score } }),
+          bidsFrom: floor.before,
+        },
+        after: {
+          entryId: reissued.entry.id,
+          bidsFrom: floor.after,
+        },
+        at: now,
+      })
+      return ok(ctx.row)
+    },
   )
 }
 

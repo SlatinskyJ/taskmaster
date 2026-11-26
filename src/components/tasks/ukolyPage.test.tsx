@@ -193,6 +193,7 @@ describe('switch openRows (#205): Úkoly rows open their page', () => {
     deadline: null,
     change: null,
     bidding: null,
+    lastBids: [],
   }
   const list = [
     task(4, 'Čekající', { status: 'done_unconfirmed', completedBy: boys[1] ?? null }),

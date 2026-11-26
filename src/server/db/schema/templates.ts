@@ -40,6 +40,12 @@ export const templates = sqliteTable(
      * round (#209). Approvals count only in the current round. Unchanged once agreed.
      */
     offerRound: integer('offer_round').notNull().default(1),
+    /**
+     * The same-number floor (#232): the highest thread row id when bids last reset (an agreement
+     * or a turn-down). A taker's previous bid counts only above it (and above the newest giver
+     * row). 0 = no reset yet.
+     */
+    bidsFrom: integer('bids_from').notNull().default(0),
     /** Spec §5.5: on → a completion waits for a giver's approval. */
     approvalRequired: integer('approval_required', { mode: 'boolean' }).notNull(),
     /** Schedule weekdays as bits: `1 << weekday` (0 = Sunday … 6 = Saturday). 0 = no schedule. */

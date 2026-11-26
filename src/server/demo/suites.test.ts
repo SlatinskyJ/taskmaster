@@ -156,7 +156,7 @@ describe('e2e seeds (#183)', () => {
     expect(listTasks(db)).toHaveLength(0)
     const tata = db.select().from(users).where(eq(users.username, 'tata')).get()?.id ?? 0
     // Newest first, as Úkoly lists them.
-    const views = listTemplates(db, tata, { choreBidding: true })
+    const views = listTemplates(db, tata, { choreBidding: true, bidRefusals: false })
     expect(views.map((t) => [t.title, t.status, t.score])).toEqual([
       ['Zalít kytky', 'proposed', 4],
       ['Vynést kompost', 'proposed', 10],
@@ -165,6 +165,18 @@ describe('e2e seeds (#183)', () => {
     expect(views[0]?.bidding?.bids.map((b) => [b.name, b.score])).toEqual([
       ['Starší', 6],
       ['Mladší', 7],
+    ])
+  })
+
+  it('chorechange: Umýt koupelnu agreed at 8, Starší bids 10 and Mladší 11, no offer', () => {
+    const db = seeded('chorechange')
+    const tata = db.select().from(users).where(eq(users.username, 'tata')).get()?.id ?? 0
+    const views = listTemplates(db, tata, { choreBidding: false, bidRefusals: true })
+    expect(views.map((t) => [t.title, t.status, t.score])).toEqual([['Umýt koupelnu', 'active', 8]])
+    expect(views[0]?.change?.offer).toBeNull()
+    expect(views[0]?.change?.bids.map((b) => [b.name, b.score])).toEqual([
+      ['Starší', 10],
+      ['Mladší', 11],
     ])
   })
 })

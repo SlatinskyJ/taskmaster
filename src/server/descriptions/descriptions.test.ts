@@ -414,6 +414,7 @@ describe('templates (spec §5.1)', () => {
       score: 10,
       offerRound: 1,
       entryIds: [],
+      bidsFrom: 0,
     })
     expect(log[0]?.after).toMatchObject({ description: 'Až k popelnici', offerRound: 2 })
     // The old yes no longer counts: Starší's yes now is the first taker yes of round 2.
@@ -424,11 +425,13 @@ describe('templates (spec §5.1)', () => {
   it('proposed with a bid (choreBidding on): the bid closes', () => {
     const f = family()
     const id = must(createTemplate(f.db, f.tata, input, T0)).id
-    must(bidOnTemplate(f.db, f.mladsi, id, 14, T1, { choreBidding: true }))
+    must(bidOnTemplate(f.db, f.mladsi, id, 14, T1, { choreBidding: true, bidRefusals: false }))
     must(changeDescriptionOf(f.db, tpl(id), f.tata, 'nový', T2))
     const entry = templateAudits(f.db, id).find((a) => a.action === 'template.description_changed')
     expect((entry?.before as { entryIds: number[] }).entryIds).toHaveLength(1)
-    expect(acceptOfferOnTemplate(f.db, f.mladsi, id, 10, T3, { choreBidding: true })).toEqual({
+    expect(
+      acceptOfferOnTemplate(f.db, f.mladsi, id, 10, T3, { choreBidding: true, bidRefusals: false }),
+    ).toEqual({
       ok: false,
       error: 'no_bid',
     })
@@ -545,7 +548,7 @@ describe('a stale page: seenDescription (ruling 8)', () => {
       deadline: null,
       description: 'x',
     }
-    const on = { choreBidding: true }
+    const on = { choreBidding: true, bidRefusals: false }
     const id = must(createTemplate(f.db, f.tata, input, T0)).id
     expect(approveTemplateScore(f.db, f.starsi, id, 10, T1, 'old')).toEqual(stale)
     expect(bidOnTemplate(f.db, f.mladsi, id, 14, T1, { ...on, seenDescription: 'old' })).toEqual(

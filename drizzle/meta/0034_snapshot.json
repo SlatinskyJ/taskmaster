@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9d199152-aaa3-4ccf-9d7e-88ffd9c4673c",
+  "id": "9fd5199f-63c7-41a9-b692-0de7d82c8a99",
   "prevId": "e0e7706b-9778-4d84-a420-89dc24aecb3e",
   "tables": {
     "audit_log": {
@@ -508,172 +508,6 @@
         "settlement_corrections_reason_check": {
           "name": "settlement_corrections_reason_check",
           "value": "length(trim(\"settlement_corrections\".\"reason\")) BETWEEN 1 AND 1000"
-        }
-      }
-    },
-    "description_changes": {
-      "name": "description_changes",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "task_id": {
-          "name": "task_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "template_id": {
-          "name": "template_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "proposed_by": {
-          "name": "proposed_by",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "closed_at": {
-          "name": "closed_at",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "closed_as": {
-          "name": "closed_as",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "closed_by": {
-          "name": "closed_by",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "description_changes_open_task_idx": {
-          "name": "description_changes_open_task_idx",
-          "columns": [
-            "task_id"
-          ],
-          "isUnique": true,
-          "where": "closed_at IS NULL AND task_id IS NOT NULL"
-        },
-        "description_changes_open_template_idx": {
-          "name": "description_changes_open_template_idx",
-          "columns": [
-            "template_id"
-          ],
-          "isUnique": true,
-          "where": "closed_at IS NULL AND template_id IS NOT NULL"
-        },
-        "description_changes_task_idx": {
-          "name": "description_changes_task_idx",
-          "columns": [
-            "task_id"
-          ],
-          "isUnique": false
-        },
-        "description_changes_template_idx": {
-          "name": "description_changes_template_idx",
-          "columns": [
-            "template_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "description_changes_task_id_tasks_id_fk": {
-          "name": "description_changes_task_id_tasks_id_fk",
-          "tableFrom": "description_changes",
-          "tableTo": "tasks",
-          "columnsFrom": [
-            "task_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "description_changes_template_id_templates_id_fk": {
-          "name": "description_changes_template_id_templates_id_fk",
-          "tableFrom": "description_changes",
-          "tableTo": "templates",
-          "columnsFrom": [
-            "template_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "description_changes_proposed_by_users_id_fk": {
-          "name": "description_changes_proposed_by_users_id_fk",
-          "tableFrom": "description_changes",
-          "tableTo": "users",
-          "columnsFrom": [
-            "proposed_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "description_changes_closed_by_users_id_fk": {
-          "name": "description_changes_closed_by_users_id_fk",
-          "tableFrom": "description_changes",
-          "tableTo": "users",
-          "columnsFrom": [
-            "closed_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {
-        "description_changes_target_check": {
-          "name": "description_changes_target_check",
-          "value": "(\"description_changes\".\"task_id\" IS NULL) <> (\"description_changes\".\"template_id\" IS NULL)"
-        },
-        "description_changes_closed_check": {
-          "name": "description_changes_closed_check",
-          "value": "(\"description_changes\".\"closed_at\" IS NULL AND \"description_changes\".\"closed_as\" IS NULL) OR (\"description_changes\".\"closed_at\" IS NOT NULL AND \"description_changes\".\"closed_as\" IS NOT NULL AND \"description_changes\".\"closed_as\" IN ('agreed', 'applied', 'declined', 'withdrawn', 'replaced', 'discarded'))"
         }
       }
     },
@@ -1386,13 +1220,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "status": {
           "name": "status",
           "type": "text",
@@ -1918,13 +1745,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "status": {
           "name": "status",
           "type": "text",
@@ -1946,6 +1766,14 @@
           "notNull": true,
           "autoincrement": false,
           "default": 1
+        },
+        "bids_from": {
+          "name": "bids_from",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
         },
         "approval_required": {
           "name": "approval_required",

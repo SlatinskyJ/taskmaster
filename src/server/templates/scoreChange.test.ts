@@ -102,8 +102,8 @@ describe('template score change', () => {
       action: 'template.score_changed',
       actor: s.mladsi,
       kind: 'user',
-      before: { score: 3 },
-      after: { score: 4, entryIds: [offer], closedIds: [bid], by: 'offer' },
+      before: { score: 3, bidsFrom: 0 },
+      after: { score: 4, entryIds: [offer], closedIds: [bid], by: 'offer', bidsFrom: offer },
     })
   })
 
@@ -119,8 +119,8 @@ describe('template score change', () => {
       action: 'template.score_changed',
       actor: s.tata,
       kind: 'user',
-      before: { score: 3 },
-      after: { score: 4, entryIds: [low], closedIds: [high], by: 'bid' },
+      before: { score: 3, bidsFrom: 0 },
+      after: { score: 4, entryIds: [low], closedIds: [high], by: 'bid', bidsFrom: high },
     })
   })
 
@@ -137,8 +137,8 @@ describe('template score change', () => {
         action: 'template.score_changed',
         actor: s.mama,
         kind: 'user',
-        before: { score: 3 },
-        after: { score: 4, entryIds: ids, closedIds: [], by: 'bid' },
+        before: { score: 3, bidsFrom: 0 },
+        after: { score: 4, entryIds: ids, closedIds: [], by: 'bid', bidsFrom: ids.at(-1) },
       },
     ])
   })
@@ -161,8 +161,14 @@ describe('template score change', () => {
       action: 'template.score_changed',
       actor: s.tata,
       kind: 'user',
-      before: { score: 3, replacedOffer: { entryId: oldOffer, score: 5 } },
-      after: { score: 4, entryIds: [low, counter], closedIds: [high], by: 'counter' },
+      before: { score: 3, replacedOffer: { entryId: oldOffer, score: 5 }, bidsFrom: 0 },
+      after: {
+        score: 4,
+        entryIds: [low, counter],
+        closedIds: [high],
+        by: 'counter',
+        bidsFrom: counter,
+      },
     })
   })
 
@@ -261,6 +267,8 @@ describe('template score change', () => {
       status: 'agreed',
       score: 6,
       change: { offer: null, bids: [{ by: s.mladsi, score: 4 }] },
+      // Bids reset on the agreement at 6: only Mladší's new 4 counts (#232).
+      lastBids: [{ by: s.mladsi, score: 4 }],
     })
   })
 

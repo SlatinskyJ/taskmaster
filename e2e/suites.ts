@@ -49,6 +49,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'recurring', spec: 'recurring.spec.ts', seed: 'recurring' },
   // Its own server: bids, Nechci and the turn-down change the chores for good (#209).
   { name: 'chores', spec: 'chore-bidding.spec.ts', seed: 'chores' },
+  // Its own server: Nechci and the turn-down change the chore's price change for good (#232).
+  { name: 'chorechange', spec: 'chore-change.spec.ts', seed: 'chorechange' },
   // Its own server: the scheduled and expired rows of #39.
   { name: 'scheduler', spec: 'scheduler.spec.ts', seed: 'scheduler' },
   // Its own server: the proposals change for good.
@@ -69,6 +71,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'keyboard-password', spec: 'keyboard-password.spec.ts', seed: 'password' },
   // The reject reason (#206) with the keyboard open. Read-only: forms are opened, never sent.
   { name: 'keyboard-approve', spec: 'keyboard-approve.spec.ts', seed: 'approve' },
+  // Czech letters in the app's fonts (#246). Read-only.
+  { name: 'fonts', spec: 'fonts.spec.ts', seed: 'demo' },
 ]
 
 /** Passkeys on (localhost) for the `on` suite only, at its own port. */

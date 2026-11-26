@@ -95,7 +95,7 @@ function applyWithReset(
     )
     return
   }
-  const { saved, entry, replacedOffer, closedIds } = resetTemplateOffer(
+  const { saved, entry, replacedOffer, closedIds, floor } = resetTemplateOffer(
     tx,
     loaded.row,
     giverId,
@@ -106,8 +106,20 @@ function applyWithReset(
     target,
     'changed',
     actor,
-    { ...before, offerRound: loaded.row.offerRound, entryIds: closedIds, ...replacedOffer },
-    { description: next, score: saved.score, offerRound: saved.offerRound, entryId: entry.id },
+    {
+      ...before,
+      offerRound: loaded.row.offerRound,
+      entryIds: closedIds,
+      ...replacedOffer,
+      bidsFrom: floor.before,
+    },
+    {
+      description: next,
+      score: saved.score,
+      offerRound: saved.offerRound,
+      entryId: entry.id,
+      bidsFrom: floor.after,
+    },
     now,
   )
 }

@@ -193,7 +193,7 @@
 
 /* Type, shape, spacing: UI doc §2.3. */
 @theme {
-  --font-display: 'Fredoka Variable', 'Fredoka', ui-rounded, system-ui, sans-serif;
+  --font-display: 'Baloo 2 Variable', 'Baloo 2', ui-rounded, system-ui, sans-serif;
   --font-body: 'Nunito Variable', 'Nunito', ui-rounded, system-ui, sans-serif;
   --font-sans: var(--font-body);
 
@@ -218,9 +218,15 @@
   --spacing-tap: 44px;
 }
 
-/* Fredoka with tabular figures, for every number (UI doc §2.3). */
+/* Outside @theme, so Tailwind makes no font-num utility: `num` is the one way to set numbers. */
+:root {
+  --font-num: 'Fredoka Digits', 'Baloo 2 Variable', ui-rounded, system-ui, sans-serif;
+}
+
+/* Fredoka digits with tabular figures, Baloo 2 letters (UI doc §2.3, #246). Don't combine with
+   font-display: both set font-family and cn() does not know they clash. */
 @utility num {
-  font-family: var(--font-display);
+  font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
 }
 
