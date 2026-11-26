@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { ProfilePassword } from '~/components/auth/ProfilePassword'
 import { ProfilePasskeys } from '~/components/auth/ProfilePasskeys'
+import { ProfileInstall } from '~/components/pwa/ProfileInstall'
 import { Avatar } from '~/components/shell/Avatar'
 import { loadMine, ProfileSuggestions } from '~/components/suggestions/ProfileSuggestions'
 import { SectionLabel } from '~/components/shell/SectionLabel'
@@ -22,9 +23,9 @@ import { getPasskeysEnabledFn, listMyPasskeysFn } from '~/server/passkeys/functi
 import { listMySuggestionsFn } from '~/server/suggestions/functions'
 
 // Profile (UI doc §7.4): light / dark / auto, effects on/off, passkeys (#29), own password
-// (#210, behind the `passwordChange` switch), suggestions (#247, behind `suggestions`), log
-// out. Both choices are stored on this device (src/lib/theme.ts, src/lib/effects.ts): a phone
-// and a shared screen may want different ones.
+// (#210, behind the `passwordChange` switch), suggestions (#247, behind `suggestions`),
+// install the app (#302), log out. Both choices are stored on this device (src/lib/theme.ts,
+// src/lib/effects.ts): a phone and a shared screen may want different ones.
 export const Route = createFileRoute('/_app/profil')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/profil')
@@ -137,6 +138,8 @@ function Profile() {
           data={suggestions}
           onReload={() => router.invalidate()}
         />
+
+        <ProfileInstall />
 
         <Button
           variant="no"
