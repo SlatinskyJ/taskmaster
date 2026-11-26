@@ -24,7 +24,7 @@ function facts(over: Partial<PrFacts> = {}): PrFacts {
     needsJakubAfterLabel: false,
     ci: 'green',
     unresolvedThreads: 0,
-    inStack: false,
+    stack: null,
     behind: false,
     handedOver: false,
     ...over,
@@ -36,6 +36,7 @@ interface Options {
   update?: 'ok' | 'conflict'
   merge?: 'merged' | 'refused'
   onComment?: () => void
+  onUnstack?: () => void
   labelId?: number | null
 }
 
@@ -65,6 +66,11 @@ function fakeGh(o: Options) {
     },
     removeLabel: (pr, label) => {
       calls.push({ op: 'removeLabel', args: [pr, label] })
+      return Promise.resolve()
+    },
+    unstack: (stack, prs) => {
+      calls.push({ op: 'unstack', args: [stack, prs] })
+      if (o.onUnstack) o.onUnstack()
       return Promise.resolve()
     },
   }
@@ -230,6 +236,37 @@ describe('record and step', () => {
     const f = fakeGh({ prs: [facts({ ci: 'pending' })] })
     await step(f.gh, log, KEY)
     expect(f.calls.map((c) => c.op)).toEqual(['labelledPrs'])
+  })
+})
+
+describe('step: stacks', () => {
+  it('unstacks, reads the PRs again and moves the bottom PR in the same run', async () => {
+    let unstacked = false
+    const st = { number: 3, openPrs: [10, 11] }
+    const f = fakeGh({
+      prs: () =>
+        unstacked
+          ? [facts({ number: 10 }), facts({ number: 11, baseIsMain: false })]
+          : [facts({ number: 10, stack: st }), facts({ number: 11, baseIsMain: false, stack: st })],
+      onUnstack: () => {
+        unstacked = true
+      },
+    })
+    expect(await step(f.gh, log, KEY)).toEqual({ handedOver: [] })
+    expect(f.writes()).toEqual([
+      { op: 'unstack', args: [3, [10, 11]] },
+      { op: 'merge', args: [10, X] },
+      { op: 'removeLabel', args: [10, 'merge-me'] },
+    ])
+  })
+
+  it('unstacks at most once per run, and skips updates and merges in that pass', async () => {
+    const st = { number: 3, openPrs: [10] }
+    const f = fakeGh({
+      prs: [facts({ number: 9, behind: true }), facts({ number: 10, stack: st })],
+    })
+    await step(f.gh, log, KEY)
+    expect(f.writes().map((c) => c.op)).toEqual(['unstack', 'updateBranch'])
   })
 })
 

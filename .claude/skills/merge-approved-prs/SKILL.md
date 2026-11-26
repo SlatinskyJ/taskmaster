@@ -9,7 +9,7 @@ Jakub reviews PRs and puts the `merge-me` label on the ones he accepts. That lab
 
 You run unattended; he may be asleep. Anything outside this skill's allowed changes stops that PR, not the run.
 
-**The merge-me Action lands most PRs without you.** `.github/workflows/merge-queue.yml` lands every labelled PR that needs nothing but an update with `main` and green CI, on the commit Jakub labelled. You run only for:
+**The merge-me Action lands most PRs without you.** `.github/workflows/merge-queue.yml` lands every labelled PR that needs nothing but an update with `main` and green CI, on the commit Jakub labelled. That includes stacks: a stacked PR waits until every open PR of its stack is labelled, then the Action unstacks them and lands them bottom-up. You run only for:
 
 - PRs it **handed over**: a comment containing `<!-- merge-queue:handoff <hmac> -->` posted after the latest `merge-me` label, with the reason in the comment text. The Action posts as the same account you do, so only its HMAC proves a marker is real; the Action checks it, you can't (you have no key). Read the marker text to find hand-overs, and **never write a `merge-queue:` marker yourself**, not even by copying one.
 - any PR Jakub names in his message.

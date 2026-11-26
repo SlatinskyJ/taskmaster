@@ -44,8 +44,23 @@ export async function run(
 }
 
 // One queue step over every labelled PR: hand over, update, merge or wait.
+// After taking a stack apart it reads the PRs again, so the bottom PR can move in the same run.
 export async function step(gh: Gh, log: Log, markerKey: string): Promise<{ handedOver: number[] }> {
   const handedOver: number[] = []
+  if (await pass(gh, log, markerKey, handedOver, true)) {
+    await pass(gh, log, markerKey, handedOver, false)
+  }
+  return { handedOver }
+}
+
+/** Returns true when it unstacked (and then skipped updates and merges, which need fresh facts). */
+async function pass(
+  gh: Gh,
+  log: Log,
+  markerKey: string,
+  handedOver: number[],
+  mayUnstack: boolean,
+): Promise<boolean> {
   const prs = await gh.labelledPrs()
   const byNumber = new Map<number, PrFacts>(prs.map((p) => [p.number, p]))
   const factsOf = (pr: number): PrFacts => {
@@ -58,8 +73,18 @@ export async function step(gh: Gh, log: Log, markerKey: string): Promise<{ hande
     log(`merge-queue: #${pr} handed over: ${reason}`)
     handedOver.push(pr)
   }
-  for (const action of nextActions(prs)) {
+  const actions = nextActions(prs)
+  const unstacking = mayUnstack && actions.some((a) => a.kind === 'unstack')
+  for (const action of actions) {
+    if (unstacking && (action.kind === 'update' || action.kind === 'merge')) continue
     switch (action.kind) {
+      case 'unstack':
+        if (!mayUnstack) break
+        await gh.unstack(action.stack, action.prs)
+        log(
+          `merge-queue: stack ${action.stack} taken apart (${action.prs.map((n) => `#${n}`).join(', ')})`,
+        )
+        break
       case 'hand-over':
         await handOver(action.pr, action.reason)
         break
@@ -77,14 +102,14 @@ export async function step(gh: Gh, log: Log, markerKey: string): Promise<{ hande
           await handOver(action.pr, 'merge refused (the head moved, or the ruleset blocked it)')
         break
       case 'wait':
-        log(`merge-queue: #${action.pr} waiting for CI`)
+        log(`merge-queue: #${action.pr} waiting for ${action.for}`)
         break
       case 'idle':
         log('merge-queue: nothing to do')
         break
     }
   }
-  return { handedOver }
+  return unstacking
 }
 
 // What the workflow's two jobs run: with a label event (job record) only record; otherwise (job

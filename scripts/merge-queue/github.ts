@@ -52,6 +52,8 @@ export interface Gh {
   merge(pr: number, sha: string): Promise<'merged' | 'refused'>
   comment(pr: number, body: string): Promise<void>
   removeLabel(pr: number, label: string): Promise<void>
+  /** Takes the PRs out of the stack; their bases stay as they are. */
+  unstack(stack: number, prs: number[]): Promise<void>
 }
 
 /**
@@ -224,18 +226,30 @@ export function makeGh(
     return nodes.filter((n) => !n.isResolved).length
   }
 
-  async function inStack(pr: number): Promise<boolean> {
+  interface GhStack {
+    number: number
+    open: boolean
+    pull_requests: { number: number; state: string }[]
+  }
+
+  async function stackOf(pr: number): Promise<PrFacts['stack']> {
     let body: unknown
     try {
       body = await getJson<unknown>(`${base}/stacks?pull_request=${pr}`)
     } catch (e) {
-      if (e instanceof HttpError && e.status === 404) return false
+      if (e instanceof HttpError && e.status === 404) return null
       throw e
     }
-    if (Array.isArray(body)) return body.length > 0
-    const stacks = (body as { stacks?: unknown } | null)?.stacks
-    if (Array.isArray(stacks)) return stacks.length > 0
-    return true // unknown shape: treat as stacked, so the PR is handed over, never merged
+    // An unknown shape throws: the run ends red and nothing is updated or merged.
+    if (!Array.isArray(body)) throw new Error(`stacks for PR ${pr}: unexpected answer`)
+    const open = (body as GhStack[]).filter((s) => s.open)
+    if (open.length === 0) return null
+    const [s] = open
+    if (open.length > 1 || !s || typeof s.number !== 'number' || !Array.isArray(s.pull_requests)) {
+      throw new Error(`stacks for PR ${pr}: unexpected answer`)
+    }
+    const openPrs = s.pull_requests.filter((p) => p.state === 'open').map((p) => p.number)
+    return { number: s.number, openPrs }
   }
 
   function qualifyingLabel(events: IssueEvent[]): IssueEvent | undefined {
@@ -284,7 +298,7 @@ export function makeGh(
       needsJakubAfterLabel,
       ci: 'pending',
       unresolvedThreads: 0,
-      inStack: false,
+      stack: null,
       behind: false,
       handedOver,
     }
@@ -296,7 +310,7 @@ export function makeGh(
     )
     facts.ci = requiredCi(await required(), check_runs)
     facts.unresolvedThreads = await unresolvedThreads(pr)
-    facts.inStack = await inStack(pr)
+    facts.stack = await stackOf(pr)
     // Not mergeable_state: GitHub computes it lazily and answers 'unknown' right after a push.
     const { behind_by } = await getJson<{ behind_by: number }>(
       `${base}/compare/main...${detail.head.sha}`,
@@ -345,6 +359,9 @@ export function makeGh(
     },
     async removeLabel(pr, label) {
       await request('DELETE', `${base}/issues/${pr}/labels/${encodeURIComponent(label)}`)
+    },
+    async unstack(stack, prs) {
+      await request('POST', `${base}/stacks/${stack}/unstack`, { pull_requests: prs })
     },
   }
 }

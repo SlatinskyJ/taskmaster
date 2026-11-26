@@ -19,7 +19,7 @@ function facts(over: Partial<PrFacts> = {}): PrFacts {
     unresolvedThreads: 0,
     fromFork: false,
     baseIsMain: true,
-    inStack: false,
+    stack: null,
     behind: false,
     handedOver: false,
     ...over,
@@ -66,17 +66,9 @@ describe('entryCheck', () => {
   it('fails a PR from a fork (its author could rewrite an update merge in the web editor)', () => {
     expect(entryCheck(facts({ fromFork: true }))).toEqual({ ok: false, reason: 'PR from a fork' })
   })
-  it('fails a PR whose base is not main (a stack that is not linked)', () => {
-    expect(entryCheck(facts({ baseIsMain: false }))).toEqual({
-      ok: false,
-      reason: 'base is not main',
-    })
-  })
-  it('fails a PR in a GitHub stack', () => {
-    expect(entryCheck(facts({ inStack: true }))).toEqual({
-      ok: false,
-      reason: 'in a GitHub stack',
-    })
+  it('passes a PR on a lower PR or in a stack: nextActions makes it wait', () => {
+    expect(entryCheck(facts({ baseIsMain: false }))).toEqual({ ok: true })
+    expect(entryCheck(facts({ stack: { number: 3, openPrs: [9] } }))).toEqual({ ok: true })
   })
 })
 
@@ -121,7 +113,7 @@ describe('nextActions', () => {
   })
 
   it('waits on a clean PR whose CI is pending', () => {
-    expect(nextActions([facts({ ci: 'pending' })])).toEqual([{ kind: 'wait', pr: 9 }])
+    expect(nextActions([facts({ ci: 'pending' })])).toEqual([{ kind: 'wait', pr: 9, for: 'CI' }])
   })
 
   it('updates again when main moved while CI ran on its update merge', () => {
@@ -151,6 +143,61 @@ describe('nextActions', () => {
         facts({ number: 7, behind: true }),
         facts({ number: 9, ci: 'pending', updatedByAction: true, headSha: H }),
       ]),
-    ).toEqual([{ kind: 'wait', pr: 9 }])
+    ).toEqual([{ kind: 'wait', pr: 9, for: 'CI' }])
+  })
+})
+
+describe('nextActions: stacks', () => {
+  const st = (openPrs: number[]) => ({ number: 3, openPrs })
+
+  it('waits, without a hand-over, for a stacked PR whose lower PR is not labelled', () => {
+    expect(nextActions([facts({ number: 11, baseIsMain: false, stack: st([10, 11]) })])).toEqual([
+      { kind: 'wait', pr: 11, for: 'its whole stack' },
+    ])
+  })
+
+  it('unstacks once every open PR of the stack is labelled and passes', () => {
+    const prs = [
+      facts({ number: 10, stack: st([10, 11]) }),
+      facts({ number: 11, baseIsMain: false, stack: st([10, 11]) }),
+    ]
+    expect(nextActions(prs)).toEqual([{ kind: 'unstack', stack: 3, prs: [10, 11] }])
+  })
+
+  it('does not unstack while a PR of the stack is handed over', () => {
+    const prs = [
+      facts({ number: 10, stack: st([10, 11]), handedOver: true }),
+      facts({ number: 11, baseIsMain: false, stack: st([10, 11]) }),
+    ]
+    expect(nextActions(prs)).toEqual([{ kind: 'wait', pr: 11, for: 'its whole stack' }])
+  })
+
+  it('does not unstack while a PR of the stack fails its checks (and hands that one over)', () => {
+    const prs = [
+      facts({ number: 10, stack: st([10, 11]), ci: 'red' }),
+      facts({ number: 11, baseIsMain: false, stack: st([10, 11]) }),
+    ]
+    expect(nextActions(prs)).toEqual([
+      { kind: 'hand-over', pr: 10, reason: 'CI red' },
+      { kind: 'wait', pr: 11, for: 'its whole stack' },
+    ])
+  })
+
+  it('a PR on a lower PR (out of the stack) waits for it; the lower one lands', () => {
+    const prs = [facts({ number: 10 }), facts({ number: 11, baseIsMain: false })]
+    expect(nextActions(prs)).toEqual([
+      { kind: 'wait', pr: 11, for: 'its lower PR' },
+      { kind: 'merge', pr: 10, sha: A },
+    ])
+  })
+
+  it('never makes a stacked or off-main PR the active one', () => {
+    const prs = [
+      facts({ number: 4, baseIsMain: false, updatedByAction: true }),
+      facts({ number: 9 }),
+    ]
+    expect(nextActions(prs).filter((a) => a.kind === 'merge')).toEqual([
+      { kind: 'merge', pr: 9, sha: A },
+    ])
   })
 })

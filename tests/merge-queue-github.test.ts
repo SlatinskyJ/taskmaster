@@ -332,7 +332,7 @@ describe('labelledPrs', () => {
         needsJakubAfterLabel: false,
         ci: 'green',
         unresolvedThreads: 0,
-        inStack: false,
+        stack: null,
         behind: false,
         handedOver: false,
       },
@@ -502,7 +502,20 @@ describe('labelledPrs', () => {
         },
       },
     }
-    routes[`GET ${R}/stacks`] = { status: 200, body: [{ number: 3 }] }
+    routes[`GET ${R}/stacks`] = {
+      status: 200,
+      body: [
+        {
+          number: 3,
+          open: true,
+          pull_requests: [
+            { number: 8, state: 'closed' },
+            { number: 9, state: 'open' },
+            { number: 10, state: 'open' },
+          ],
+        },
+      ],
+    }
     routes[`GET ${R}/pulls/9`] = {
       status: 200,
       body: {
@@ -516,7 +529,11 @@ describe('labelledPrs', () => {
     }
     const { impl } = fakeFetch(routes)
     const [pr] = await makeGh('t', KEY, impl, { now: () => NOW }).labelledPrs()
-    expect(pr).toMatchObject({ unresolvedThreads: 1, inStack: true, behind: true })
+    expect(pr).toMatchObject({
+      unresolvedThreads: 1,
+      stack: { number: 3, openPrs: [9, 10] },
+      behind: true,
+    })
   })
 })
 
@@ -607,5 +624,28 @@ describe('writes', () => {
       `DELETE ${R}/issues/9/labels/merge-me`,
     ])
     expect(calls[0]?.body).toEqual({ body: 'hi' })
+  })
+})
+
+describe('labelledPrs: stack', () => {
+  async function stackWith(reply: Reply) {
+    const routes = world({})
+    routes[`GET ${R}/stacks`] = reply
+    const { impl } = fakeFetch(routes)
+    return makeGh('t', KEY, impl, { now: () => NOW }).labelledPrs()
+  }
+  it('no stack (empty list, 404, or only closed stacks) is null', async () => {
+    expect((await stackWith({ status: 200, body: [] }))[0]?.stack).toBeNull()
+    expect((await stackWith({ status: 404, body: {} }))[0]?.stack).toBeNull()
+    const closed = { number: 2, open: false, pull_requests: [{ number: 9, state: 'closed' }] }
+    expect((await stackWith({ status: 200, body: [closed] }))[0]?.stack).toBeNull()
+  })
+  it('an answer of unknown shape throws, so nothing is updated or merged', async () => {
+    await expect(stackWith({ status: 200, body: { stacks: [] } })).rejects.toThrow(
+      'unexpected answer',
+    )
+    await expect(stackWith({ status: 200, body: [{ open: true }] })).rejects.toThrow(
+      'unexpected answer',
+    )
   })
 })
