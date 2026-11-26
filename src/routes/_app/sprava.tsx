@@ -7,6 +7,12 @@ import { DismissDialog } from '~/components/admin/DismissDialog'
 import { dismissInput, DisputesCard, loadAdminDisputes } from '~/components/admin/DisputesCard'
 import { afterFix, draftKey, FixCard, fixStartOf, loadFixable } from '~/components/admin/FixCard'
 import { FixDrawer } from '~/components/admin/FixDrawer'
+import { CloseSuggestionDialog } from '~/components/admin/CloseSuggestionDialog'
+import type { CloseMove } from '~/components/admin/CloseSuggestionDialog'
+import { SendSuggestionDrawer } from '~/components/admin/SendSuggestionDrawer'
+import type { SendOutcome } from '~/components/admin/SendSuggestionDrawer'
+import { loadAdminSuggestions, SuggestionsCard } from '~/components/admin/SuggestionsCard'
+import { sendClose, sendIssue } from '~/components/suggestions/suggestionForms'
 import type { FixStart } from '~/components/admin/fixDraft'
 import { sendDismiss } from '~/components/disputes/disputeCalls'
 import { adminDisputeLines } from '~/components/disputes/disputeProps'
@@ -29,6 +35,12 @@ import type { AdminDisputeEntry } from '~/server/disputes/functions'
 import { dismissDisputeFn, getAdminDisputesFn } from '~/server/disputes/functions'
 import { listPasskeyCountsFn } from '~/server/passkeys/functions'
 import { getPeriodDefaultsFn, savePeriodDefaultsFn } from '~/server/periods/functions'
+import type { AdminSuggestion } from '~/server/suggestions/functions'
+import {
+  closeSuggestionFn,
+  getAdminSuggestionsFn,
+  sendSuggestionFn,
+} from '~/server/suggestions/functions'
 import type { PersonSummary } from '~/server/users/functions'
 import { createUserFn, listUsersFn, resetPasswordFn, updateUserFn } from '~/server/users/functions'
 
@@ -38,20 +50,22 @@ import { createUserFn, listUsersFn, resetPasswordFn, updateUserFn } from '~/serv
 // admin edits the default week directly. Sporné (#47, spec §5.11): the open disputes, first,
 // each kept with a note or fixed (Opravit, #48); Opravy bodů (#48, spec §5.9): the admin adds
 // or takes points, or corrects a settled week, directly. Both hidden while the `disputes`
-// switch is off.
+// switch is off. Návrhy (#247, spec §5.13): everyone's suggestions, closed or sent to GitHub;
+// hidden while the `suggestions` switch is off.
 export const Route = createFileRoute('/_app/sprava')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/sprava')
   },
   loader: async () => {
-    const [people, passkeys, defaults, disputes, fixable] = await Promise.all([
+    const [people, passkeys, defaults, disputes, fixable, suggestions] = await Promise.all([
       listUsersFn(),
       listPasskeyCountsFn(),
       getPeriodDefaultsFn(),
       loadAdminDisputes(() => getAdminDisputesFn()),
       loadFixable(() => getFixableFn()),
+      loadAdminSuggestions(() => getAdminSuggestionsFn()),
     ])
-    return { people, passkeys, defaults, disputes, fixable }
+    return { people, passkeys, defaults, disputes, fixable, suggestions }
   },
   component: Sprava,
 })
@@ -60,7 +74,7 @@ type Sheet = { mode: 'add' } | { mode: 'edit'; person: PersonSummary } | null
 
 function Sprava() {
   const { user } = Route.useRouteContext()
-  const { people, passkeys, defaults, disputes, fixable } = Route.useLoaderData()
+  const { people, passkeys, defaults, disputes, fixable, suggestions } = Route.useLoaderData()
   const router = useRouter()
   const [sheet, setSheet] = useState<Sheet>(null)
   // Kept apart from `sheet` so the drawer can close while its last content fades out.
@@ -74,6 +88,10 @@ function Sprava() {
   const [fixOpenings, setFixOpenings] = useState(0)
   // The typed reasons, per sheet: a reload after a stale row keeps them.
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [closing, setClosing] = useState<{ item: AdminSuggestion; move: CloseMove } | null>(null)
+  const [closeOpen, setCloseOpen] = useState(false)
+  const [sending, setSending] = useState<AdminSuggestion | null>(null)
+  const [sendOpen, setSendOpen] = useState(false)
   const editing = sheet?.mode === 'edit' ? sheet.person : undefined
 
   function open(next: Exclude<Sheet, null>) {
@@ -141,6 +159,18 @@ function Sprava() {
     await router.invalidate()
   }
 
+  async function sendSettled(outcome: SendOutcome) {
+    if ('notSaved' in outcome) {
+      // The issue exists: the sheet stays with its link, the list catches up.
+      await router.invalidate()
+      return
+    }
+    setSendOpen(false)
+    if (outcome.ok) toast.success(cs.suggestions.sentToast)
+    else toast.error(outcome.message)
+    await router.invalidate()
+  }
+
   return (
     <Screen title={cs.admin.title} user={user}>
       {showDisputes && (
@@ -173,6 +203,44 @@ function Sprava() {
           else toast.error(outcome.message)
           await router.invalidate()
         }}
+      />
+      <SuggestionsCard
+        data={suggestions}
+        onClose={(item, move) => {
+          setClosing({ item, move })
+          setCloseOpen(true)
+        }}
+        onSend={(item) => {
+          setSending(item)
+          setSendOpen(true)
+        }}
+        onRetry={() => {
+          void router.invalidate()
+        }}
+      />
+      <CloseSuggestionDialog
+        move={closing?.move ?? null}
+        open={closeOpen}
+        onOpenChange={setCloseOpen}
+        onConfirm={() =>
+          closing
+            ? sendClose(closeSuggestionFn, { id: closing.item.id, move: closing.move })
+            : Promise.resolve({ ok: true as const })
+        }
+        onDone={async (outcome) => {
+          setCloseOpen(false)
+          if (outcome.ok) toast.success(cs.admin.saved)
+          else toast.error(outcome.message)
+          await router.invalidate()
+        }}
+      />
+      <SendSuggestionDrawer
+        item={sending}
+        canSend={'canSend' in suggestions && suggestions.canSend}
+        open={sendOpen}
+        onOpenChange={setSendOpen}
+        onSend={(input) => sendIssue(sendSuggestionFn, input)}
+        onSettled={sendSettled}
       />
       {showFix && (
         <FixCard
