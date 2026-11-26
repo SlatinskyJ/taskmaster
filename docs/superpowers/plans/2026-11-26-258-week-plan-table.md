@@ -192,7 +192,7 @@ export function getWeekPlan(db: Db | Tx, now: Date): WeekPlan
 - Create: `src/components/week/planView.ts`
 - Modify: `src/lib/strings.ts` (`cs.plan`; `cs.templates.everyDay: 'každý den'`)
 - Modify: `src/lib/templateText.ts` (new `export function describeDays(days: readonly number[]): string`: all 7 days → `'každý den'`, else the days Monday-first joined by `', '` with `WEEK_ORDER`; `describeTemplate` calls it, so Úkoly and the plan table say the same thing)
-- Test: `src/components/week/planView.test.ts`, `src/lib/templateText.test.ts`
+- Test: `src/components/week/planView.test.ts`, `src/lib/templateText.test.ts`, `src/components/tasks/tasks.test.tsx` (its two every-day expectations, lines ~169 and ~238, change to "každý den …"; Decision 17, noted in the brief)
 
 **Interfaces:**
 - Consumes: `PlanCopy`, `PlanRow`, `WeekPlan` (Task 2 re-export); `dayLabel` (`~/components/tasks/taskView`: "Čt"), `dayMonth` (`~/components/period/periodView`), `formatPragueTime` (`~/lib/formatDate`), `formatPoints`, `cs`.
