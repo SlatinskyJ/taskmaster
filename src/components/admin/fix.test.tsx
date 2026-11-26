@@ -40,6 +40,7 @@ const dispute: AdminDisputeEntry = {
   reason,
   openedAt: '2026-11-22T10:00:00.000Z',
   value: { score: 22 },
+  page: null,
 }
 
 function view(start: FixStart, over: Partial<FixDraft> = {}, props: Partial<FixFormProps> = {}) {
