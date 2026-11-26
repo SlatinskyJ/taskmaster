@@ -556,6 +556,10 @@ export const cs = {
     waitWarn: 'Kluci nový popis nejdřív odsouhlasí.',
     waitingTitle: 'Nový popis čeká na souhlas',
     waitingRemove: 'Návrh: popis odebrat',
+    /** What a waiting change changes (Jakub 2026-11-26): the hint and screen-reader words. */
+    diffHint: 'Podtržené přibylo, přeškrtnuté ubylo.',
+    diffAdded: 'přibylo:',
+    diffRemoved: 'ubylo:',
     waitingFor: (names: string) => `Čeká na: ${names}`,
     agree: 'Souhlasím s popisem',
     decline: 'Nesouhlasím',

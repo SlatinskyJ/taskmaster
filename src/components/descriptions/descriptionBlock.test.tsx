@@ -45,10 +45,18 @@ const block = (p: Partial<Parameters<typeof DescriptionBlock>[0]>) =>
     />,
   )
 
-const card = (me: Me, c = change) =>
+const card = (me: Me, c = change, inForce: string | null = null, busy: Busy = null) =>
   renderToStaticMarkup(
-    <WaitingCard change={c} me={me} busy={null} onAnswer={vi.fn()} onTakeBack={vi.fn()} />,
+    <WaitingCard
+      change={c}
+      inForce={inForce}
+      me={me}
+      busy={busy}
+      onAnswer={vi.fn()}
+      onTakeBack={vi.fn()}
+    />,
   )
+type Busy = Parameters<typeof WaitingCard>[0]['busy']
 
 describe('DescriptionBlock', () => {
   it('shows the text as plain text with its line breaks', () => {
@@ -72,10 +80,11 @@ describe('DescriptionBlock', () => {
     expect(block({ text: null })).toBe('')
   })
 
-  it('a waiting change shows its card under the text', () => {
+  it('a waiting change shows its card under the text, as a diff against it', () => {
     const html = block({ change })
     expect(html).toContain(cs.description.waitingTitle)
-    expect(html).toContain('Umýt i kola.\nA vysát.')
+    expect(html).toContain('data-slot="description-diff"')
+    expect(html).toMatch(/<del[^>]*><span class="sr-only">[^<]*<\/span>auto\./)
   })
 })
 
@@ -104,17 +113,36 @@ describe('WaitingCard', () => {
   })
 
   it('busy: every button disabled, the pressed one aria-busy', () => {
-    const html = renderToStaticMarkup(
-      <WaitingCard
-        change={change}
-        me={starsi}
-        busy="yes"
-        onAnswer={vi.fn()}
-        onTakeBack={vi.fn()}
-      />,
-    )
+    const html = card(starsi, change, null, 'yes')
     expect(html.match(/disabled=""/g)).toHaveLength(2)
     expect(html).toMatch(/aria-busy="true"[^>]*>Souhlasím s popisem</)
+    expect(card(starsi, change, null, 'no')).toMatch(/aria-busy="true"[^>]*>Nesouhlasím</)
+    const back = card(tata, change, null, 'back')
+    expect(back).toMatch(/disabled=""[^>]*aria-busy="true"[^>]*>Vzít zpět</)
+  })
+
+  it('no names: no Čeká na line', () => {
+    expect(card(starsi, { ...change, waitingForNames: [] })).not.toContain('Čeká na')
+  })
+
+  it('no text in force: the new text plain, no diff', () => {
+    const html = card(starsi)
+    expect(html).toContain('Umýt i kola.\nA vysát.')
+    expect(html).not.toContain('description-diff')
+  })
+
+  it('a text in force: removed words struck, added underlined, each read out, and a hint', () => {
+    const html = card(starsi, change, 'Umýt kola.\nA vysát.')
+    expect(html).toMatch(
+      new RegExp(`<ins[^>]*><span class="sr-only">${cs.description.diffAdded} </span>i </ins>`),
+    )
+    expect(html).not.toContain('<del')
+    expect(html).toContain(cs.description.diffHint)
+    const swap = card(starsi, { ...change, description: 'Umýt auto.' }, 'Umýt kola.')
+    expect(swap).toMatch(
+      new RegExp(`<del[^>]*><span class="sr-only">${cs.description.diffRemoved} </span>kola</del>`),
+    )
+    expect(swap).toMatch(/<ins[^>]*><span class="sr-only">[^<]*<\/span>auto<\/ins>/)
   })
 })
 

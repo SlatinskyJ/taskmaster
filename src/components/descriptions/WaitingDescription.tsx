@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import type { Me } from '~/components/tasks/taskView'
 import { Button } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
+import { wordDiff } from '~/lib/textDiff'
 import { answerDescriptionFn, changeDescriptionFn } from '~/server/descriptions/functions'
 import type {
   DescriptionOutcome,
@@ -50,6 +51,7 @@ export function WaitingDescription({
   return (
     <WaitingCard
       change={change}
+      inForce={inForce}
       me={me}
       busy={busy}
       onAnswer={(yes) =>
@@ -64,15 +66,51 @@ export function WaitingDescription({
   )
 }
 
+/**
+ * The new text against the one in force (Jakub 2026-11-26): added words underlined on a green
+ * tint, removed ones struck through, so the difference reads without colour too; a screen
+ * reader hears "přibylo:" / "ubylo:" before each.
+ */
+export function TextDiff({ before, after }: { before: string; after: string }) {
+  return (
+    <div data-slot="description-diff" className="grid gap-1">
+      <p className="break-words whitespace-pre-line">
+        {wordDiff(before, after).map((part, k) =>
+          part.kind === 'same' ? (
+            part.text
+          ) : part.kind === 'added' ? (
+            <ins
+              key={k}
+              className="rounded-sm bg-state-open/15 text-state-open-text decoration-2 underline-offset-2"
+            >
+              <span className="sr-only">{cs.description.diffAdded} </span>
+              {part.text}
+            </ins>
+          ) : (
+            <del key={k} className="text-state-rejected-text decoration-2">
+              <span className="sr-only">{cs.description.diffRemoved} </span>
+              {part.text}
+            </del>
+          ),
+        )}
+      </p>
+      <p className="text-meta text-muted">{cs.description.diffHint}</p>
+    </div>
+  )
+}
+
 /** The card itself, hook-free so each state renders in a test. */
 export function WaitingCard({
   change,
+  inForce,
   me,
   busy,
   onAnswer,
   onTakeBack,
 }: {
   change: Waiting
+  /** The text in force: a new text shows as a diff against it. */
+  inForce: string | null
   me: Me
   busy: Busy
   onAnswer: (yes: boolean) => void
@@ -88,8 +126,10 @@ export function WaitingCard({
       <span className="text-meta font-bold">{cs.description.waitingTitle}</span>
       {change.description === null ? (
         <p className="text-meta text-muted">{cs.description.waitingRemove}</p>
-      ) : (
+      ) : inForce === null ? (
         <p className="break-words whitespace-pre-line">{change.description}</p>
+      ) : (
+        <TextDiff before={inForce} after={change.description} />
       )}
       {change.waitingForNames.length > 0 && (
         <p className="text-meta text-muted">
