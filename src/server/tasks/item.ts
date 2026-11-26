@@ -19,6 +19,7 @@ export function toItem(row: TaskRow): Item {
       row.dueAt !== null && row.graceEndsAt !== null
         ? { dueAt: parseIsoUtc(row.dueAt), graceEndsAt: parseIsoUtc(row.graceEndsAt) }
         : null,
+    day: null,
   }
   const reservation = reservationOf(row)
   switch (row.status) {

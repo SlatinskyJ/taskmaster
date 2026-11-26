@@ -92,6 +92,7 @@ describe('demo seed (#62)', () => {
       choreBidding: false,
       openRows: false,
       descriptions: false,
+      weekPlan: false,
     })
   })
 
@@ -238,6 +239,7 @@ describe('demo seed (#62)', () => {
       choreBidding: false,
       openRows: false,
       descriptions: false,
+      weekPlan: false,
     })
   })
 })

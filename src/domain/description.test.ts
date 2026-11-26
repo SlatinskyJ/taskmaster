@@ -19,7 +19,7 @@ const STARSI: Person = { id: 3, role: 'taker', active: true }
 const MLADSI: Person = { id: 4, role: 'taker', active: true }
 const people = [TATA, OLD_GIVER, STARSI, MLADSI]
 
-const base = { origin: 'one_time', approvalRequired: true, deadline: null } as const
+const base = { origin: 'one_time', approvalRequired: true, deadline: null, day: null } as const
 const completion = {
   completedBy: 3,
   completedAt: new Date(0),
