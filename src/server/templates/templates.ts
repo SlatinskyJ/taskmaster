@@ -31,7 +31,7 @@ import { templates, templateScoreApprovals, users } from '~/server/db/schema'
 import type { TemplateRow, TemplateStatus } from '~/server/db/schema'
 import type { ThreadEntry } from '~/server/threadEntry'
 import { listPeople } from '~/server/users/people'
-import { closeThread, lastBids, openRows, threadOf } from './thread'
+import { closeThread, lastBids, markBidsFrom, openRows, threadOf } from './thread'
 
 // Recurring templates and their first score agreement (spec §5.1, §5.3). The rules live in
 // src/domain (agreement + templates); this module loads the rows, asks the domain, and writes
@@ -84,13 +84,18 @@ function approvers(db: Db | Tx, templateId: number, offerRound: number): number[
  * read from the open thread rows (null when none are open).
  */
 export function agreementOf(db: Db | Tx, row: TemplateRow): TemplateAgreement {
+  const last = (since: number) =>
+    lastBids(db, row.id, since).map((r) => ({ by: r.userId, score: r.score }))
   if (row.status === 'active') {
     const rows = openRows(db, row.id)
-    if (rows.length === 0) return { status: 'agreed', score: row.score, change: null }
+    // Each taker's last bid since bids last reset (#232): the same number is refused again.
+    const lastBids = last(row.bidsFrom)
+    if (rows.length === 0) return { status: 'agreed', score: row.score, change: null, lastBids }
     const offer = rows.find((r) => r.side === 'giver')
     return {
       status: 'agreed',
       score: row.score,
+      lastBids,
       change: {
         offer: offer ? { score: offer.score, proposedBy: offer.userId } : null,
         bids: rows.filter((r) => r.side === 'taker').map((r) => ({ by: r.userId, score: r.score })),
@@ -111,7 +116,7 @@ export function agreementOf(db: Db | Tx, row: TemplateRow): TemplateAgreement {
       approvedBy: approvers(db, row.id, row.offerRound),
     },
     book: { bids: bids(rows.filter((r) => r.side === 'taker')) },
-    lastBids: bids(lastBids(db, row.id)),
+    lastBids: last(row.bidsFrom),
   }
 }
 
@@ -159,6 +164,8 @@ export function agreeIn(
     .at(0)
   if (!active) return undefined
   const { accepted, closed } = closeThread(tx, row.id, acceptedIds, now)
+  // An agreement resets bids (#232): no first-price bid blocks its number in a later change.
+  const floor = markBidsFrom(tx, row.id)
   writeAudit(tx, {
     actor,
     action: 'template.agreed',
@@ -169,8 +176,16 @@ export function agreeIn(
       score: row.score,
       // A counter that agreed replaced the open offer row before the thread closed (§5.10).
       ...(replaced && { replacedOffer: { entryId: replaced.id, score: replaced.score } }),
+      bidsFrom: floor.before,
     },
-    after: { status: 'active', score, by, entryIds: accepted, closedIds: closed },
+    after: {
+      status: 'active',
+      score,
+      by,
+      entryIds: accepted,
+      closedIds: closed,
+      bidsFrom: floor.after,
+    },
     at: now,
   })
   return active
@@ -320,6 +335,11 @@ export interface TemplateView {
   change: TemplateChangeView | null
   /** Proposed only: the first-price bidding (#209), else null. */
   bidding: TemplateBiddingView | null
+  /**
+   * Agreed only: each taker's last bid since bids last reset or the offer last changed, open or
+   * withdrawn (#232): the same number is refused again. Empty for a proposed chore (see bidding).
+   */
+  lastBids: { takerId: number; score: number }[]
 }
 
 /** A score change as screens show it: current takers' bids only (live), lowest first. */
@@ -339,12 +359,10 @@ export type TemplateBiddingView = TemplateChangeView & {
 }
 
 function biddingView(
-  db: Db | Tx,
-  row: TemplateRow,
+  agreement: TemplateAgreement,
   people: Person[],
   name: (id: number) => string,
 ): TemplateBiddingView | null {
-  const agreement = agreementOf(db, row)
   if (agreement.status !== 'proposed') return null
   const { proposal, lastBids: last } = agreement
   const live = [...liveBook(agreement.book, people).bids].sort((a, b) => a.score - b.score)
@@ -356,13 +374,16 @@ function biddingView(
   }
 }
 
+function agreedLastBids(agreement: TemplateAgreement): TemplateView['lastBids'] {
+  if (agreement.status !== 'agreed') return []
+  return (agreement.lastBids ?? []).map((b) => ({ takerId: b.by, score: b.score }))
+}
+
 function changeView(
-  db: Db | Tx,
-  row: TemplateRow,
+  agreement: TemplateAgreement,
   people: Person[],
   name: (id: number) => string,
 ): TemplateChangeView | null {
-  const agreement = agreementOf(db, row)
   if (agreement.status !== 'agreed' || !agreement.change) return null
   const { offer, bids } = liveTemplateBook(agreement.change, people)
   // Bids are oldest first; a stable sort keeps that order among equal scores.
@@ -397,19 +418,34 @@ export function deadlineRuleOf(row: TemplateRow): DeadlineRule | null {
   return { dayOffset: row.dueDayOffset, due: { hour, minute }, graceMinutes: row.graceMinutes }
 }
 
-/** The launch switch a read or an action follows (#209). Off by default. */
+/**
+ * The launch switches a read or an action follows. Off by default. `choreBidding` (#209): bidding
+ * on a proposed chore's first price; `bidRefusals` (#232): Nechci and turn-down on a price change.
+ */
 export interface BiddingOpts {
   choreBidding: boolean
+  bidRefusals: boolean
 }
-const BIDDING_OFF: BiddingOpts = { choreBidding: false }
+const BIDDING_OFF: BiddingOpts = { choreBidding: false, bidRefusals: false }
 
 /** With `choreBidding` off a proposed template has `bidding: null`: no screen offers bidding. */
 function views(db: Db | Tx, rows: TemplateRow[], opts: BiddingOpts): TemplateView[] {
   if (rows.length === 0) return []
   const names = nameMap(db)
   const people = listPeople(db)
+  return rows.map((t) => viewOf(db, t, agreementOf(db, t), people, names, opts))
+}
+
+function viewOf(
+  db: Db | Tx,
+  t: TemplateRow,
+  agreement: TemplateAgreement,
+  people: Person[],
+  names: Map<number, string>,
+  opts: BiddingOpts,
+): TemplateView {
   const name = (id: number) => names.get(id) ?? ''
-  return rows.map((t) => ({
+  return {
     id: t.id,
     title: t.title,
     status: t.status,
@@ -426,9 +462,10 @@ function views(db: Db | Tx, rows: TemplateRow[], opts: BiddingOpts): TemplateVie
       t.dueDayOffset === null || t.dueTime === null || t.graceMinutes === null
         ? null
         : { dayOffset: t.dueDayOffset, due: t.dueTime, graceMinutes: t.graceMinutes },
-    change: changeView(db, t, people, name),
-    bidding: opts.choreBidding ? biddingView(db, t, people, name) : null,
-  }))
+    change: changeView(agreement, people, name),
+    bidding: opts.choreBidding ? biddingView(agreement, people, name) : null,
+    lastBids: agreedLastBids(agreement),
+  }
 }
 
 /**
@@ -453,24 +490,28 @@ export function listTemplates(
 export interface TemplateDetail {
   template: TemplateView
   thread: ThreadEntry[]
+  /** Who may still agree to a proposed template; any one of them per missing side (#205). */
+  waitingFor: { id: number; name: string }[]
 }
 
 /**
- * The price page of a template, or null: unknown id, or a proposed template for anyone but a
- * giver (takers approve proposed ones from "Čeká na tebe"). With `choreBidding` a taker may open a
- * proposed one too, to bid on its first price (#209); an admin never.
+ * The price page of a template, or null: unknown id, or a viewer who is not a party (the admin).
+ * A proposed one shows to the brothers too when a switch lets them reach it: with `openRows`
+ * they agree to it there (spec §5.1, #205), with `choreBidding` they bid on its first price (#209).
  */
 export function getTemplateDetail(
   db: Db | Tx,
   templateId: number,
   viewerId: number,
   opts: BiddingOpts = BIDDING_OFF,
+  openRows = false,
 ): TemplateDetail | null {
   const row = db.select().from(templates).where(eq(templates.id, templateId)).get()
   if (!row) return null
   const viewer = findPerson(listPeople(db), viewerId)
-  const mayOpen = viewer?.role === 'giver' || (opts.choreBidding && viewer?.role === 'taker')
-  if (row.status === 'proposed' && !mayOpen) return null
+  if (viewer?.role !== 'giver' && viewer?.role !== 'taker') return null
+  const takerMay = opts.choreBidding || openRows
+  if (row.status === 'proposed' && viewer.role === 'taker' && !takerMay) return null
   const [template] = views(db, [row], opts)
   if (!template) return null
   const names = nameMap(db)
@@ -482,7 +523,11 @@ export function getTemplateDetail(
     at: e.createdAt,
     state: e.closedAs ?? 'open',
   }))
-  return { template, thread }
+  const waitingFor = templateWaitsFor(db, row, listPeople(db)).map((p) => ({
+    id: p.id,
+    name: names.get(p.id) ?? '',
+  }))
+  return { template, thread, waitingFor }
 }
 
 /**
@@ -518,6 +563,29 @@ export function pendingTemplatePriceChanges(
 }
 
 /**
+ * Who may still agree to a proposed template: the active people of each side that has no yes
+ * yet, minus those who said yes. Empty once it is agreed. Domů and the price page share it.
+ */
+export function templateWaitsFor(
+  db: Db | Tx,
+  row: TemplateRow,
+  people: readonly Person[],
+): Person[] {
+  if (row.status !== 'proposed') return []
+  const agreement = agreementOf(db, row)
+  if (agreement.status !== 'proposed') return []
+  const { proposal } = agreement
+  const missing = missingRoles(proposal, people)
+  return people.filter(
+    (p) =>
+      p.active &&
+      p.role !== 'admin' &&
+      missing.includes(p.role) &&
+      !proposal.approvedBy.includes(p.id),
+  )
+}
+
+/**
  * "Čeká na tebe": proposed templates that still need this person's side and that they haven't
  * approved. Takers see every new one; a giver only when no current giver has approved.
  */
@@ -529,18 +597,14 @@ export function pendingTemplateApprovals(
   const people = listPeople(db)
   const me = findPerson(people, userId)
   if (!me || me.role === 'admin' || !me.active) return []
-  const role = me.role
   const proposed = db
     .select()
     .from(templates)
     .where(eq(templates.status, 'proposed'))
     .orderBy(asc(templates.id))
     .all()
-  const waiting = proposed.filter((row) => {
-    const agreement = agreementOf(db, row)
-    if (agreement.status !== 'proposed') return false
-    if (agreement.proposal.approvedBy.includes(userId)) return false
-    return missingRoles(agreement.proposal, people).includes(role)
-  })
+  const waiting = proposed.filter((row) =>
+    templateWaitsFor(db, row, people).some((p) => p.id === userId),
+  )
   return views(db, waiting, opts)
 }

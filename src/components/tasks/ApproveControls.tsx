@@ -5,6 +5,7 @@ import { Input } from '~/components/ui/input'
 import { cs } from '~/lib/strings'
 import { REASON_MAX } from '~/lib/taskLimits'
 import { approveTaskFn, rejectTaskFn, type TaskView } from '~/server/tasks/functions'
+import { taskLink } from './rowLink'
 import { canApprove, type Me } from './taskView'
 import { TaskRow } from './TaskRow'
 import { useTaskAction } from './useTaskAction'
@@ -193,10 +194,13 @@ export function ApprovableRow({
   task,
   busy,
   run,
+  links = false,
 }: {
   task: TaskView
   busy: string | null
   run: Run
+  /** The `openRows` switch (#205): each row opens its page. */
+  links?: boolean
 }) {
   const r = useRejecting()
   return (
@@ -217,6 +221,7 @@ export function ApprovableRow({
             />
           )
         }
+        link={links ? taskLink(task.id) : undefined}
       />
       {r.open && <RejectForm taskId={task.id} busy={busy} run={run} onClose={r.close} />}
     </div>

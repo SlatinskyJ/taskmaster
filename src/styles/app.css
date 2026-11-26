@@ -1,6 +1,17 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
-@import '@fontsource-variable/fredoka/wght.css';
+@import '@fontsource-variable/baloo-2/wght.css';
 @import '@fontsource-variable/nunito/wght.css';
 @import './theme.css';
 @import './effects.css';
+
+/* Fredoka draws digits only: it has no ě č ř ů ť ď ň (#246). Letters next to them are Baloo 2. */
+@font-face {
+  font-family: 'Fredoka Digits';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 300 700;
+  src: url('@fontsource-variable/fredoka/files/fredoka-latin-wght-normal.woff2')
+    format('woff2-variations');
+  unicode-range: U+0030-0039;
+}

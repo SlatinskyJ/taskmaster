@@ -186,7 +186,7 @@ export const templates: Piece = ({ tx, id, now }) => {
  * no bids, "Zalít kytky" at 4 with Starší's bid 6 and Mladší's bid 7.
  */
 export const choreBidding: Piece = ({ tx, id, now }) => {
-  const on = { choreBidding: true }
+  const on = { choreBidding: true, bidRefusals: false }
   const make = (title: string, score: number) =>
     step(
       `template "${title}"`,
@@ -204,6 +204,25 @@ export const choreBidding: Piece = ({ tx, id, now }) => {
     ['mladsi', 7],
   ] as const) {
     step(`bid on "${plants.title}"`, bidOnTemplateIn(tx, id(who), plants.id, score, now, on))
+  }
+}
+
+/**
+ * #232: "Umýt koupelnu", agreed at 8, with a price change of two bids and no parents' offer:
+ * Starší 10, Mladší 11. Nechci and the turn-down on it need `bidRefusals`.
+ */
+export const choreChange: Piece = ({ tx, id, now }) => {
+  const input = { title: 'Umýt koupelnu', score: 8, approvalRequired: true }
+  const bath = step(
+    `template "${input.title}"`,
+    createTemplateIn(tx, id('tata'), { ...input, schedule: null, deadline: null }, now),
+  )
+  step(`approve "${bath.title}"`, approveTemplateScoreIn(tx, id('starsi'), bath.id, 8, now))
+  for (const [who, score] of [
+    ['starsi', 10],
+    ['mladsi', 11],
+  ] as const) {
+    step(`bid on "${bath.title}"`, bidOnTemplateIn(tx, id(who), bath.id, score, now))
   }
 }
 

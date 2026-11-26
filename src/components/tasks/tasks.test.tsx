@@ -200,6 +200,7 @@ describe('WaitingForYou with templates (#37)', () => {
     schedule: { days: [0, 1, 2, 3, 4, 5, 6] as (0 | 1 | 2 | 3 | 4 | 5 | 6)[], time: '18:00' },
     deadline: { dayOffset: 1, due: '07:00', graceMinutes: 120 },
     bidding: null,
+    lastBids: [],
     change: null,
   }
 
@@ -306,6 +307,7 @@ describe('template price change: ways in', () => {
     schedule: null,
     deadline: null,
     bidding: null,
+    lastBids: [],
     change: {
       offer: { score: 4, byName: 'Táta' },
       bids: [{ takerId: 5, name: 'Mladší', score: 5 }],
@@ -431,6 +433,7 @@ describe('Úkoly: a proposed chore with first-price bidding (#209)', () => {
           schedule: null,
           deadline: null,
           change: null,
+          lastBids: [],
           bidding: {
             offer: { score: 10, byName: 'Táta' },
             bids,

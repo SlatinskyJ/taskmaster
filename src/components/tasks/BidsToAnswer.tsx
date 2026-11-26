@@ -4,13 +4,21 @@ import { buttonVariants } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
 import type { TaskView } from '~/server/tasks/functions'
 import { lowestText } from './taskView'
+import { taskLink } from './rowLink'
 import { TaskRow } from './TaskRow'
 
 /**
  * "Vyjednávání" on a parent's Domů (mockup GHome): offers the brothers bid on, with the lowest
  * bid, each a link to its page to answer. Renders nothing when there are none.
  */
-export function BidsToAnswer({ items }: { items: readonly TaskView[] }) {
+export function BidsToAnswer({
+  items,
+  links = false,
+}: {
+  items: readonly TaskView[]
+  /** The `openRows` switch (#205): each row opens its page. */
+  links?: boolean
+}) {
   if (items.length === 0) return null
   return (
     <section className="grid gap-2" aria-labelledby="bids-label">
@@ -34,6 +42,7 @@ export function BidsToAnswer({ items }: { items: readonly TaskView[] }) {
                   {cs.bids.answer}
                 </Link>
               }
+              link={links ? taskLink(task.id) : undefined}
             />
           </li>
         ))}
