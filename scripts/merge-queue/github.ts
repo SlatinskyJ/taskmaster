@@ -100,7 +100,6 @@ interface PullDetail {
   number: number
   draft: boolean
   head: { sha: string }
-  mergeable_state: string
   labels: { name: string }[]
 }
 
@@ -276,7 +275,7 @@ export function makeGh(
       ci: 'pending',
       unresolvedThreads: 0,
       inStack: false,
-      behind: detail.mergeable_state === 'behind',
+      behind: false,
       handedOver,
     }
     // decide.ts never acts on these beyond a hand-over, so skip the costly reads.
@@ -288,6 +287,11 @@ export function makeGh(
     facts.ci = requiredCi(await required(), check_runs)
     facts.unresolvedThreads = await unresolvedThreads(pr)
     facts.inStack = await inStack(pr)
+    // Not mergeable_state: GitHub computes it lazily and answers 'unknown' right after a push.
+    const { behind_by } = await getJson<{ behind_by: number }>(
+      `${base}/compare/main...${detail.head.sha}`,
+    )
+    facts.behind = behind_by > 0
     return facts
   }
 

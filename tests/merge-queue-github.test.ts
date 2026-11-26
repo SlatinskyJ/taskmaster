@@ -199,6 +199,8 @@ interface World {
   commits?: GhCommit[]
   head?: string
   onMain?: string[]
+  /** Commits on main the head lacks (compare main...head). */
+  behindBy?: number
 }
 
 function world(w: World = {}): Record<string, Reply> {
@@ -255,6 +257,12 @@ function world(w: World = {}): Record<string, Reply> {
         body: { status: onMain.has(p.sha) ? 'behind' : 'diverged' },
       }
     }
+  }
+  const headCompare = routes[`GET ${R}/compare/main...${head}`]?.body as
+    { status: string } | undefined
+  routes[`GET ${R}/compare/main...${head}`] = {
+    status: 200,
+    body: { status: headCompare?.status ?? 'ahead', behind_by: w.behindBy ?? 0 },
   }
   return routes
 }
@@ -427,7 +435,7 @@ describe('labelledPrs', () => {
   })
 
   it('reports unresolved threads, a stack and behind', async () => {
-    const routes = world()
+    const routes = world({ behindBy: 2 })
     routes['POST /graphql'] = {
       status: 200,
       body: {
@@ -443,11 +451,29 @@ describe('labelledPrs', () => {
     routes[`GET ${R}/stacks`] = { status: 200, body: [{ number: 3 }] }
     routes[`GET ${R}/pulls/9`] = {
       status: 200,
-      body: { number: 9, draft: false, head: { sha: A }, mergeable_state: 'behind', labels: [] },
+      body: { number: 9, draft: false, head: { sha: A }, mergeable_state: 'clean', labels: [] },
     }
     const { impl } = fakeFetch(routes)
     const [pr] = await makeGh('t', KEY, impl, { now: () => NOW }).labelledPrs()
     expect(pr).toMatchObject({ unresolvedThreads: 1, inStack: true, behind: true })
+  })
+})
+
+describe('behind', () => {
+  it('comes from compare with main, not from mergeable_state, which GitHub may not have computed yet', async () => {
+    const routes = world({ behindBy: 1 })
+    routes[`GET ${R}/pulls/9`] = {
+      status: 200,
+      body: { number: 9, draft: false, head: { sha: A }, mergeable_state: 'unknown', labels: [] },
+    }
+    const { impl } = fakeFetch(routes)
+    const [pr] = await makeGh('t', KEY, impl, { now: () => NOW }).labelledPrs()
+    expect(pr).toMatchObject({ behind: true })
+  })
+
+  it('is false when the head already contains main', async () => {
+    const [pr] = await factsOf({ behindBy: 0 })
+    expect(pr).toMatchObject({ behind: false })
   })
 })
 
