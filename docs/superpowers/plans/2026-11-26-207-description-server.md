@@ -36,19 +36,18 @@
 
 ## Rulings (spec is silent; listed in the brief, Jakub may overturn)
 
-Rulings 1 and 7 are open questions to Jakub (decision cards in the project thread). The plan builds the recommended answer; the other answer changes only the step named in the ruling.
+Rulings 1 and 7 were asked of Jakub and are his decisions (2026-11-26, decision cards in the project thread).
 
-1. **Back to proposed** (asked Jakub; if he picks "apply", `discardStaleDescription` applies the text instead and logs `task.description_changed`). A release of a bid-won reservation sends the task back to `proposed` (§5.4). A change waiting at that moment is **discarded**, and the old text stays. The giver can change it again at once, since a proposed task needs nobody's OK.
+1. **Back to proposed: the waiting change applies** (Jakub 2026-11-26). A release of a bid-won reservation sends the task back to `proposed` (§5.4). A change waiting at that moment **applies at once**, since a proposed task needs nobody's OK: `tasks.description` takes its text, the row closes `applied`, and one `task.description_changed` entry (actor = the releaser, `before`/`after` the texts, `changeId`) is written after `task.released`. No ruling-7 reset on top: the release already starts a new offer round with no bids.
 2. **Completed, cancelled or expired** (any status other than proposed, open or reserved): a waiting change is discarded, logged as `*.description_change_discarded`.
 3. **Reserved ↔ open while a change waits** (release, reserve): the change stays. Who may OK it follows the task's state at the moment of the answer.
 4. **Instances** are not changeable (`not_changeable`). Their text is a copy from creation.
 5. **Changing back.** A giver who sets the text that is in force while a change waits closes that change as `withdrawn`, and nothing else changes. With no change waiting, the same text is `same_description`.
 6. **Normalising.** `\r\n` and `\r` become `\n`, and the whole text is trimmed. Empty means no description (`null`). The length is counted after normalising, in UTF-16 code units (`String.length`, like the 1000-character limits elsewhere). Control characters other than `\n` and `\t` (U+0000–U+001F, U+007F) and the bidi controls (U+202A–U+202E, U+2066–U+2069) are removed first.
-7. **A change while proposed resets the agreement** (asked Jakub; recommended). The description is what done means, so yeses and bids given on the old text must not count. A change to a proposed task or template (applied at once) also closes every open bid and starts a new offer round at the same score, with the changing giver as the offerer. No third writer of offer rounds: each bidding module gets one shared helper that the turn-down already needs, and both the turn-down and the description path call it.
+7. **A change while proposed resets the agreement** (Jakub 2026-11-26). The description is what done means, so yeses and bids given on the old text must not count. A change to a proposed task or template (applied at once) also closes every open bid and starts a new offer round at the same score, with the changing giver as the offerer. No third writer of offer rounds: each bidding module gets one shared helper that the turn-down already needs, and both the turn-down and the description path call it.
    - `src/server/tasks/bidding.ts`: `export function resetOfferRound(tx: Tx, task: TaskRow, giverId: number, now: Date): { saved: TaskRow; entry: ThreadRow; old: ThreadRow; closedIds: number[] }` closes the open bids (`closeRows`) and calls `newOfferRound` at `task.score`. `turnDownBids` is refactored to call it (its tests keep passing unchanged).
    - `src/server/templates/scoreChange.ts`: `export function resetTemplateOffer(tx: Tx, row: TemplateRow, giverId: number, now: Date)` with the same shape, taken out of `turnDownTemplateBidsIn`, which then calls it.
    - The entry `*.description_changed` logs the same keys as the turn-down: `before: { description, score, offerRound, entryIds, offerEntryId }` (a template: its replaced offer as `turnDownTemplateBidsIn` logs it), `after: { description, score, offerRound, entryId }`.
-   - If Jakub picks "keep", the call goes and the entry loses those keys.
 8. **Stale page on a proposed task or chore.** Every taker sees the new text before he agrees or bids (§5.2). So a taker's yes, pick or bid carries `seenDescription` (the text his page showed, `null` for none). With the switch on, the server compares it with the current description, after normalising, and refuses a mismatch with `offer_changed`. This covers `approveTaskOfferFn`, `acceptOfferFn`, `placeBidFn` and the template yes, accept and bid functions. In this PR the field is optional (a missing field is not checked), so today's screens keep working with the switch on; PR 2 sends it from every one of those screens and makes it required when the switch is on.
    - Where the switch is read: only in the server function layer. Each of those handlers reads `getFlags(db).descriptions` and passes `seenDescription` on to the inner function only when it is on (otherwise `undefined`). The tasks and templates modules never read the switch.
    - Parsers: `parseApproval` (task yes), the task bid and accept parsers, and the template yes, accept and bid parsers take an optional `seenDescription`: a string of at most 4000 raw characters, or `null`; anything else throws.
@@ -91,8 +90,8 @@ export function changeDescription(
 export function answerDescription(
   rule: DescriptionRule, people: readonly Person[], takerId: PersonId,
 ): Result<true, DescriptionError>
-/** Whether a waiting change survives the task's new state (rulings 1 to 3). */
-export function keepsDescriptionChange(item: Item): boolean
+/** What a waiting change does after the task's new state (rulings 1 to 3). */
+export function waitingChangeAfter(item: Item): 'keep' | 'apply' | 'discard'
 ```
 Here `pending` is the waiting change's text: `undefined` means no change is waiting, and `null` means a waiting removal.
 
@@ -131,7 +130,7 @@ Here `pending` is the waiting change's text: `undefined` means no change is wait
     - any_taker with an active taker → ok;
     - taker rule with another taker → `not_involved`;
     - direct → `not_involved` (nothing waits on a proposed task).
-  - `keepsDescriptionChange`: true for open and reserved one-time tasks; false for proposed, done_unconfirmed, confirmed and cancelled.
+  - `waitingChangeAfter`: `keep` for open and reserved one-time tasks; `apply` for proposed; `discard` for done_unconfirmed, confirmed and cancelled.
 - [ ] **Step 2:** Run `pnpm vitest run src/domain/description.test.ts`. Expect FAIL (module missing).
 - [ ] **Step 3:** Implement. Use `isActiveAs` from `./parties`. `taskDescriptionRule` switches on `item.status` like `changeRule` in `scoreChange.ts`.
 - [ ] **Step 4:** Run the same command. Expect PASS.
@@ -164,7 +163,7 @@ Here `pending` is the waiting change's text: `undefined` means no change is wait
   - `proposedBy` → users, not null;
   - `createdAt`;
   - `closedAt`;
-  - `closedAs`, from `DESCRIPTION_CHANGE_CLOSINGS = ['agreed','declined','withdrawn','replaced','discarded']`;
+  - `closedAs`, from `DESCRIPTION_CHANGE_CLOSINGS = ['agreed','applied','declined','withdrawn','replaced','discarded']`;
   - `closedBy` → users, nullable.
 
   CHECKs:
@@ -226,8 +225,8 @@ export function changeDescriptionOf(db: Db | Tx, target: DescriptionTarget, give
 export function answerDescriptionChange(db: Db | Tx, target: DescriptionTarget, takerId: number,
   changeId: number, yes: boolean, now?: Date): Result<'agreed' | 'declined', DescriptionServerError>
 export function waitingDescriptionOf(db: Db | Tx, target: DescriptionTarget): WaitingDescription | null
-/** Lifecycle caller duty (rulings 1–2): closes a change the task's new state no longer keeps. */
-export function discardStaleDescription(tx: Tx, row: TaskRow, actor: Actor, now: Date): void
+/** Lifecycle caller duty (rulings 1–2): back to proposed → applies the waiting change; done, cancelled → discards it. */
+export function settleStaleDescription(tx: Tx, row: TaskRow, actor: Actor, now: Date): void
 ```
 
 What each call writes, with `before`/`after` = `{ description, changeId? }`:
@@ -246,7 +245,7 @@ A template's entries use the `template.*` names and `entityType: 'template'`.
   - an open task in a reopened round (`biddingFrom` set): still waits (Review Focus, open not proposed);
   - a reserved task: the other taker's OK → `not_involved`; the reserver's OK applies it;
   - Review Focus 2: a reserved task with a waiting change, then release → open, then the other taker's OK applies it;
-  - ruling 1: a bid-won reservation is released back to proposed. The change closes `discarded` with one `task.description_change_discarded` entry, logged after `task.released`;
+  - ruling 1: a bid-won reservation with a waiting change is released back to proposed. `tasks.description` is the new text, the row closed `applied`, and there is one `task.description_changed` entry by the releaser, after `task.released`, with no `task.description_change_discarded`;
   - completion discards the change (ruling 2);
   - a giver's second change replaces the first: the old row is `replaced`, and the entry carries `replacedId`;
   - Review Focus 1: an OK naming the replaced `changeId` → `offer_changed`; with no change → `no_change`;
@@ -261,10 +260,10 @@ A template's entries use the `template.*` names and `entityType: 'template'`.
   - template entries: each of applied, waiting, OK, no and withdrawn writes exactly one entry with the `template.*` action and `entityType: 'template'`, `entityId` = the template's id, and no `task.*` entry;
   - instance birth entry: `instance.created` (on demand) and `instance.self_logged` carry `after.description` = the template's text at that moment;
   - ruling 7: a proposed task with Mladší's open bid; a giver changes the text. Then the bid is closed, `offerRound` went up by one, the changing giver's approval is the only one in the new round, and there is one `task.description_changed` entry whose `before` has the closed `entryIds` and the old `offerEntryId`, and whose `after` has the new `offerRound` and the new giver row's `entryId`. A giver's accept of the lowest bid afterwards → `no_bids`. The same for a proposed template with a bid (when `choreBidding` is on) and with no bid (only `offerRound` moves);
-  - ruling 8: `approveTaskOffer(..., seenDescription: 'old')` after a change → `offer_changed` and nothing written; with the current text → ok; with no field → ok. The same for `placeBid`, `acceptOffer`, and the template yes (`approveTemplateScore`), accept (`acceptOfferOnTemplate`) and bid (`bidOnTemplate`);
+  - ruling 8: `approveTaskOffer(..., seenDescription: 'old')` after a change → `offer_changed` and nothing written; with the current text → ok; with no field → ok. `null` is a value, not a missing field: a task with no text gets one, and the taker sends `seenDescription: null` → `offer_changed`; a task still with no text and `null` → ok. The comparison runs after normalising: current `'x'` and `seenDescription: ' x\r\n'` → ok. The same for `placeBid`, `acceptOffer`, and the template yes (`approveTemplateScore`), accept (`acceptOfferOnTemplate`) and bid (`bidOnTemplate`);
   - rollback: with `writeAudit` made to throw (the way `src/server/tasks/tasks.test.ts` does it), an applied change, a waiting change, an OK and a no each leave `tasks.description` and `description_changes` unchanged.
 - [ ] **Step 2:** Run `pnpm vitest run src/server/descriptions`. Expect FAIL.
-- [ ] **Step 3:** Implement. Each exported write runs in `db.transaction`, loads the row, `listPeople(tx)` and the open change, asks the domain, then writes the rows and `writeAudit` entries. In `lifecycle.ts`, call `discardStaleDescription(tx, saved, actor, now)` right after `discardStaleChange`.
+- [ ] **Step 3:** Implement. Each exported write runs in `db.transaction`, loads the row, `listPeople(tx)` and the open change, asks the domain, then writes the rows and `writeAudit` entries. In `lifecycle.ts`, call `settleStaleDescription(tx, saved, actor, now)` right after `discardStaleChange`.
 - [ ] **Step 4:** Run `pnpm vitest run src/server`. Expect PASS (existing create and instance tests keep passing; `description` is optional).
 - [ ] **Step 5:** Commit `Change, approve and decline descriptions on the server (#207)`.
 
