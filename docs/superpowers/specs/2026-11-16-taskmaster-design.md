@@ -129,7 +129,7 @@ Details:
   - **[call]** If someone reserves or completes the task while the bidding runs, the bidding closes: all open bids close, logged.
 - **Description of a one-time task** (Jakub, 2026-11-24). The description is the task's acceptance criteria, so changing it can change the work and therefore the fair score:
   - any giver may write or change it; a taker never does;
-  - while the task is **proposed** (offer or bidding): the change applies at once and needs nobody's OK. Every taker sees the new text before he agrees or bids;
+  - while the task is **proposed** (offer or bidding): the change applies at once and needs nobody's OK. Every taker sees the new text before he agrees or bids. Reopened bidding on an open task (below) does not count as proposed: the rules for an open task apply;
   - once agreed and **reserved**: the change needs the OK of the taker who reserved it;
   - once agreed and **open** (unreserved): the change needs the OK of **any one taker**;
   - until that OK the old description stays in force, and the change is shown to the takers as waiting. **[call]** One description change may be in flight per task; a giver's new change replaces it. A taker's "no" closes it and the old description stays. The OK changes only the description, never the score: a taker who thinks the work grew asks for a new score (above: a score change if reserved, reopened bidding if open);
