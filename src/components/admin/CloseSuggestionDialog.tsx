@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import type { AdminOutcome } from '~/components/disputes/disputeCalls'
+import { afterClose } from '~/components/suggestions/suggestionForms'
 import { Button } from '~/components/ui/button'
 import {
   Dialog,
@@ -89,8 +90,9 @@ export function CloseSuggestionDialog({
     const outcome = await onConfirm()
     sending.current = false
     setBusy(false)
-    if (outcome.ok || outcome.reload) await onDone(outcome)
-    else setError(outcome.message)
+    const message = afterClose(outcome)
+    if (message === null) await onDone(outcome)
+    else setError(message)
   }
 
   return (

@@ -3,6 +3,7 @@ import { issueDraft } from '~/domain'
 import { cs } from '~/lib/strings'
 import type { AdminSuggestion } from '~/server/suggestions/functions'
 import {
+  afterClose,
   afterSend,
   canSendIssue,
   checkSuggestion,
@@ -162,6 +163,20 @@ describe('sendIssue', () => {
       message: e.generic,
       reload: false,
     })
+  })
+})
+
+describe('afterClose: what the Hotovo / Zamítnout dialog does with the answer', () => {
+  it('ok: the page closes it', () => {
+    expect(afterClose({ ok: true })).toBeNull()
+  })
+
+  it('a stale refusal: the page closes it, toasts and reloads', () => {
+    expect(afterClose({ ok: false, message: t.stale, reload: true })).toBeNull()
+  })
+
+  it.each([e.busy, e.not_admin])('another refusal (%s) keeps the dialog open with it', (m) => {
+    expect(afterClose({ ok: false, message: m, reload: false })).toBe(m)
   })
 })
 

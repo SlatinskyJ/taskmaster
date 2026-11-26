@@ -94,6 +94,14 @@ export async function sendClose(
   }
 }
 
+/**
+ * The confirm dialog's step after the answer: null hands it to the page (closed, or stale:
+ * close, toast, reload); any other refusal is the message the dialog keeps for a retry.
+ */
+export function afterClose(outcome: AdminOutcome): string | null {
+  return outcome.ok || outcome.reload ? null : outcome.message
+}
+
 /** GitHub made the issue but the app did not store it: show the link, never send it again. */
 export interface NotSaved {
   ok: false
