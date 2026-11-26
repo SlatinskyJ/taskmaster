@@ -71,6 +71,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'keyboard-password', spec: 'keyboard-password.spec.ts', seed: 'password' },
   // The reject reason (#206) with the keyboard open. Read-only: forms are opened, never sent.
   { name: 'keyboard-approve', spec: 'keyboard-approve.spec.ts', seed: 'approve' },
+  // Czech letters in the app's fonts (#246). Read-only.
+  { name: 'fonts', spec: 'fonts.spec.ts', seed: 'demo' },
 ]
 
 /** Passkeys on (localhost) for the `on` suite only, at its own port. */

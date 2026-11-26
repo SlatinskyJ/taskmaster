@@ -141,12 +141,12 @@ A template defines:
 - **Description** (optional, see 4 and 5.1). An instance takes the template's description **at the moment it is created**, like its score.
 - **Schedule** (optional): the days (and optionally a time) an instance is created automatically, e.g. trash every Tuesday, bins Sunday evening.
 - **Deadline mode**, one of:
-  - **No deadline** (e.g. dishwasher): the instance stays open until someone does it.
+  - **No deadline** (e.g. dishwasher): the instance stays open until someone does it (with the week plan switch on, until the end of its day, see 5.12).
   - **Deadline + grace window** (e.g. bins out before the collection truck): the instance has a due time. The template sets it as a number of days after the instance appears plus a Prague clock time, e.g. "next day, 7:00": bins that appear Tuesday 18:00 are due Wednesday 7:00. If that moment has already passed when the instance appears, the due time moves one day later (Jakub, 2026-11-18). Completion may still be logged during a grace window after the due time (the person did it on time and only logs it afterwards). After the grace window the instance **expires**; no points, logged.
 - **Approval required** flag (see 5.5).
 
 Instances come into existence three ways:
-1. **Scheduled**: created automatically by the schedule. **[call]** If an earlier *no-deadline* instance of the same template is still open, no duplicate is created.
+1. **Scheduled**: created automatically by the schedule (with the week plan switch on, for the whole week at once, see 5.12). **[call]** If an earlier *no-deadline* instance of the same template is still open, no duplicate is created.
 2. **On demand**: a giver creates an instance whenever needed ("dishwasher is full"), possibly several times a day.
 3. **Self-logged by a taker** (Domů, "Zapsat udělanou práci"): a taker did a recurring chore unprompted. They log it against the template; it is created directly in **done, unconfirmed** and **always** requires giver approval, regardless of the template's approval flag.
    - **Refused while a copy is out (Jakub, 2026-11-22):** a taker cannot log a chore whose template has an **open** or **reserved** instance; they complete that one instead. A self-log or completion still waiting for approval does not block a new log.
@@ -218,7 +218,7 @@ A giver (normally Dad) runs a guided **meeting screen**:
    Example: lower 50, upper 100, total 130 → upper level, 100 deducted, 30 carries. Total 30 → none, 30 carries.
 
    The giver confirms; a **settlement record** is written per taker (period, total before, level reached, points deducted, carry-over). The running total never goes negative.
-3. **Plan.** Lead into the normal board: open tasks, bidding, and reservations for the coming period. Optionally propose length/levels for the *following* period here (subject to 5.8 agreement).
+3. **Plan.** Lead into the normal board: open tasks, bidding, and reservations for the coming period; with the week plan switch on, the week plan table (5.12). Optionally propose length/levels for the *following* period here (subject to 5.8 agreement).
 
 - Settlements are **final**. Givers and takers cannot edit them. Only the **admin** can correct a settlement, with a mandatory reason; the correction is logged and the original record is preserved.
 - **[call]** A correction never rewrites later settlements. It writes a correction record linked to the original (which may state a corrected level reached, for the money paid outside the app) and posts the point difference as an adjustment to the taker's **current** running total. Carry-over is stored per settlement, not recomputed.
@@ -232,6 +232,41 @@ A giver (normally Dad) runs a guided **meeting screen**:
   - **Dismiss:** leave things as they are, with a note.
 - Everyone involved sees the outcome. **[call]** An item has at most one open dispute at a time.
 - Opening, correcting, and dismissing a dispute are audit-logged.
+
+### 5.12 Week plan (Jakub, 2026-11-26)
+Why: the brothers plan each week on a whiteboard on Sunday: a table of chores by day where they write their names. The week plan moves that table into the app, so on their own phones they see the whole week and reserve the days they will do.
+
+Behind its own launch switch (`weekPlan`, off in production until Jakub flips it). With the switch off, 5.3 works as before.
+
+**Copies are made for the whole week (5.3 "Scheduled" changes).**
+- When a period starts, every schedule slot of every agreed template from the period's start up to its cutoff gets its copy at once, open, at the template's current score and description. This holds whether the period started by a settlement at the meeting (5.8, the copies exist the moment the settlement is confirmed, so the brothers can plan right then) or at the cutoff.
+- One copy per slot, never two. A copy belongs to the period its slot falls in **[call]**: when a meeting ends a period early (Sunday 20:00), a copy for a slot later that day (Sunday 21:00) was already made by the old period and simply counts in the new one; it is not made again.
+- A copy's deadline is counted from its **slot**, not from when it was made (so Tuesday's bins made on Sunday are still due Wednesday 7:00), the same rule as a late copy in 5.3.
+- A template agreed during the week gets copies for its remaining slots of the running period at once. A score or description change agreed during the week applies to copies made after it, so normally from the next week (5.1).
+- **[call]** Slots already in the past when the copies are made (the server was down) follow the catch-up rule of §11: only the latest missed slot gets a copy, due from its slot (5.3).
+- **[call]** A period longer than 14 days gets copies only 14 days ahead; the rest are made as that horizon moves.
+- The 5.3 **[call]** "no duplicate while a no-deadline instance is open" no longer applies to scheduled copies: each copy belongs to its own day (below).
+- On-demand copies (5.3 way 2) stay: a giver can still add one any time. **[call]** It belongs to the day it is made.
+
+**Turning the switch on or off [call].** Jakub flips it, best at a week start. On: copies for the rest of the running period are made at once; copies made before the flip keep the old rules (they never expire under the midnight rule and can be done any time). Off: nothing is cancelled or expired; copies already made stay, with the old rules, and reservations on them stay.
+
+**A copy belongs to its day.** Its *day* is the Prague calendar day of its slot (for an on-demand copy, the day it was made).
+- It can be marked done only from the start of its day (Jakub: never ahead, otherwise it would have been planned for another day). Reserving and releasing are allowed any time before it is done.
+- **Deadline chores:** done is allowed from the start of its day until its grace window ends, as in 5.3 (a deadline after midnight, like bins due 7:00 the next morning, still counts as on time).
+- **No-deadline chores** (Jakub): a copy not done by the end of its day **expires** at midnight (no points, logged, as a missed deadline). This replaces "stays open until someone does it" (5.3) while the switch is on.
+- Self-logging (5.3 way 3): a chore is refused only while a copy of it **for today** is open or reserved. Copies for other days do not block it.
+- **[call]** Domů lists a copy only from the start of its day. A reserved copy for a later day shows in Moje rezervace with its weekday (e.g. "Čt"). Úkoly (giver) lists copies only from their day too; the whole week is on the plan.
+
+**The plan table (Týden).** Takers and givers open it from the Týden tab, any time, not only during the meeting.
+- Rows: one per agreed template with a schedule (templates with no schedule days have no fixed days and are not shown) **[call]**. Columns: the Prague days of the running period, in order from its start; a phone held sideways (landscape) fits seven. **[call]** The start day is shown only if a copy of it is still in the period (a meeting on Sunday evening starts the week with what is left of that Sunday).
+- A cell shows that day's copy: free; reserved (the taker's avatar, initial in his colour); done and waiting for approval; confirmed; expired. A day with no slot is blank. **[call]** Several copies on one day (an on-demand extra) show as a count; tapping opens the list.
+- A taker taps a free cell to reserve it (first tap wins, no limit). **[call]** Tapping his own reserved cell offers Uvolnit (release); tapping any other cell, and every tap by a giver, opens that copy's task page.
+- **[call]** Days already past are greyed out. Before the first period starts the table is empty.
+- Nobody "accepts" the plan: reservations are real the moment they are made (Jakub: no proposal stage). No bidding on copies; bidding stays for one-time tasks (5.2).
+
+**At the meeting.** Step 3 (Plan, 5.9) shows the same table for the week the settlement just started, next to the open one-time tasks. The brothers reserve on their own phones (Týden), the giver's screen updates when reloaded **[call]**.
+
+Left for later (Jakub, 2026-11-26): Schůzka as an event in the family Google Calendar.
 
 ### 5.10 Audit log
 - **Append-only.** Every state-changing action writes an entry: actor (user), timestamp, action type, entity type and ID, before/after values (or the relevant payload), and optional reason.
@@ -258,6 +293,7 @@ A giver (normally Dad) runs a guided **meeting screen**:
   - **Log a chore**: pick a template, mark done (self-logged).
   - **Create**: one-time task (giver), template (giver), instance on demand (giver).
   - **Meeting**: the three-step flow from 5.9 (givers).
+  - **Week plan**: the table of chores by day for the running week; takers reserve from it (5.12).
   - **Period settings**: propose length/levels for an upcoming period, propose a change to the defaults (givers), approve proposals.
   - **Dispute**: mark a locked item as disputed, with a reason (takers and givers).
   - **Admin**: settings, open disputes, corrections, adjustments, people (admin console).
