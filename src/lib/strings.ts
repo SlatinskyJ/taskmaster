@@ -82,6 +82,17 @@ export const cs = {
       changed: 'Heslo se mezitím změnilo. Zkus to znovu.',
       featureOff: 'Změna hesla je teď vypnutá.',
     },
+    /** Nainstalovat aplikaci (#302). */
+    installSection: 'Aplikace',
+    installButton: 'Nainstalovat aplikaci',
+    installHint: 'Taskmaster na ploše jako appka',
+    installIosTitle: 'Přidat na plochu',
+    installIosSteps: [
+      'Ťukni na Sdílet dole v prohlížeči.',
+      'Vyber Přidat na plochu.',
+      'Ťukni na Přidat.',
+    ],
+    installIosClose: 'Rozumím',
   },
   /** One-time tasks (#33): GTasks, GCreate, TApprove (UI doc §7). */
   tasks: {
