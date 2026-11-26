@@ -669,7 +669,7 @@ describe('labelledPrs: labelled on a lower PR', () => {
   const LOW_U = '2'.repeat(40)
   async function lowerWith(
     compare: string,
-    low: { state: string; merged_at: string | null; head: string },
+    low: { state: string; merged_at: string | null; head: string; base?: string },
     lowCommits: GhCommit[] = [
       commit(OLD, []),
       commit(LOW, [OLD], { committer: { name: 'Jakub', email: 'j@x' } }),
@@ -681,7 +681,12 @@ describe('labelledPrs: labelled on a lower PR', () => {
     routes[`GET ${R}/compare/${LOW}...${A}`] = { status: 200, body: { status: compare } }
     routes[`GET ${R}/pulls/8`] = {
       status: 200,
-      body: { state: low.state, merged_at: low.merged_at, head: { sha: low.head } },
+      body: {
+        state: low.state,
+        merged_at: low.merged_at,
+        head: { sha: low.head },
+        base: { ref: low.base ?? 'main' },
+      },
     }
     routes[`GET ${R}/pulls/8/commits`] = { status: 200, body: lowCommits }
     routes[`GET ${R}/compare/main...${M1}`] = { status: 200, body: { status: 'behind' } }
@@ -705,6 +710,9 @@ describe('labelledPrs: labelled on a lower PR', () => {
   })
   it('bad when it did not contain the lower head (stale on an older lower commit)', async () => {
     expect(await lowerWith('diverged', merged)).toBe('bad')
+  })
+  it('bad when the lower PR merged into another branch, not main', async () => {
+    expect(await lowerWith('ahead', { ...merged, base: '40-bottom' })).toBe('bad')
   })
   it('pending while the lower PR is open', async () => {
     expect(await lowerWith('ahead', { state: 'open', merged_at: null, head: LOW })).toBe('pending')

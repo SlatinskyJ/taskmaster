@@ -282,11 +282,15 @@ export function makeGh(
     if (status !== 'ahead' && status !== 'identical') return 'bad'
     // The lower PR may only have moved by update merges GitHub made (the same proof as for an
     // approved head), so the Action updating it with main before merging it is fine.
-    const low = await getJson<{ state: string; merged_at: string | null; head: { sha: string } }>(
-      `${base}/pulls/${lower.pr}`,
-    )
+    const low = await getJson<{
+      state: string
+      merged_at: string | null
+      head: { sha: string }
+      base: { ref: string }
+    }>(`${base}/pulls/${lower.pr}`)
     if (!(await walk(lower.pr, lower.sha, low.head.sha)).headIsApproved) return 'bad'
-    if (low.merged_at) return 'ok'
+    // Merged into main only: merged into another branch, it is not landed yet.
+    if (low.merged_at) return low.base.ref === 'main' ? 'ok' : 'bad'
     return low.state === 'open' ? 'pending' : 'bad'
   }
 
