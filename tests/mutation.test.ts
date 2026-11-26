@@ -47,6 +47,71 @@ describe('mutateTargets', () => {
   })
 })
 
+describe('mutateTargets with a patch', () => {
+  it('limits a modified file to the line ranges its patch adds or changes', () => {
+    const patch = [
+      '@@ -3,4 +3,5 @@ export function f() {',
+      ' const a = 1',
+      '-const b = 2',
+      '+const b = 3',
+      '+const c = 4',
+      ' const d = 5',
+      '@@ -20,3 +21,3 @@',
+      ' x()',
+      '-y()',
+      '+z()',
+      ' w()',
+    ].join('\n')
+    expect(mutateTargets([{ filename: 'src/a.ts', status: 'modified', patch }])).toEqual([
+      'src/a.ts:4-5',
+      'src/a.ts:22-22',
+    ])
+  })
+
+  it('joins touching ranges and skips hunks that only delete lines', () => {
+    const patch = [
+      '@@ -1 +1 @@',
+      '-a',
+      '+b',
+      '@@ -1,0 +2,2 @@',
+      '+d',
+      '+e',
+      '@@ -10,3 +12,1 @@',
+      ' k',
+      '-l',
+      '-m',
+      '\\ No newline at end of file',
+    ].join('\n')
+    expect(mutateTargets([{ filename: 'src/a.ts', status: 'modified', patch }])).toEqual([
+      'src/a.ts:1-3',
+    ])
+  })
+
+  it('leaves out a file whose patch only deletes lines', () => {
+    const patch = '@@ -5,2 +5,1 @@\n keep\n-gone'
+    expect(mutateTargets([{ filename: 'src/a.ts', status: 'modified', patch }])).toEqual([])
+  })
+
+  it('mutates the whole file when GitHub sends no patch (diff too large)', () => {
+    expect(
+      mutateTargets([
+        { filename: 'src/big.ts', status: 'modified' },
+        { filename: 'src/huge.ts', status: 'modified', patch: null },
+      ]),
+    ).toEqual(['src/big.ts', 'src/huge.ts'])
+  })
+
+  it('sorts ranges by file, then by line', () => {
+    expect(
+      mutateTargets([
+        { filename: 'src/b.ts', status: 'modified', patch: '@@ -1 +1 @@\n-x\n+y' },
+        { filename: 'src/a.ts', status: 'modified', patch: '@@ -30 +30 @@\n-x\n+y' },
+        { filename: 'src/a.ts', status: 'modified', patch: '@@ -9 +9 @@\n-x\n+y' },
+      ]),
+    ).toEqual(['src/a.ts:9-9', 'src/a.ts:30-30', 'src/b.ts:1-1'])
+  })
+})
+
 function mutant(
   status: MutantStatus,
   mutatorName: string,
