@@ -410,6 +410,8 @@ export const cs = {
     bidsTurnedDown: 'nabídky odmítnuty',
     biddingReopened: 'nové vyjednávání o ceně',
     biddingClosed: 'vyjednávání skončilo',
+    /** A divider in Historie once a price was reopened (#212): "2. vyjednávání o ceně". */
+    round: (n: number) => `${String(n)}. vyjednávání o ceně`,
     approved: (n: number) => `souhlas s ${String(n)} b`,
     agreed: (n: number) => `domluveno za ${String(n)} b`,
     agreedReserved: (n: number, name: string) => `domluveno za ${String(n)} b · rezervace: ${name}`,

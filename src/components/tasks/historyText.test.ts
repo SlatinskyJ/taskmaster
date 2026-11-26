@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HistoryEntry } from '~/server/tasks/functions'
-import { historyLine, historyReason, historyTime } from './historyText'
+import { historyLine, historyReason, historyRounds, historyTime } from './historyText'
 
 const AT = '2026-11-21T09:12:00.000Z'
 const entry = (over: Partial<HistoryEntry>): HistoryEntry => ({
@@ -82,5 +82,29 @@ describe('historyLine', () => {
   it('the reason in Czech quotes, none when empty', () => {
     expect(historyReason(entry({ reason: 'Udělá to firma.' }))).toBe('„Udělá to firma.“')
     expect(historyReason(entry({}))).toBeNull()
+  })
+})
+
+describe('historyRounds (#212, Jakub 2026-11-26)', () => {
+  const at = (id: number, action: HistoryEntry['action']) => entry({ id, action })
+  it('no reopen: no round dividers', () => {
+    expect([...historyRounds([at(1, 'task.created'), at(2, 'task.bid_placed')])]).toEqual([])
+    expect([...historyRounds([])]).toEqual([])
+  })
+  it('the first entry starts round 1, each reopen the next; old bids stay in the list', () => {
+    const entries = [
+      at(1, 'task.created'),
+      at(2, 'task.bid_placed'),
+      at(3, 'task.agreed'),
+      at(4, 'task.bidding_reopened'),
+      at(5, 'task.bid_placed'),
+      at(6, 'task.bids_turned_down'),
+      at(7, 'task.bidding_reopened'),
+    ]
+    expect([...historyRounds(entries)]).toEqual([
+      [1, 1],
+      [4, 2],
+      [7, 3],
+    ])
   })
 })
