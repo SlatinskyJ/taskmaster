@@ -270,7 +270,7 @@ export function listRowLabel(copy: PlanCopy, viewer: Viewer): { what: string; ac
   - `freeCount` → opens yesterday 1, today 2, tomorrow 1 (and one reserved today) → 3.
   - `dayHeader('<Wed 2. 12. 00:00 Prague ISO>')` → `{ weekday: 'St', date: '2. 12.' }`.
   - `rowMeta` → days `[0..6]` → `'každý den'`; `[2, 5]` → `'Út, Pá'` (it calls `describeDays`).
-  - `templateText.test.ts` → `describeDays([0..6])` → `'každý den'`; `describeDays([5, 2])` → `'Út, Pá'`; the existing `describeTemplate` case `'Po, Út, St, Čt, Pá, So, Ne v 18:00 · do dalšího dne 7:00 (+2 h)'` becomes `'každý den v 18:00 · do dalšího dne 7:00 (+2 h)'` (one wording on Úkoly and in the table; Decisions 20).
+  - `templateText.test.ts` → `describeDays([0..6])` → `'každý den'`; `describeDays([5, 2])` → `'Út, Pá'`; the existing `describeTemplate` case `'Po, Út, St, Čt, Pá, So, Ne v 18:00 · do dalšího dne 7:00 (+2 h)'` becomes `'každý den v 18:00 · do dalšího dne 7:00 (+2 h)'` (one wording on Úkoly and in the table; Decisions 17).
   - `cellLabel` → free for a taker `'Prostřít stůl k večeři, St: volné, rezervovat'`; own `'…, St: rezervováno tebou, uvolnit'`; the brother's `'…, St: rezervováno, Mladší'`; count `'…, St: 2 kopie, otevřít seznam'`.
   - `listRowLabel` → a scheduled copy reserved by me `{ what: 'Podle rozvrhu · rezervováno tebou', action: 'Uvolnit' }`; an on-demand open copy made 14:20 `{ what: 'Navíc 14:20 · Volné', action: 'Rezervovat' }`; for a giver `action: null`.
 - [ ] **Step 2:** Run `pnpm test src/components/week/planView.test.ts`. Expected: FAIL.
@@ -541,5 +541,5 @@ All of them go into the PR brief.
 14. The e2e makes the on-demand extra through Táta's "+ Teď". The seed cannot: the switch is off while the seed's pieces run.
 15. The data is the same for a taker and a giver (the whole family's board); only the taps differ.
 16. `Avatar` gets a `sm` size (26 px) for cells.
-20. An every-day chore reads "každý den" on Úkoly too (shared `describeDays`, Architecture judge round 1), instead of listing all seven days.
-21. A start-day copy that expired before the period started (its grace ended before `startsAt`) belongs to the old week, like one completed before the start (Rules judge round 1).
+17. An every-day chore reads "každý den" on Úkoly too (shared `describeDays`, Architecture judge round 1), instead of listing all seven days.
+18. A start-day copy that expired before the period started (its grace ended before `startsAt`) belongs to the old week, like one completed before the start (Rules judge round 1).
