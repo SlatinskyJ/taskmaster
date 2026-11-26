@@ -9,6 +9,7 @@ import {
   choreDispute,
   descriptions,
   disputes,
+  endedWeek,
   instances,
   negotiation,
   pastWeek,
@@ -93,6 +94,14 @@ export const SEEDS = {
   weekplan: { pieces: [weekChores, points], features: ['recurring', 'log', 'weekPlan'] },
   /** The plan table on Týden (#258): four chores, yesterday's and today's copies in each state. */
   plantable: { pieces: [planTable], features: ['recurring', 'week', 'weekPlan'] },
+  /**
+   * The week plan at Schůzka (#259): an ended week to settle on any weekday with the last-day
+   * rule on, a running week that does not end today, and the plan table's chores in it.
+   */
+  planmeeting: {
+    pieces: [endedWeek, planTable],
+    features: ['recurring', 'week', 'meeting', 'weekPlan', 'settleLastDay'],
+  },
   /** Suggestions on Profil and Správa (#247): two new, one done, one dismissed. */
   suggestions: { pieces: [suggestions], features: ['suggestions'] },
   /** Previews and dev: everything. */

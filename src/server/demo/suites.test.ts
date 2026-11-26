@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
+import { DEFAULT_PERIOD_DEFAULTS, isLastDay, isRunning } from '~/domain'
 import { settlements, templates, users } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { listPeriods, proposalsView, rollPeriods } from '~/server/periods'
@@ -239,6 +239,42 @@ describe('e2e seeds (#183)', () => {
       // Tomorrow's vacuum is Starší's.
       expect(cell(1, at + 1)).toEqual([['reserved', 'Starší']])
       expect(getFlags(db)).toEqual({ ...NO_FEATURES, recurring: true, week: true, weekPlan: true })
+      const log = db
+        .select({ at: auditLog.at })
+        .from(auditLog)
+        .orderBy(auditLog.id)
+        .all()
+        .map((r) => r.at)
+      expect(log).toEqual([...log].sort())
+    },
+  )
+
+  it.each([16, 17, 18, 19, 20, 21, 22])(
+    'planmeeting (#259) on 11. %i. 2026 at 10:00: one ended unsettled week, the running week not on its last day',
+    (day) => {
+      const now = fromPragueWallTime({ year: 2026, month: 11, day, hour: 10, minute: 0 })
+      const db = createTestDb()
+      seedDemo(db, { TASKMASTER_ENV: 'preview', TASKMASTER_SEED: 'planmeeting' }, now)
+      const [ended, running, ...rest] = listPeriods(db)
+      expect(rest).toEqual([])
+      expect(ended && isRunning(ended, now)).toBe(false)
+      expect(ended && ended.cutoffAt.getTime() < now.getTime()).toBe(true)
+      expect(running && isRunning(running, now)).toBe(true)
+      expect(running && isLastDay(running, now)).toBe(false)
+      expect(db.select().from(settlements).all()).toEqual([])
+      expect(getFlags(db)).toEqual({
+        ...NO_FEATURES,
+        recurring: true,
+        week: true,
+        meeting: true,
+        weekPlan: true,
+        settleLastDay: true,
+      })
+      const meeting = getMeeting(db, now, true)
+      expect(meeting.period?.id).toBe(ended?.id)
+      expect(meeting.settledToday).toBe(false)
+      if (meeting.period) expect(meeting.pending).toEqual([])
+      expect(getWeekPlan(db, now).rows.map((r) => r.title)).toContain('Prostřít stůl k večeři')
       const log = db
         .select({ at: auditLog.at })
         .from(auditLog)

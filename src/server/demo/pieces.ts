@@ -21,6 +21,7 @@ import {
   proposeDefaultsChange,
   proposePeriod,
   rollPeriods,
+  writePeriodDefaults,
 } from '~/server/periods'
 import { getMeeting, settlePeriod } from '~/server/settlement/meeting'
 import { closeSuggestionIn, createSuggestionIn } from '~/server/suggestions/store'
@@ -641,6 +642,21 @@ export const weekChores: Piece = ({ tx, id, now }) => {
   rollPeriods(tx, now, defaults)
   // Only these chores: the other pieces' scheduled chores keep their old-rule instances.
   for (const t of made) makeWeekCopies(tx, now, { templateId: t.id, log: SEED_LOG })
+}
+
+/**
+ * Test only (#259, seed `planmeeting`), not in `demo`: an ended, unsettled week and a running
+ * week whose last day is never today, so e2e can settle at Schůzka on any weekday with the
+ * last-day rule on and come back to step 3. The ended week starts at `start` (the audit log
+ * stays in time order) and, rolled with a one-day length, ends at the first default cutoff
+ * after it: before `now`. The default week is then 14 days, so the running week, rolled from
+ * that cutoff, ends at least a week from now. Must come first in a seed: it writes at `start`.
+ */
+export const endedWeek: Piece = ({ tx, now, start }) => {
+  const defaults = getPeriodDefaults(tx)
+  rollPeriods(tx, start, { ...defaults, lengthDays: 1 })
+  writePeriodDefaults(tx, { kind: 'system' }, { ...defaults, lengthDays: 14 }, start)
+  rollPeriods(tx, now, getPeriodDefaults(tx))
 }
 
 /** The plan table's chores (#258): three every day (one with the long name), one twice a week. */
