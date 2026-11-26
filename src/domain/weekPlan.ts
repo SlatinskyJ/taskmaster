@@ -9,7 +9,7 @@ import type { ClockTime } from './templates'
 // A copy keeps no slot of its own, so it is rebuilt: a scheduled copy's day at the template's
 // schedule time (no time: the day's 00:00, so a no-time start-day copy is the old week's); an
 // on-demand copy's slot is when it was made. A schedule time changed after the copy was made
-// shifts this rebuilt slot (a known gap, Jakub 2026-11-26).
+// shifts this rebuilt slot (a known gap, listed in the PR brief for Jakub).
 
 export interface WeekCopyTimes {
   /** UTC ISO start of the copy's Prague day. */
