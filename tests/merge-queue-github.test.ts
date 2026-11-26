@@ -202,6 +202,8 @@ interface World {
   onMain?: string[]
   /** Commits on main the head lacks (compare main...head). */
   behindBy?: number
+  /** full_name of the head repo; null = deleted fork. */
+  headRepo?: string | null
 }
 
 function world(w: World = {}): Record<string, Reply> {
@@ -233,7 +235,13 @@ function world(w: World = {}): Record<string, Reply> {
       body: {
         number: 9,
         draft: false,
-        head: { sha: head },
+        head: {
+          sha: head,
+          repo:
+            w.headRepo === undefined
+              ? { full_name: 'SlatinskyJ/taskmaster' }
+              : w.headRepo && { full_name: w.headRepo },
+        },
         mergeable_state: 'clean',
         labels: [{ name: 'merge-me' }],
       },
@@ -273,6 +281,21 @@ async function factsOf(w: World) {
   return makeGh('t', KEY, impl, { now: () => NOW }).labelledPrs()
 }
 
+describe('labelledPrs: head repository', () => {
+  it('marks a PR from a fork', async () => {
+    const [pr] = await factsOf({ headRepo: 'someone/taskmaster' })
+    expect(pr?.fromFork).toBe(true)
+  })
+  it('marks a PR whose head repo was deleted', async () => {
+    const [pr] = await factsOf({ headRepo: null })
+    expect(pr?.fromFork).toBe(true)
+  })
+  it('a branch in this repository is not a fork', async () => {
+    const [pr] = await factsOf({})
+    expect(pr?.fromFork).toBe(false)
+  })
+})
+
 const BASE_COMMITS = [
   commit(OLD, []),
   commit(A, [OLD], { committer: { name: 'Jakub', email: 'j@x' } }),
@@ -284,6 +307,7 @@ describe('labelledPrs', () => {
       {
         number: 9,
         draft: false,
+        fromFork: false,
         approvedSha: A,
         labelEventId: LABEL_ID,
         headSha: A,
@@ -438,7 +462,7 @@ describe('labelledPrs', () => {
       body: {
         number: 9,
         draft: false,
-        head: { sha: A },
+        head: { sha: A, repo: { full_name: 'SlatinskyJ/taskmaster' } },
         mergeable_state: 'clean',
         labels: [{ name: 'merge-me' }, { name: 'needs-jakub' }],
       },
@@ -465,7 +489,13 @@ describe('labelledPrs', () => {
     routes[`GET ${R}/stacks`] = { status: 200, body: [{ number: 3 }] }
     routes[`GET ${R}/pulls/9`] = {
       status: 200,
-      body: { number: 9, draft: false, head: { sha: A }, mergeable_state: 'clean', labels: [] },
+      body: {
+        number: 9,
+        draft: false,
+        head: { sha: A, repo: { full_name: 'SlatinskyJ/taskmaster' } },
+        mergeable_state: 'clean',
+        labels: [],
+      },
     }
     const { impl } = fakeFetch(routes)
     const [pr] = await makeGh('t', KEY, impl, { now: () => NOW }).labelledPrs()
@@ -478,7 +508,13 @@ describe('behind', () => {
     const routes = world({ behindBy: 1 })
     routes[`GET ${R}/pulls/9`] = {
       status: 200,
-      body: { number: 9, draft: false, head: { sha: A }, mergeable_state: 'unknown', labels: [] },
+      body: {
+        number: 9,
+        draft: false,
+        head: { sha: A, repo: { full_name: 'SlatinskyJ/taskmaster' } },
+        mergeable_state: 'unknown',
+        labels: [],
+      },
     }
     const { impl } = fakeFetch(routes)
     const [pr] = await makeGh('t', KEY, impl, { now: () => NOW }).labelledPrs()

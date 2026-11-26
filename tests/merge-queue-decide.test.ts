@@ -17,6 +17,7 @@ function facts(over: Partial<PrFacts> = {}): PrFacts {
     needsJakubAfterLabel: false,
     ci: 'green',
     unresolvedThreads: 0,
+    fromFork: false,
     inStack: false,
     behind: false,
     handedOver: false,
@@ -60,6 +61,9 @@ describe('entryCheck', () => {
       ok: false,
       reason: '3 unresolved threads',
     })
+  })
+  it('fails a PR from a fork (its author could rewrite an update merge in the web editor)', () => {
+    expect(entryCheck(facts({ fromFork: true }))).toEqual({ ok: false, reason: 'PR from a fork' })
   })
   it('fails a PR in a GitHub stack', () => {
     expect(entryCheck(facts({ inStack: true }))).toEqual({

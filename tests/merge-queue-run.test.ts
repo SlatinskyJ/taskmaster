@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import type { PrFacts } from '../scripts/merge-queue/decide.ts'
 import { approvedMarker, handoffMarker, type Gh } from '../scripts/merge-queue/github.ts'
@@ -12,6 +13,7 @@ function facts(over: Partial<PrFacts> = {}): PrFacts {
   return {
     number: 9,
     draft: false,
+    fromFork: false,
     approvedSha: X,
     labelEventId: 501,
     headSha: X,
@@ -156,7 +158,7 @@ describe('run', () => {
     const f = fakeGh({ prs: [facts()], merge: 'refused' })
     await run(f.gh, log, KEY)
     expect(f.writes().map((c) => c.op)).toEqual(['merge', 'comment'])
-    expect(f.comments()[0]).toContain('merge refused: the head moved')
+    expect(f.comments()[0]).toContain('merge refused (the head moved, or the ruleset blocked it)')
   })
 
   it('posts one comment for a hand-over and keeps the label', async () => {
@@ -164,6 +166,16 @@ describe('run', () => {
     await run(f.gh, log, KEY)
     expect(f.writes().map((c) => c.op)).toEqual(['comment'])
     expect(f.comments()[0]).toContain('draft')
+  })
+
+  it('returns the handed-over PRs, so the entry point can end the run red', async () => {
+    const f = fakeGh({ prs: [facts({ number: 7, draft: true }), facts({ number: 9 })] })
+    expect(await run(f.gh, log, KEY)).toEqual({ handedOver: [7] })
+  })
+
+  it('returns no hand-overs after a clean merge', async () => {
+    const f = fakeGh({ prs: [facts()] })
+    expect(await run(f.gh, log, KEY)).toEqual({ handedOver: [] })
   })
 
   it('writes nothing while waiting', async () => {
@@ -176,5 +188,18 @@ describe('run', () => {
     const f = fakeGh({ prs: [] })
     await run(f.gh, log, KEY)
     expect(f.writes()).toEqual([])
+  })
+})
+
+describe('entry point', () => {
+  // Vitest transpiles TypeScript itself; the workflow runs the file with plain `node`, whose type
+  // stripping rejects some syntax (parameter properties, enums). Load it the way the workflow does.
+  it('loads under plain node and refuses to run without its secrets', () => {
+    const r = spawnSync(process.execPath, ['scripts/merge-queue/run.ts'], {
+      env: { PATH: process.env.PATH ?? '' },
+      encoding: 'utf8',
+    })
+    expect(r.stderr).toContain('merge-queue: GH_TOKEN and MERGE_MARKER_KEY are required')
+    expect(r.status).toBe(1)
   })
 })

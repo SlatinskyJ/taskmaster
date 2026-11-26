@@ -102,17 +102,16 @@ interface IssueComment {
 interface PullDetail {
   number: number
   draft: boolean
-  head: { sha: string }
+  head: { sha: string; repo: { full_name: string } | null }
   labels: { name: string }[]
 }
 
+// No parameter properties: Node's type stripping (the workflow runs this file as plain .ts) rejects them.
 class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    method: string,
-    url: string,
-  ) {
+  readonly status: number
+  constructor(status: number, method: string, url: string) {
     super(`${method} ${url} → HTTP ${status}`)
+    this.status = status
   }
 }
 
@@ -273,6 +272,7 @@ export function makeGh(
     const facts: PrFacts = {
       number: pr,
       draft: detail.draft,
+      fromFork: detail.head.repo?.full_name !== repo,
       approvedSha,
       labelEventId: label.id,
       headSha: detail.head.sha,

@@ -18,7 +18,8 @@ export async function run(
   log: (line: string) => void,
   markerKey: string,
   labelEvent?: { pr: number; sha: string },
-): Promise<void> {
+): Promise<{ handedOver: number[] }> {
+  const handedOver: number[] = []
   if (labelEvent) {
     const { pr, sha } = labelEvent
     const labelId = await gh.latestLabelEventId(pr)
@@ -38,6 +39,7 @@ export async function run(
   const handOver = async (pr: number, reason: string) => {
     await gh.comment(pr, handOverBody(markerKey, factsOf(pr), reason))
     log(`merge-queue: #${pr} handed over: ${reason}`)
+    handedOver.push(pr)
   }
   for (const action of nextActions(prs)) {
     switch (action.kind) {
@@ -54,7 +56,8 @@ export async function run(
         if ((await gh.merge(action.pr, action.sha)) === 'merged') {
           await gh.removeLabel(action.pr, LABEL)
           log(`merge-queue: #${action.pr} merged on ${action.sha}`)
-        } else await handOver(action.pr, 'merge refused: the head moved')
+        } else
+          await handOver(action.pr, 'merge refused (the head moved, or the ruleset blocked it)')
         break
       case 'wait':
         log(`merge-queue: #${action.pr} waiting for CI`)
@@ -64,6 +67,7 @@ export async function run(
         break
     }
   }
+  return { handedOver }
 }
 
 function labelEventFromEnv(env: NodeJS.ProcessEnv): { pr: number; sha: string } | undefined {
@@ -84,7 +88,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exit(1)
   }
   const gh = makeGh(token, key, fetch, { repo: process.env.GITHUB_REPOSITORY })
-  await run(
+  const { handedOver } = await run(
     gh,
     (line) => {
       console.log(line)
@@ -92,4 +96,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     key,
     labelEventFromEnv(process.env),
   )
+  // The hand-over comment is posted as Jakub (PAT), so GitHub notifies nobody. A red run does:
+  // GitHub mails the failed-run notice, and the annotation names the PRs.
+  if (handedOver.length > 0) {
+    console.log(
+      `::error::merge-queue handed over ${handedOver.map((n) => `#${n}`).join(', ')}: run skill merge-approved-prs`,
+    )
+    process.exitCode = 1
+  }
 }
