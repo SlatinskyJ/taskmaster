@@ -66,6 +66,8 @@ const EXPECTED_ROLES: Record<string, string> = {
   counterTemplateScoreFn: 'giver',
   acceptTemplateBidFn: 'giver',
   acceptTemplateOfferFn: 'taker',
+  withdrawTemplateBidFn: 'taker',
+  turnDownTemplateBidsFn: 'giver',
   getTemplateDetailFn: 'giver,taker',
   listPendingTemplatePriceChangesFn: 'giver,taker',
   listPendingTemplateApprovalsFn: 'giver,taker',

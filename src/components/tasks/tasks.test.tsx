@@ -199,6 +199,7 @@ describe('WaitingForYou with templates (#37)', () => {
     approvedBy: ['Táta'],
     schedule: { days: [0, 1, 2, 3, 4, 5, 6] as (0 | 1 | 2 | 3 | 4 | 5 | 6)[], time: '18:00' },
     deadline: { dayOffset: 1, due: '07:00', graceMinutes: 120 },
+    bidding: null,
     change: null,
   }
 
@@ -304,6 +305,7 @@ describe('template price change: ways in', () => {
     approvedBy: [],
     schedule: null,
     deadline: null,
+    bidding: null,
     change: {
       offer: { score: 4, byName: 'Táta' },
       bids: [{ takerId: 5, name: 'Mladší', score: 5 }],
@@ -411,6 +413,45 @@ describe('template price change: ways in', () => {
     expect(
       renderToStaticMarkup(<TemplateRow template={{ ...plain, status: 'proposed' }} />),
     ).not.toContain('<a ')
+  })
+})
+
+describe('Úkoly: a proposed chore with first-price bidding (#209)', () => {
+  const proposedRow = (bids: { takerId: number; name: string; score: number }[]) =>
+    renderToStaticMarkup(
+      <TemplateRow
+        template={{
+          id: 9,
+          title: 'Vynést koš',
+          status: 'proposed',
+          score: 10,
+          approvalRequired: true,
+          createdByName: 'Táta',
+          approvedBy: ['Táta'],
+          schedule: null,
+          deadline: null,
+          change: null,
+          bidding: {
+            offer: { score: 10, byName: 'Táta' },
+            bids,
+            lowest: bids[0]?.score ?? null,
+            lastBids: [],
+          },
+        }}
+      />,
+    )
+
+  it('with bids: Odpovědět and who wants what, not Čeká na souhlas', () => {
+    const html = proposedRow([{ takerId: 4, name: 'Starší', score: 12 }])
+    expect(html).toContain('<a href="/sablona/9">Odpovědět</a>')
+    expect(html).toContain('Starší chce 12')
+    expect(html).not.toContain('Čeká na souhlas')
+  })
+
+  it('without bids: Otevřít and Čeká na souhlas', () => {
+    const html = proposedRow([])
+    expect(html).toContain('<a href="/sablona/9">Otevřít</a>')
+    expect(html).toContain('Čeká na souhlas')
   })
 })
 

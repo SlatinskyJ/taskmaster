@@ -5,7 +5,7 @@ import { templates } from '~/server/db/schema'
 import { addGiver, family, T1, T2 } from '~/server/tasks/testing'
 import { agreementOf } from './templates'
 import { agreedTemplate, threadRows } from './testing'
-import { addEntry, closeThread, openRows } from './thread'
+import { addEntry, closeThread, lastBids, openRows } from './thread'
 
 function setup() {
   const f = family()
@@ -94,5 +94,35 @@ describe('template thread rows', () => {
       score: 3,
       change: { offer: null, bids: [{ by: s.f.starsi, score: 4 }] },
     })
+  })
+})
+
+describe('last bids for the same-number rule (#209)', () => {
+  const pairs = (rows: { userId: number; score: number }[]) => rows.map((r) => [r.userId, r.score])
+
+  it('lastBids counts from the newest giver row, closed bids included', () => {
+    const s = setup()
+    s.add(s.f.starsi, 'taker', 4)
+    s.add(s.f.tata, 'giver', 5)
+    const bid = s.add(s.f.starsi, 'taker', 6)
+    s.add(s.f.mladsi, 'taker', 7)
+    s.tx((t) => closeThread(t, s.id, [], T2))
+    // Starší's 4 is before the counter; his 6 counts though closed, as does Mladší's 7.
+    expect(pairs(lastBids(s.f.db, s.id))).toEqual([
+      [s.f.starsi, 6],
+      [s.f.mladsi, 7],
+    ])
+    expect(bid.entry.closedAt).toBeNull()
+  })
+
+  it('lastBids with since ignores bids at or below it', () => {
+    const s = setup()
+    const first = s.add(s.f.starsi, 'taker', 4)
+    s.add(s.f.mladsi, 'taker', 7)
+    expect(pairs(lastBids(s.f.db, s.id, first.entry.id))).toEqual([[s.f.mladsi, 7]])
+    expect(pairs(lastBids(s.f.db, s.id))).toEqual([
+      [s.f.starsi, 4],
+      [s.f.mladsi, 7],
+    ])
   })
 })

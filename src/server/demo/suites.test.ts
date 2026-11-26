@@ -10,6 +10,7 @@ import { listTasks } from '~/server/tasks'
 import { rejectionsSince } from '~/server/tasks/rejections'
 import { getFlags } from '~/server/features/flags'
 import { NO_FEATURES } from '~/lib/features'
+import { listTemplates } from '~/server/templates/templates'
 import { seedDemo } from './seed'
 import type { SeedName } from './seeds'
 
@@ -127,5 +128,22 @@ describe('e2e seeds (#183)', () => {
       waitingFor: [id('starsi'), id('mladsi')],
       settings: { lengthDays: 14, levels: { lower: 60, upper: 120 } },
     })
+  })
+
+  it('chores: Vynést kompost at 10 with no bids, Zalít kytky at 4 with Starší 6 and Mladší 7', () => {
+    const db = seeded('chores')
+    expect(listTasks(db)).toHaveLength(0)
+    const tata = db.select().from(users).where(eq(users.username, 'tata')).get()?.id ?? 0
+    // Newest first, as Úkoly lists them.
+    const views = listTemplates(db, tata, { choreBidding: true })
+    expect(views.map((t) => [t.title, t.status, t.score])).toEqual([
+      ['Zalít kytky', 'proposed', 4],
+      ['Vynést kompost', 'proposed', 10],
+    ])
+    expect(views[1]?.bidding?.bids).toEqual([])
+    expect(views[0]?.bidding?.bids.map((b) => [b.name, b.score])).toEqual([
+      ['Starší', 6],
+      ['Mladší', 7],
+    ])
   })
 })

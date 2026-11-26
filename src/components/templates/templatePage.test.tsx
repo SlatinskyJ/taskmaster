@@ -70,6 +70,7 @@ const dishes: TemplateView = {
   approvedBy: [],
   schedule: null,
   deadline: null,
+  bidding: null,
   change: {
     offer: { score: 4, byName: 'Táta' },
     bids: [{ takerId: 5, name: 'Mladší', score: 5 }],
@@ -95,9 +96,9 @@ const thread: ThreadEntry[] = [
   },
 ]
 
-function render(user: PageUser, entries: ThreadEntry[] = thread) {
+function render(user: PageUser, entries: ThreadEntry[] = thread, template: TemplateView = dishes) {
   page.user = user
-  page.template = dishes
+  page.template = template
   page.thread = entries
   const Page = (Route as unknown as { component: () => ReactNode }).component
   return renderToStaticMarkup(<Page />)
@@ -107,6 +108,26 @@ const STARSI = { id: 4, role: 'taker', displayName: 'Starší' } as const
 const TATA = { id: 2, role: 'giver', displayName: 'Táta' } as const
 
 describe('template price page', () => {
+  it('a proposed chore with bidding shows Návrh: 10 b. and no future-only line (#209)', () => {
+    const chore: TemplateView = {
+      ...dishes,
+      status: 'proposed',
+      score: 10,
+      change: null,
+      bidding: {
+        offer: { score: 10, byName: 'Táta' },
+        bids: [{ takerId: 4, name: 'Starší', score: 12 }],
+        lowest: 12,
+        lastBids: [{ takerId: 4, score: 12 }],
+      },
+    }
+    const html = render(STARSI, [], chore)
+    expect(html).toContain('Návrh: 10 b.')
+    expect(html).not.toContain('Platí 10 b.')
+    expect(html).not.toContain('Nová cena platí jen pro nově vzniklé úkoly.')
+    expect(html).toContain('Nechci')
+  })
+
   it('a brother sees the score, the offer, the history and his buttons', () => {
     const html = render(STARSI)
     expect(html).toContain('Vyluxovat celý obývák a chodbu')
