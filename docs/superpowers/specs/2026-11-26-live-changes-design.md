@@ -70,7 +70,9 @@ Transport for all three: Server-Sent Events from the one server.
 - **C. Broadcast a nudge; the phone reloads its screen in the background and compares.**
   Rejected: one extra load per change per open phone, and a burst of changes multiplies it.
 - WebSockets instead of SSE: rejected. Events only flow one way, and the Apache proxy in front
-  of production would need a tunnel module and rewrite rules; SSE is plain HTTP.
+  of production would need a tunnel module and rewrite rules. SSE is an ordinary HTTPS response
+  that stays open, so it uses the same TLS, cookie and proxy as every other request; production
+  serves it over HTTPS only (Jakub asked).
 - Polling: rejected by "event-driven".
 
 ## Design
@@ -88,8 +90,11 @@ Transport for all three: Server-Sent Events from the one server.
   that dispute. The stream endpoint checks every topic with the same read rule the data function
   used and refuses one the user could not have loaded, so a crafted query gains nothing. The hub
   itself only matches strings: no reads per event.
-- After a refresh or a navigation the screen reopens the stream with its new topics and `asOf`;
-  the old one closes. One open stream per tab.
+- **Leaving a screen ends its subscription (Jakub).** On navigation the tab closes the old
+  stream and opens one with the new screen's topics and `asOf`; the banner and its count are
+  cleared. Nothing about the old screen is delivered after that: each stream carries the id of
+  its subscription, and an event from a closed one that was already in flight is dropped by the
+  tab. A refresh does the same with the same screen's new topics. One open stream per tab.
 
 ### Topics [call]
 
@@ -120,11 +125,15 @@ missing is not.
 
 ### The event
 
-- The text is built on the server from the entry, one Czech sentence per action type in
-  `src/lib/strings.ts`, with a fallback "<jméno> něco změnil(a)" **[call]**. It holds only the
-  actor's name, a verb, and the title of the task or chore, e.g. "Táta schválil Vynést koš"
-  **[call]**: no points, amounts or reasons, and never the entry's `before` / `after` (audit
-  README rule).
+- **The text comes from the action type (Jakub).** Every audit action type already says exactly
+  what changed (`task.agreed`, `instance.expired`, …). Each gets a Czech translation in
+  `src/lib/strings.ts`, and the banner shows the actor, that translation and the title, e.g.
+  "Táta · domluveno za 8 b · Vynést koš". Task and chore actions reuse the wording of the task's
+  Historie (`cs.history`), which already translates them and shows the same points to whoever
+  can open the task; the other actions (periods, proposals, settlement, people, settings,
+  disputes, suggestions) get new translations, with the fallback "změna" as Historie does. Never
+  the entry's `before` / `after` as they are (audit README rule): only the values that
+  translation needs, and only values the subscriber's screen could load.
 - **One change = one action of a person [call].** One tap can write several audit entries (a
   settlement writes one per boy; accepting a bid writes more than one). Those count as one
   change, with the sentence of the main entry. How entries of one transaction are grouped
@@ -151,8 +160,20 @@ missing is not.
 - The stream must not be buffered by Apache (likely `flushpackets=on` on the `ProxyPass`, and no
   compression of `text/event-stream`). That is a change on the VPS: it needs Jakub's own words
   before anyone applies it. The preview host's proxy needs the same check.
-- Limits **[call]**: at most 5 open streams per session and 50 topics per stream; extra ones are
-  refused. The family has about five people.
+- **Limits from the real app (Jakub: based on how it looks and what the data is).** With the
+  topics above, a screen subscribes to a handful of topics, not one per row: lists and Týden use
+  `tasks` and `period:…` instead of one topic per task. Counted per screen today (topics ≈):
+  Domů 4–5, Úkoly 2–3, Zapsat 1, task page 2–3, chore page 2–3, Týden 2–3, Příští / Výchozí
+  týden 2, Profil 1–2, Schůzka about 7 (the week, tasks, proposals and each boy's points),
+  Správa about 10 (people, settings, disputes, suggestions, corrections and each boy's points).
+  The builder recounts from the code; the limit is **twice the largest screen's count** (about
+  20 today), checked by a test over every screen, so a new screen that grows past it fails CI
+  rather than being refused in use. A boy's or Mum's account adds a topic per person on the
+  screens that list everyone, which the 2× covers.
+- **Streams per login:** a login is one device (a phone, the PWA, a browser), and each open tab
+  holds one stream. In practice that is one or two. The limit is 3 per session **[call]**; when
+  a fourth opens, the server closes the oldest instead of refusing the newest, so the tab in
+  hand always works. `/dev/multi` frames each have their own login, so they don't share it.
 - A phone in the background drops the stream; the browser reconnects when it comes back, and
   catch-up does the rest.
 - Behind a launch switch `liveChanges`, off in production until Jakub flips it. Off: no stream is
@@ -162,8 +183,8 @@ missing is not.
 
 - Every action type in `src/server/audit/actions.ts` must have a topic mapping; a unit test
   fails when a new action has none. "No topics" is a valid, explicit mapping for actions no
-  screen loads (login, logout, failed login, launch switch flips) **[call]**. Passkeys are shown
-  on Profil, so `passkey.*` maps to a per-user topic.
+  screen loads (login, logout, failed login), and for what Jakub put out of scope: launch switch
+  flips and passkeys (`passkey.*`).
 - Per screen, a test changes each kind of entity its loader reads and checks that the screen's
   topics catch the event.
 - One e2e: two browser contexts, a change in one, the banner and its count in the other, refresh
