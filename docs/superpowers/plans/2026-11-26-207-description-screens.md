@@ -28,7 +28,7 @@
 4. **Who sees edit.** Upravit popis / Přidat popis: an active giver, on a one-time task that is proposed, open or reserved, and on any chore. Never on an instance (its text is the chore's) nor for a brother.
 5. **Chore history.** The chore page has no audit history today; description lines show only in a task's history. The chore page shows the waiting change card like the task page.
 6. **Domů lists waiting description changes** (plan round 1, Rules + UX; spec §5.2 "shown to the takers as waiting"): #252 has no per-person read, so this PR adds one (Task 5). A brother in a change's `waitingFor` gets a row in "Čeká na tebe" that links to the item's page, like a waiting price change.
-7. **A parent takes a waiting change back** with a button on the card (plan round 1, UX): it sends the text in force (null when none), which the server already treats as a withdrawal (#252 ruling 5). No server change.
+7. **A parent takes a waiting change back** with a button on the card (plan round 1, UX): it sends the text in force (`''` when none; the parser takes strings only), which the server already treats as a withdrawal (#252 ruling 5). No server change.
 
 ## Review Focus
 
@@ -47,7 +47,7 @@
 **Produces:**
 ```ts
 export type DescriptionCallResult<O> = { ok: true; outcome: O } | { ok: false; error: string } // error = Czech message
-export function sendDescription(target: DescriptionTarget, text: string | null, fn = changeDescriptionFn): Promise<DescriptionCallResult<'applied' | 'waiting' | 'withdrawn'>>
+export function sendDescription(target: DescriptionTarget, text: string, fn = changeDescriptionFn): Promise<DescriptionCallResult<'applied' | 'waiting' | 'withdrawn'>>
 export function answerDescription(target: DescriptionTarget, changeId: number, yes: boolean, fn = answerDescriptionFn): Promise<DescriptionCallResult<'agreed' | 'declined'>>
 export function descriptionToast(outcome: 'applied' | 'waiting' | 'withdrawn' | 'agreed' | 'declined'): string
 /** Ruling 4, the one place both pages ask. */
@@ -74,9 +74,9 @@ A throw → `{ok:false, error: cs.login.failed}`.
 
 **Produces:** `DescriptionBlock({ text, change, target, canEdit, me })`: `SectionLabel` "Popis" + text (`whitespace-pre-line break-words`) or `cs.description.none` (only when `canEdit`; nothing at all when no text and no edit); a ghost `min-h-tap` button Upravit / Přidat opening `DescriptionSheet`; below, `WaitingDescription` card when `change` is set.
 `DescriptionSheet`: vaul Drawer, `DescriptionForm` with `Textarea name="description" maxLength={1000}` pre-filled with the waiting text if any else the text in force, a live `count`, the line `resetWarn` (proposed item) or `waitWarn` (open/reserved task, agreed chore), Uložit `size="lg"` busy + `aria-busy`, error `role="alert"`, text kept on error; on success close, toast `descriptionToast(outcome)`, `router.invalidate()`.
-`WaitingDescription({ change, me, names })`: title, the new text (or `waitingRemove`), "Čeká na: …"; for a brother in `change.waitingFor`: Souhlasím s popisem (`ok`) and Nesouhlasím (`ghost`), each busy while sending, toast, invalidate. For a giver: `takeBack` (`ghost`, `min-h-tap`) sends the text in force through `sendDescription` (withdrawn toast).
+`WaitingDescription({ change, me, names })`: title, the new text (or `waitingRemove`), "Čeká na: …"; for a brother in `change.waitingFor`: Souhlasím s popisem (`ok`) and Nesouhlasím (`ghost`), each busy while sending, toast, invalidate. For a giver: `takeBack` (`ghost`, `min-h-tap`) sends the text in force (`text ?? ''`, the server reads blank as none) through `sendDescription` (withdrawn toast).
 
-- [ ] Tests (static render): text with `\n` keeps the line breaks class and escapes `<b>`; giver sees Upravit, brother does not; no text + giver → Přidat; no text + brother → nothing; the waiting card shows the new text and the two buttons only for a brother in `waitingFor`, and Vzít zpět only for a giver (its call gets the text in force, null when none); a removal shows `waitingRemove`; the form disables Uložit while busy and shows the error; count reads "12 / 1000"; the textarea has `maxlength="1000"`; with a waiting change the textarea holds the waiting text, not the text in force (and a removal → empty); `resetWarn` on a proposed item, `waitWarn` on an open one.
+- [ ] Tests (static render): text with `\n` keeps the line breaks class and escapes `<b>`; giver sees Upravit, brother does not; no text + giver → Přidat; no text + brother → nothing; the waiting card shows the new text and the two buttons only for a brother in `waitingFor`, and Vzít zpět only for a giver (its call gets the text in force, `''` when none); a removal shows `waitingRemove`; the form disables Uložit while busy and shows the error; count reads "12 / 1000"; the textarea has `maxlength="1000"`; with a waiting change the textarea holds the waiting text, not the text in force (and a removal → empty); `resetWarn` on a proposed item, `waitWarn` on an open one.
 - [ ] Implement, run, commit.
 
 ### Task 3: Pages and Nový úkol
@@ -97,7 +97,7 @@ A throw → `{ok:false, error: cs.login.failed}`.
 
 ### Task 5: Domů, rows, history
 
-**Files:** Modify `src/components/tasks/WaitingForYou.tsx` (rulings 1 and 6), `src/routes/_app/index.tsx` (loader calls the new read), `src/server/descriptions/rows.ts` + `functions.ts` (new read), `src/components/tasks/TaskRow.tsx` (**required** `described: boolean` → a `NotebookText` icon, `role="img"`, `aria-label={cs.description.hasIcon}`, `size-4`, after the name inside the name line), and every caller the typecheck lists (today: `TakerBoard`, `TaskGroups`, `RecurringList`, `TemplateRow`, `WaitingForYou`, `ApproveControls`, `BidsToAnswer`, `MeetingScreen`, `WeekScreen`, `WaitingOnTakers`, `routes/dev/ui.tsx`) pass `described={item.description !== null}`; `src/components/tasks/historyText.ts` (six `task.description_*` lines); `src/server/settlement/meeting.ts:139` passes the switch (#252 review nit); tests `homePage.test.tsx`, `taskRow.test.tsx`, `historyText.test.ts`.
+**Files:** Modify `src/components/tasks/WaitingForYou.tsx` (rulings 1 and 6; new **required** prop `descriptionChanges: DescriptionWaitingRow[]`, like `priceChanges`), `src/routes/_app/index.tsx` (loader calls the new read), `src/server/descriptions/rows.ts` + `functions.ts` (new read), `src/components/tasks/TaskRow.tsx` (**required** `described: boolean` → a `NotebookText` icon, `role="img"`, `aria-label={cs.description.hasIcon}`, `size-4`, after the name inside the name line), and every caller the typecheck lists (today: `TakerBoard`, `TaskGroups`, `RecurringList`, `TemplateRow`, `WaitingForYou`, `ApproveControls`, `BidsToAnswer`, `MeetingScreen`, `WeekScreen`, `WaitingOnTakers`, `routes/dev/ui.tsx`) pass `described={item.description !== null}`; `src/components/tasks/historyText.ts` (six `task.description_*` lines); `src/server/settlement/meeting.ts:139` passes the switch (#252 review nit); tests `homePage.test.tsx`, `taskRow.test.tsx`, `historyText.test.ts`.
 
 **Produces (server):**
 ```ts
