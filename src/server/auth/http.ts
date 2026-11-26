@@ -6,12 +6,11 @@ import {
   getRequestUrl,
   setCookie,
 } from '@tanstack/react-start/server'
-import { FRAME_HEADER, FRAME_QUERY } from '~/lib/frame'
 import { getDb } from '~/server/db'
 import type { CurrentUser } from './sessions'
 import { resolveSession } from './sessions'
 import { pickClientIp } from './clientIp'
-import { readFrame } from './frame'
+import { frameSignals, readFrame } from './frame'
 import type { FrameRequest } from './frame'
 import { login, logout } from './login'
 import type { LoginError } from './login'
@@ -44,11 +43,7 @@ function clearSessionCookie(): void {
 
 /** Whether this request comes from a viewer frame, and its token. Never a frame in production. */
 export function requestFrame(env: NodeJS.ProcessEnv = process.env): FrameRequest {
-  return readFrame(env, {
-    header: getRequestHeader(FRAME_HEADER),
-    query: getRequestUrl().searchParams.get(FRAME_QUERY) ?? undefined,
-    fetchDest: getRequestHeader('sec-fetch-dest'),
-  })
+  return readFrame(env, frameSignals(getRequestHeader, getRequestUrl()))
 }
 
 /** The request's session token: a frame's own, else the cookie's. */
