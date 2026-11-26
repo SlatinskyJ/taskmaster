@@ -24,7 +24,7 @@ import { saveItem, toItem } from './item'
 // its open change, asks the domain, and writes the rows with their audit entries in one
 // transaction. The old score stays in `tasks.score` until a change is agreed.
 
-export type ScoreChangeError = AgreementError | 'not_found' | 'no_change'
+export type ScoreChangeError = AgreementError | 'not_found' | 'no_change' | 'bidding_instead'
 
 interface Loaded {
   task: TaskRow
@@ -55,11 +55,19 @@ export function proposeTaskScoreChange(
   taskId: number,
   score: number,
   now: Date = new Date(),
+  opts: { rebid?: boolean } = {},
 ): Result<TaskRow, ScoreChangeError> {
   return db.transaction((tx) => {
     const loaded = load(tx, taskId)
     if (!loaded) return fail('not_found')
     const { task, people } = loaded
+    // A reopened round (#212) negotiates the score already.
+    if (task.biddingFrom !== null) return fail('bidding_open')
+    // With `reopenBidding` on, reopening bidding replaces "Jiná cena" on an open one-time task
+    // (spec §5.2 [call], #212); reserved tasks keep it. Checked here, in the write's transaction.
+    if (opts.rebid && task.status === 'open' && task.origin === 'one_time') {
+      return fail('bidding_instead')
+    }
     const pending = openChangeOf(tx, taskId)
     const proposal = proposeOneTimeScoreChange(
       toItem(task),

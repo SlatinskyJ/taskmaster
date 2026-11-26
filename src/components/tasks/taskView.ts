@@ -246,14 +246,18 @@ export function toastFor(action: BidAction, status: TaskView['status'], me: Me):
 
 // ── Price change (#36, spec §5.2) ────────────────────────────────────────────────────────
 
-/** "Změnit cenu": no change in flight; open → any giver or taker; reserved → a giver or its taker. */
+/**
+ * "Změnit cenu": no change in flight; open → any giver or taker; reserved → a giver or its
+ * taker. With `rebid` (switch `reopenBidding`, #212) an open task changes price by a new round.
+ */
 export function canProposeChange(
   task: Pick<TaskView, 'status' | 'reservedBy' | 'scoreChange'>,
   me: Me,
+  rebid = false,
 ): boolean {
   if (task.scoreChange) return false
   if (me.role !== 'giver' && me.role !== 'taker') return false
-  if (task.status === 'open') return true
+  if (task.status === 'open') return !rebid
   if (task.status === 'reserved') return me.role === 'giver' || task.reservedBy?.id === me.id
   return false
 }

@@ -15,6 +15,7 @@ describe('taskErrorMessage', () => {
     ['not_allowed', cs.tasks.errors.notAllowed],
     ['not_a_taker', cs.tasks.errors.notAllowed],
     ['feature_off', cs.tasks.errors.notAllowed],
+    ['bidding_open', 'Teď se o ceně vyjednává. Obnov stránku.'],
     ['reason_too_long', 'Důvod je moc dlouhý (nejvýš 200 znaků).'],
     ['same_score', 'Tohle číslo už platí. Zvol jiné.'],
     ['no_bids', 'Zatím nikdo nic nenabídl.'],
@@ -42,6 +43,7 @@ describe('scoreChangeErrorMessage', () => {
     ['score_frozen', cs.taskPrice.errors.scoreFrozen],
     ['not_agreed', cs.taskPrice.errors.notAgreed],
     ['not_changeable', cs.tasks.errors.gone],
+    ['bidding_instead', cs.taskPrice.errors.biddingInstead],
     ['wrong_state', cs.tasks.errors.gone],
     ['not_a_giver', cs.tasks.errors.notAllowed],
   ])('%s', (code, message) => {

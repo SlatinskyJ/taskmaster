@@ -88,6 +88,7 @@ describe('demo seed (#62)', () => {
       passwordChange: false,
       bidRefusals: false,
       approveAnywhere: false,
+      reopenBidding: false,
     })
   })
 
@@ -225,6 +226,7 @@ describe('demo seed (#62)', () => {
       passwordChange: false,
       bidRefusals: false,
       approveAnywhere: false,
+      reopenBidding: false,
     })
   })
 })

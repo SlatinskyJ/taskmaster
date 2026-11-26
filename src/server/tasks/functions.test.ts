@@ -9,13 +9,17 @@ import {
   parseCounter,
   parseReject,
   parseTurnDown,
+  proposeTaskScoreChangeHandler,
+  reopenBiddingHandler,
   turnDownBidsHandler,
   withdrawBidHandler,
 } from './functions'
 import { eq } from 'drizzle-orm'
 import { featureFlags } from '~/server/db/schema'
 import { placeBid } from './bidding'
-import { car, family, must, T1, T2, thread } from './testing'
+import { reserveTask } from './lifecycle'
+import { approveTaskOffer } from './tasks'
+import { car, family, must, row, T0, T1, T2, thread } from './testing'
 
 // Input checks of the bidding server functions (Security: no empty, huge or repeated bidders
 // list, no score above TASK_SCORE_MAX).
@@ -169,6 +173,55 @@ describe('the bidRefusals switch (#208)', () => {
       ok: true,
       id,
       status: 'proposed',
+    })
+  })
+})
+
+describe('the reopenBidding switch (#212)', () => {
+  const openCar = (enabled: boolean) => {
+    const f = family()
+    f.db.update(featureFlags).set({ enabled }).where(eq(featureFlags.key, 'reopenBidding')).run()
+    const id = car(f)
+    must(approveTaskOffer(f.db, f.starsi, id, 18, T0))
+    return { f, id }
+  }
+  it('off: reopening answers feature_off and writes nothing', () => {
+    const { f, id } = openCar(false)
+    expect(reopenBiddingHandler(f.db, f.starsi, { taskId: id }, T1)).toEqual({
+      ok: false,
+      error: 'feature_off',
+    })
+    expect(row(f.db, id)?.biddingFrom).toBeNull()
+  })
+  it('on: exactly ok, id and status; the round has started', () => {
+    const { f, id } = openCar(true)
+    expect(reopenBiddingHandler(f.db, f.mladsi, { taskId: id }, T1)).toEqual({
+      ok: true,
+      id,
+      status: 'open',
+    })
+    expect(row(f.db, id)?.biddingFrom).toBe(1)
+  })
+  it('on: Jiná cena is refused on an open task, accepted on a reserved one', () => {
+    const { f, id } = openCar(true)
+    const data = { taskId: id, score: 20 }
+    expect(proposeTaskScoreChangeHandler(f.db, f.starsi, data, T1)).toEqual({
+      ok: false,
+      error: 'bidding_instead',
+    })
+    must(reserveTask(f.db, f.starsi, id, T1))
+    expect(proposeTaskScoreChangeHandler(f.db, f.starsi, data, T2)).toEqual({
+      ok: true,
+      id,
+      status: 'reserved',
+    })
+  })
+  it('off: Jiná cena on an open task works as before', () => {
+    const { f, id } = openCar(false)
+    expect(proposeTaskScoreChangeHandler(f.db, f.starsi, { taskId: id, score: 20 }, T1)).toEqual({
+      ok: true,
+      id,
+      status: 'open',
     })
   })
 })

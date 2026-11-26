@@ -12,6 +12,7 @@ import {
   createOneTimeItem,
   expireItem,
   markAgreed,
+  markRebidAgreed,
   pendingEarner,
   rejectCompletion,
   releaseReservation,
@@ -162,6 +163,22 @@ describe('agreement ends negotiation (spec §5.2)', () => {
 
   it.each(others('proposed'))('not from %s', (status) => {
     expect(error(markAgreed(every[status](), null))).toBe('wrong_state')
+  })
+})
+
+describe('markRebidAgreed (#212)', () => {
+  it('a round on an open task agrees: stays open, or reserved by the won bid', () => {
+    expect(value(markRebidAgreed(openTask(), null))).toEqual(openTask())
+    const item = value(markRebidAgreed(openTask(), { takerId: older.id, giverId: dad.id }))
+    expect(item.status === 'reserved' && item.reservation).toEqual({
+      takerId: older.id,
+      via: 'bid',
+      giverId: dad.id,
+    })
+  })
+
+  it.each(others('open'))('not from %s', (status) => {
+    expect(error(markRebidAgreed(every[status](), null))).toBe('wrong_state')
   })
 })
 

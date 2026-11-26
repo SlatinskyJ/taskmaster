@@ -31,6 +31,8 @@ describe('historyLine', () => {
     ['task.bid_accepted', 'přijato 8 b'],
     ['task.bid_withdrawn', 'nabídka stažena'],
     ['task.bids_turned_down', 'nabídky odmítnuty'],
+    ['task.bidding_reopened', 'nové vyjednávání o ceně'],
+    ['task.bidding_closed', 'vyjednávání skončilo'],
     ['task.score_approved', 'souhlas s 8 b'],
     ['task.agreed', 'domluveno za 8 b'],
     ['task.reserved', 'rezervace'],
