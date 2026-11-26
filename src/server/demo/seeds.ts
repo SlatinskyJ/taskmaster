@@ -96,10 +96,10 @@ export const SEEDS = {
   plantable: { pieces: [planTable], features: ['recurring', 'week', 'weekPlan'] },
   /**
    * The week plan at Schůzka (#259): an ended week to settle on any weekday with the last-day
-   * rule on, a running week that does not end today, and the plan table's chores in it.
+   * rule on, a running week from today 00:00, and the plan table's chores with every copy.
    */
   planmeeting: {
-    pieces: [endedWeek, planTable],
+    pieces: [endedWeek],
     features: ['recurring', 'week', 'meeting', 'weekPlan', 'settleLastDay'],
   },
   /** Suggestions on Profil and Správa (#247): two new, one done, one dismissed. */

@@ -650,9 +650,12 @@ export const weekChores: Piece = ({ tx, id, now }) => {
  * last-day rule on and come back to step 3. The default week here ends at today's weekday 00:00:
  * the ended week runs from `start` (a week ago; the audit log stays in time order) to today
  * 00:00, and the running week from today 00:00 for seven days, as after a Sunday-evening
- * meeting. Must come first in a seed: it writes at `start`.
+ * meeting. The plan table's chores are agreed in the ended week, as a family's chores are, so
+ * the running week has a copy for every slot from its start, today's too (`planTable` agrees
+ * them now inside a running week, and a slot before the agreement makes no copy). Mladší holds
+ * today's "Vyluxovat…". Must come first in a seed: it writes at `start`.
  */
-export const endedWeek: Piece = ({ tx, now, start }) => {
+export const endedWeek: Piece = ({ tx, id, now, start }) => {
   const today = startOfPragueDay(now)
   const defaults = {
     ...getPeriodDefaults(tx),
@@ -662,7 +665,21 @@ export const endedWeek: Piece = ({ tx, now, start }) => {
   // First the week, so the save's own roll at `start` finds it running.
   rollPeriods(tx, start, defaults)
   writePeriodDefaults(tx, { kind: 'system' }, defaults, start)
+  const made = PLAN_CHORES.map((input) => {
+    const t = step(`template "${input.title}"`, createTemplateIn(tx, id('tata'), input, start))
+    step(`approve "${input.title}"`, approveTemplateScoreIn(tx, id('starsi'), t.id, t.score, start))
+    return t
+  })
   rollPeriods(tx, now, getPeriodDefaults(tx))
+  for (const t of made) makeWeekCopies(tx, now, { templateId: t.id, log: SEED_LOG })
+  const vacuum = made.find((t) => t.title === PLAN_CHORES[0]?.title)
+  const copy = tx
+    .select()
+    .from(taskTable)
+    .where(and(eq(taskTable.templateId, vacuum?.id ?? 0), eq(taskTable.planDayAt, toIsoUtc(today))))
+    .get()
+  if (!copy) throw new Error("Demo seed: no copy of today's vacuum")
+  step('Mladší holds the vacuum', reserveTask(tx, id('mladsi'), copy.id, now, true))
 }
 
 /** The plan table's chores (#258): three every day (one with the long name), one twice a week. */

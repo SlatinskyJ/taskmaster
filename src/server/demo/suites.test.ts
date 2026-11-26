@@ -265,7 +265,22 @@ describe('e2e seeds (#183)', () => {
       const today = fromPragueWallTime({ year: 2026, month: 11, day, hour: 0, minute: 0 })
       expect(running?.startsAt).toEqual(today)
       expect(ended?.cutoffAt).toEqual(today)
-      expect(getWeekPlan(db, now).days).toHaveLength(7)
+      const plan = getWeekPlan(db, now)
+      expect(plan.days).toHaveLength(7)
+      // Today's column has each chore's copy (agreed in the ended week, not now).
+      const at = plan.days.indexOf(plan.today)
+      expect(at).toBe(0)
+      const todays = Object.fromEntries(
+        plan.rows.map((r) => [
+          r.title,
+          r.cells[at]?.map((c) => [c.status, c.person?.name ?? null]) ?? [],
+        ]),
+      )
+      expect(todays['Prostřít stůl k večeři']).toEqual([['open', null]])
+      expect(todays['Zalít kytky na balkoně']).toEqual([['open', null]])
+      expect(todays['Vyluxovat celý obývák a chodbu']).toEqual([['reserved', 'Mladší']])
+      const binToday = [2, 5].includes(new Date(now).getDay()) // Út, Pá (Prague day = UTC day at 10:00)
+      expect(todays['Vynést koš na plasty']).toEqual(binToday ? [['open', null]] : [])
       expect(db.select().from(settlements).all()).toEqual([])
       expect(getFlags(db)).toEqual({
         ...NO_FEATURES,
