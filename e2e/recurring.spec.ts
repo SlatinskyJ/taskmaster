@@ -63,3 +63,24 @@ test('Zapsat, + Teď, approve, then the tile is taken', async ({ page }) => {
     page.getByRole('button', { name: cs.log.tileOnBoardLabel('Vyndat myčku') }),
   ).toBeDisabled()
 })
+
+test('a proposed chore offers no bidding with choreBidding off (#209)', async ({ page }) => {
+  // The `recurring` seed has the switch off; "Vynést koše" is Táta's proposed chore, the first
+  // template (his own page opens at /sablona/1, which pins the id).
+  await passwordLogin(page, 'tata')
+  await expect(page).toHaveURL(/\/$/)
+  await page.goto('/ukoly')
+  const proposed = page
+    .getByRole('region', { name: cs.templates.section })
+    .getByRole('listitem')
+    .filter({ hasText: 'Vynést koše' })
+  await expect(proposed).toBeVisible()
+  await expect(proposed.getByRole('link')).toHaveCount(0)
+  await page.goto('/sablona/1')
+  await expect(page.getByRole('heading', { name: 'Vynést koše' })).toBeVisible()
+
+  await switchTo(page, 'starsi')
+  await page.goto('/sablona/1')
+  await expect(page.getByText(cs.notFound.message)).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Vynést koše' })).toHaveCount(0)
+})

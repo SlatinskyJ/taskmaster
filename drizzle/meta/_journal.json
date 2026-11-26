@@ -232,6 +232,13 @@
       "when": 1795618121929,
       "tag": "0032_chore_bidding",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1795685606391,
+      "tag": "0033_open_rows_switch",
+      "breakpoints": true
     }
   ]
 }

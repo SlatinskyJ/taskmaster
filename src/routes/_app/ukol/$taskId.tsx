@@ -1,4 +1,4 @@
-import { createFileRoute, notFound } from '@tanstack/react-router'
+import { createFileRoute, Link, notFound } from '@tanstack/react-router'
 import { DisputeControl } from '~/components/disputes/DisputeControl'
 import { taskDisputes } from '~/components/disputes/disputeProps'
 import { Screen } from '~/components/shell/Screen'
@@ -19,6 +19,7 @@ import {
   taskChipState,
   waitingText,
 } from '~/components/tasks/taskView'
+import { buttonVariants } from '~/components/ui/button'
 import { Card } from '~/components/ui/card'
 import { parseIdParam } from '~/lib/idParam'
 import { guardScreen } from '~/lib/screenGuard'
@@ -29,8 +30,8 @@ import { getTaskDetailFn } from '~/server/tasks/functions'
 
 // One task's page (#34): TTask for a brother, GBid / GTask for a parent (UI doc §7). The state,
 // what this person can do now (bid; Hotovo and Uvolnit for the brother who has the task, #150;
-// a new price, a giver's cancel, #36), the bid thread and the task's history. Reserve stays
-// on Domů.
+// a new price, a giver's cancel, #36; Rezervovat on a free task, #195), the bid thread and the
+// task's history. A chore's copy links to its chore (#205).
 export const Route = createFileRoute('/_app/ukol/$taskId')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/ukol/$taskId')
@@ -70,7 +71,7 @@ function TaskPage() {
   const waiting = waitingText(task, me)
   const oneTime = task.origin === 'one_time'
   return (
-    <Screen title={task.title} user={user} back="/">
+    <Screen title={task.title} user={user} back="history">
       <Card className="grid gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <StateChip state={taskChipState(task)} />
@@ -93,6 +94,15 @@ function TaskPage() {
               </>
             )}
           </p>
+        )}
+        {features.openRows && task.templateId !== null && (
+          <Link
+            to="/sablona/$templateId"
+            params={{ templateId: String(task.templateId) }}
+            className={buttonVariants({ variant: 'ghost' })}
+          >
+            {cs.tasks.chorePageLink}
+          </Link>
         )}
         {features.disputes &&
           taskDisputes(task, user.role === 'giver').map((d) => (

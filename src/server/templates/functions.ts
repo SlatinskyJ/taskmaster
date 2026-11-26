@@ -3,7 +3,7 @@ import { requireRole } from '~/server/auth/guards'
 import type { Result } from '~/domain/result'
 import type { Db } from '~/server/db'
 import { getDb } from '~/server/db'
-import type { TemplateRow } from '~/server/db/schema'
+import type { TemplateRow, TemplateStatus } from '~/server/db/schema'
 import { getFlags } from '~/server/features'
 import { parseApproval, parseNewTemplate, parseTemplateId, parseTemplateTurnDown } from './parse'
 import {
@@ -37,10 +37,13 @@ export type { NewTemplate, TemplateChangeView, TemplateDetail, TemplateError, Te
 
 /** On success, `score` is the template's score after the action (moved only by an agreement). */
 export type TemplateActionResult =
-  { ok: true; id: number; score: number } | { ok: false; error: TemplateError }
+  | { ok: true; id: number; score: number; status: TemplateStatus }
+  | { ok: false; error: TemplateError }
 
 const answered = (result: Result<TemplateRow, TemplateError>): TemplateActionResult =>
-  result.ok ? { ok: true, id: result.value.id, score: result.value.score } : result
+  result.ok
+    ? { ok: true, id: result.value.id, score: result.value.score, status: result.value.status }
+    : result
 
 /** The `choreBidding` switch (#209) as the score actions take it. */
 const bidding = (db: Db) => ({ choreBidding: getFlags(db).choreBidding })
@@ -64,7 +67,9 @@ export const approveTemplateScoreFn = createServerFn({ method: 'POST' })
 /** Templates for the Úkoly screen: every one for a giver, agreed ones for a taker. */
 export const listTemplatesFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
-  .handler(({ context }): TemplateView[] => listTemplates(getDb(), context.user.id))
+  .handler(({ context }): TemplateView[] =>
+    listTemplates(getDb(), context.user.id, bidding(getDb())),
+  )
 
 // ── Score change (spec §5.1) and first-price bidding (#209) ──────────────────────────────
 // On an agreed template these change its score; on a proposed one (switch `choreBidding`, off →
@@ -165,15 +170,25 @@ export const getTemplateDetailFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
   .validator(parseTemplateId)
   .handler(({ data, context }): TemplateDetail | null =>
-    getTemplateDetail(getDb(), data.templateId, context.user.id),
+    getTemplateDetail(
+      getDb(),
+      data.templateId,
+      context.user.id,
+      bidding(getDb()),
+      getFlags(getDb()).openRows,
+    ),
   )
 
 /** "Čeká na tebe": agreed templates whose score change waits for this person's side. */
 export const listPendingTemplatePriceChangesFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
-  .handler(({ context }): TemplateView[] => pendingTemplatePriceChanges(getDb(), context.user.id))
+  .handler(({ context }): TemplateView[] =>
+    pendingTemplatePriceChanges(getDb(), context.user.id, bidding(getDb())),
+  )
 
 /** "Čeká na tebe": proposed templates waiting for this person's approval. */
 export const listPendingTemplateApprovalsFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
-  .handler(({ context }): TemplateView[] => pendingTemplateApprovals(getDb(), context.user.id))
+  .handler(({ context }): TemplateView[] =>
+    pendingTemplateApprovals(getDb(), context.user.id, bidding(getDb())),
+  )
