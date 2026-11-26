@@ -111,3 +111,18 @@ export function waitingChangeAfter(item: Item): 'keep' | 'apply' | 'discard' {
       return 'discard'
   }
 }
+
+/**
+ * A taker's page showed `seen` while the text in force is `current` (ruling 8): stale if the two
+ * differ after normalising. `undefined` = the page sent nothing, never stale; a `seen` too long to
+ * be a description is stale.
+ */
+export function isStaleDescription(
+  current: string | null,
+  seen: string | null | undefined,
+): boolean {
+  if (seen === undefined) return false
+  if (seen === null) return current !== null
+  const text = normaliseDescription(seen)
+  return !text.ok || text.value !== current
+}

@@ -6,12 +6,14 @@ import {
   createOneTimeTask,
   byPerson,
   findPerson,
+  isStaleDescription,
   isValidScore,
   liveBook,
   lowestBid,
   markAgreed,
   markRebidAgreed,
   missingRoles,
+  normaliseDescription,
   oneTimeChangeWaitingFor,
   reopenOneTimeOffer,
   resolveOneTime,
@@ -48,12 +50,15 @@ import { addEntry, lastBids, openBids, openOffer, openOfferOrNull, threadOf } fr
 
 export const TITLE_MAX = TASK_TITLE_MAX
 
-export type TaskError = AgreementError | LifecycleError | 'invalid_title' | 'not_found'
+export type TaskError =
+  AgreementError | LifecycleError | 'invalid_title' | 'not_found' | 'description_too_long'
 
 export interface NewTask {
   title: string
   score: number
   approvalRequired: boolean
+  /** What done means (#207); normalised, blank = none. */
+  description?: string | null
 }
 
 /** Approvals of the task's current offer, oldest first (the proposer first). */
@@ -173,6 +178,8 @@ export function createTask(
   const title = normaliseTitle(input.title)
   if (!title) return fail('invalid_title')
   if (!isValidScore(input.score)) return fail('invalid_score')
+  const description = normaliseDescription(input.description ?? '')
+  if (!description.ok) return description
   const at = toIsoUtc(now)
   return db.transaction((tx) => {
     const people = listPeople(tx)
@@ -187,6 +194,7 @@ export function createTask(
       .insert(tasks)
       .values({
         title,
+        description: description.value,
         status: agreement.value.status === 'open' ? 'open' : 'proposed',
         score: input.score,
         approvalRequired: input.approvalRequired,
@@ -230,11 +238,14 @@ export function approveTaskOffer(
   taskId: number,
   score: number,
   now: Date = new Date(),
+  /** The description the person's page showed (#207 ruling 8); undefined = not checked. */
+  seenDescription?: string | null,
 ): Result<TaskRow, TaskError> {
   const at = toIsoUtc(now)
   return db.transaction((tx) => {
     const task = tx.select().from(tasks).where(eq(tasks.id, taskId)).get()
     if (!task) return fail('not_found')
+    if (isStaleDescription(task.description, seenDescription)) return fail('offer_changed')
     const people = listPeople(tx)
     const agreement = agreementOf(tx, task)
     if (agreement.status === 'rebidding') {

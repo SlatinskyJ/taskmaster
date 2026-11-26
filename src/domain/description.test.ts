@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   answerDescription,
   changeDescription,
+  isStaleDescription,
   normaliseDescription,
   taskDescriptionRule,
   templateDescriptionRule,
@@ -131,5 +132,20 @@ describe('waitingChangeAfter', () => {
     expect(waitingChangeAfter(proposed)).toBe('apply')
     for (const item of [done, confirmed, cancelled])
       expect(waitingChangeAfter(item)).toBe('discard')
+  })
+})
+
+describe('isStaleDescription', () => {
+  it('no field is never stale; null is a value', () => {
+    expect(isStaleDescription('x', undefined)).toBe(false)
+    expect(isStaleDescription(null, null)).toBe(false)
+    expect(isStaleDescription('x', null)).toBe(true)
+    expect(isStaleDescription(null, 'x')).toBe(true)
+  })
+  it('compares after normalising; too long is stale', () => {
+    expect(isStaleDescription('x', ' x\r\n')).toBe(false)
+    expect(isStaleDescription('x', 'y')).toBe(true)
+    expect(isStaleDescription(null, '  ')).toBe(false)
+    expect(isStaleDescription('a'.repeat(1000), 'a'.repeat(1001))).toBe(true)
   })
 })

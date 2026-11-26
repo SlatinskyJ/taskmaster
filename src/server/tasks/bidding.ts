@@ -5,6 +5,7 @@ import {
   counterOneTimeOffer,
   isActiveAs,
   isAgreedOneTime,
+  isStaleDescription,
   placeOneTimeBid,
   reopenOneTimeBidding,
   turnDownOneTimeBids,
@@ -50,10 +51,13 @@ function onTask(
   db: Db | Tx,
   taskId: number,
   run: (ctx: Ctx) => Result<TaskRow, TaskError>,
+  /** A taker's page's description (#207 ruling 8); undefined = not checked. */
+  seenDescription?: string | null,
 ): Result<TaskRow, TaskError> {
   return db.transaction((tx) => {
     const task = tx.select().from(tasks).where(eq(tasks.id, taskId)).get()
     if (!task) return fail('not_found')
+    if (isStaleDescription(task.description, seenDescription)) return fail('offer_changed')
     return run({ tx, task, people: listPeople(tx) })
   })
 }
@@ -93,22 +97,32 @@ export function placeBid(
   taskId: number,
   score: number,
   now: Date = new Date(),
+  seenDescription?: string | null,
 ): Result<TaskRow, TaskError> {
-  return onTask(db, taskId, ({ tx, task, people }) => {
-    const result = placeOneTimeBid(agreementOf(tx, task), people, takerId, score)
-    if (!result.ok) return result
-    const { entry, replaced } = addEntry(tx, { taskId, userId: takerId, side: 'taker', score }, now)
-    writeAudit(tx, {
-      actor: { kind: 'user', userId: takerId },
-      action: 'task.bid_placed',
-      entityType: 'task',
-      entityId: taskId,
-      before: replaced ? { entryId: replaced.id, score: replaced.score } : undefined,
-      after: { entryId: entry.id, score },
-      at: now,
-    })
-    return ok(task)
-  })
+  return onTask(
+    db,
+    taskId,
+    ({ tx, task, people }) => {
+      const result = placeOneTimeBid(agreementOf(tx, task), people, takerId, score)
+      if (!result.ok) return result
+      const { entry, replaced } = addEntry(
+        tx,
+        { taskId, userId: takerId, side: 'taker', score },
+        now,
+      )
+      writeAudit(tx, {
+        actor: { kind: 'user', userId: takerId },
+        action: 'task.bid_placed',
+        entityType: 'task',
+        entityId: taskId,
+        before: replaced ? { entryId: replaced.id, score: replaced.score } : undefined,
+        after: { entryId: entry.id, score },
+        at: now,
+      })
+      return ok(task)
+    },
+    seenDescription,
+  )
 }
 
 /**
@@ -197,6 +211,22 @@ function newOfferRound(
   return { saved, entry, old }
 }
 
+/**
+ * A proposed task's agreement starts over at the same score: every open bid closes and `giverId`
+ * offers `task.score` again in a new offer round. Shared by a turn-down and a description change
+ * (#207 ruling 7), so the two can't drift apart. Writes no audit entry; the caller logs it.
+ */
+export function resetOfferRound(
+  tx: Tx,
+  task: TaskRow,
+  giverId: number,
+  now: Date,
+): { saved: TaskRow; entry: ThreadRow; old: ThreadRow; closedIds: number[] } {
+  const closedIds = openBids(tx, task.id).map((b) => b.id)
+  closeRows(tx, closedIds, now)
+  return { ...newOfferRound(tx, task, giverId, task.score, now), closedIds }
+}
+
 /** A taker says no (Nechci, Jakub 2026-11-24): his open bid closes, other bids stay. */
 export function withdrawBid(
   db: Db | Tx,
@@ -239,13 +269,7 @@ export function turnDownBids(
     const result = turnDownOneTimeBids(agreementOf(tx, task), people, giverId, book)
     if (!result.ok) return result
     if (task.status === 'open') return ok(endRound(tx, task, giverId, now))
-    const bids = openBids(tx, taskId)
-    closeRows(
-      tx,
-      bids.map((b) => b.id),
-      now,
-    )
-    const { saved, entry, old } = newOfferRound(tx, task, giverId, task.score, now)
+    const { saved, entry, old, closedIds } = resetOfferRound(tx, task, giverId, now)
     writeAudit(tx, {
       actor: { kind: 'user', userId: giverId },
       action: 'task.bids_turned_down',
@@ -254,7 +278,7 @@ export function turnDownBids(
       before: {
         score: task.score,
         offerRound: task.offerRound,
-        entryIds: bids.map((b) => b.id),
+        entryIds: closedIds,
         offerEntryId: old.id,
       },
       after: { score: saved.score, offerRound: saved.offerRound, entryId: entry.id },
@@ -271,25 +295,31 @@ export function acceptOffer(
   taskId: number,
   score: number,
   now: Date = new Date(),
+  seenDescription?: string | null,
 ): Result<TaskRow, TaskError> {
-  return onTask(db, taskId, ({ tx, task, people }) => {
-    const result = acceptOneTimeOffer(agreementOf(tx, task), people, takerId, score)
-    if (!result.ok) return result
-    if (!isAgreedOneTime(result.value)) throw new Error('an accepted offer is agreed')
-    const offer = openOffer(tx, taskId)
-    // A reopened round (#212) keeps no approvals: the counter and this yes agree it.
-    if (task.status === 'proposed') approve(tx, task, takerId, task.offerRound, score, now)
-    const actor = { kind: 'user', userId: takerId } as const
-    writeAudit(tx, {
-      actor,
-      action: 'task.score_approved',
-      entityType: 'task',
-      entityId: taskId,
-      after: { score },
-      at: now,
-    })
-    return ok(agree(tx, task, result.value, [offer.id], actor, now))
-  })
+  return onTask(
+    db,
+    taskId,
+    ({ tx, task, people }) => {
+      const result = acceptOneTimeOffer(agreementOf(tx, task), people, takerId, score)
+      if (!result.ok) return result
+      if (!isAgreedOneTime(result.value)) throw new Error('an accepted offer is agreed')
+      const offer = openOffer(tx, taskId)
+      // A reopened round (#212) keeps no approvals: the counter and this yes agree it.
+      if (task.status === 'proposed') approve(tx, task, takerId, task.offerRound, score, now)
+      const actor = { kind: 'user', userId: takerId } as const
+      writeAudit(tx, {
+        actor,
+        action: 'task.score_approved',
+        entityType: 'task',
+        entityId: taskId,
+        after: { score },
+        at: now,
+      })
+      return ok(agree(tx, task, result.value, [offer.id], actor, now))
+    },
+    seenDescription,
+  )
 }
 
 /**

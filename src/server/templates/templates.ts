@@ -2,10 +2,12 @@ import { and, asc, desc, eq } from 'drizzle-orm'
 import {
   approveTemplate,
   findPerson,
+  isStaleDescription,
   isValidScore,
   liveBook,
   liveTemplateBook,
   missingRoles,
+  normaliseDescription,
   proposeTemplate,
   resolveTemplate,
   validateTemplateDefinition,
@@ -37,7 +39,8 @@ import { closeThread, lastBids, openRows, threadOf } from './thread'
 // src/domain (agreement + templates); this module loads the rows, asks the domain, and writes
 // the result with its audit entries in one transaction. Score changes after agreement: ./scoreChange.
 
-export type TemplateError = AgreementError | TemplateDefinitionError | 'invalid_title' | 'not_found'
+export type TemplateError =
+  AgreementError | TemplateDefinitionError | 'invalid_title' | 'not_found' | 'description_too_long'
 
 export interface NewTemplate {
   title: string
@@ -45,6 +48,8 @@ export interface NewTemplate {
   approvalRequired: boolean
   schedule: TemplateSchedule | null
   deadline: DeadlineRule | null
+  /** What done means (#207); normalised, blank = none. Copied to each instance. */
+  description?: string | null
 }
 
 // ── Storage helpers ─────────────────────────────────────────────────────────────────────
@@ -204,6 +209,8 @@ export function createTemplateIn(
   if (!isValidScore(input.score)) return fail('invalid_score')
   const def = validateTemplateDefinition({ schedule: input.schedule, deadline: input.deadline })
   if (!def.ok) return def
+  const description = normaliseDescription(input.description ?? '')
+  if (!description.ok) return description
   const people = listPeople(tx)
   const agreement = proposeTemplate(people, giverId, input.score)
   if (!agreement.ok) return agreement
@@ -214,6 +221,7 @@ export function createTemplateIn(
     .insert(templates)
     .values({
       title,
+      description: description.value,
       status: agreement.value.status === 'agreed' ? 'active' : 'proposed',
       score: input.score,
       approvalRequired: input.approvalRequired,
@@ -251,8 +259,12 @@ export function approveTemplateScore(
   templateId: number,
   score: number,
   now: Date = new Date(),
+  /** The description the person's page showed (#207 ruling 8); undefined = not checked. */
+  seenDescription?: string | null,
 ): Result<TemplateRow, TemplateError> {
-  return db.transaction((tx) => approveTemplateScoreIn(tx, userId, templateId, score, now))
+  return db.transaction((tx) =>
+    approveTemplateScoreIn(tx, userId, templateId, score, now, seenDescription),
+  )
 }
 
 /** `approveTemplateScore` inside a caller's transaction (the demo seed). */
@@ -262,9 +274,11 @@ export function approveTemplateScoreIn(
   templateId: number,
   score: number,
   now: Date,
+  seenDescription?: string | null,
 ): Result<TemplateRow, TemplateError> {
   const row = tx.select().from(templates).where(eq(templates.id, templateId)).get()
   if (!row) return fail('not_found')
+  if (isStaleDescription(row.description, seenDescription)) return fail('offer_changed')
   if (row.status !== 'proposed') return fail('not_proposed')
   if (row.score !== score) return fail('offer_changed')
   const result = approveTemplate(agreementOf(tx, row), listPeople(tx), userId)
