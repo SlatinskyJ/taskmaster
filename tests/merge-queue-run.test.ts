@@ -38,6 +38,7 @@ interface Options {
   merge?: 'merged' | 'refused'
   onComment?: () => void
   onUnstack?: () => void
+  lowerPr?: number | null
   labelId?: number | null
 }
 
@@ -65,6 +66,10 @@ function fakeGh(o: Options) {
       if (o.onComment) o.onComment()
       return Promise.resolve()
     },
+    openPrWithHead: (ref) => {
+      calls.push({ op: 'openPrWithHead', args: [ref] })
+      return Promise.resolve(o.lowerPr === undefined ? 8 : o.lowerPr)
+    },
     removeLabel: (pr, label) => {
       calls.push({ op: 'removeLabel', args: [pr, label] })
       return Promise.resolve()
@@ -88,7 +93,7 @@ const log = (line: string) => {
 describe('run', () => {
   it('records the approval for the labelled commit first, whatever the head is now', async () => {
     const f = fakeGh({ prs: [facts({ headSha: Y, approvedSha: X, headIsApproved: false })] })
-    await run(f.gh, log, KEY, { pr: 9, sha: X, lower: null })
+    await run(f.gh, log, KEY, { pr: 9, sha: X, base: { ref: 'main', sha: Y } })
     const first = f.writes()[0]
     expect(first?.op).toBe('comment')
     expect(first?.args[0]).toBe(9)
@@ -105,7 +110,7 @@ describe('run', () => {
         marked = true
       },
     })
-    await run(f.gh, log, KEY, { pr: 9, sha: X, lower: null })
+    await run(f.gh, log, KEY, { pr: 9, sha: X, base: { ref: 'main', sha: Y } })
     expect(f.calls.map((c) => c.op).slice(0, 3)).toEqual([
       'latestLabelEventId',
       'comment',
@@ -116,7 +121,7 @@ describe('run', () => {
 
   it('writes no approval when the PR has no qualifying label event', async () => {
     const f = fakeGh({ prs: [], labelId: null })
-    await run(f.gh, log, KEY, { pr: 9, sha: X, lower: null })
+    await run(f.gh, log, KEY, { pr: 9, sha: X, base: { ref: 'main', sha: Y } })
     expect(f.writes()).toEqual([])
   })
 
@@ -202,14 +207,15 @@ describe('run', () => {
 describe('record and step', () => {
   it('record writes only the approval and reads no other PR', async () => {
     const f = fakeGh({ prs: [facts({ number: 7, draft: true }), facts()] })
-    await record(f.gh, log, KEY, { pr: 9, sha: X, lower: null })
+    await record(f.gh, log, KEY, { pr: 9, sha: X, base: { ref: 'main', sha: Y } })
     expect(f.calls.map((c) => c.op)).toEqual(['latestLabelEventId', 'comment'])
     expect(f.comments()[0]?.startsWith(approvedMarker(KEY, 9, 501, X))).toBe(true)
   })
 
   it('record on ten PRs in a row writes ten approvals', async () => {
     const f = fakeGh({ prs: [] })
-    for (let pr = 1; pr <= 10; pr++) await record(f.gh, log, KEY, { pr, sha: X, lower: null })
+    for (let pr = 1; pr <= 10; pr++)
+      await record(f.gh, log, KEY, { pr, sha: X, base: { ref: 'main', sha: Y } })
     expect(f.comments().filter((b) => b.includes('merge-queue:approved'))).toHaveLength(10)
   })
 
@@ -246,8 +252,16 @@ describe('record and step', () => {
       LABEL_BASE_SHA: Y,
     })
     const [onLower, onMain] = f.comments()
-    expect(onLower?.startsWith(approvedMarker(KEY, 9, 501, X, Y))).toBe(true)
+    expect(onLower?.startsWith(approvedMarker(KEY, 9, 501, X, { pr: 8, sha: Y }))).toBe(true)
     expect(onMain?.startsWith(approvedMarker(KEY, 9, 501, X, null))).toBe(true)
+  })
+
+  it('records pr 0 (never lands) when no open PR has the base branch', async () => {
+    const f = fakeGh({ prs: [], lowerPr: null })
+    await record(f.gh, log, KEY, { pr: 9, sha: X, base: { ref: '41-low', sha: Y } })
+    expect(f.comments()[0]?.startsWith(approvedMarker(KEY, 9, 501, X, { pr: 0, sha: Y }))).toBe(
+      true,
+    )
   })
 
   it('entry refuses a label event without its base', async () => {

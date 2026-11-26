@@ -3,14 +3,22 @@
 // No retry loops: the next event (label, CI done, push to main) runs it again.
 import { pathToFileURL } from 'node:url'
 import { nextActions, type PrFacts } from './decide.ts'
-import { FOOTER, LABEL, approvedMarker, handoffMarker, makeGh, type Gh } from './github.ts'
+import {
+  FOOTER,
+  LABEL,
+  approvedMarker,
+  handoffMarker,
+  makeGh,
+  type Gh,
+  type Lower,
+} from './github.ts'
 
 function approvalBody(
   key: string,
   pr: number,
   labelEventId: number,
   sha: string,
-  lower: string | null,
+  lower: Lower | null,
 ): string {
   return `${approvedMarker(key, pr, labelEventId, sha, lower)}\nThe merge-me Action recorded \`merge-me\` on commit ${sha}. It lands this PR on that commit only, after updating it with \`main\` if needed.\n\n${FOOTER}`
 }
@@ -20,11 +28,11 @@ function handOverBody(key: string, pr: PrFacts, reason: string): string {
 }
 
 type Log = (line: string) => void
-/** A label event: the PR, its head, and the head of the lower PR it sits on (null on main). */
+/** A label event: the PR, its head, and its base branch with that branch's tip. */
 export interface LabelEvent {
   pr: number
   sha: string
-  lower: string | null
+  base: { ref: string; sha: string }
 }
 
 // Records Jakub's approval for the labelled commit. The workflow runs this in its own job, one
@@ -36,10 +44,14 @@ export async function record(
   markerKey: string,
   labelEvent: LabelEvent,
 ): Promise<void> {
-  const { pr, sha, lower } = labelEvent
+  const { pr, sha, base } = labelEvent
   const labelId = await gh.latestLabelEventId(pr)
   if (labelId === null) log(`merge-queue: #${pr} has no merge-me label by SlatinskyJ`)
   else {
+    // On a lower PR: record which PR and its head, so this PR lands only after that PR merged
+    // on that head (plus GitHub's own update merges). No open PR on the branch: pr 0, never lands.
+    const lower: Lower | null =
+      base.ref === 'main' ? null : { pr: (await gh.openPrWithHead(base.ref)) ?? 0, sha: base.sha }
     await gh.comment(pr, approvalBody(markerKey, pr, labelId, sha, lower))
     log(`merge-queue: #${pr} approved on ${sha}`)
   }
@@ -150,7 +162,7 @@ function labelEventFromEnv(env: NodeJS.ProcessEnv): LabelEvent | undefined {
       `bad LABEL_PR, LABEL_SHA, LABEL_BASE_REF or LABEL_BASE_SHA: ${JSON.stringify({ pr, sha, baseRef, baseSha })}`,
     )
   }
-  return { pr: Number(pr), sha, lower: baseRef === 'main' ? null : baseSha }
+  return { pr: Number(pr), sha, base: { ref: baseRef, sha: baseSha } }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
