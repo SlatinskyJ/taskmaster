@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { ALL_FEATURES, FEATURE_KEYS, NO_FEATURES } from '~/lib/features'
 import { auditLog, featureFlags } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
-import { getFlags, setSwitchesIn } from './flags'
+import { family } from '~/server/tasks/testing'
+import { getFlags, parseSwitchInput, setSwitch, setSwitchesIn } from './flags'
 
 describe('NO_FEATURES and ALL_FEATURES', () => {
   it('hold every switch, all off and all on', () => {
@@ -198,5 +199,89 @@ describe('setSwitchesIn (#183)', () => {
       })
     }).toThrow('boom')
     expect(getFlags(db)).toEqual(NO_FEATURES)
+  })
+})
+
+describe('setSwitch (#296)', () => {
+  const AT = new Date('2026-11-26T10:00:00.000Z')
+  const MIGRATED = getFlags(createTestDb())
+  const rows = (db: ReturnType<typeof createTestDb>) =>
+    db
+      .select()
+      .from(auditLog)
+      .all()
+      .map((r) => [r.action, r.actorKind, r.actorUserId, r.entityType, r.entityId, r.at])
+
+  it('turns a switch on and logs it with the admin as actor', () => {
+    const { db, admin } = family()
+    expect(setSwitch(db, admin, 'disputes', true, AT)).toStrictEqual({ changed: true })
+    expect(getFlags(db)).toStrictEqual({ ...MIGRATED, disputes: true })
+    expect(rows(db)).toEqual([
+      ['feature.switched', 'user', admin, 'feature', 'disputes', AT.toISOString()],
+    ])
+    const [entry] = db.select().from(auditLog).all()
+    expect(JSON.parse(entry?.before ?? 'null')).toEqual({ enabled: false })
+    expect(JSON.parse(entry?.after ?? 'null')).toEqual({ enabled: true })
+  })
+
+  it('creates the row of a switch with no row', () => {
+    const { db, admin } = family()
+    db.delete(featureFlags).where(eq(featureFlags.key, 'weekPlan')).run()
+    expect(setSwitch(db, admin, 'weekPlan', true, AT)).toStrictEqual({ changed: true })
+    expect(db.select().from(featureFlags).where(eq(featureFlags.key, 'weekPlan')).get()).toEqual({
+      key: 'weekPlan',
+      enabled: true,
+    })
+    const [entry] = db.select().from(auditLog).all()
+    expect(JSON.parse(entry?.before ?? 'null')).toEqual({ enabled: false })
+  })
+
+  it('turns a switch off', () => {
+    const { db, admin } = family()
+    expect(setSwitch(db, admin, 'recurring', false, AT)).toStrictEqual({ changed: true })
+    expect(getFlags(db)).toStrictEqual({ ...MIGRATED, recurring: false })
+    expect(rows(db)).toEqual([
+      ['feature.switched', 'user', admin, 'feature', 'recurring', AT.toISOString()],
+    ])
+    const [entry] = db.select().from(auditLog).all()
+    expect(JSON.parse(entry?.before ?? 'null')).toEqual({ enabled: true })
+    expect(JSON.parse(entry?.after ?? 'null')).toEqual({ enabled: false })
+  })
+
+  it('writes nothing when the switch already has that value', () => {
+    const { db, admin } = family()
+    expect(setSwitch(db, admin, 'recurring', true, AT)).toStrictEqual({ changed: false })
+    expect(db.select().from(auditLog).all()).toHaveLength(0)
+    expect(getFlags(db)).toStrictEqual(MIGRATED)
+  })
+
+  it('rolls the switch back when the audit write fails', () => {
+    const { db, admin } = family()
+    db.run(
+      sql`CREATE TRIGGER boom BEFORE INSERT ON audit_log WHEN NEW.action = 'feature.switched' BEGIN SELECT RAISE(ABORT, 'boom'); END`,
+    )
+    expect(() => setSwitch(db, admin, 'disputes', true, AT)).toThrow('boom')
+    expect(getFlags(db).disputes).toBe(false)
+  })
+})
+
+describe('parseSwitchInput (#296)', () => {
+  it('accepts a known key and a boolean', () => {
+    expect(parseSwitchInput({ key: 'log', enabled: false })).toStrictEqual({
+      key: 'log',
+      enabled: false,
+    })
+    expect(parseSwitchInput({ key: 'weekPlan', enabled: true, extra: 1 })).toStrictEqual({
+      key: 'weekPlan',
+      enabled: true,
+    })
+  })
+
+  it('refuses an unknown key, a non-boolean value and no object', () => {
+    expect(() => parseSwitchInput({ key: 'nope', enabled: true })).toThrow('invalid_switch')
+    expect(() => parseSwitchInput({ key: 'log', enabled: 1 })).toThrow('invalid_switch')
+    expect(() => parseSwitchInput({ key: 'toString', enabled: true })).toThrow('invalid_switch')
+    expect(() => parseSwitchInput(null)).toThrow('invalid_switch')
+    expect(() => parseSwitchInput('log')).toThrow('invalid_switch')
   })
 })
