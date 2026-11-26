@@ -146,9 +146,9 @@ export function withdrawTemplateChangeBid(
 }
 
 /**
- * A giver turns a score change's bidding down (#232): every open bid closes. With a giver offer
- * the change stays in flight at it, now offered by this giver; with none it ends and the old
- * score stays. `seen` are the live bids he saw; if they changed meanwhile, `offer_changed`.
+ * A giver turns a score change's bidding down (#232): every open bid closes and the change
+ * stays in flight at the parents' offer, now offered by this giver. With no offer there is
+ * nothing to stand by: `no_offer` (Jakub 2026-11-26). `seen` are the live bids he saw; if they changed meanwhile, `offer_changed`.
  */
 export function turnDownTemplateChangeBids(
   template: TemplateAgreement,

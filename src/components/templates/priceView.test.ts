@@ -408,7 +408,9 @@ describe('Nechci, turn-down and the same number on a price change (#232)', () =>
     const offerOnly = { ...change, change: { offer, bids: [], lowest: null } }
     expect(priceRefusal(offerOnly, TATA, true)).toBeNull()
     expect(priceRefusal(base, TATA, true)).toBeNull()
-    expect(priceRefusal(change, ADMIN, true)).toBeNull()
+    expect(priceRefusal(withOffer, ADMIN, true)).toBeNull()
+    expect(priceRefusal(withOffer, TATA, false)).toBeNull()
+    expect(priceRefusal(withOffer, TATA)).toBeNull()
   })
 
   it('a proposed chore keeps Nechci and Odmítnout nabídky with refusals off (#209)', () => {

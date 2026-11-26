@@ -485,11 +485,14 @@ export function turnDownTemplateBidsIn(
       // The offer stays in flight, now his (a new giver row). The domain refuses a turn-down
       // with no parent offer (`no_offer`), so there always is one.
       const offer = result.value.status === 'agreed' ? result.value.change?.offer : null
-      const reissued = offer
-        ? addEntry(tx, { templateId, userId: giverId, side: 'giver', score: offer.score }, now)
-        : null
+      if (!offer) throw new Error('turn-down without a parent offer')
+      const reissued = addEntry(
+        tx,
+        { templateId, userId: giverId, side: 'giver', score: offer.score },
+        now,
+      )
       const floor = markBidsFrom(tx, templateId)
-      const replaced = reissued?.replaced
+      const replaced = reissued.replaced
       writeAudit(tx, {
         actor: { kind: 'user', userId: giverId },
         action: 'template.bids_turned_down',
@@ -502,7 +505,7 @@ export function turnDownTemplateBidsIn(
           bidsFrom: floor.before,
         },
         after: {
-          ...(reissued && { entryId: reissued.entry.id }),
+          entryId: reissued.entry.id,
           bidsFrom: floor.after,
         },
         at: now,
