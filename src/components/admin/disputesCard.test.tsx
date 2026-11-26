@@ -8,6 +8,28 @@ import { closesDialog, DISMISS_START, DismissForm, dismissReducer } from './Dism
 import { dismissInput, DisputesCard, loadAdminDisputes } from './DisputesCard'
 
 // Sporné on Správa (#47): the rows, the empty and error states, and the keep dialog's body.
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({
+    to,
+    params,
+    children,
+    ...rest
+  }: {
+    to: string
+    params: Record<string, string>
+    children: ReactNode
+    'aria-label'?: string
+    className?: string
+  }) => (
+    <a
+      href={to.replace(/\$(\w+)/g, (_, k: string) => params[k] ?? '')}
+      aria-label={rest['aria-label']}
+      className={rest.className}
+    >
+      {children}
+    </a>
+  ),
+}))
 vi.mock('~/components/ui/dialog', () => {
   const Pass = ({ children }: { children?: ReactNode }) => <div>{children}</div>
   return {
@@ -86,6 +108,39 @@ describe('DisputesCard', () => {
     expect(html).toContain('role="alert"')
     expect(html).toContain(t.loadError)
     expect(html).toContain(t.retry)
+  })
+})
+
+describe('a Sporné card opens its item (#222)', () => {
+  const card = (e: AdminDisputeEntry) =>
+    renderToStaticMarkup(<DisputesCard data={[e]} onKeep={noop} onFix={noop} onRetry={noop} />)
+
+  it('no page: the card exactly as before, no link', () => {
+    expect(card(entry)).toMatchInlineSnapshot(
+      `"<section class="mb-3.5 grid gap-2" aria-labelledby="admin-disputes-label"><h2 class="text-xs font-extrabold tracking-[.07em] text-muted uppercase" id="admin-disputes-label">Sporné (1)</h2><ul class="grid gap-2"><li data-admin-dispute="5" class="grid min-w-0 gap-1 rounded-card border-l-4 border-l-state-disputed bg-surface py-2.5 pr-2.5 pl-3 shadow-sticker"><span class="text-meta font-bold break-words text-muted">Body za úkol</span><span class="text-row font-bold break-words">Vyluxovat celý obývák a chodbu · 30 bodů</span><span class="text-meta break-words text-muted">Starší rozporuje · 22. 11.</span><blockquote class="rounded-button bg-track/40 px-3 py-2 break-words">Vysával jsem i kufr a koberečky, to je mnohem víc práce než obyčejně. Vysával jsem i kufr a koberečky, to je mnohem víc práce než obyčejně. Vysával jsem i kufr a koberečky, to je mnohem víc práce než obyčejně. </blockquote><div class="flex flex-wrap justify-end gap-2"><button data-slot="button" class="inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-button font-display font-semibold whitespace-nowrap transition-[transform,background-color,box-shadow] select-none active:translate-y-px active:shadow-none disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:pointer-events-none [&amp;_svg]:shrink-0 [&amp;_svg:not([class*=&quot;size-&quot;])]:size-5 border-2 border-track bg-surface text-ink shadow-sticker min-h-tap px-4 text-row" type="button" aria-label="Ponechat: Body za úkol – Vyluxovat celý obývák a chodbu">Ponechat</button><button data-slot="button" class="inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-button font-display font-semibold whitespace-nowrap transition-[transform,background-color,box-shadow] select-none active:translate-y-px active:shadow-none disabled:pointer-events-none disabled:opacity-50 [&amp;_svg]:pointer-events-none [&amp;_svg]:shrink-0 [&amp;_svg:not([class*=&quot;size-&quot;])]:size-5 bg-accent-strong text-on-accent-strong shadow-sticker min-h-tap px-4 text-row" type="button" aria-label="Opravit: Body za úkol – Vyluxovat celý obývák a chodbu">Opravit</button></div></li></ul></section>"`,
+    )
+  })
+
+  it('a task: one link to /ukol/7 over the card, named for the item; the buttons above it', () => {
+    const html = card({ ...entry, page: { kind: 'task', id: 7 } })
+    expect(html.match(/<a /g)).toHaveLength(1)
+    expect(html).toMatch(
+      /<li[^>]*class="[^"]*\brelative\b[^"]*"[^>]*><span[^>]*>Body za úkol<\/span><span class="text-row font-bold break-words"><a href="\/ukol\/7" aria-label="([^"]*)" class="[^"]*after:absolute after:inset-0[^"]*">Vyluxovat celý obývák a chodbu · 30 bodů<\/a><\/span>/,
+    )
+    expect(html).toContain(
+      `aria-label="${t.openFor('Body za úkol', 'Vyluxovat celý obývák a chodbu')}"`,
+    )
+    expect(t.openFor('Body za úkol', 'Umýt okna')).toBe('Otevřít: Body za úkol – Umýt okna')
+    expect(html).toMatch(/<div class="[^"]*\brelative z-10\b[^"]*"><button[^>]*>Ponechat/)
+  })
+
+  it('a chore: the link goes to /sablona/4', () => {
+    const html = card({
+      ...entry,
+      item: { kind: 'template_score', id: 4 },
+      page: { kind: 'template', id: 4 },
+    })
+    expect(html).toContain('<a href="/sablona/4"')
   })
 })
 

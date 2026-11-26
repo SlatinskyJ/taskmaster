@@ -1,12 +1,20 @@
+import { Link } from '@tanstack/react-router'
 import { adminDisputeLines } from '~/components/disputes/disputeProps'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
+import { cn } from '~/lib/utils'
 import { cs } from '~/lib/strings'
 import type { AdminDisputeEntry, DismissDisputeInput } from '~/server/disputes/functions'
 
 // Sporné on Správa (#47, UI doc §7.5 ADisputes, spec §5.11): every open dispute, oldest first,
 // with who opened it, what it is, its value now and the reason. Ponechat keeps the item as it is
 // with a note (DismissDialog); Opravit (#48) opens the fix sheet. Pure: Správa holds the state.
+// A task or chore card opens its page (#222): the name line is a link stretched over the card
+// (the #205 row pattern), and the buttons sit above it, so Ponechat and Opravit never open it.
+
+/** The #205 stretched link: the whole card is its tap target and its focus ring. */
+const STRETCHED =
+  "after:absolute after:inset-0 after:rounded-card after:content-[''] focus-visible:outline-none focus-visible:after:outline-2 focus-visible:after:outline-offset-2 focus-visible:after:outline-accent2 focus-visible:after:outline-solid active:after:bg-current/5"
 
 const t = cs.admin.disputes
 
@@ -61,19 +69,37 @@ export function DisputesCard({
         <ul className="grid gap-2">
           {data.map((e) => {
             const l = adminDisputeLines(e)
+            const page = e.page
             return (
               <li
                 key={e.id}
                 data-admin-dispute={e.id}
-                className="grid min-w-0 gap-1 rounded-card border-l-4 border-l-state-disputed bg-surface py-2.5 pr-2.5 pl-3 shadow-sticker"
+                className={cn(
+                  'grid min-w-0 gap-1 rounded-card border-l-4 border-l-state-disputed bg-surface py-2.5 pr-2.5 pl-3 shadow-sticker',
+                  page && 'relative',
+                )}
               >
                 <span className="text-meta font-bold break-words text-muted">{l.what}</span>
-                <span className="text-row font-bold break-words">{l.value}</span>
+                <span className="text-row font-bold break-words">
+                  {page ? (
+                    <Link
+                      {...(page.kind === 'task'
+                        ? { to: '/ukol/$taskId', params: { taskId: String(page.id) } }
+                        : { to: '/sablona/$templateId', params: { templateId: String(page.id) } })}
+                      aria-label={t.openFor(cs.disputes.what[e.item.kind], l.name)}
+                      className={STRETCHED}
+                    >
+                      {l.value}
+                    </Link>
+                  ) : (
+                    l.value
+                  )}
+                </span>
                 <span className="text-meta break-words text-muted">{l.opened}</span>
                 <blockquote className="rounded-button bg-track/40 px-3 py-2 break-words">
                   {l.reason}
                 </blockquote>
-                <div className="flex flex-wrap justify-end gap-2">
+                <div className={cn('flex flex-wrap justify-end gap-2', page && 'relative z-10')}>
                   <Button
                     type="button"
                     variant="ghost"
