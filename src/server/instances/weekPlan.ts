@@ -1,12 +1,13 @@
 import { and, eq, gt, inArray } from 'drizzle-orm'
 import type { Weekday } from '~/domain/dates'
 import { addPragueDays, startOfPragueDay, toIsoUtc } from '~/domain/dates'
+import { copyInWeek } from '~/domain/weekPlan'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
 import { tasks, templates, users } from '~/server/db/schema'
 import type { TaskRow } from '~/server/db/schema'
 import { currentPeriod } from '~/server/periods'
-import { maskToDays } from '~/server/templates/rules'
+import { maskToDays, scheduleOf } from '~/server/templates/rules'
 
 // The plan table on Týden (#258, spec §5.12): the running period's days as columns, the agreed
 // chores with schedule days as rows, and each day's week copies (`plan_day_at`, #257) as cells.
@@ -66,25 +67,6 @@ function periodDays(startsAt: Date, cutoffAt: Date): string[] {
   return days
 }
 
-/**
- * A start-day copy that reached its end before the period started belongs to the old week
- * (spec §5.12 [call] "only if a copy of it is still in the period"). Cancelled is final, so
- * `updatedAt` is when it was cancelled.
- */
-function endedBefore(row: TaskRow, startsAt: string): boolean {
-  switch (row.status) {
-    case 'done_unconfirmed':
-    case 'confirmed':
-      return row.completedAt !== null && row.completedAt < startsAt
-    case 'expired':
-      return row.graceEndsAt !== null && row.graceEndsAt < startsAt
-    case 'cancelled':
-      return row.updatedAt < startsAt
-    default:
-      return false
-  }
-}
-
 function personId(row: TaskRow): number | null {
   if (row.status === 'reserved') return row.reservedBy
   if (row.status === 'done_unconfirmed' || row.status === 'confirmed') return row.completedBy
@@ -109,6 +91,7 @@ export function getWeekPlan(db: Db | Tx, now: Date): WeekPlan {
     .sort((a, b) => a.title.localeCompare(b.title, 'cs') || a.id - b.id)
   const ids = chosen.map((t) => t.id)
   const startDay = days[0]
+  const times = new Map(chosen.map((t) => [t.id, scheduleOf(t)?.time ?? null]))
   const copies = (
     ids.length === 0 || days.length === 0
       ? []
@@ -124,7 +107,20 @@ export function getWeekPlan(db: Db | Tx, now: Date): WeekPlan {
             ),
           )
           .all()
-  ).filter((r) => !(r.planDayAt === startDay && endedBefore(r, startsAt)))
+  ).filter((r) =>
+    // The start day keeps only copies whose slot is at or after the start (domain/weekPlan).
+    copyInWeek(
+      {
+        planDayAt: r.planDayAt ?? '',
+        origin: r.origin === 'on_demand' ? 'on_demand' : 'scheduled',
+        createdAt: r.createdAt,
+      },
+      times.get(r.templateId ?? -1) ?? null,
+      period,
+    ),
+  )
+  // The start day is a column only if a copy of it is in the period (§5.12 [call]); a week
+  // starting at 00:00 always keeps it.
   const midnight = startDay === startsAt
   if (!midnight && !copies.some((r) => r.planDayAt === startDay)) days = days.slice(1)
   const names = new Map(

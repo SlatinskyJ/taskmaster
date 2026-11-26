@@ -13,6 +13,7 @@ import {
 } from '~/server/tasks/lifecycle'
 import type { Family } from '~/server/tasks/testing'
 import { T0, family, must } from '~/server/tasks/testing'
+import { getMeeting, settlePeriod } from '~/server/settlement/meeting'
 import { approveTemplateScore, createTemplate } from '~/server/templates'
 import { weekPlanHandler } from './functions'
 import { createOnDemandInstance, selfLogInstance } from './instances'
@@ -124,73 +125,93 @@ describe('getWeekPlan (#258, spec §5.12)', () => {
     expect(getWeekPlan(f.db, MON_10).days).toEqual(WEEK_DAYS)
   })
 
-  it('eight columns after a Sunday 20:00 start when a Sunday copy is still open', () => {
+  it('no Sunday column after a Sunday 20:00 start when the old week’s Sunday copy is still open', () => {
     const f = twoWeeks()
     const plan = getWeekPlan(f.db, SUN_21)
     expect(plan.period?.startsAt).toBe(iso(prague(11, 29, 20)))
+    expect(copiesOf(f.db, f.tpl).some((c) => c.planDayAt === SUN && c.status === 'open')).toBe(true)
+    expect(plan.days).toEqual(WEEK_DAYS)
+  })
+
+  it('eight columns after a Sunday 20:00 start when a Sunday copy’s slot is after it (21:00)', () => {
+    const f = twoWeeks({ time: { hour: 21, minute: 0 } })
+    const plan = getWeekPlan(f.db, SUN_21)
     expect(plan.days).toEqual([SUN, ...WEEK_DAYS])
     expect(plan.rows[0]?.cells[0]?.map((c) => c.status)).toEqual(['open'])
   })
 
-  it('start day dropped when its only copy was done before the start; kept when done exactly at the start', () => {
-    const start = prague(11, 29, 20)
-    const before = twoWeeks({
+  it('a meeting ends the week early on Sunday 20:00: the Sunday 21:00 copy the old week made is in the new week, the Sunday 10:00 one is not', () => {
+    const f = family()
+    const start = prague(11, 23, 0)
+    rollPeriods(f.db, start, DEFAULT_PERIOD_DEFAULTS)
+    const late = chore(f, {
+      title: 'A večerní',
       days: [0],
-      before: (f, tpl) => {
-        must(completeTask(f.db, f.starsi, copyOn(f, tpl, SUN), new Date(start.getTime() - 1), true))
-      },
+      time: { hour: 21, minute: 0 },
+      agreedAt: start,
     })
-    expect(getWeekPlan(before.db, SUN_21).days).toEqual(WEEK_DAYS)
-
-    const at = twoWeeks({ days: [0] })
-    const id = copyOn(at, at.tpl, SUN)
-    must(completeTask(at.db, at.starsi, id, start, true))
-    const plan = getWeekPlan(at.db, SUN_21)
+    const early = chore(f, {
+      title: 'B ranní',
+      days: [0],
+      time: { hour: 10, minute: 0 },
+      agreedAt: start,
+    })
+    setWeekPlan(f.db, true)
+    makeWeekCopies(f.db, new Date(start.getTime() + 60_000))
+    const lateId = copyOn(f, late, SUN)
+    copyOn(f, early, SUN)
+    const meeting = prague(11, 29, 20)
+    const m = getMeeting(f.db, meeting, false)
+    if (!m.period) throw new Error('nothing to settle')
+    must(
+      settlePeriod(
+        f.db,
+        f.tata,
+        m.period.id,
+        m.takers.map((t) => ({ takerId: t.id, total: t.total })),
+        meeting,
+        false,
+      ),
+    )
+    const plan = getWeekPlan(f.db, SUN_21)
+    expect(plan.period?.startsAt).toBe(iso(meeting))
     expect(plan.days).toEqual([SUN, ...WEEK_DAYS])
-    expect(plan.rows[0]?.cells[0]?.map((c) => [c.id, c.status])).toEqual([[id, 'done_unconfirmed']])
+    expect(plan.rows.map((r) => r.cells[0]?.map((c) => c.id))).toEqual([[lateId], []])
+    expect(copiesOf(f.db, late).filter((c) => c.planDayAt === SUN)).toHaveLength(1)
   })
 
-  it('start day dropped when its only copy was cancelled before the start; kept when cancelled exactly at the start', () => {
+  it('an on-demand start-day copy made 1 ms before the start is the old week’s; one made at the start is in', () => {
     const start = prague(11, 29, 20)
     const before = twoWeeks({
-      days: [0],
+      days: [1],
       before: (f, tpl) => {
-        must(
-          cancelTask(f.db, f.tata, copyOn(f, tpl, SUN), undefined, new Date(start.getTime() - 1)),
-        )
+        must(createOnDemandInstance(f.db, f.tata, tpl, new Date(start.getTime() - 1)))
       },
     })
     expect(getWeekPlan(before.db, SUN_21).days).toEqual(WEEK_DAYS)
 
-    const at = twoWeeks({ days: [0] })
-    const id = copyOn(at, at.tpl, SUN)
-    must(cancelTask(at.db, at.tata, id, undefined, start))
+    const at = twoWeeks({ days: [1] })
+    const extra = must(createOnDemandInstance(at.db, at.tata, at.tpl, start))
     const plan = getWeekPlan(at.db, SUN_21)
     expect(plan.days).toEqual([SUN, ...WEEK_DAYS])
-    expect(plan.rows[0]?.cells[0]).toEqual([
-      expect.objectContaining({ id, status: 'cancelled', person: null }),
-    ])
+    expect(plan.rows[0]?.cells[0]?.map((c) => [c.id, c.origin])).toEqual([[extra.id, 'on_demand']])
   })
 
-  it('start day dropped when its only copy expired before the start; kept when its grace ends exactly at the start', () => {
-    const noon: DeadlineRule = { dayOffset: 0, due: { hour: 12, minute: 0 }, graceMinutes: 60 }
-    const before = twoWeeks({
-      days: [0],
-      time: { hour: 8, minute: 0 },
-      deadline: noon,
-      before: (f, tpl) => {
-        must(expireTask(f.db, copyOn(f, tpl, SUN), prague(11, 29, 13), true))
-      },
-    })
-    expect(getWeekPlan(before.db, SUN_21).days).toEqual(WEEK_DAYS)
-
-    const seven: DeadlineRule = { dayOffset: 0, due: { hour: 19, minute: 0 }, graceMinutes: 60 }
-    const at = twoWeeks({ days: [0], time: { hour: 8, minute: 0 }, deadline: seven })
-    const id = copyOn(at, at.tpl, SUN)
-    must(expireTask(at.db, id, prague(11, 29, 20), true))
-    const plan = getWeekPlan(at.db, SUN_21)
-    expect(plan.days).toEqual([SUN, ...WEEK_DAYS])
-    expect(plan.rows[0]?.cells[0]?.map((c) => [c.id, c.status])).toEqual([[id, 'expired']])
+  it('a week starting at the 23:59 cutoff: an open no-time, no-deadline Sunday copy keeps no Sunday column', () => {
+    const f = family()
+    const start = prague(11, 23, 0)
+    rollPeriods(f.db, start, DEFAULT_PERIOD_DEFAULTS)
+    const tpl = chore(f, { time: null, agreedAt: start })
+    setWeekPlan(f.db, true)
+    makeWeekCopies(f.db, new Date(start.getTime() + 60_000))
+    const cutoff = prague(11, 29, 23, 59)
+    rollPeriods(f.db, cutoff, DEFAULT_PERIOD_DEFAULTS)
+    makeWeekCopies(f.db, cutoff)
+    const now = new Date(cutoff.getTime() + 30_000)
+    expect(copiesOf(f.db, tpl).find((c) => c.planDayAt === SUN)?.status).toBe('open')
+    const plan = getWeekPlan(f.db, now)
+    expect(plan.period?.startsAt).toBe(iso(cutoff))
+    expect(plan.days).toEqual(WEEK_DAYS)
   })
 
   it('a period starting at Monday 00:00 keeps Monday with no Monday copy', () => {
@@ -231,12 +252,14 @@ describe('getWeekPlan (#258, spec §5.12)', () => {
   ])(
     'DST weeks (%s): one column per Prague day across the clock change',
     (_name, start, next, expected) => {
-      const f = twoWeeks({ start, next })
+      // A 21:00 slot: the start day's copy is the new week's (its slot is after the 20:00 start).
+      const f = twoWeeks({ start, next, time: { hour: 21, minute: 0 } })
       const plan = getWeekPlan(f.db, new Date(next.getTime() + 3_600_000))
       expect(plan.days).toEqual(expected)
       expect(new Set(plan.days).size).toBe(8)
       expect(plan.days.every((d) => toPragueWallTime(new Date(d)).hour === 0)).toBe(true)
-      expect(plan.rows[0]?.cells.map((c) => c.length)).toEqual(Array(8).fill(1))
+      // The last Sunday's 21:00 slot is after the 20:00 cutoff: next week's.
+      expect(plan.rows[0]?.cells.map((c) => c.length)).toEqual([1, 1, 1, 1, 1, 1, 1, 0])
     },
   )
 
