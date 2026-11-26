@@ -364,6 +364,31 @@ describe('task page: price, cancel, history (#36)', () => {
       /<div id="history-time-7" aria-hidden="true"[^>]*><div[^>]*><p[^>]*>so 21\. 11\. 10:12<\/p>/,
     )
   })
+
+  it('a rail beside Historie says newest on top: "Teď" first, and a reader hears it (#248)', () => {
+    page.history = [
+      {
+        id: 7,
+        at,
+        action: 'instance.expired',
+        by: null,
+        score: null,
+        reservedBy: null,
+        reason: null,
+      },
+    ]
+    const html = render(STARSI, reserved)
+    page.history = []
+    const section = html.slice(html.indexOf('aria-labelledby="history-label"'))
+    const rail = section.indexOf('data-history-rail')
+    expect(rail).toBeGreaterThan(-1)
+    expect(section.slice(rail, section.indexOf('<ol'))).toMatch(/>Teď</)
+    expect(section).toMatch(/<p class="sr-only">Nejnovější nahoře<\/p>\s*<ol/)
+    // The rail is only a picture; the sentence above is what a reader hears.
+    expect(section).toMatch(/<div aria-hidden="true" data-history-rail[^>]*>/)
+    // No history, no rail.
+    expect(render(STARSI, reserved)).not.toContain('data-history-rail')
+  })
 })
 
 describe('task page: Rozporovat (#46)', () => {

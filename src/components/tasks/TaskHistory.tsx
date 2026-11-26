@@ -1,3 +1,4 @@
+import { ArrowDown } from 'lucide-react'
 import { useState } from 'react'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { Card } from '~/components/ui/card'
@@ -9,7 +10,8 @@ import { historyItems } from './historyText'
 /**
  * Everything that happened to the task, newest first (#36, mockup GTask "Historie"), as chat
  * bubbles (#248, Jakub 2026-11-26): mine on the left and dark, everyone else's on the right, the
- * system's a centred note. The time shows under an entry after a tap, a second tap hides it.
+ * system's a centred note. The time shows under an entry after a tap, a second tap hides it. A
+ * rail on the left, "Teď" on top fading down to an arrow, says the newest is on top.
  */
 export function TaskHistory({ entries, meId }: { entries: readonly HistoryEntry[]; meId: number }) {
   const [open, setOpen] = useState<ReadonlySet<number>>(new Set())
@@ -25,8 +27,20 @@ export function TaskHistory({ entries, meId }: { entries: readonly HistoryEntry[
   return (
     <section className="grid gap-2" aria-labelledby="history-label">
       <SectionLabel id="history-label">{cs.history.title}</SectionLabel>
-      <Card className="grid gap-2">
-        <ol>
+      <Card className="flex gap-2.5 pl-2.5">
+        <div
+          aria-hidden="true"
+          data-history-rail
+          className="flex w-7 flex-none flex-col items-center gap-1"
+        >
+          <span className="rounded-full bg-accent-strong px-1.5 py-0.5 text-[11px] font-extrabold text-on-accent-strong">
+            {cs.history.now}
+          </span>
+          <span className="w-[3px] flex-1 rounded-full bg-linear-to-b from-accent-strong to-track" />
+          <ArrowDown className="size-3.5 text-muted" strokeWidth={3} />
+        </div>
+        <p className="sr-only">{cs.history.newestFirst}</p>
+        <ol className="min-w-0 flex-1">
           {historyItems(entries, meId).map((item) => {
             if (item.kind === 'round') {
               return (
