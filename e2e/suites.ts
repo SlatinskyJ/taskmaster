@@ -49,6 +49,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'recurring', spec: 'recurring.spec.ts', seed: 'recurring' },
   // Its own server: bids, Nechci and the turn-down change the chores for good (#209).
   { name: 'chores', spec: 'chore-bidding.spec.ts', seed: 'chores' },
+  // Its own server: Souhlasím makes the proposed chore run for good (#244).
+  { name: 'chore-approve', spec: 'chore-approve.spec.ts', seed: 'chores' },
   // Its own server: Nechci and the turn-down change the chore's price change for good (#232).
   { name: 'chorechange', spec: 'chore-change.spec.ts', seed: 'chorechange' },
   // Its own server: the scheduled and expired rows of #39.

@@ -235,12 +235,15 @@ export function roundLines(task: Pick<TaskView, 'score' | 'rebidding'>): string[
   return [...counter, cs.taskPrice.oldStays(task.score)]
 }
 
-/** A "Čeká na tebe" row's short line: who offers, and my bid next to it. */
+/**
+ * A "Čeká na tebe" row's short line: who offers, and my bid next to it. In a reopened round
+ * (#237) the offer is the parent's counter, not the task's agreed score.
+ */
 export function waitingMeta(task: TaskView, me: Me): string {
-  const by = task.offeredByName ?? task.createdByName
+  const by = task.rebidding?.offeredBy?.name ?? task.offeredByName ?? task.createdByName
   const bid = myBid(task, me)
   if (bid === null) return `${cs.tasks.offeredBy} ${by}`
-  return `${by} ${String(task.score)} · ${cs.bids.you} ${String(bid)}`
+  return `${by} ${String(offerScore(task))} · ${cs.bids.you} ${String(bid)}`
 }
 
 /** Who the offer still waits for; any one of them agreeing is enough. */

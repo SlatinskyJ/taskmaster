@@ -63,3 +63,25 @@ describe('historyBack', () => {
     expect(e.preventDefault).not.toHaveBeenCalled()
   })
 })
+
+// A task or chore page shows its whole name in the header (#264); other screens keep the
+// two-line cut, so a list screen's header stays short.
+const heading = (fullTitle?: boolean) =>
+  /<h1 class="([^"]*)"/.exec(
+    renderToStaticMarkup(
+      <Screen title="Vyluxovat celý obývák, chodbu i schody" user={USER} fullTitle={fullTitle}>
+        x
+      </Screen>,
+    ),
+  )?.[1] ?? ''
+
+describe('Screen title', () => {
+  it('is cut at two lines by default', () => {
+    expect(heading()).toContain('line-clamp-2')
+  })
+
+  it('fullTitle: wraps in full, never cut', () => {
+    expect(heading(true)).not.toContain('line-clamp')
+    expect(heading(true)).toContain('break-words')
+  })
+})

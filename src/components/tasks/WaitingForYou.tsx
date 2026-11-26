@@ -14,7 +14,7 @@ import type { TaskView } from '~/server/tasks/functions'
 import type { TemplateView } from '~/server/templates/functions'
 import { callBid } from './bidCalls'
 import type { Me } from './taskView'
-import { bidButtons, myBid, taskChipState, toastFor, waitingMeta } from './taskView'
+import { bidButtons, myBid, offerScore, taskChipState, toastFor, waitingMeta } from './taskView'
 import { taskLink, templateLink } from './rowLink'
 import { TaskRow } from './TaskRow'
 import type { RowLink } from './rowLink'
@@ -36,6 +36,7 @@ const targetLink = (t: DescriptionWaitingRow['target']): RowLink =>
  * description waiting for his OK (#207 ruling 6). A proposed item with a description links to its
  * page ("Přečíst a souhlasit", a full-width line under the row so the name keeps its width)
  * instead of Souhlasím, so he reads the text first (ruling 1, Jakub 2026-11-26).
+ * A reopened round with a parent's counter (#237) is a task row too, at the counter's price.
  */
 export function WaitingForYou({
   items,
@@ -185,7 +186,7 @@ export function WaitingForYou({
               described={task.description !== null}
               name={task.title}
               state={taskChipState(task)}
-              points={task.score}
+              points={offerScore(task)}
               meta={waitingMeta(task, me)}
               action={task.description === null ? taskActions(task) : undefined}
               footer={

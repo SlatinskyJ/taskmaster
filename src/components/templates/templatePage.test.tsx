@@ -177,6 +177,13 @@ describe('template price page', () => {
   })
 })
 
+describe('template page: header (#264)', () => {
+  it('shows a long chore name in full, not cut at two lines', () => {
+    const h1 = /<h1 class="([^"]*)">/.exec(render(STARSI))
+    expect(h1?.[1]).not.toContain('line-clamp')
+  })
+})
+
 describe('template page: Rozporovat (#46)', () => {
   type Loader = (a: {
     params: { templateId: string }

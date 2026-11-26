@@ -650,21 +650,27 @@ export function listTasks(db: Db | Tx, opts: TaskViewOpts = {}): TaskView[] {
 /**
  * "Čeká na tebe" (UI doc §6): proposed tasks whose offer still needs this person's side and
  * that they haven't approved yet. Takers see every new offer; a giver only when no current
- * giver has approved (the offering giver's approval stops counting if they leave).
+ * giver has approved (the offering giver's approval stops counting if they leave). A reopened
+ * round (#212) with a parent's counter waits for each brother until one says yes (#237), like a
+ * Návrh counter does.
  */
 export function pendingApprovals(db: Db | Tx, userId: number, opts: TaskViewOpts = {}): TaskView[] {
   const people = listPeople(db)
   const me = findPerson(people, userId)
   if (!me || me.role === 'admin' || !me.active) return []
   const role = me.role
-  const proposed = db
+  // Open tasks too: a reopened round with a parent's counter waits for every brother (#237).
+  const candidates = db
     .select()
     .from(tasks)
-    .where(eq(tasks.status, 'proposed'))
+    .where(
+      or(eq(tasks.status, 'proposed'), and(eq(tasks.status, 'open'), isNotNull(tasks.biddingFrom))),
+    )
     .orderBy(asc(tasks.id))
     .all()
-  const waiting = proposed.filter((task) => {
+  const waiting = candidates.filter((task) => {
     const agreement = agreementOf(db, task)
+    if (agreement.status === 'rebidding') return role === 'taker' && agreement.offer.by !== null
     if (agreement.status !== 'proposed') return false
     if (agreement.offer.approvedBy.includes(userId)) return false
     return missingRoles(agreement.offer, people).includes(role)
