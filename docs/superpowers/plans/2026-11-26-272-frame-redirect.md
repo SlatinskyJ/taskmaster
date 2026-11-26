@@ -48,14 +48,14 @@
 - Consumes: `readFrame(env, req: FrameSignals)`, `FrameSignals`, `FRAME_QUERY`.
 - Produces: `export function frameRedirectLocation(env: NodeJS.ProcessEnv, req: FrameSignals, requestUrl: string, location: string): string | null` — the new Location, or null for "leave it as it is".
 
-Rules: null unless `readFrame(env, req).inFrame` and `req.header === undefined` and `req.query !== undefined`. Resolve `new URL(location, requestUrl)`; null if its origin differs from `new URL(requestUrl).origin` (a throwing `new URL` → null). Set `FRAME_QUERY` to `req.query` (replacing any existing). Return `pathname + search + hash` (a path, as the router writes same-origin redirects).
+Rules: null unless `readFrame(env, req).inFrame` and `req.header === undefined` and `req.query !== undefined`. Resolve `new URL(location, requestUrl)`; null if its origin differs from `new URL(requestUrl).origin` (a throwing `new URL` → null). Set `FRAME_QUERY` to `req.query` (replacing any existing). Return `pathname + search + hash` (a path, as the router writes same-origin redirects; never `url.href`, because behind the preview proxy the request origin is the internal one). Null when the resolved `pathname` starts with `//` (e.g. Location `/.//evil.example` normalises to `//evil.example`, which a browser reads as another host).
 
 - [ ] **Step 1: Write the failing tests** in a new `describe('frameRedirectLocation')`, with `PREVIEW`, `PROD`, `NONE` from the file and `REQ = 'http://localhost:3000/?tmFrame=tok'`:
   - same-origin path: `frameRedirectLocation(PREVIEW, { ...NONE, query: 'tok', fetchDest: 'iframe' }, REQ, '/sprava')` → `'/sprava?tmFrame=tok'`
   - keeps query and hash, replaces an old token: `'/login?redirect=%2Fsprava&tmFrame=old#x'` → `'/login?redirect=%2Fsprava&tmFrame=tok#x'`
   - same-origin absolute: `'http://localhost:3000/sprava'` → `'/sprava?tmFrame=tok'`
   - the no-token sentinel is copied: query `'-'` → `'/login?redirect=%2F&tmFrame=-'` for Location `'/login?redirect=%2F'`
-  - off-site → null for each of `'https://evil.example/x'`, `'//evil.example/x'`, `'/\\evil.example/x'`, `'javascript:alert(1)'`
+  - off-site → null for each of `'https://evil.example/x'`, `'//evil.example/x'`, `'/\\evil.example/x'`, `'javascript:alert(1)'`, `'/.//evil.example'` (pathname normalises to `//evil.example`), `'/./\\evil.example'`, and the same host on another port or scheme: `'http://localhost:3001/x'`, `'https://localhost:3000/x'` (previews share one host, one port per PR)
   - production → null: `frameRedirectLocation(PROD, { header: undefined, query: 'tok', fetchDest: 'iframe' }, REQ, '/sprava')`
   - header-only frame request → null: `{ ...NONE, header: 'tok' }`; also header and query both present → null
   - not a frame / no query → null: `NONE`, and `{ ...NONE, fetchDest: 'iframe' }`
@@ -77,10 +77,11 @@ Rules: null unless `readFrame(env, req).inFrame` and `req.header === undefined` 
 
 **Interfaces:**
 - Consumes: `frameRedirectLocation` (Task 1), `FRAME_HEADER`, `FRAME_QUERY`.
-- Produces: `export const frameRedirectMiddleware` = `createMiddleware().server(async ({ request, handlerType, next }) => { … })` from `@tanstack/react-start`. After `const result = await next()`: if `handlerType === 'router'`, `result.response.status` is 300–399 and it has a `Location`, call `frameRedirectLocation(process.env, { header: request.headers.get(FRAME_HEADER) ?? undefined, query: new URL(request.url).searchParams.get(FRAME_QUERY) ?? undefined, fetchDest: request.headers.get('sec-fetch-dest') ?? undefined }, request.url, location)`; when it returns a string, `result.response.headers.set('Location', it)`. Always return `result`.
+- Produces: `export const frameRedirectMiddleware` = `createMiddleware().server(async ({ request, handlerType, next }) => { … })` from `@tanstack/react-start`. After `const result = await next()`: if `handlerType === 'router'`, `result.response.status` is 300–399 and it has a `Location`, call `frameRedirectLocation(process.env, frameSignals((n) => request.headers.get(n) ?? undefined, new URL(request.url)), request.url, location)`. `frameSignals(getHeader, url): FrameSignals` is a new pure export in `src/server/auth/frame.ts` (one place that maps a request to frame signals); `requestFrame` in `http.ts` uses it too (`frameSignals(getRequestHeader, getRequestUrl())`), so the redirect decision and the session decision can't drift apart. Unit test: it maps the three signals and leaves absent ones `undefined`.; when it returns a string, `result.response.headers.set('Location', it)`. Always return `result`.
 - `src/start.ts`: `requestMiddleware: [csrf, frameRedirectMiddleware]` (CSRF stays first). Update the file's top comment.
 
 - [ ] **Step 1: Write the failing e2e tests** in `e2e/frames.spec.ts` (suite `frames`, seed `family`, which has `admin`):
+  - Client guard through `__root.tsx`: `page.route` answers the frame's next `tmFrame` page load with a 307 to the same path without `tmFrame` (simulating a redirect the middleware doesn't see); the frame stops navigating within 5 s (count frame navigations ≤ 3) and shows the login screen.
   - Generalise `frameLogin(page)` to `frameLogin(page, username = 'starsi', heading = hello('Starší'))`; existing callers unchanged.
   - Helper `frameToken(page): Promise<string>` → reads `document.getElementById('viewer').contentWindow.name`, strips `tm-frame:`, expects 43 chars.
   - Helper `countFrameLoads(page): () => number` → counts `page.on('framenavigated')` events whose frame is the `#viewer` frame (`frame.name().startsWith('tm-frame:')`), from the moment it is called.
@@ -112,7 +113,7 @@ Rules: null unless `readFrame(env, req).inFrame` and `req.header === undefined` 
 - [ ] **Step 1: Write the failing tests** (`describe('guardedReentryUrl')`, a `Map`-backed fake store, `at('tm-frame:abc', 'http://x/sprava')`):
   - first call at `now = 1000` → `'http://x/sprava?tmFrame=abc'`, and the store holds it
   - second call, same frame and address, at `1000 + 4999` → null
-  - same address at `1000 + 5000` → the URL again (window passed)
+  - same address at `1000 + 5000` → the URL again (window passed). Run first, second and this call on ONE store in sequence (1000, 5999, 6000), so a guard that refreshes `at` on a refused call fails the 6000 case
   - another address in the same frame within the window → its URL
   - another frame (`tm-frame:def`) at the same address within the window → its URL (own key)
   - `store` undefined → the URL every time; a store whose `getItem`/`setItem` throw → the URL; `getItem` returning `'{'` → the URL
