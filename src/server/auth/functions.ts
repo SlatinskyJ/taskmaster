@@ -1,9 +1,12 @@
 import { createServerFn } from '@tanstack/react-start'
 import { getDb } from '~/server/db'
-import { clearSessionCookie, clientIp, currentUser, sessionToken, setSessionCookie } from './http'
-import { login, logout } from './login'
-import type { LoginError } from './login'
-import type { CurrentUser } from './sessions'
+import { frameLogin } from './frameLogin'
+import type { FrameLoginResult } from './frameLogin'
+import { clientIp, currentUser, logoutHere, passwordLogin } from './http'
+import type { LoginResult } from './http'
+
+export type { LoginResult } from './http'
+export type { FrameLoginResult } from './frameLogin'
 
 // Server functions the login screen (#31) and the app shell call.
 
@@ -21,22 +24,31 @@ function parseLoginForm(data: unknown): LoginForm {
   return { username, password }
 }
 
-export type LoginResult = { ok: true; user: CurrentUser } | { ok: false; error: LoginError }
-
+/** Outside a viewer frame the session goes to the cookie; in one, back as `frameToken` (./http). */
 export const loginFn = createServerFn({ method: 'POST' })
   .validator(parseLoginForm)
-  .handler(async ({ data }): Promise<LoginResult> => {
-    const result = await login(getDb(), { ...data, ip: clientIp() })
-    if (!result.ok) return result
-    setSessionCookie(result.value.token, result.value.expiresAt)
-    return { ok: true, user: result.value.user }
-  })
+  .handler(({ data }): Promise<LoginResult> => passwordLogin(data))
 
 export const logoutFn = createServerFn({ method: 'POST' }).handler(() => {
-  const token = sessionToken()
-  if (token) logout(getDb(), token)
-  clearSessionCookie()
+  logoutHere()
 })
+
+function parseFrameLogin(data: unknown): { username: string } {
+  if (typeof data !== 'object' || data === null) throw new Error('Invalid frame login')
+  const { username } = data as Record<string, unknown>
+  if (typeof username !== 'string') throw new Error('Invalid frame login')
+  return { username }
+}
+
+/**
+ * The multi-user viewer logs a demo user in for one frame (./frameLogin). Dev and previews
+ * only; sets no cookie and returns the token for the frame to keep.
+ */
+export const frameLoginFn = createServerFn({ method: 'POST' })
+  .validator(parseFrameLogin)
+  .handler(({ data }): Promise<FrameLoginResult> =>
+    frameLogin(getDb(), process.env, data.username, clientIp()),
+  )
 
 /** Who is signed in, or null. Loaders call it; it never throws for a missing session. */
 export const getCurrentUserFn = createServerFn({ method: 'GET' }).handler(() => currentUser())

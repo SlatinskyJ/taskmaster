@@ -9,7 +9,8 @@ passkeys ([`src/server/passkeys`](../passkeys/README.md)) build on this.
 - `rateLimit.ts`: failed logins per username and per IP in the last 15 minutes (`login_failures`).
 - `http.ts`: the cookie (`__Host-tm_session`, HttpOnly, Secure, SameSite=Lax) and the client IP.
   `currentUser()` is the one way server code learns who is signed in.
-- `functions.ts`: server functions `loginFn`, `logoutFn`, `getCurrentUserFn`.
+- `frame.ts`, `frameLogin.ts`: viewer frames on dev and previews (below).
+- `functions.ts`: server functions `loginFn`, `logoutFn`, `getCurrentUserFn`, `frameLoginFn`.
 - `authorize.ts`: the one role check (`authorize`) and each role's landing page.
 - `guards.ts`: `requireUser` / `requireRole(...)` middlewares for server functions.
 
@@ -36,11 +37,30 @@ what protects the data.
   then counts the whole family's failures together. Set it wherever the app sits behind a proxy.
 - `WEBAUTHN_RP_ID`, `WEBAUTHN_ORIGIN`: passkeys, see [`src/server/passkeys`](../passkeys/README.md).
 
+## Viewer frames (dev and previews)
+
+The multi-user viewer (`/dev/multi`, spec "Multi-user viewer") shows several people at once, one
+per iframe, so a frame can't use the shared cookie. Only where `devPagesAllowed` holds (dev, PR
+previews), `frame.ts` marks a request as a frame by the `x-tm-frame` header (server function
+calls), the `tmFrame` query (document loads) or `Sec-Fetch-Dest: iframe`; the value is the frame's
+session token, or `-` for none. In a frame:
+
+- the cookie is never read, set or cleared, also with no token or a dead one (nobody signed in);
+- logging in (password, passkey, or the viewer's `frameLoginFn`) returns the token as
+  `frameToken` instead of setting the cookie; logging out ends only that frame's session;
+- the sessions are ordinary ones: same table, expiry, audit.
+
+The client (`src/lib/frame.ts`, `src/start.ts`) keeps the token in the frame's `window.name`
+(`tm-frame:<token>`) and sends it on every server function call. In production every frame
+signal is ignored and `frameLoginFn` answers `not_available`, as it does when `ADMIN_PASSWORD`
+is set.
+
 ## CSRF
 
 Server functions are protected by the session cookie's `SameSite=Lax` plus TanStack Start's
-default CSRF middleware (checks `Origin` / `Sec-Fetch-Site`). That default applies only while
-the app has no `src/start.ts`: whoever adds one must add `createCsrfMiddleware()` there.
+CSRF middleware (checks `Origin` / `Sec-Fetch-Site`). `src/start.ts` registers it with
+`createCsrfMiddleware()`, since a custom `src/start.ts` replaces the default; keep it there.
+`e2e/frames.spec.ts` checks a cross-site call is refused.
 
 ## Adding a login method
 

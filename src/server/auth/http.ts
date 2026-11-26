@@ -28,7 +28,7 @@ import type { LoginError } from './login'
  */
 export const SESSION_COOKIE = '__Host-tm_session'
 
-export function setSessionCookie(token: string, expiresAt: Date): void {
+function setSessionCookie(token: string, expiresAt: Date): void {
   setCookie(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: true,
@@ -38,7 +38,7 @@ export function setSessionCookie(token: string, expiresAt: Date): void {
   })
 }
 
-export function clearSessionCookie(): void {
+function clearSessionCookie(): void {
   deleteCookie(SESSION_COOKIE, { httpOnly: true, secure: true, sameSite: 'lax', path: '/' })
 }
 

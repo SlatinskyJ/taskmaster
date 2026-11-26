@@ -24,6 +24,8 @@ export const PUBLIC_SERVER_FNS: Readonly<Record<string, string>> = {
   logoutFn: 'auth/functions.ts',
   // Route guards ask it who is signed in; it answers null for nobody.
   getCurrentUserFn: 'auth/functions.ts',
+  // The viewer's way in for a frame; refuses outside dev and previews.
+  frameLoginFn: 'auth/functions.ts',
   // The login screen asks whether to show the passkey button; a yes/no about the deployment.
   getPasskeysEnabledFn: 'passkeys/functions.ts',
   // Passkey login is a way in, like loginFn: the challenge, then the signed answer.
