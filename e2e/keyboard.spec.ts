@@ -43,6 +43,32 @@ test('Správa, Nový člověk: the sheet moves up, each field stays visible', as
   }
 })
 
+test('Správa, Nový člověk: Uložit comes after the last field in the same scroll (#159)', async ({
+  page,
+}) => {
+  await passwordLogin(page, 'admin')
+  await page.waitForURL((url) => !url.pathname.startsWith('/login'))
+  await page.goto('/sprava')
+  await page.getByRole('button', { name: cs.admin.add }).click()
+  const sheet = page.getByRole('dialog')
+  const body = sheet.locator('[data-slot="person-form-body"]')
+  const name = sheet.getByRole('textbox', { name: new RegExp(`^${cs.admin.displayName}`) })
+  const password = sheet.getByRole('textbox', { name: new RegExp(`^${cs.admin.password}`) })
+  const save = body.getByRole('button', { name: cs.admin.save, exact: true })
+  // Uložit lives in the fields' own scroll body, below the last field: nothing pinned under
+  // the first fields pretends the form ends there.
+  await expect(save).toBeAttached()
+  await openKeyboard(page, name)
+  await expectAboveKeyboard(page, name)
+  const [p, s] = await Promise.all([password.boundingBox(), save.boundingBox()])
+  expect(p && s && s.y > p.y).toBe(true)
+  // The admin scrolls the sheet to the end: Uložit comes into view above the keyboard.
+  await openKeyboard(page, password)
+  await expectAboveKeyboard(page, password)
+  await save.scrollIntoViewIfNeeded()
+  await expectAboveKeyboard(page, save)
+})
+
 async function openResetDialog(page: Page) {
   await passwordLogin(page, 'admin')
   await page.waitForURL((url) => !url.pathname.startsWith('/login'))
