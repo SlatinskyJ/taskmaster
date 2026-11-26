@@ -6,6 +6,7 @@ import {
   choreBidding,
   choreChange,
   corrections,
+  choreDispute,
   disputes,
   instances,
   negotiation,
@@ -64,8 +65,14 @@ export const SEEDS = {
   scheduler: { pieces: [pastWeekScheduled, bootTick], features: ['recurring'] },
   /** Příští týden and Výchozí týden (#43): an open proposal of each kind. */
   proposals: { pieces: [thisWeek, proposals], features: ['week', 'periodProposals'] },
-  /** Disputes (#46): a confirmed and a rejected item this week, a settled past week. */
-  disputes: { pieces: [pastWeek, thisWeek, disputes], features: ['week', 'disputes'] },
+  /**
+   * Disputes (#46): a confirmed and a rejected item this week, a settled past week, and the
+   * agreed chores with "Vyndat myčku" in dispute (#222: a chore card on Sporné).
+   */
+  disputes: {
+    pieces: [pastWeek, thisWeek, templates, disputes, choreDispute],
+    features: ['week', 'disputes', 'recurring'],
+  },
   /** Corrections and adjustments (#48): the disputes, then a manual +5 and a corrected week. */
   corrections: {
     pieces: [pastWeek, thisWeek, disputes, corrections],
@@ -88,6 +95,7 @@ export const SEEDS = {
       thisWeek,
       disputes,
       corrections,
+      choreDispute,
       instances,
       proposals,
       bootTick,

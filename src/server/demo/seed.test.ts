@@ -188,7 +188,7 @@ describe('demo seed (#62)', () => {
       chorechange: { ...NO_FEATURES, recurring: true, bidRefusals: true },
       scheduler: { ...NO_FEATURES, recurring: true },
       proposals: { ...NO_FEATURES, week: true, periodProposals: true },
-      disputes: { ...NO_FEATURES, week: true, disputes: true },
+      disputes: { ...NO_FEATURES, week: true, disputes: true, recurring: true },
       corrections: { ...NO_FEATURES, week: true, disputes: true },
       password: { ...NO_FEATURES, passwordChange: true },
       demo: ALL_FEATURES,
