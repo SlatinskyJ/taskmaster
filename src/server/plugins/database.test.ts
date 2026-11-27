@@ -39,4 +39,19 @@ describe('boot plugin', () => {
     hooks.close?.()
     expect(vi.getTimerCount()).toBe(0)
   })
+
+  it('refuses to boot the demo without TRUST_PROXY=1, before touching the database', async () => {
+    vi.stubEnv('TASKMASTER_ENV', 'demo')
+    vi.stubEnv('ADMIN_PASSWORD', '')
+    vi.stubEnv('TRUST_PROXY', '')
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const nitroApp = { hooks: { hook: () => undefined } }
+    const { default: plugin } = (await import('~/server/plugins/database')) as unknown as {
+      default: (app: typeof nitroApp) => void
+    }
+    expect(() => {
+      plugin(nitroApp)
+    }).toThrow(/TRUST_PROXY=1/)
+    expect(info).not.toHaveBeenCalled()
+  })
 })

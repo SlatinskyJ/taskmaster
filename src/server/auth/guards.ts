@@ -44,6 +44,17 @@ export class ForbiddenError extends Error {
 }
 
 /**
+ * Thrown (with HTTP 403) on the public demo when a locked server function is called
+ * (src/server/demo/lock.ts). Changes no state, so it writes no audit entry.
+ */
+export class DemoLockedError extends Error {
+  constructor() {
+    super('demo_locked')
+    this.name = 'DemoLockedError'
+  }
+}
+
+/**
  * The signed-in user, or a redirect to the login screen. Throws 403 for a wrong role.
  * Server-only: the client bundle gets a stub, so the DB code behind it never ships.
  */

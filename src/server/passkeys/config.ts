@@ -1,6 +1,9 @@
 // Passkey relying party (spec §11 Passkeys). Passkeys are on only when WEBAUTHN_RP_ID is set:
 // production sets it to its own host, previews leave it unset (Jakub, 2026-11-18). A bad value
 // throws at boot, so a typo stops the server instead of failing every registration later.
+// The public demo (TASKMASTER_ENV=demo) keeps them off whatever WEBAUTHN_RP_ID says.
+
+import { isDemo } from '~/server/env/demo'
 
 export interface PasskeyConfig {
   /** The host passkeys are bound to, e.g. `taskmaster.example.cz`. */
@@ -21,6 +24,8 @@ export class PasskeyConfigError extends Error {
 const HOST = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/
 
 export function passkeyConfig(env: NodeJS.ProcessEnv = process.env): PasskeyConfig | null {
+  // The public demo never has passkeys: a visitor's passkey would outlive the demo account.
+  if (isDemo(env)) return null
   const rpId = env.WEBAUTHN_RP_ID
   if (!rpId) return null
   if (!HOST.test(rpId)) {

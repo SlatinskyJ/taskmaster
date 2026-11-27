@@ -1,12 +1,16 @@
 import { createServerFn } from '@tanstack/react-start'
 import { requireRole } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
+import type { Db } from '~/server/db'
+import { positiveId } from '~/server/disputes/functions'
 import { getFlags } from '~/server/features'
 import { idTopic } from '~/server/live/topics'
 import { liveRead } from '~/server/live/define'
 import { serveLive } from '~/server/live/read'
 import type { Topic } from '~/server/live/topics'
 import { meetingNow, settleNow } from './actions'
+import { getAdminWeek } from './adminWeek'
+import type { AdminWeek, AdminWeekItem } from './adminWeek'
 import type { Meeting, MeetingTaker, SettleError, ShownTotal } from './meeting'
 import { getWeek } from './week'
 import type {
@@ -20,7 +24,7 @@ import type {
 } from './week'
 import type { CurrentUser } from '~/server/auth/sessions'
 
-export type { Meeting, MeetingTaker, SettleError }
+export type { AdminWeek, AdminWeekItem, Meeting, MeetingTaker, SettleError }
 export type { HistoryRecord, HistoryWeek, Week, WeekAdjustment, WeekItem, WeekTaker }
 
 // Server functions for the weekly meeting (#44). Giver only: the guard here, and the domain's
@@ -96,3 +100,36 @@ export const weekRead = liveRead({
 export const getWeekFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('taker', 'giver')])
   .handler(({ context }) => serveLive(weekRead, context.user, undefined))
+
+// The admin's view of one brother's week (#263), opened from Sporné: only while `disputes` is on.
+
+export interface AdminWeekInput {
+  periodId: number
+  takerId: number
+}
+
+export function parseAdminWeek(data: unknown): AdminWeekInput {
+  if (typeof data !== 'object' || data === null) throw new Error('Invalid input')
+  const { periodId, takerId } = data as Record<string, unknown>
+  return { periodId: positiveId(periodId), takerId: positiveId(takerId) }
+}
+
+export function adminWeekHandler(
+  db: Db,
+  arg: AdminWeekInput,
+): AdminWeek | null | { error: 'feature_off' } {
+  if (!getFlags(db).disputes) return { error: 'feature_off' }
+  return getAdminWeek(db, arg.periodId, arg.takerId)
+}
+
+/** The week, the people and the boy's points; off or not found: nothing subscribed. */
+export const adminWeekRead = liveRead({
+  read: (db, _viewer, arg: AdminWeekInput) => adminWeekHandler(db, arg),
+  topics: (_viewer, data): Topic[] =>
+    data === null || 'error' in data ? [] : ['week', 'people', idTopic('points', data.taker.id)],
+})
+
+export const getAdminWeekFn = createServerFn({ method: 'GET' })
+  .middleware([requireRole('admin')])
+  .validator(parseAdminWeek)
+  .handler(({ data, context }) => serveLive(adminWeekRead, context.user, data))

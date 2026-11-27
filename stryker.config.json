@@ -12,7 +12,7 @@
   "plugins": ["@stryker-mutator/vitest-runner"],
   "vitest": { "configFile": "vitest.stryker.config.ts", "related": true },
   "coverageAnalysis": "perTest",
-  "ignoreStatic": true,
+  "ignoreStatic": false,
   "reporters": ["json", "clear-text", "progress"],
   "jsonReporter": { "fileName": "reports/mutation/mutation.json" },
   "tempDirName": ".stryker-tmp",

@@ -164,7 +164,8 @@ describe('template price page', () => {
     expect(html).toContain('Platí 3 b.')
     expect(html).toContain('Nová cena platí jen pro nově vzniklé úkoly.')
     expect(html).toContain('Historie ceny')
-    expect(html).toContain('Mladší chce')
+    // Historie ceny as chat bubbles (#289): theirs with a name above, mine with none.
+    expect(html).toMatch(/>Mladší<\/span><button[^>]*>chce 5 b</)
     expect(html).toContain('Přijmout 4')
     expect(html).toContain(`aria-label="${cs.tasks.less}"`)
   })
@@ -172,7 +173,7 @@ describe('template price page', () => {
   it('a parent gets the lowest bid to accept', () => {
     const html = render(TATA)
     expect(html).toContain('Přijmout 5 (Mladší)')
-    expect(html).toContain('Ty nabízíš')
+    expect(html).toMatch(/<li class="[^"]*items-start[^"]*"><button[^>]*>nabídka 4 b</)
   })
 
   it('no history yet: the empty line', () => {
@@ -360,7 +361,9 @@ describe('chore page: the admin reads it, never acts (#222)', () => {
   it.each(states)('%s, every switch on: no button and no action', (_, template, entries) => {
     const html = allOn(() => render(ADMIN, entries, template))
     expect(html).toContain('Vyluxovat celý obývák a chodbu')
-    expect(html).not.toContain('<button')
+    // Historie ceny's bubbles are buttons that only show their time (#289); nothing else is.
+    const history = /<section[^>]*aria-labelledby="history-label"[\s\S]*?<\/section>/
+    expect(html.replace(history, '')).not.toContain('<button')
     for (const label of [
       cs.disputes.action,
       cs.taskPrice.agree,

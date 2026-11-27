@@ -1,0 +1,84 @@
+name: red-main
+
+# Emails Jakub when CI fails on main, and once when it is green again (#338).
+# Logic and tests: scripts/red-main/. Runs main's own copy of this file and script; never PR
+# code. No concurrency group: a dropped waiting run would be a lost email. A late run behind a
+# newer one sends nothing (decide.ts).
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      test:
+        description: Send one test email
+        type: boolean
+        default: false
+
+permissions: {}
+
+jobs:
+  alert:
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main') ||
+      (github.event_name == 'workflow_dispatch' && github.actor == 'SlatinskyJ' && inputs.test)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    # Reads runs and jobs only; writes nothing to GitHub.
+    permissions:
+      actions: read
+    steps:
+      # Until Jakub adds the secrets the workflow stays green and does nothing.
+      - name: Check secrets
+        id: guard
+        env:
+          ALERT_SMTP_URL: ${{ secrets.ALERT_SMTP_URL }}
+          ALERT_SMTP_USER: ${{ secrets.ALERT_SMTP_USER }}
+          ALERT_SMTP_PASSWORD: ${{ secrets.ALERT_SMTP_PASSWORD }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+        run: |
+          if [ -z "$ALERT_SMTP_URL" ] || [ -z "$ALERT_SMTP_USER" ] || [ -z "$ALERT_SMTP_PASSWORD" ] || [ -z "$ALERT_EMAIL_TO" ]; then
+            echo "red-main: secrets not set, nothing to send"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.guard.outputs.ready == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - if: steps.guard.outputs.ready == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - if: steps.guard.outputs.ready == 'true'
+        name: Decide and write the email
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          RED_MAIN_TEST: ${{ github.event_name == 'workflow_dispatch' && inputs.test }}
+          MAIL_FILE: ${{ runner.temp }}/mail.txt
+          ALERT_SMTP_USER: ${{ secrets.ALERT_SMTP_USER }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+        run: node scripts/red-main/run.ts
+      # A failed send fails the job, so GitHub's own failed-workflow notice still goes out.
+      # The netrc file keeps the password off curl's command line.
+      - if: steps.decide.outputs.send == 'true'
+        name: Send the email
+        env:
+          ALERT_SMTP_URL: ${{ secrets.ALERT_SMTP_URL }}
+          ALERT_SMTP_USER: ${{ secrets.ALERT_SMTP_USER }}
+          ALERT_SMTP_PASSWORD: ${{ secrets.ALERT_SMTP_PASSWORD }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+          MAIL_FILE: ${{ runner.temp }}/mail.txt
+        run: |
+          umask 077
+          host="$(echo "$ALERT_SMTP_URL" | sed -E 's#^[a-z]+://([^:/]+).*#\1#')"
+          printf 'machine %s login %s password %s\n' "$host" "$ALERT_SMTP_USER" "$ALERT_SMTP_PASSWORD" > "$RUNNER_TEMP/netrc"
+          curl --fail --silent --show-error --max-time 30 --ssl-reqd --url "$ALERT_SMTP_URL" \
+            --netrc-file "$RUNNER_TEMP/netrc" --mail-from "$ALERT_SMTP_USER" --mail-rcpt "$ALERT_EMAIL_TO" \
+            --upload-file "$MAIL_FILE"

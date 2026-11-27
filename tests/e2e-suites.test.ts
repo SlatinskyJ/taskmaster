@@ -25,7 +25,8 @@ describe('e2e suites (#183)', () => {
     expect(new Set(servers.map((s) => s.env.DATA_DIR)).size).toBe(servers.length)
     for (const { suite, port, env } of servers) {
       expect(env.PORT).toBe(String(port))
-      expect(env.TASKMASTER_ENV).toBe('preview')
+      // The `demo` suite runs the public demo; every other suite a preview.
+      expect(env.TASKMASTER_ENV).toBe(suite.name === 'demo' ? 'demo' : 'preview')
       expect(env.TASKMASTER_SEED).toBe(suite.seed)
       expect(isSeedName(env.TASKMASTER_SEED)).toBe(true)
     }
