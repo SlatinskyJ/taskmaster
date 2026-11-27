@@ -20,10 +20,45 @@ function fakeFetch(status = 200, fail: Error | null = null, body = '{}') {
   return { fn, calls }
 }
 
+function seqFetch(...statuses: number[]) {
+  const calls: { url: string; init: RequestInit }[] = []
+  const fn = ((url: string, init: RequestInit) => {
+    calls.push({ url, init })
+    const status = statuses[calls.length - 1] ?? 500
+    const body = status === 403 ? JSON.stringify({ error: { type: 'permission_error' } }) : '{}'
+    return Promise.resolve(new Response(body, { status }))
+  }) as unknown as typeof fetch
+  return { fn, calls }
+}
+
 describe('hand-over alert', () => {
+  it('fires again without text when the fire with text is refused (403)', async () => {
+    const f = seqFetch(403, 200)
+    expect(await alertHandback(f.fn, ENV, [7])).toEqual({ result: 'sent', bare: true })
+    expect(f.calls).toHaveLength(2)
+    expect(JSON.parse(f.calls[0]?.init.body as string)).toHaveProperty('text')
+    expect(JSON.parse(f.calls[1]?.init.body as string)).toEqual({})
+    expect((f.calls[1]?.init.headers as Record<string, string>).Authorization).toBe('Bearer tok')
+    expect(f.calls[1]?.url).toBe(URL_OK)
+  })
+
+  it('reports the bare fire failing too', async () => {
+    const f = seqFetch(403, 403)
+    expect(await alertHandback(f.fn, ENV, [7])).toEqual({
+      result: 'failed',
+      detail: 'HTTP 403 permission_error (bare)',
+    })
+  })
+
+  it('does not retry on other refusals', async () => {
+    const f = seqFetch(401)
+    expect((await alertHandback(f.fn, ENV, [7])).result).toBe('failed')
+    expect(f.calls).toHaveLength(1)
+  })
+
   it('fires the scheduled task once with the PRs and the run link', async () => {
     const f = fakeFetch()
-    expect(await alertHandback(f.fn, ENV, [7, 9])).toEqual({ result: 'sent' })
+    expect(await alertHandback(f.fn, ENV, [7, 9])).toEqual({ result: 'sent', bare: false })
     expect(f.calls).toHaveLength(1)
     const [call] = f.calls
     if (!call) throw new Error('no call')
@@ -108,7 +143,7 @@ describe('hand-over alert', () => {
   it('trims a secret pasted with a trailing newline or spaces', async () => {
     const f = fakeFetch()
     const env = { ...ENV, HANDBACK_FIRE_URL: `${URL_OK}\n`, HANDBACK_FIRE_TOKEN: ' tok\n' }
-    expect(await alertHandback(f.fn, env, [7])).toEqual({ result: 'sent' })
+    expect(await alertHandback(f.fn, env, [7])).toEqual({ result: 'sent', bare: false })
     expect(f.calls[0]?.url).toBe(URL_OK)
     expect((f.calls[0]?.init.headers as Record<string, string>).Authorization).toBe('Bearer tok')
   })
@@ -123,7 +158,7 @@ describe('hand-over alert', () => {
 
   it('fires a TEST alert by hand even with nothing handed over', async () => {
     const f = fakeFetch()
-    expect(await alertHandback(f.fn, ENV, [], true)).toEqual({ result: 'sent' })
+    expect(await alertHandback(f.fn, ENV, [], true)).toEqual({ result: 'sent', bare: false })
     expect(JSON.parse(f.calls[0]?.init.body as string)).toEqual({
       text: testText('https://github.com/SlatinskyJ/taskmaster/actions/runs/42'),
     })
