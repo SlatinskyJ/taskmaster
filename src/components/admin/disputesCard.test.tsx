@@ -57,6 +57,7 @@ const entry: AdminDisputeEntry = {
   openedAt: '2026-11-22T10:00:00.000Z',
   value: { score: 30 },
   page: null,
+  weekPage: null,
 }
 const noop = () => undefined
 
