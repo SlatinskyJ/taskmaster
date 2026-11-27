@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cs } from '~/lib/strings'
 import type { TemplateView } from '~/server/templates/functions'
 
 // Úkoly and Nový úkol rendered through their routes, so the launch switch for recurring
@@ -74,6 +75,17 @@ describe('Úkoly', () => {
     expect(html).toContain('K udělání')
   })
 
+  it('Opakované with no chores yet: its empty line, no list (#179)', () => {
+    page.data = { list: [], templates: [] }
+    const html = show(TasksRoute)
+    const section = html.slice(html.indexOf('aria-labelledby="templates-label"'))
+    expect(section).toContain(cs.templates.empty)
+    expect(section).not.toContain('<ul')
+    // With a chore: the list, no empty line.
+    page.data = { list: [], templates: [flowers] }
+    expect(show(TasksRoute)).not.toContain(cs.templates.empty)
+  })
+
   it('launch: no Opakované section and no lone Jednorázové heading', () => {
     features.recurring = false
     const html = show(TasksRoute)
@@ -102,6 +114,25 @@ describe('Nový úkol', () => {
     const html = show(NewRoute)
     expect(html).toContain('Opakovaný')
     expect(html).toContain('Jednorázový')
+  })
+
+  it('the kind toggle opens on Jednorázový: pressed and raised; Opakovaný not (#179)', () => {
+    const html = show(NewRoute)
+    const button = (label: string) =>
+      new RegExp(
+        `<button type="button" aria-pressed="(true|false)" class="([^"]*)">${label}</button>`,
+      ).exec(html)
+    const one = button(cs.templates.kindOneTime)
+    const rec = button(cs.templates.kindRecurring)
+    expect(one?.[1]).toBe('true')
+    expect(rec?.[1]).toBe('false')
+    for (const b of [one, rec]) expect(b?.[2]).toContain('min-h-tap cursor-pointer rounded-button')
+    expect(one?.[2]).toContain('bg-surface text-ink shadow-sticker')
+    expect(one?.[2]).not.toContain('text-muted')
+    expect(rec?.[2]).toContain('text-muted')
+    expect(rec?.[2]).not.toContain('bg-surface')
+    // One-time is the default form: no recurring fields' hint.
+    expect(html).toContain(cs.tasks.proposeHint)
   })
 
   it('launch: no kind toggle, a one-time task form only', () => {

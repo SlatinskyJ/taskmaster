@@ -2,6 +2,13 @@
 // surviving mutants for the Tests judge. Usage: node scripts/mutation/run.ts <pr-files.json>
 // (a JSON array of GitHub `pulls/<n>/files` entries). Survivors never fail the run; a Stryker
 // run that fails, is killed or writes no report does.
+//
+// stryker.config.json keeps `ignoreStatic` off (#189). A static mutant (module-level code, e.g.
+// a const list) runs when a file is imported. When one test imports the module inside its body
+// (a dynamic `import()`), Stryker sees that test cover the mutant too and, with `ignoreStatic`
+// on, runs only that test: the test files that pin the value imported it before their tests
+// started, so they never ran, and the mutant was listed as a survivor. With it off, a static
+// mutant reloads the modules and runs every related test: slower, but its result is real.
 import { spawnSync } from 'node:child_process'
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
