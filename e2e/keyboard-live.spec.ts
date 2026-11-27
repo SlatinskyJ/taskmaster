@@ -191,6 +191,8 @@ test.describe('at 360 px', () => {
       await b.evaluate((el) =>
         Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)),
       )
+      // The slide-in transition may not have started when data-mounted flips: wait until it lands.
+      await expect.poll(async () => (await b.boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(0)
       const box = await b.boundingBox()
       if (!box) throw new Error('no banner')
       expect(box.x).toBeGreaterThanOrEqual(0)
