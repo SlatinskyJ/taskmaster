@@ -116,6 +116,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'install', spec: 'install.spec.ts', seed: 'family' },
   // Launch switches in Správa (#296). Its own server: it flips switches for good.
   { name: 'switches', spec: 'switches.spec.ts', seed: 'launch' },
+  // Správa, Nový člověk (#286). Its own server: it adds a person for good.
+  { name: 'people', spec: 'people.spec.ts', seed: 'family' },
 ]
 
 /** Passkeys on (localhost) for the `on` suite only, at its own port. */
