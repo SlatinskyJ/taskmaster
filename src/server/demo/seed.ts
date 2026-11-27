@@ -2,6 +2,7 @@ import { hashSync } from '@node-rs/argon2'
 import type { Db } from '~/server/db'
 import { users } from '~/server/db/schema'
 import { setSwitchesIn } from '~/server/features'
+import { demoDataAllowed } from '~/server/env/demo'
 import { createUser } from '~/server/users'
 import type { NewUser } from '~/server/users'
 import { SEEDS, isSeedName } from './seeds'
@@ -45,10 +46,13 @@ export function seedDemo(
   env: NodeJS.ProcessEnv = process.env,
   now: Date = new Date(),
 ): DemoOutcome {
-  if (env.TASKMASTER_ENV !== 'preview') return { kind: 'skipped', reason: 'not_preview' }
-  // A real deploy sets ADMIN_PASSWORD. If the preview flag ever leaks into one, the known
-  // demo password must still never create an account.
+  const flag = env.TASKMASTER_ENV
+  if (flag !== 'preview' && flag !== 'demo') return { kind: 'skipped', reason: 'not_preview' }
+  // A real deploy sets ADMIN_PASSWORD. If the preview or demo flag ever leaks into one, the
+  // known demo password must still never create an account. Checked before demoDataAllowed
+  // (which also says no then), so the boot log names the reason.
   if ((env.ADMIN_PASSWORD ?? '') !== '') return { kind: 'skipped', reason: 'admin_password_set' }
+  if (!demoDataAllowed(env)) return { kind: 'skipped', reason: 'not_preview' }
   // Before the empty check, so a misspelt name fails every boot, not only the first: a suite
   // must never run on data it did not ask for.
   // An empty value (a blank CI env line) counts as unset.
