@@ -48,6 +48,8 @@ describe('stripLinksDeep', () => {
   })
 
   it('leaves values that are not plain objects as they are', () => {
+    const bare = Object.assign(Object.create(null) as Record<string, unknown>, { t: 'a www.x b' })
+    expect(stripLinksDeep(bare)).toEqual({ t: 'a  b' })
     const date = new Date(0)
     expect(stripLinksDeep(date)).toBe(date)
   })

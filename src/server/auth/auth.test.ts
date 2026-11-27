@@ -425,6 +425,18 @@ describe('login limits on the demo', () => {
     expect((await on(DEMO, db, PASSWORD, at(2000), 'admin', '198.51.100.9')).ok).toBe(true)
   })
 
+  it('every address of one IPv6 /64 counts toward the same attempt cap', async () => {
+    const { db } = family()
+    const addr = (i: number) => `2001:db8:1:2::${i.toString(16)}`
+    for (let i = 0; i < DEMO_ATTEMPTS_PER_IP; i++)
+      expect((await on(DEMO, db, PASSWORD, T0, 'admin', addr(i + 1))).ok).toBe(true)
+    expect(await on(DEMO, db, PASSWORD, at(1000), 'admin', addr(999))).toEqual({
+      ok: false,
+      error: 'rate_limited',
+    })
+    expect((await on(DEMO, db, PASSWORD, at(1000), 'admin', '2001:db8:1:3::1')).ok).toBe(true)
+  })
+
   it('an attempt exactly one window after the first counts the first one out', async () => {
     const { db } = family()
     expect((await on(DEMO, db, PASSWORD, T0)).ok).toBe(true)

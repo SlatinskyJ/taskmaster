@@ -1,3 +1,4 @@
+import { ipBucket } from '~/server/auth/clientIp'
 import { isDemo } from '~/server/env/demo'
 
 // The public demo's per-IP cap on live streams (docs/superpowers/specs/2026-11-27-demo-
@@ -13,6 +14,8 @@ export interface Gauge {
   open(key: string): boolean
   /** Gives one place back; never below 0. */
   close(key: string): void
+  /** Keys holding a place (a key at 0 is dropped, so this stays small). */
+  size(): number
 }
 
 export function createGauge(limit: number): Gauge {
@@ -30,6 +33,7 @@ export function createGauge(limit: number): Gauge {
       if (n <= 1) open.delete(key)
       else open.set(key, n - 1)
     },
+    size: () => open.size,
   }
 }
 
@@ -41,17 +45,18 @@ export interface StreamSlot {
   close(): void
 }
 
-/** The stream's place in `gauge` under the visitor's IP on the demo; elsewhere none. */
+/** The stream's place in `gauge` under the visitor's IP bucket (an IPv6 /64) on the demo; elsewhere none. */
 export function demoStreamSlot(
   env: NodeJS.ProcessEnv,
   ip: string,
   gauge: Gauge = liveGauge,
 ): StreamSlot | undefined {
   if (!isDemo(env)) return undefined
+  const key = ipBucket(ip)
   return {
-    open: () => gauge.open(ip),
+    open: () => gauge.open(key),
     close: () => {
-      gauge.close(ip)
+      gauge.close(key)
     },
   }
 }

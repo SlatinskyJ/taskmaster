@@ -638,6 +638,18 @@ describe('the demo stream cap', () => {
     expect(open().status).toBe(200)
   })
 
+  it('a catch-up that throws gives the slot back', async () => {
+    const { s, open } = await capped(1)
+    const broken = (): Hub => ({
+      ...s.hub,
+      changesSince: () => {
+        throw new Error('db gone')
+      },
+    })
+    expect(() => open({ hub: broken })).toThrow('db gone')
+    expect(open().status).toBe(200)
+  })
+
   it('the hub refusing attach (503) gives the slot back', async () => {
     const { s, gauge, open } = await capped(1)
     const hub: Hub = { ...s.hub, attach: () => null }

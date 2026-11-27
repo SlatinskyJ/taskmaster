@@ -141,8 +141,16 @@ export function openStream(req: StreamRequest, deps: StreamDeps): Response {
   })
 
   // Catch-up and attach in one synchronous block: no flush can fall between them.
-  const hub = deps.hub()
-  const caught = hub.changesSince(start, topics, CATCH_UP_LIMIT, { id: user.id, role: user.role })
+  let hub: ReturnType<StreamDeps['hub']>
+  let caught: ReturnType<typeof hub.changesSince>
+  try {
+    hub = deps.hub()
+    caught = hub.changesSince(start, topics, CATCH_UP_LIMIT, { id: user.id, role: user.role })
+  } catch (err) {
+    // No stream owns the demo slot yet, so give it back here.
+    slot?.close()
+    throw err
+  }
   const stream: Stream = {
     sessionId: session.id,
     userId: user.id,

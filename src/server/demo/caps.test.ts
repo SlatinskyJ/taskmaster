@@ -31,6 +31,17 @@ describe('createGauge', () => {
     g.close('x')
     expect(openTimes(g, 'x', 3)).toEqual([true, true, false])
   })
+
+  it('a key back at 0 leaves the gauge, so it does not grow with every visitor', () => {
+    const g = createGauge(2)
+    openTimes(g, 'x', 2)
+    g.open('y')
+    g.close('x')
+    expect(g.size()).toBe(2)
+    g.close('x')
+    g.close('y')
+    expect(g.size()).toBe(0)
+  })
 })
 
 describe('demoStreamSlot', () => {
@@ -42,6 +53,14 @@ describe('demoStreamSlot', () => {
     expect(g.open('198.51.100.1')).toBe(true)
     slot?.close()
     expect(g.open('203.0.113.9')).toBe(true)
+  })
+
+  it('one IPv6 /64 shares one place, another /64 has its own', () => {
+    const g = createGauge(1)
+    const demo = { TASKMASTER_ENV: 'demo' }
+    expect(demoStreamSlot(demo, '2001:db8:1:2::a', g)?.open()).toBe(true)
+    expect(demoStreamSlot(demo, '2001:db8:1:2::b', g)?.open()).toBe(false)
+    expect(demoStreamSlot(demo, '2001:db8:1:3::a', g)?.open()).toBe(true)
   })
 
   it('no slot on a preview, outside the demo, or on a demo flag with ADMIN_PASSWORD', () => {
