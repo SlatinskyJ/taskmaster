@@ -136,8 +136,8 @@ core in `stream.ts`); a viewer frame adds `tmFrame`. `Last-Event-ID`, when sent,
 - Heartbeat: a `: ping` comment every **25 s**, because production's Apache closes requests
   idle for 60 s (`ProxyTimeout 60`). Each ping checks the session again without sliding it:
   logged out or expired, the stream ends.
-- Limits: 3 streams per session (a fourth closes the oldest, so the tab in hand works), 50 in
-  all.
+- Limits: 3 streams per session (a fourth closes the oldest with `event: replaced`, which the
+  tab does not reopen until it is in hand again, so the tab in hand works), 50 in all.
 
 ## Ops
 

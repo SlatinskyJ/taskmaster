@@ -52,6 +52,8 @@ async function setup(): Promise<F> {
 interface Fake extends Stream {
   got: LiveEvent[]
   closed: boolean
+  /** The reason of each `close` call, in order (undefined for none). */
+  reasons: (string | undefined)[]
 }
 
 let n = 0
@@ -65,11 +67,13 @@ function stream(topics: Topic[], over: Partial<Stream> = {}): Fake {
     topics: new Set(topics),
     got: [],
     closed: false,
+    reasons: [],
     send(e) {
       s.got.push(e)
     },
-    close() {
+    close(reason) {
       s.closed = true
+      s.reasons.push(reason)
     },
     ...over,
   }
@@ -501,6 +505,16 @@ describe('limits', () => {
     expect(four.map((s) => s.closed)).toEqual([true, false, false, false])
     expect(other.closed).toBe(false)
     expect(hub.size()).toBe(4)
+  })
+
+  it('a fourth stream of one session closes the oldest with reason replaced', async () => {
+    const f = await setup()
+    const hub = hubOf(f)
+    const four = [1, 2, 3, 4].map(() => stream(['tasks'], { sessionId: 501 }))
+    for (const s of four) hub.attach(s, 0)
+    expect(four.map((s) => s.reasons)).toEqual([['replaced'], [], [], []])
+    hub.stop()
+    expect(four.slice(1).map((s) => s.reasons)).toEqual([[undefined], [undefined], [undefined]])
   })
 
   it('the 50th stream overall is accepted; the 51st is refused', async () => {

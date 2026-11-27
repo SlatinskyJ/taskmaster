@@ -16,6 +16,8 @@ export const HEARTBEAT_MS = 25_000
 export const CATCH_UP_LIMIT = 100
 /** Written as soon as the stream is attached, so it is open before the first heartbeat (#309). */
 export const OPEN_LINE = ': open\n\n'
+/** Written before a stream pushed out by its session's fourth ends: the tab does not reopen it. */
+export const REPLACED_LINE = 'event: replaced\ndata: {}\n\n'
 
 export interface StreamRequest {
   /** The `t` query values: signed subscriptions (./subscription.ts). */
@@ -102,12 +104,17 @@ export function openStream(req: StreamRequest, deps: StreamDeps): Response {
   let ended = false
   let detach: (() => void) | null = null
 
-  const end = () => {
+  const write = (text: string) => {
+    controller.enqueue(encoder.encode(text))
+  }
+
+  const end = (reason?: 'replaced') => {
     if (ended) return
     ended = true
     if (timer !== null) deps.clearInterval(timer)
     detach?.()
     try {
+      if (reason === 'replaced') write(REPLACED_LINE)
       controller.close()
     } catch {
       // Already closed or cancelled.
@@ -122,9 +129,6 @@ export function openStream(req: StreamRequest, deps: StreamDeps): Response {
       end()
     },
   })
-  const write = (text: string) => {
-    controller.enqueue(encoder.encode(text))
-  }
 
   // Catch-up and attach in one synchronous block: no flush can fall between them.
   const hub = deps.hub()

@@ -43,7 +43,8 @@ export interface Stream {
   tab: string
   topics: ReadonlySet<Topic>
   send(e: LiveEvent): void
-  close(): void
+  /** Ends the stream; `replaced`: a newer stream of the session pushed it out (the tab waits). */
+  close(reason?: 'replaced'): void
 }
 
 export interface Hub {
@@ -238,7 +239,7 @@ export function createHub(db: Db, opts: { originTab?: () => string | undefined }
       const mine = [...streams.keys()].filter((o) => o.sessionId === s.sessionId)
       for (const old of mine.slice(0, Math.max(0, mine.length - STREAMS_PER_SESSION + 1))) {
         detach(old)
-        old.close()
+        old.close('replaced')
       }
       if (streams.size >= STREAMS_TOTAL) return null
       streams.set(s, { lastId })
