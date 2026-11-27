@@ -104,6 +104,26 @@ test('a price change offers no Nechci or turn-down with bidRefusals off (#232)',
   await expect(page.getByRole('button', { name: cs.bids.withdraw, exact: true })).toHaveCount(0)
 })
 
+test('Nový → Opakovaný proposes a recurring chore, not a one-time task (#144)', async ({
+  page,
+}) => {
+  const TITLE = 'Zalít kytky na balkoně'
+  await passwordLogin(page, 'tata')
+  await expect(page).toHaveURL(/\/$/)
+  await page.goto('/ukoly')
+  await page.getByRole('link', { name: cs.tasks.new }).click()
+  await expect(page).toHaveURL(/\/ukoly\/novy/)
+  await page.getByRole('button', { name: cs.templates.kindRecurring, exact: true }).click()
+  await page.getByLabel(cs.tasks.title).fill(TITLE)
+  await page.getByRole('button', { name: cs.tasks.propose, exact: true }).click()
+  await expect(page.getByText(cs.templates.created, { exact: true })).toBeVisible()
+  await expect(page).toHaveURL(/\/ukoly$/)
+  const chores = page.getByRole('region', { name: cs.templates.section })
+  const oneTime = page.getByRole('region', { name: cs.templates.itemsSection })
+  await expect(chores.getByRole('listitem').filter({ hasText: TITLE })).toBeVisible()
+  await expect(oneTime.getByText(TITLE)).toHaveCount(0)
+})
+
 test('Souhlasím on a proposed chore’s Domů row agrees it, choreBidding off (#244)', async ({
   page,
 }) => {
