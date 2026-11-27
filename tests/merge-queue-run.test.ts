@@ -27,7 +27,10 @@ function facts(over: Partial<PrFacts> = {}): PrFacts {
     stack: null,
     lower: 'none',
     behind: false,
-    handedOver: false,
+    handover: null,
+    rearms: 0,
+    rearmRequest: null,
+    headIsFixed: true,
     ...over,
   }
 }

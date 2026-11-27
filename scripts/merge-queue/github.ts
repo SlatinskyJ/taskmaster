@@ -380,11 +380,15 @@ export function makeGh(
       stack: null,
       lower: 'none',
       behind: false,
-      handedOver,
+      handover: handedOver ? { kind: 'final', n: Infinity, redSha: null } : null,
+      rearms: 0,
+      rearmRequest: null,
+      headIsFixed: false,
     }
     // decide.ts never acts on these beyond a hand-over, so skip the costly reads.
     if (handedOver || approvedSha === null) return facts
     Object.assign(facts, await walk(pr, approvedSha, detail.head.sha))
+    facts.headIsFixed = facts.headIsApproved
     const { check_runs } = await getJson<{ check_runs: GhCheckRun[] }>(
       `${base}/commits/${detail.head.sha}/check-runs?per_page=100`,
     )

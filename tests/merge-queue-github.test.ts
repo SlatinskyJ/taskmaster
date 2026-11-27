@@ -357,7 +357,10 @@ describe('labelledPrs', () => {
         stack: null,
         lower: 'none',
         behind: false,
-        handedOver: false,
+        handover: null,
+        rearms: 0,
+        rearmRequest: null,
+        headIsFixed: true,
       },
     ])
   })
@@ -457,7 +460,7 @@ describe('labelledPrs', () => {
         approvedOk(),
       ],
     })
-    expect(pr).toMatchObject({ handedOver: false })
+    expect(pr).toMatchObject({ handover: null })
   })
 
   it('counts a hand-over with a valid HMAC after the latest label', async () => {
@@ -470,7 +473,7 @@ describe('labelledPrs', () => {
         ),
       ],
     })
-    expect(pr).toMatchObject({ handedOver: true })
+    expect(pr).toMatchObject({ handover: { kind: 'final' } })
   })
 
   it('does not count a hand-over with a wrong or missing HMAC', async () => {
@@ -481,7 +484,7 @@ describe('labelledPrs', () => {
         comment('<!-- merge-queue:handoff -->', '2026-11-26T10:31:00Z'),
       ],
     })
-    expect(pr).toMatchObject({ handedOver: false })
+    expect(pr).toMatchObject({ handover: null })
   })
 
   it('does not count a hand-over signed for an earlier label', async () => {
@@ -491,7 +494,7 @@ describe('labelledPrs', () => {
         comment(handoffMarker(KEY, 9, 400, 'final', 1, null), '2026-11-26T10:30:00Z'),
       ],
     })
-    expect(pr).toMatchObject({ handedOver: false })
+    expect(pr).toMatchObject({ handover: null })
   })
 
   it('reports a needs-jakub label added after merge-me and still on', async () => {
