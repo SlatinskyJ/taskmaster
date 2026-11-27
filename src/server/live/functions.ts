@@ -10,6 +10,7 @@ import { openStream } from './stream'
 
 export type { Live } from './define'
 export type { LiveSub } from './subscription'
+export type { LiveEvent } from './hub'
 
 // The stream route's body (src/routes/api/live.ts, #299): reads the request and hands it to
 // `openStream` (./stream.ts). Server only. Screens import the subscription types from here.

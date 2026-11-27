@@ -62,3 +62,15 @@ test('the live change stream answers 404 with its switch off (#299)', async ({ p
   await expect(page).toHaveURL(/\/$/)
   expect((await page.request.get('/api/live?tab=x')).status()).toBe(404)
 })
+
+test('with the switch off no screen opens the live stream (#299)', async ({ page }) => {
+  const streams: string[] = []
+  page.on('request', (r) => {
+    if (r.url().includes('/api/live')) streams.push(r.url())
+  })
+  await passwordLogin(page, 'tata')
+  await expect(page).toHaveURL(/\/$/)
+  await expect(bottomBar(page)).toBeVisible()
+  await page.waitForTimeout(2_000)
+  expect(streams).toEqual([])
+})

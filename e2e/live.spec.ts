@@ -4,7 +4,8 @@ import { passwordLogin } from './helpers'
 
 // Live change notices, server side (#299): the real stream route, and the tokens the screens
 // sign into their pages. The `demo` seed turns the `liveChanges` switch on; the 404 with the switch
-// off is in launch.spec.ts (every switch off). The two-browser e2e comes with the banner (PR 4).
+// off is in launch.spec.ts (every switch off). The banner's two-browser e2e is
+// live-banner.spec.ts.
 
 test('GET /api/live without a session is 401', async ({ request }) => {
   const res = await request.get('/api/live?tab=x')

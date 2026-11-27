@@ -11,7 +11,7 @@ import { family, must, T0 } from '~/server/tasks/testing'
 import { createTemplate } from '~/server/templates/templates'
 import { createHub } from './hub'
 import type { Hub, LiveEvent } from './hub'
-import { CATCH_UP_LIMIT, HEARTBEAT_MS, OPEN_LINE, openStream } from './stream'
+import { CATCH_UP_LIMIT, HEARTBEAT_MS, OPEN_LINE, openStream, REPLACED_LINE } from './stream'
 import type { StreamDeps, StreamRequest } from './stream'
 import { signSubscription } from './subscription'
 import { TOPIC_LIMIT } from './topics'
@@ -548,6 +548,28 @@ describe('heartbeat and the session', () => {
     s.ping()
     expect(await body.text()).toBe(`${OPEN_LINE}: ping\n\n`)
     expect(s.f.db.select().from(sessions).all()).toEqual(before)
+  })
+
+  it('a replaced stream writes `event: replaced` and then ends', async () => {
+    const s = await setup()
+    const open = () => reader(openStream(request({ tokens: [sign(s, ['tasks'])] }), s.deps()))
+    const first = open()
+    expect(await first.text()).toBe(OPEN_LINE)
+    for (let i = 0; i < 3; i++) await open().text()
+    expect(REPLACED_LINE).toBe('event: replaced\ndata: {}\n\n')
+    expect(await first.text()).toBe(REPLACED_LINE)
+    expect(first.done()).toBe(true)
+    expect(s.hub.size()).toBe(3)
+  })
+
+  it("a stream ended by the heartbeat's session check writes no replaced frame", async () => {
+    const s = await setup()
+    const body = reader(openStream(request({ tokens: [sign(s, ['tasks'])] }), s.deps()))
+    await body.text()
+    s.setNow(new Date(T0.getTime() + 91 * 24 * 60 * 60 * 1000))
+    s.ping()
+    expect(await body.text()).toBe('')
+    expect(body.done()).toBe(true)
   })
 
   it('cancelling the body detaches from the hub', async () => {

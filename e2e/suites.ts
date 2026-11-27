@@ -102,6 +102,12 @@ export const SUITES: readonly Suite[] = [
   { name: 'multi', spec: 'multi.spec.ts', seed: 'week' },
   // The live change stream's route (#299): read-only, `demo` has the liveChanges switch on.
   { name: 'live', spec: 'live.spec.ts', seed: 'demo' },
+  // The live change banner (#299) in three browsers. Its own server: it reserves and releases
+  // for good.
+  { name: 'live-banner', spec: 'live-banner.spec.ts', seed: 'demo' },
+  // The live change banner over the phone keyboard, a sheet and at 360 px (#299), with a
+  // scripted stream. Read-only: forms are opened, never sent.
+  { name: 'keyboard-live', spec: 'keyboard-live.spec.ts', seed: 'demo' },
   // Profil → Aplikace (#302): a fake install event. Read-only: changes no data.
   { name: 'install', spec: 'install.spec.ts', seed: 'family' },
   // Launch switches in Správa (#296). Its own server: it flips switches for good.

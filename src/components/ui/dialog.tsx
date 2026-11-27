@@ -2,6 +2,7 @@ import { XIcon } from 'lucide-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
 import type { ComponentProps } from 'react'
 import { cn } from '~/lib/utils'
+import { keepOpenForToaster } from './outside'
 
 // UI doc §5: only for actions that can't be undone (cancel task, settle).
 export const Dialog = DialogPrimitive.Root
@@ -20,6 +21,8 @@ export function DialogContent({
   className,
   children,
   closeLabel,
+  onPointerDownOutside,
+  onInteractOutside,
   ...props
 }: ComponentProps<typeof DialogPrimitive.Content> & {
   /** Czech label for the corner close button (from the strings module); no button without it. */
@@ -39,6 +42,9 @@ export function DialogContent({
           className,
         )}
         {...props}
+        // A tap on the live change banner keeps the dialog open (#299, ./outside.ts).
+        onPointerDownOutside={keepOpenForToaster(onPointerDownOutside)}
+        onInteractOutside={keepOpenForToaster(onInteractOutside)}
       >
         {children}
         {closeLabel ? (

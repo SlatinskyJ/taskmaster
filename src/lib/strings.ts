@@ -513,6 +513,15 @@ export const cs = {
     suggestionSent: 'návrh poslán na GitHub',
     suggestionDone: 'návrh vyřízen',
     suggestionDismissed: 'návrh zamítnut',
+    /** The live change banner (src/components/live/): one change's sentence, or a count. */
+    banner: {
+      many: (n: number) => `Více změn (${String(n)})`,
+      /** More than the server replays one by one (100): the count is unknown (#299 Q1). */
+      overflow: 'Více změn (100+)',
+      /** The refresh icon button [call]. */
+      refresh: 'Načíst změny',
+      close: 'Zavřít',
+    },
   },
   home: {
     greeting: 'Ahoj',

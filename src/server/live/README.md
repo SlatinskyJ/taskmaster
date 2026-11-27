@@ -2,7 +2,7 @@
 
 The server side of the live change banner (design: `docs/superpowers/specs/2026-11-26-live-changes-design.md`).
 A screen that is open while someone else changes what it shows gets an event; the banner
-(PR 2) tells the person, and they refresh when they choose. Behind the launch switch
+(`src/components/live/`) tells the person, and they refresh when they choose. Behind the launch switch
 `liveChanges` (off in production; the `demo` seed turns it on). Off: the stream answers 404
 and data functions return `live: null`.
 
@@ -136,8 +136,45 @@ core in `stream.ts`); a viewer frame adds `tmFrame`. `Last-Event-ID`, when sent,
 - Heartbeat: a `: ping` comment every **25 s**, because production's Apache closes requests
   idle for 60 s (`ProxyTimeout 60`). Each ping checks the session again without sliding it:
   logged out or expired, the stream ends.
-- Limits: 3 streams per session (a fourth closes the oldest, so the tab in hand works), 50 in
-  all.
+- Limits: 3 streams per session (a fourth closes the oldest with `event: replaced`, which the
+  tab does not reopen until it is in hand again, so the tab in hand works), 50 in all.
+
+## The banner (client)
+
+`<LiveBanner />` (`src/components/live/LiveBanner.tsx`) sits in the `_app` layout, once per tab.
+
+- **Subscription key.** It reads `live` from every active route match (`subsOf`,
+  `src/lib/liveBanner.ts`), deduplicated by token, and joins the tokens into the key. One open
+  stream per key: when the key changes (navigation, a refresh, the reload after one's own
+  action) the old stream closes, an event of it already in flight is dropped, the count starts
+  again and the new stream opens. No subscriptions (Nový, Klíč, Profil without its topics) or
+  the switch off: no stream.
+- **Banner.** One Sonner toast with the fixed id `live-changes`, no timeout: one change shows its
+  `text`, more show `Více změn (N)`, an `overflow` shows `Více změn (100+)` until refresh.
+  Swipe or Zavřít hides it and keeps the count, so the next change shows the count from the
+  last refresh. A change key counted once is never counted again (a replay after a reconnect).
+  It shows at once, also over a focused field in a dialog or sheet (Jakub 2026-11-27); a tap on
+  it never closes the dialog or sheet (`src/components/ui/outside.ts`), so typed text stays.
+- **Refresh** (Načíst změny) is `router.invalidate()`: every active loader runs again and signs
+  new tokens, which gives a new key. If nothing was written since the loaders last ran the
+  tokens stay the same, and the refresh starts the count again itself.
+- **Reconnect** (`src/lib/liveConnect.ts`, `fetch`-based: native `EventSource` gives up for good
+  after a non-200). A clean end, a network error, 503 or any other status retries after
+  `RETRY_MS` (1, 2, 5, 10, 30, then every 60 s; `: open` starts the steps over) with
+  `since=<the last id received>`. No byte for `STALE_MS` (60 s; the server pings every 25 s): the
+  socket is dead, reconnect at once. 401, 404 and 400 stop for good (400 is logged as
+  `[live] stream refused: 400`). `event: replaced` (a fourth stream of the login) stops until the
+  tab is in hand again (visible, focused or back online). While the tab is hidden no retry runs;
+  it retries when it is visible again.
+
+### How a screen hooks into the refresh
+
+- A screen is live when its route loader returns `live: live.all()` (`liveSubs()`); nothing
+  else. The banner reads every active match's `loaderData.live`.
+- The refresh reruns every active loader, so it always renews the subscription.
+- A screen that must know whether the banner is its refresh (e.g. one with its own reload
+  button) calls `offersLiveRefresh(context.features, live)` from `~/lib/liveBanner`: true when
+  the switch is on and its loader returned at least one subscription.
 
 ## Ops
 
