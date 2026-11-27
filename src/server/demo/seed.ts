@@ -2,6 +2,7 @@ import { hashSync } from '@node-rs/argon2'
 import type { Db } from '~/server/db'
 import { users } from '~/server/db/schema'
 import { setSwitchesIn } from '~/server/features'
+import { demoDataAllowed } from '~/server/env/demo'
 import { createUser } from '~/server/users'
 import type { NewUser } from '~/server/users'
 import { SEEDS, isSeedName } from './seeds'
@@ -10,12 +11,13 @@ import type { SeedName } from './seeds'
 // Demo data for previews, dev and E2E (#62): an empty database gets the family with known
 // passwords, so a preview is clickable right away. This is the only source of test users
 // (Jakub 2026-11-17); production gets its one admin from ADMIN_PASSWORD (../users/bootstrap).
-// Runs at boot (src/server/plugins) only when `TASKMASTER_ENV=preview`; to try it locally:
-// `TASKMASTER_ENV=preview pnpm dev` on a fresh `DATA_DIR`.
+// Runs at boot (src/server/plugins) only when `TASKMASTER_ENV=preview` or `demo` (the public
+// demo, src/server/env/demo.ts); to try it locally: `TASKMASTER_ENV=preview pnpm dev` on a
+// fresh `DATA_DIR`.
 //
-// Guards: never without the preview flag, never when ADMIN_PASSWORD is set (a real deploy
-// sets it), and never on a database that already has people (a real family's database always
-// does). All tested.
+// Guards: never without the preview or demo flag, never when ADMIN_PASSWORD is set (a real
+// deploy sets it), and never on a database that already has people (a real family's database
+// always does). All tested.
 //
 // What else it holds is picked by `TASKMASTER_SEED` (#183): a named seed (./seeds.ts) is a list
 // of pieces (./pieces.ts, one per feature's sample data) and the launch switches it turns on;
@@ -24,7 +26,10 @@ import type { SeedName } from './seeds'
 // shows features production still hides. Each e2e suite names its own seed in e2e/suites.ts.
 // Everything runs in one transaction, through the real actions.
 
-/** Known on purpose: previews are tailnet-only and hold no real data. Never used in production. */
+/**
+ * Known on purpose: previews are tailnet-only and the public demo is for anyone; neither holds
+ * real data, and the demo locks password changes (./lock.ts). Never used in production.
+ */
 export const DEMO_PASSWORD = 'demo1234'
 
 export const DEMO_USERS: readonly NewUser[] = [
@@ -45,10 +50,13 @@ export function seedDemo(
   env: NodeJS.ProcessEnv = process.env,
   now: Date = new Date(),
 ): DemoOutcome {
-  if (env.TASKMASTER_ENV !== 'preview') return { kind: 'skipped', reason: 'not_preview' }
-  // A real deploy sets ADMIN_PASSWORD. If the preview flag ever leaks into one, the known
-  // demo password must still never create an account.
+  const flag = env.TASKMASTER_ENV
+  if (flag !== 'preview' && flag !== 'demo') return { kind: 'skipped', reason: 'not_preview' }
+  // A real deploy sets ADMIN_PASSWORD. If the preview or demo flag ever leaks into one, the
+  // known demo password must still never create an account. Checked before demoDataAllowed
+  // (which also says no then), so the boot log names the reason.
   if ((env.ADMIN_PASSWORD ?? '') !== '') return { kind: 'skipped', reason: 'admin_password_set' }
+  if (!demoDataAllowed(env)) return { kind: 'skipped', reason: 'not_preview' }
   // Before the empty check, so a misspelt name fails every boot, not only the first: a suite
   // must never run on data it did not ask for.
   // An empty value (a blank CI env line) counts as unset.

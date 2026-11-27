@@ -9,6 +9,12 @@ describe('passkeyConfig (spec §11 Passkeys: RP ID from config)', () => {
     expect(passkeyConfig({ WEBAUTHN_RP_ID: '' })).toBeNull()
   })
 
+  it('is off on the demo, even with WEBAUTHN_RP_ID set by mistake', () => {
+    expect(passkeyConfig({ TASKMASTER_ENV: 'demo', WEBAUTHN_RP_ID: 'demo.example.cz' })).toBeNull()
+    // A bad value is not even checked: the demo never uses it.
+    expect(passkeyConfig({ TASKMASTER_ENV: 'demo', WEBAUTHN_RP_ID: 'Bad Host' })).toBeNull()
+  })
+
   it('defaults the origin to https://<rp id>', () => {
     expect(passkeyConfig({ WEBAUTHN_RP_ID: RP })).toEqual({
       rpId: RP,
