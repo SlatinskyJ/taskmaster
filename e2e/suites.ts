@@ -93,6 +93,10 @@ export const SUITES: readonly Suite[] = [
   // The plan table on Týden (#258). Its own server: it reserves, releases and adds an extra copy
   // for good.
   { name: 'week-plan', spec: 'week-plan.spec.ts', seed: 'plantable' },
+  // The week plan at Schůzka (#259). Its own server: it settles a week and reserves for good.
+  // Its seed's running week is on its last day, so settling works on any weekday with the
+  // last-day rule on, and a new week starts.
+  { name: 'meeting-plan', spec: 'meeting-plan.spec.ts', seed: 'planmeeting' },
   // The multi-user viewer (#265): logs frames in and out and proposes tasks, so its own server.
   // `week`: the boys' Týden tab is on.
   { name: 'multi', spec: 'multi.spec.ts', seed: 'week' },

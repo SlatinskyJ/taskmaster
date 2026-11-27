@@ -33,6 +33,7 @@ describe('meetingNow and settleNow, switch on (as migrated)', () => {
     expect(meetingNow(f.db, WED)).toStrictEqual({
       period: null,
       runningCutoffAt: CUTOFF.toISOString(),
+      settledToday: false,
     })
   })
 

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type * as ButtonModule from '~/components/ui/button'
 import type { Meeting } from '~/server/settlement/functions'
 import type { TaskView } from '~/server/tasks/functions'
-import { pendingWeek, period, settledOk, task, week } from './fixtures'
+import { noWeek, pendingWeek, period, settledOk, task, week } from './fixtures'
 import { cs } from '~/lib/strings'
 import { MeetingBody } from './MeetingScreen'
 import { reduce, START } from './meetingFlow'
@@ -50,6 +50,7 @@ function render(
   ui: MeetingUi = START,
   plan: TaskView[] = [],
   otherLevels = false,
+  weekPlan?: ReactNode,
 ) {
   pressed.clear()
   const dispatch = vi.fn<(e: MeetingEvent) => void>()
@@ -62,6 +63,7 @@ function render(
       dispatch={dispatch}
       onConfirm={onConfirm}
       otherLevels={otherLevels}
+      weekPlan={weekPlan}
     />,
   )
   return { html, dispatch, onConfirm }
@@ -179,7 +181,7 @@ describe('step 3: Plánovat', () => {
       result: { ...settledOk, next: null },
       names,
     })
-    const { html } = render({ period: null, runningCutoffAt: null }, late)
+    const { html } = render(noWeek(), late)
     expect(html).toContain('Tento týden běží dál')
     expect(html).not.toContain('Nový týden')
     expect(html).toContain('Začínají s')
@@ -187,7 +189,7 @@ describe('step 3: Plánovat', () => {
   })
 
   it('nothing to settle shows step 3 only', () => {
-    const { html } = render({ period: null, runningCutoffAt: null })
+    const { html } = render(noWeek())
     expect(html).toContain('Teď není co vyúčtovat')
     expect(html).not.toContain('data-step="done"')
     expect(html).not.toContain('Vyúčtováno')
@@ -196,10 +198,9 @@ describe('step 3: Plánovat', () => {
   })
 
   it('mid-week with the last-day rule: says the week runs, not "nothing to settle" (#211)', () => {
-    const { html } = render({
-      period: null,
-      runningCutoffAt: new Date(Date.UTC(2026, 10, 29, 22, 59)).toISOString(),
-    })
+    const { html } = render(
+      noWeek({ runningCutoffAt: new Date(Date.UTC(2026, 10, 29, 22, 59)).toISOString() }),
+    )
     expect(html).toContain('Týden ještě běží')
     expect(html).toContain('Týden běží do neděle 29. 11. 23:59.')
     expect(html).toContain('Vyúčtovat půjde až v poslední den týdne.')
@@ -209,10 +210,9 @@ describe('step 3: Plánovat', () => {
   })
 
   it('a week ending on Saturday reads in Czech too (#211)', () => {
-    const { html } = render({
-      period: null,
-      runningCutoffAt: new Date(Date.UTC(2026, 10, 28, 22, 59)).toISOString(),
-    })
+    const { html } = render(
+      noWeek({ runningCutoffAt: new Date(Date.UTC(2026, 10, 28, 22, 59)).toISOString() }),
+    )
     expect(html).toContain('Týden běží do soboty 28. 11. 23:59.')
   })
 
@@ -242,5 +242,26 @@ describe('step 3: Plánovat', () => {
   it('with no tasks shows the empty state', () => {
     const { html } = render(week(), done)
     expect(html).toContain('Na tento týden zatím nic. Přidej úkol.')
+  })
+})
+
+describe('the week plan slot (#259)', () => {
+  const slot = <div data-slot="week-plan-slot">PLAN</div>
+  it('step 3 renders the weekPlan slot after the open tasks and before Ukončit schůzku', () => {
+    for (const plan of [[], [task({ id: 21, title: 'Umýt auto', status: 'open' })]]) {
+      const { html } = render(week(), done, plan, false, slot)
+      const at = html.indexOf('data-slot="week-plan-slot"')
+      expect(at).toBeGreaterThan(-1)
+      expect(at).toBeGreaterThan(html.indexOf(cs.meeting.planTasks))
+      const tasks = plan.length > 0 ? html.indexOf('Umýt auto') : html.indexOf(cs.meeting.planEmpty)
+      expect(at).toBeGreaterThan(tasks)
+      expect(at).toBeLessThan(html.indexOf(cs.meeting.newTask))
+      expect(at).toBeLessThan(html.indexOf(cs.meeting.end))
+    }
+  })
+
+  it('steps 1 and 2 never render the slot', () => {
+    expect(render(pendingWeek(), START, [], false, slot).html).not.toContain('week-plan-slot')
+    expect(render(week(), step2, [], false, slot).html).not.toContain('week-plan-slot')
   })
 })

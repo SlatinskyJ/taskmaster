@@ -1,5 +1,6 @@
 import { Link, useRouter } from '@tanstack/react-router'
 import { useMemo, useReducer } from 'react'
+import type { ReactNode } from 'react'
 import { toast } from 'sonner'
 import { EmptyState } from '~/components/EmptyState'
 import { PointsBar } from '~/components/points/PointsBar'
@@ -10,6 +11,7 @@ import { ToApprove } from '~/components/tasks/ToApprove'
 import { Button, buttonVariants } from '~/components/ui/button'
 import { cs } from '~/lib/strings'
 import { cn } from '~/lib/utils'
+import { getWeekPlanFn, type PlanAnswer } from '~/server/instances/functions'
 import { settlePeriodFn, type Meeting, type MeetingTaker } from '~/server/settlement/functions'
 import type { TaskView } from '~/server/tasks/functions'
 import {
@@ -25,6 +27,14 @@ import {
 } from './meetingFlow'
 import { dayTime, levelBadgeClass, levelLabel, weekLabel } from '~/components/period/periodView'
 import { shortfall, untilLabel } from './meetingView'
+import { MeetingWeekPlanView } from './MeetingWeekPlan'
+import {
+  createRefresh,
+  meetingPlanView,
+  REFRESH_START,
+  refreshReduce,
+  refreshTap,
+} from './planRefresh'
 
 type Week = Extract<Meeting, { period: object }>
 
@@ -37,14 +47,33 @@ export function MeetingScreen({
   meeting,
   plan,
   otherLevels = false,
+  weekPlan = null,
+  viewerId,
+  frame = (body) => body,
 }: {
   meeting: Meeting
   plan: readonly TaskView[]
   /** The `periodProposals` switch: step 3 links to Příští týden ("Jiné hranice", #43). */
   otherLevels?: boolean
+  /** The loader's week plan (#259): set only with `weekPlan` on, on the settlement's day. */
+  weekPlan?: PlanAnswer | null
+  viewerId: number
+  /** Wraps the body in the screen; `wide` exactly while the plan block shows. */
+  frame?: (body: ReactNode, wide: boolean) => ReactNode
 }) {
   const router = useRouter()
   const [ui, dispatch] = useReducer(reduce, START)
+  const [refreshState, refreshDispatch] = useReducer(refreshReduce, REFRESH_START)
+  const refresh = useMemo(
+    () => createRefresh(() => getWeekPlanFn().then((r) => r.data), refreshDispatch),
+    [],
+  )
+  const { view, shown } = meetingPlanView(
+    stepOf(meeting, ui),
+    meeting.settledToday,
+    refreshState,
+    weekPlan,
+  )
   const confirm = useMemo(
     () =>
       createConfirm(
@@ -59,7 +88,8 @@ export function MeetingScreen({
       ),
     [router],
   )
-  return (
+  const tap = weekPlan === null ? null : refreshTap(refresh, weekPlan)
+  return frame(
     <MeetingBody
       meeting={meeting}
       plan={plan}
@@ -67,7 +97,13 @@ export function MeetingScreen({
       dispatch={dispatch}
       onConfirm={() => void confirm(meeting)}
       otherLevels={otherLevels}
-    />
+      weekPlan={
+        shown && view && tap ? (
+          <MeetingWeekPlanView {...view} viewerId={viewerId} onRefresh={() => void tap()} />
+        ) : undefined
+      }
+    />,
+    shown,
   )
 }
 
@@ -79,6 +115,7 @@ export function MeetingBody({
   dispatch,
   onConfirm,
   otherLevels = false,
+  weekPlan,
 }: {
   meeting: Meeting
   plan: readonly TaskView[]
@@ -86,6 +123,8 @@ export function MeetingBody({
   dispatch: (event: MeetingEvent) => void
   onConfirm: () => void
   otherLevels?: boolean
+  /** Step 3's week plan block (#259), drawn after the open tasks; MeetingScreen decides it. */
+  weekPlan?: ReactNode
 }) {
   const step = stepOf(meeting, ui)
   return (
@@ -119,6 +158,7 @@ export function MeetingBody({
           nothing={!ui.result}
           runningCutoffAt={meeting.period ? null : meeting.runningCutoffAt}
           otherLevels={otherLevels}
+          weekPlan={weekPlan}
         />
       )}
     </div>
@@ -296,6 +336,7 @@ function StepPlan({
   nothing,
   runningCutoffAt,
   otherLevels,
+  weekPlan,
 }: {
   ui: MeetingUi
   plan: readonly TaskView[]
@@ -303,6 +344,7 @@ function StepPlan({
   /** Set before the running week's last day (#211): the card says when the week ends. */
   runningCutoffAt: string | null
   otherLevels: boolean
+  weekPlan: ReactNode
 }) {
   const result = ui.result
   const starting = startingTotals(ui)
@@ -385,6 +427,7 @@ function StepPlan({
           ))}
         </ul>
       )}
+      {weekPlan}
       <div className="grid gap-2">
         {/* As M3Plan: adding a task is the side action, ending the meeting the main one. */}
         <Link to="/ukoly/novy" className={buttonVariants({ variant: 'ghost', size: 'lg' })}>

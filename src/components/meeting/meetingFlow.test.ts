@@ -1,7 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SettleResult } from '~/server/settlement/functions'
-import { pendingWeek, settledOk, week } from './fixtures'
-import { afterConfirm, createConfirm, reduce, START, startingTotals, stepOf } from './meetingFlow'
+import { planFixture } from '~/components/week/fixtures'
+import { noWeek, pendingWeek, settledOk, week } from './fixtures'
+import {
+  afterConfirm,
+  createConfirm,
+  planShown,
+  reduce,
+  START,
+  startingTotals,
+  stepOf,
+} from './meetingFlow'
 import type { MeetingEvent, MeetingUi } from './meetingFlow'
 
 const names = [
@@ -23,7 +32,7 @@ describe('stepOf', () => {
   })
 
   it('nothing to settle shows step 3 only', () => {
-    expect(stepOf({ period: null, runningCutoffAt: null }, START)).toBe(3)
+    expect(stepOf(noWeek(), START)).toBe(3)
   })
 
   it('after a confirm the screen shows step 3 and never step 2', () => {
@@ -32,7 +41,7 @@ describe('stepOf', () => {
     // The reloaded meeting already offers the new week for step 2 (§5.8); the screen stays.
     expect(stepOf(week(), done)).toBe(3)
     expect(stepOf(pendingWeek(), done)).toBe(3)
-    expect(stepOf({ period: null, runningCutoffAt: null }, done)).toBe(3)
+    expect(stepOf(noWeek(), done)).toBe(3)
   })
 })
 
@@ -204,7 +213,7 @@ describe('createConfirm', () => {
 
   it('nothing to settle sends nothing', async () => {
     const send = vi.fn()
-    await createConfirm(send, vi.fn(), vi.fn())({ period: null, runningCutoffAt: null })
+    await createConfirm(send, vi.fn(), vi.fn())(noWeek())
     expect(send).not.toHaveBeenCalled()
   })
 })
@@ -229,5 +238,18 @@ describe('startingTotals', () => {
 
   it('nothing before a confirm', () => {
     expect(startingTotals(START)).toEqual([])
+  })
+})
+
+describe('planShown (#259)', () => {
+  const a = planFixture()
+  it('only at step 3, on the settlement day, with a plan', () => {
+    expect(planShown(3, true, a)).toBe(true)
+    expect(planShown(1, true, a)).toBe(false)
+    expect(planShown(2, true, a)).toBe(false)
+    // Jakub 2026-11-26: not on a day without a settlement.
+    expect(planShown(3, false, a)).toBe(false)
+    expect(planShown(3, true, null)).toBe(false)
+    expect(planShown(3, true, { error: 'feature_off' })).toBe(false)
   })
 })

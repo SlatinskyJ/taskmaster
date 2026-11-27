@@ -2,14 +2,31 @@ import { describe, expect, it } from 'vitest'
 import { fail, ok } from '~/domain/result'
 import type { SettlementRow } from '~/server/db/schema'
 import type { Period } from '~/domain'
-import { settled } from './actions'
-import { meetingRead, parseSettle, viewerOf, weekRead } from './functions'
+import type { Db } from '~/server/db'
 import { eq } from 'drizzle-orm'
 import { featureFlags } from '~/server/db/schema'
-import { family } from '~/server/tasks/testing'
-import { MEETING, week } from './testing'
+import { family, must } from '~/server/tasks/testing'
+import { settled } from './actions'
+import { settlePeriod } from './meeting'
+import { doneTask, MEETING, plus, SAT, week } from './testing'
+import { meetingRead, parseSettle, viewerOf, weekRead } from './functions'
 
 // Input checks and the response shape of the meeting server functions.
+
+function example() {
+  const f = week()
+  doneTask(f, { score: 100, completedAt: plus(SAT, 3_600_000), earner: f.starsi })
+  return f
+}
+const shownOf = (db: Db, now: Date) => {
+  const m = meetingRead.read(
+    db,
+    { id: 0, username: '', displayName: '', role: 'giver' },
+    undefined,
+    now,
+  )
+  return m.period ? m.takers.map((t) => ({ takerId: t.id, total: t.total })) : []
+}
 
 const many = (n: number) => Array.from({ length: n }, (_, i) => ({ takerId: i + 1, total: 0 }))
 
@@ -105,6 +122,24 @@ describe('viewerOf', () => {
       id: 3,
       role: 'taker',
     })
+  })
+})
+
+describe('getMeetingFn (meetingRead) shape (#259)', () => {
+  it('returns exactly the old keys plus settledToday, with no settlement rows', () => {
+    const f = example()
+    const tata = { id: f.tata, username: 'tata', displayName: 'Táta', role: 'giver' as const }
+    const read = (now: Date) => meetingRead.read(f.db, tata, undefined, now)
+    expect(Object.keys(read(MEETING)).sort()).toEqual([
+      'pending',
+      'period',
+      'settledToday',
+      'takers',
+    ])
+    must(settlePeriod(f.db, f.tata, f.p1.id, shownOf(f.db, MEETING), MEETING, true))
+    const after = read(plus(MEETING, 60_000))
+    expect(Object.keys(after).sort()).toEqual(['period', 'runningCutoffAt', 'settledToday'])
+    expect(after.settledToday).toBe(true)
   })
 })
 

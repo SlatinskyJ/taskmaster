@@ -1,5 +1,6 @@
 import { settleErrorMessage } from '~/lib/settleErrors'
 import { cs } from '~/lib/strings'
+import type { PlanAnswer } from '~/server/instances/functions'
 import type { Meeting, SettleResult } from '~/server/settlement/functions'
 
 // The meeting screen's state (#44, spec §5.9), framework-free so every step change is tested.
@@ -43,6 +44,18 @@ export function stepOf(meeting: Meeting, ui: MeetingUi): MeetingStep {
   if (ui.result || !meeting.period) return 3
   if (meeting.pending.length > 0 || !ui.advanced || ui.periodId !== meeting.period.id) return 1
   return 2
+}
+
+/**
+ * Whether step 3 shows the week plan (#259): only at step 3, on the Prague day of the latest
+ * settlement (Jakub 2026-11-26), and only for a real plan (not missing, not `feature_off`).
+ */
+export function planShown(
+  step: MeetingStep,
+  settledToday: boolean,
+  weekPlan: PlanAnswer | null,
+): boolean {
+  return step === 3 && settledToday && weekPlan !== null && !('error' in weekPlan)
 }
 
 export type MeetingEvent =

@@ -555,6 +555,10 @@ export const cs = {
     planTasks: 'Úkoly na tento týden',
     planEmpty: 'Na tento týden zatím nic. Přidej úkol.',
     newTask: '+ Nový úkol',
+    /** The week plan under the open tasks on the settlement's day (#259); title `cs.plan.title`. */
+    refresh: 'Obnovit',
+    planHint: 'Kluci si dny rezervují v Týdnu na svých telefonech. Pak klepni na Obnovit.',
+    refreshFailed: 'Plán se nepodařilo načíst. Zkus to znovu.',
     end: 'Ukončit schůzku',
     nothing: 'Teď není co vyúčtovat',
     /** Before the running week's last day (#211): the week runs, settling waits for that day. */

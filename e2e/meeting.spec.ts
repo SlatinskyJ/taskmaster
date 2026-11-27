@@ -30,4 +30,7 @@ test('Táta runs the meeting: approve, settle, plan', async ({ page }) => {
   await expect(page.locator('[data-start]', { hasText: 'Starší' })).toHaveText(/^Starší\s*22$/)
   await expect(page.locator('[data-start]', { hasText: 'Mladší' })).toHaveText(/^Mladší\s*0$/)
   await expect(page.getByRole('link', { name: m.end })).toBeVisible()
+  // The `week` seed has the weekPlan switch off (#259): step 3 is as before.
+  await expect(page.getByRole('region', { name: cs.plan.title })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: m.refresh })).toHaveCount(0)
 })

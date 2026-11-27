@@ -194,7 +194,12 @@ const SCREENS: Screen[] = [
   {
     route: 'src/routes/_app/schuzka.tsx',
     roles: ['giver'],
-    reads: () => ({ getMeetingFn: run(meetingRead), listPlanTasksFn: run(planTasksRead) }),
+    // The week plan (#259) loads only on the settlement's day; counted whenever the switch is on.
+    reads: (_role, f) => ({
+      getMeetingFn: run(meetingRead),
+      listPlanTasksFn: run(planTasksRead),
+      ...(f.weekPlan ? { getWeekPlanFn: run(weekPlanRead) } : {}),
+    }),
     at: LAST_DAY,
   },
   {
