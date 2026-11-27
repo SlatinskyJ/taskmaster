@@ -1,7 +1,9 @@
 import { createServerFn } from '@tanstack/react-start'
 import { requireRole } from '~/server/auth/guards'
-import { idTopic, liveRead, serveLive } from '~/server/live'
-import type { Topic } from '~/server/live'
+import { idTopic } from '~/server/live/topics'
+import { liveRead } from '~/server/live/define'
+import { serveLive } from '~/server/live/read'
+import type { Topic } from '~/server/live/topics'
 import type { PointsOverview, TakerPoints } from './points'
 import { pointsView } from './points'
 

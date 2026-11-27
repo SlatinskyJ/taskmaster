@@ -3,37 +3,15 @@ import { sessionToken } from '~/server/auth/http'
 import type { Db } from '~/server/db'
 import { getDb } from '~/server/db'
 import { liveSubscriptionIn } from './subscription'
-import type { LiveSub } from './subscription'
-import type { Topic } from './topics'
+import type { Live, LiveRead } from './define'
+
+export { liveRead } from './define'
+export type { Live, LiveRead } from './define'
 
 // How a data function subscribes (#299, ./README.md "Subscribing"): its reads and its topics
-// are one `liveRead` definition, and its server function's handler is
+// are one `liveRead` definition (./define.ts), and its server function's handler is
 // `serveLive(def, context.user, data)`. `serveLive` reads, then signs, in one synchronous block,
 // so no change can commit between the data and `asOf` (an `await` there could miss one).
-
-type NotAsync<T> = T extends PromiseLike<unknown> ? never : T
-
-/** What a data function returns: its data and the subscription for what it read. */
-export interface Live<T> {
-  data: T
-  /** Null when the switch is off, there is no session, or the read named no topics. */
-  live: LiveSub | null
-}
-
-export interface LiveRead<A, T> {
-  /** The function's reads: synchronous, so nothing commits between them and the signing. */
-  read: (db: Db, viewer: CurrentUser, arg: A, now: Date) => NotAsync<T>
-  /**
-   * The topics of what `read` returned, for this viewer: only what its own checks let him load
-   * (a per-row topic names a row of `data`). `[]` for nothing (a null read, a switch off).
-   */
-  topics: (viewer: CurrentUser, data: T, db: Db) => readonly Topic[]
-}
-
-/** Identity, for type inference of a definition. */
-export function liveRead<A, T>(def: LiveRead<A, T>): LiveRead<A, T> {
-  return def
-}
 
 /** `serveLive`'s body, with what it reads from the request passed in. */
 export function serveLiveIn<A, T>(

@@ -34,7 +34,7 @@ to. Over-firing is accepted; a miss is not.
 
 ## Subscribing (data functions, PR 2)
 
-A data function is a `liveRead` (`read.ts`) in its module: `read` (synchronous) and `topics`
+A data function is a `liveRead` (`define.ts`) in its module: `read` (synchronous) and `topics`
 (what the viewer was shown). Its server function's handler is `serveLive(def, context.user,
 data)`, which reads, then signs the topics in the same synchronous block, and returns
 `{ data, live }`: `live` is a token signed with the request's session token (HMAC-SHA256) and
@@ -47,6 +47,60 @@ topics from one function throws outside production; in production it is logged
 
 A loader takes the data with `liveSubs()` (`src/lib/liveSubs.ts`) and returns the screen's
 subscriptions as `live: LiveSub[]`, for the client's stream.
+
+A `functions.ts` imports `liveRead` from `define.ts` and `idTopic` from `topics.ts` (no
+server-only imports: its definitions stay in the client bundle, only handlers are stripped) and
+`serveLive` from `read.ts`, used only inside handlers. Never the `~/server/live` index, which
+pulls in the hub.
+
+### Topics per data function
+
+Who holds what (`R` = one per row of the returned data; `-` = the role does not call it).
+`src/server/live/screens.test.ts` keeps it honest: every loader's calls have a row there, each
+screen's union stays at or under `TOPIC_LIMIT` on the demo data (today at most 8, Týden for a
+parent), and per screen and role the changes it must show reach it and a brother's facts do not.
+
+| Data function                                                                      | giver                                                                                      | taker                                                                | admin                     |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- | ------------------------- |
+| `listPendingApprovalsFn`, `listScoreChangesWaitingFn`                              | `tasks`                                                                                    | `tasks`                                                              | -                         |
+| `listTasksFn`, `listPlanTasksFn`, `listBidsToAnswerFn`, `listPendingCompletionsFn` | `tasks`                                                                                    | -                                                                    | -                         |
+| `listBoardFn`                                                                      | -                                                                                          | `tasks`                                                              | -                         |
+| `getTaskDetailFn` (null → none)                                                    | `task:<id>`, + `template:<templateId>` for a copy when the chore page loads for the viewer | same                                                                 | same                      |
+| `listTemplatesFn`                                                                  | `templates`, `templates:proposed`                                                          | `templates`                                                          | -                         |
+| `listPendingTemplatePriceChangesFn`                                                | `templates`, + `templates:proposed` with `choreBidding`                                    | `templates`                                                          | -                         |
+| `listPendingTemplateApprovalsFn`                                                   | `templates:proposed`                                                                       | `templates:proposed`                                                 | -                         |
+| `getTemplateDetailFn` (null → none)                                                | `template:<id>`                                                                            | same                                                                 | same                      |
+| `listLoggableTemplatesFn`                                                          | -                                                                                          | `templates`, `tasks`                                                 | -                         |
+| `listDescriptionChangesWaitingFn` (off → none)                                     | -                                                                                          | `tasks`, `templates`                                                 | -                         |
+| `getProposalsFn` (off → none)                                                      | `proposals`                                                                                | `proposals`                                                          | -                         |
+| `getPointsFn`                                                                      | `people`, `points:<id>` R                                                                  | `points:<self>`                                                      | -                         |
+| `getWeekFn`                                                                        | `week`, `people`, `points:<id>` R, + `disputes:about:<id>` R with `disputes`               | `week`, `points:<self>`, + `disputes:about:<self>` with `disputes`   | -                         |
+| `getDisputeListFn` (off → none)                                                    | `disputes`                                                                                 | `disputes:by:<self>`, `disputes:about:<self>`, `disputes:about:none` | -                         |
+| `getMeetingFn`                                                                     | `week`, `people`, `points:<id>` R (only with a week to settle)                             | -                                                                    | -                         |
+| `listUsersFn`                                                                      | -                                                                                          | -                                                                    | `people`                  |
+| `getPeriodDefaultsFn`                                                              | -                                                                                          | -                                                                    | `settings`                |
+| `getAdminDisputesFn` (off → none)                                                  | -                                                                                          | -                                                                    | `disputes`                |
+| `getFixableFn` (off → none)                                                        | -                                                                                          | -                                                                    | `people`, `points:<id>` R |
+| `getItemMarkFn`                                                                    | none: a mark's changes fire its page topic (`mapping.ts`), which the page holds            |                                                                      |                           |
+
+Out of scope (Jakub 2026-11-26): launch switches, passkeys and logins. Profil
+(`getPasskeysEnabledFn`, `listMyPasskeysFn`), Správa's `listPasskeyCountsFn`, Klíč and Nový
+issue no topics; a screen with no topics opens no stream.
+
+**Why a taker holds `templates:proposed`.** His Čeká na tebe shows every proposed chore waiting
+for the takers (`templateWaitsFor`); usually that is every proposed chore, since the creating
+giver's yes is written at creation and one taker's yes agrees it. A chore can leave the boys'
+lists while still proposed: approvals count only active parties, so once its giver is
+deactivated or made a taker, a boy's yes leaves it proposed, waiting for a giver. Every entry
+that can then be written on it puts it back on their lists (a description change, a counter, a
+turn-down start a new offer round), agrees it (a giver's yes), happens under `choreBidding`,
+where a boy loads every proposed chore's page (bids), or is the other boy's yes from a screen
+loaded before his brother's (both boys have then said yes to it, so both saw it).
+`template.updated` and `template.cancelled` are never written on a proposed chore. A people
+change can bring it back with no chore entry, so `user.created` and `user.updated` also fire
+`templates:proposed` while any template is proposed (`mapping.ts`). The tests: the last two
+blocks of `screens.test.ts`. (The design's "a proposed template is hidden from the boys" is
+looser than the code; this follows the code.)
 
 ## The stream
 

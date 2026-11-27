@@ -7,8 +7,10 @@ import { getDb } from '~/server/db'
 import type { TemplateRow, TemplateStatus } from '~/server/db/schema'
 import { STALE, seenOf, unseen } from '~/server/descriptions/seen'
 import { getFlags } from '~/server/features'
-import { idTopic, liveRead, serveLive } from '~/server/live'
-import type { Topic } from '~/server/live'
+import { idTopic } from '~/server/live/topics'
+import { liveRead } from '~/server/live/define'
+import { serveLive } from '~/server/live/read'
+import type { Topic } from '~/server/live/topics'
 import { hasDescription } from '~/server/descriptions/parse'
 import {
   parseNewTemplate,

@@ -5,7 +5,8 @@ import { requireRole } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
 import type { Db } from '~/server/db'
 import { getFlags } from '~/server/features'
-import { liveRead, serveLive } from '~/server/live'
+import { liveRead } from '~/server/live/define'
+import { serveLive } from '~/server/live/read'
 import { int, parseDefaults, record } from './validators'
 import {
   approveProposal,

@@ -40,8 +40,10 @@ import type { Seen as SeenText } from '~/server/descriptions/seen'
 import { getFlags } from '~/server/features'
 import { hasDescription, optionalDescription, seenDescriptionOf } from '~/server/descriptions/parse'
 import type { Db } from '~/server/db'
-import { idTopic, liveRead, serveLive } from '~/server/live'
-import type { Topic } from '~/server/live'
+import { idTopic } from '~/server/live/topics'
+import { liveRead } from '~/server/live/define'
+import { serveLive } from '~/server/live/read'
+import type { Topic } from '~/server/live/topics'
 import { templateDetailHandler } from '~/server/templates/functions'
 import {
   approveTaskOffer,

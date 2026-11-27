@@ -8,7 +8,7 @@ import { getFlags } from '~/server/features'
 import { liveHub } from './hub'
 import { openStream } from './stream'
 
-export type { Live } from './read'
+export type { Live } from './define'
 export type { LiveSub } from './subscription'
 
 // The stream route's body (src/routes/api/live.ts, #299): reads the request and hands it to

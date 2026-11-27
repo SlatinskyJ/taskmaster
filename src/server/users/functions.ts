@@ -2,7 +2,8 @@ import { createServerFn } from '@tanstack/react-start'
 import { requireRole, requireUser } from '~/server/auth/guards'
 import { clientIp, sessionToken } from '~/server/auth/http'
 import { getDb } from '~/server/db'
-import { liveRead, serveLive } from '~/server/live'
+import { liveRead } from '~/server/live/define'
+import { serveLive } from '~/server/live/read'
 import {
   changePasswordAction,
   createUserAction,
