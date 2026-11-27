@@ -42,6 +42,21 @@ describe('PersonForm (Správa, #134)', () => {
     }
   })
 
+  it('Return key hints: next on name and login, done on the password (#286)', () => {
+    const add = renderToStaticMarkup(<PersonForm mode="add" onSubmit={noop} />)
+    const hint = (html: string, name: string) =>
+      /enterkeyhint="(\w+)"/i.exec(
+        new RegExp(`<input[^>]*name="${name}"[^>]*>`).exec(html)?.[0] ?? '',
+      )?.[1]
+    expect(hint(add, 'displayName')).toBe('next')
+    expect(hint(add, 'username')).toBe('next')
+    expect(hint(add, 'password')).toBe('done')
+    const edit = renderToStaticMarkup(
+      <PersonForm mode="edit" person={TATA} onSubmit={noop} onReset={() => undefined} />,
+    )
+    expect(hint(edit, 'displayName')).toBe('done')
+  })
+
   it('fields and Uložit share one scroll body, Uložit after the last field (#159)', () => {
     const html = renderToStaticMarkup(<PersonForm mode="add" onSubmit={noop} />)
     expect(html).not.toContain('data-slot="drawer-footer"')

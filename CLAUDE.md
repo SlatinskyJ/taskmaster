@@ -88,6 +88,7 @@ Protected areas:
 
 - No code for an issue before the judges approved its plan (a small PR, PR flow above, has no plan). No plan file in a PR that is ready for review, and none on `main`.
 - Never skip, delete or weaken a test to get green.
+- A test your PR adds or changes that fails once on CI is a bug, not a flake: find the cause and fix it. Never re-run CI to get it green.
 - Never fix the spec inside a PR. If the spec is wrong or unclear, stop and ask Jakub.
 - Problems that were already there before your PR → a `follow-up` issue, not a fix in your PR.
 - Every state change writes its audit entry in the same transaction.
