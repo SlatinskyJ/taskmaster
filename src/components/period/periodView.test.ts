@@ -31,6 +31,12 @@ describe('weekLabel', () => {
     // Across a month end, and one minute later the cutoff day counts again.
     expect(weekLabel(at(11, 24), at(12, 1))).toBe('24. 11. – 30. 11.')
     expect(weekLabel(at(11, 24), at(12, 1, 0, 1))).toBe('24. 11. – 1. 12.')
+    // A few seconds past 00:00 is already the cutoff day.
+    expect(weekLabel(at(11, 24), '2026-11-30T23:00:05.000Z')).toBe('24. 11. – 1. 12.')
+  })
+
+  it('a 00:00 cutoff the day after the March DST switch (a 23-hour day)', () => {
+    expect(weekLabel(at(3, 23), at(3, 30))).toBe('23. 3. – 29. 3.')
   })
 
   it('the October DST week', () => {
