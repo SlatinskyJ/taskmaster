@@ -112,6 +112,9 @@ export const SUITES: readonly Suite[] = [
   { name: 'keyboard-live', spec: 'keyboard-live.spec.ts', seed: 'demo' },
   // Profil → Aplikace (#302): a fake install event. Read-only: changes no data.
   { name: 'install', spec: 'install.spec.ts', seed: 'family' },
+  // Profil → Vzhled: theme-color follows the chosen theme (#124). Read-only: the choice lives
+  // in the browser.
+  { name: 'theme', spec: 'theme.spec.ts', seed: 'family' },
   // Launch switches in Správa (#296). Its own server: it flips switches for good.
   { name: 'switches', spec: 'switches.spec.ts', seed: 'launch' },
 ]
