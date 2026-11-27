@@ -59,6 +59,7 @@ Strictly one at a time: start the next PR only when this one is merged or stoppe
 6. **Wait** for the merge with your harness's event mechanism (a PR activity subscription, or a background check every few minutes). Never a sleep loop that holds the turn. If checks are green but it doesn't merge because `main` moved meanwhile, go back to step 2.
 7. **CI red after the update:** read the failed job log.
    - A failure in a test file that neither the PR nor `main` changed since the PR's last green run (flaky timeout): re-run the failed jobs once; that is not a fix attempt. Green → continue, and open a `follow-up` issue for the flaky test. Red again → stop the PR.
+   - A failure in a test file the PR adds or changes is never flaky, even if a re-run might pass: don't re-run it, stop the PR (section 4). Its new test fails on some runs, so it would also fail on `main` after the merge (#318 → red `main`, 2026-11-27).
    - Otherwise fix only if section 3 allows it, else stop the PR (section 4). Two failed fix attempts on one PR → stop it.
 8. When it is merged, remove `merge-me` from it, then go to the next PR in the queue.
 
@@ -100,6 +101,7 @@ One message in the project thread when the queue is empty, nothing in between. E
 | Rebasing / `gh stack rebase` / force-pushing a labelled branch | Merge `main` in |
 | Merging an approved but unlabelled PR his message didn't name | Out; report it |
 | Judge round for a regenerated route tree or a keep-both README | Not needed |
+| Re-running a red test that the PR itself adds or changes | Stop the PR; a test that fails on some runs is a bug |
 | Polling in a sleep loop | Auto-merge + event or background check |
 | Messaging Jakub after each PR | One report at the end |
 | Leaving `merge-me` on a merged, stopped or out PR | Remove it; a label means "waiting to land" |
