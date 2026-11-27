@@ -12,18 +12,23 @@ async function signedInAsTata(page: Page) {
   await expect(page.getByRole('heading', { name: hello('Táta') })).toBeVisible()
 }
 
-/** Adds the viewer's kind of frame to the page, nobody signed in yet. */
-async function addFrame(page: Page) {
-  await page.evaluate(() => {
+/** Adds the viewer's kind of frame to the page at `src`, nobody signed in yet. */
+async function addFrame(page: Page, src = '/login?tmFrame=-') {
+  await page.evaluate((at) => {
     const frame = document.createElement('iframe')
     frame.id = 'viewer'
     frame.name = 'tm-frame:'
-    frame.src = '/login?tmFrame=-'
+    frame.src = at
     frame.style.width = '400px'
     frame.style.height = '700px'
     document.body.prepend(frame)
-  })
+  }, src)
   return page.frameLocator('#viewer')
+}
+
+/** Waits until the service worker controls the page, so it sees the page's requests. */
+async function workerInControl(page: Page) {
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null)
 }
 
 async function frameLogin(page: Page, username = 'starsi', heading = hello('Starší')) {
@@ -172,31 +177,40 @@ test('a logged-in frame redirected from /login keeps its token', async ({ page }
   expect(loads()).toBe(1)
 })
 
-test.describe('without the service worker', () => {
-  // The service worker re-fetches a page load with Sec-Fetch-Dest: empty, so the server can't
-  // tell it is a frame's and reads the page's cookie. Without it, a frame's load that lost its
-  // token is a frame with no token (the login screen).
-  test.use({ serviceWorkers: 'block' })
+test('with the service worker in control, a frame opened without tmFrame shows login, never the page’s user (#274)', async ({
+  page,
+}) => {
+  await signedInAsTata(page)
+  // The worker must control the page, or its fetch handler never sees the frame's load.
+  await workerInControl(page)
+  const frame = await addFrame(page, '/login')
+  await expect(frame.getByLabel(cs.login.username)).toBeVisible()
+  // Read as the page's user, /login would have sent the frame on to Táta's Domů.
+  expect(new URL((await frameHref(page)) ?? '').pathname).toBe('/login')
+  await expect(frame.getByRole('heading', { name: hello('Táta') })).toHaveCount(0)
+})
 
-  test('a redirect that keeps dropping tmFrame cannot reload-loop the frame', async ({ page }) => {
-    await signedInAsTata(page)
-    await frameLogin(page)
-    // Every token-carrying page load of the frame is answered with a 307 to the same address
-    // without the token: a redirect the server middleware doesn't see.
-    await page.route(/[?&]tmFrame=/, async (route) => {
-      const request = route.request()
-      if (!request.isNavigationRequest() || !request.frame().name().startsWith('tm-frame:')) {
-        return route.fallback()
-      }
-      const url = new URL(request.url())
-      url.searchParams.delete('tmFrame')
-      await route.fulfill({ status: 307, headers: { location: url.pathname + url.search } })
-    })
-    const loads = countFrameLoads(page)
-    await openInFrame(page, '/')
-    await page.waitForTimeout(5000)
-    expect(loads()).toBeLessThanOrEqual(3)
-    const frame = page.frameLocator('#viewer')
-    await expect(frame.getByLabel(cs.login.username)).toBeVisible()
+// The service worker leaves a frame's page loads to the browser (#274), so a load that lost
+// its token still says Sec-Fetch-Dest: iframe: a frame with no token (the login screen).
+test('a redirect that keeps dropping tmFrame cannot reload-loop the frame', async ({ page }) => {
+  await signedInAsTata(page)
+  await workerInControl(page)
+  await frameLogin(page)
+  // Every token-carrying page load of the frame is answered with a 307 to the same address
+  // without the token: a redirect the server middleware doesn't see.
+  await page.route(/[?&]tmFrame=/, async (route) => {
+    const request = route.request()
+    if (!request.isNavigationRequest() || !request.frame().name().startsWith('tm-frame:')) {
+      return route.fallback()
+    }
+    const url = new URL(request.url())
+    url.searchParams.delete('tmFrame')
+    await route.fulfill({ status: 307, headers: { location: url.pathname + url.search } })
   })
+  const loads = countFrameLoads(page)
+  await openInFrame(page, '/')
+  await page.waitForTimeout(5000)
+  expect(loads()).toBeLessThanOrEqual(3)
+  const frame = page.frameLocator('#viewer')
+  await expect(frame.getByLabel(cs.login.username)).toBeVisible()
 })
