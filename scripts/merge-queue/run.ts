@@ -190,9 +190,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const testAlert = process.env.HANDBACK_TEST_ALERT === 'true'
   const alert = await alertHandback(fetch, process.env, handedOver, testAlert)
   if (alert.result === 'sent')
-    console.log(
-      `merge-queue: hand-over alert sent${testAlert ? ' (test)' : ''}${alert.bare ? ' without text (text refused)' : ''}`,
-    )
+    console.log(`merge-queue: hand-over alert sent${testAlert ? ' (test)' : ''}`)
   else if (alert.result === 'failed')
     console.log(`::warning::merge-queue: hand-over alert failed (${alert.detail})`)
   else if (alert.result === 'bad-url')

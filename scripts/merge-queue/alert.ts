@@ -10,10 +10,7 @@ const FIRE_URL_RE =
 export const FIRE_TIMEOUT_MS = 15_000
 
 export type AlertResult =
-  | { result: 'skipped' | 'bad-url' }
-  /** bare: sent without the text, after the fire with text was refused (403). */
-  | { result: 'sent'; bare: boolean }
-  | { result: 'failed'; detail: string }
+  { result: 'sent' | 'skipped' | 'bad-url' } | { result: 'failed'; detail: string }
 
 export function alertText(repo: string, prs: number[], runUrl: string): string {
   const links = prs.map((n) => `https://github.com/${repo}/pull/${n}`).join(' ')
@@ -39,8 +36,8 @@ export async function alertHandback(
   if (!FIRE_URL_RE.test(url)) return { result: 'bad-url' }
   const repo = env.GITHUB_REPOSITORY ?? 'SlatinskyJ/taskmaster'
   const runUrl = `${env.GITHUB_SERVER_URL ?? 'https://github.com'}/${repo}/actions/runs/${env.GITHUB_RUN_ID ?? '?'}`
-  const fire = (body: object) =>
-    fetchFn(url, {
+  try {
+    const res = await fetchFn(url, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -48,21 +45,13 @@ export async function alertHandback(
         'anthropic-version': '2023-06-01',
         'content-type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        text: prs.length === 0 ? testText(runUrl) : alertText(repo, prs, runUrl),
+      }),
       // A hung endpoint must not hold the queue job until its 5-minute limit.
       signal: AbortSignal.timeout(FIRE_TIMEOUT_MS),
     })
-  try {
-    const text = prs.length === 0 ? testText(runUrl) : alertText(repo, prs, runUrl)
-    const res = await fire({ text })
-    if (res.ok) return { result: 'sent', bare: false }
-    // A task created inside a Claude project refuses a fire that carries text (403), but takes a
-    // bare one. The relay then says only that a hand-back happened; the PR comments say which.
-    if (res.status === 403) {
-      const bare = await fire({})
-      if (bare.ok) return { result: 'sent', bare: true }
-      return { result: 'failed', detail: `HTTP ${bare.status}${await errorType(bare)} (bare)` }
-    }
+    if (res.ok) return { result: 'sent' }
     return { result: 'failed', detail: `HTTP ${res.status}${await errorType(res)}` }
   } catch (e) {
     // Only the error's name: a message could quote the header value, which holds the token.
