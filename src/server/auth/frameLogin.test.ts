@@ -4,6 +4,8 @@ import type { Db } from '~/server/db'
 import { auditLog } from '~/server/db/schema'
 import { seedDemo } from '~/server/demo'
 import { frameLogin } from './frameLogin'
+import { login } from './login'
+import { MAX_FAILURES_PER_USER } from './rateLimit'
 import { resolveSession } from './sessions'
 
 const PROD = { NODE_ENV: 'production' }
@@ -62,6 +64,22 @@ describe('frameLogin', () => {
     const result = await frameLogin(demoDb(), DEMO, 'tata', IP, T0)
     if (!result.ok) throw new Error(result.error)
     expect(result.user.username).toBe('tata')
+  })
+
+  it('passes its env to the login: on the demo a typo-locked demo name still gets in', async () => {
+    const db = demoDb()
+    for (let i = 0; i < MAX_FAILURES_PER_USER; i++)
+      await login(
+        db,
+        { username: 'tata', password: 'nope', ip: `10.0.3.${String(i)}` },
+        T0,
+        PREVIEW,
+      )
+    expect(await frameLogin(db, PREVIEW, 'tata', IP, T0)).toEqual({
+      ok: false,
+      error: 'rate_limited',
+    })
+    expect((await frameLogin(db, DEMO, 'tata', IP, T0)).ok).toBe(true)
   })
 
   it('refuses on the demo when ADMIN_PASSWORD is set', async () => {

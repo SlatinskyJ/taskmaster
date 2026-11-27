@@ -15,6 +15,13 @@ export const FAILURE_WINDOW_MS = 15 * 60 * 1000
 export const MAX_FAILURES_PER_USER = 10
 /** Several family members share one home IP. */
 export const MAX_FAILURES_PER_IP = 30
+/**
+ * The public demo only: every attempt from one IP in the window, right or wrong, counted under
+ * `demo-ip:<ip>` and never taken back. There the demo family's names skip the per-username
+ * limit (one visitor's typos must not lock them for the next), so this caps password guessing
+ * from one IP instead.
+ */
+export const DEMO_ATTEMPTS_PER_IP = 60
 
 export interface LimitKeys {
   user: string
@@ -47,24 +54,40 @@ export interface Attempt {
   ipRowId: number
 }
 
+/** The public demo's changes to the limits (login.ts sets them only there). */
+export interface ReserveOptions {
+  /** Skip the per-username limit (the demo family's names on the demo). */
+  skipUser?: boolean
+  /** Also count against DEMO_ATTEMPTS_PER_IP. */
+  demoIp?: boolean
+}
+
 /**
  * Counts this attempt as a failure up front, in one synchronous transaction, or returns null
  * when either key is already at its limit. Counting before the (async) password check means a
  * burst of parallel tries can't all slip past the check. Also prunes failures older than the
  * window. A refusal is not counted, so waiting always helps.
  */
-export function reserveAttempt(db: Db, keys: LimitKeys, now: Date): Attempt | null {
+export function reserveAttempt(
+  db: Db,
+  keys: LimitKeys,
+  now: Date,
+  opts: ReserveOptions = {},
+): Attempt | null {
+  const demoKey = `demo-${keys.ip}`
   return db.transaction((tx) => {
     tx.delete(loginFailures)
       .where(lte(loginFailures.at, windowStart(now)))
       .run()
     if (
-      failures(tx, keys.user, now) >= MAX_FAILURES_PER_USER ||
-      failures(tx, keys.ip, now) >= MAX_FAILURES_PER_IP
+      (!opts.skipUser && failures(tx, keys.user, now) >= MAX_FAILURES_PER_USER) ||
+      failures(tx, keys.ip, now) >= MAX_FAILURES_PER_IP ||
+      (opts.demoIp === true && failures(tx, demoKey, now) >= DEMO_ATTEMPTS_PER_IP)
     ) {
       return null
     }
     const at = toIsoUtc(now)
+    if (opts.demoIp) tx.insert(loginFailures).values({ key: demoKey, at }).run()
     tx.insert(loginFailures).values({ key: keys.user, at }).run()
     const ip = tx.insert(loginFailures).values({ key: keys.ip, at }).returning().get()
     return { keys, ipRowId: ip.id }
