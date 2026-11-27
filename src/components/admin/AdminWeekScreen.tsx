@@ -1,4 +1,5 @@
 import { EmptyState } from '~/components/EmptyState'
+import { PointsBar } from '~/components/points/PointsBar'
 import { dayLabel, levelBadgeClass, levelLabel, weekLabel } from '~/components/period/periodView'
 import { SectionLabel } from '~/components/shell/SectionLabel'
 import { taskLink } from '~/components/tasks/rowLink'
@@ -7,6 +8,7 @@ import { adjustmentRow, correctionLine, historyLine } from '~/components/week/we
 import { cs, formatPoints } from '~/lib/strings'
 import { cn } from '~/lib/utils'
 import type { AdminWeek } from '~/server/settlement/functions'
+import { weekSoFar } from './adminWeekView'
 
 // The admin's read-only view of one brother's week (#263), opened from a Sporné card: built
 // from Týden's pieces. The admin is not a party, so no Rozporovat and no dispute marks.
@@ -42,7 +44,15 @@ export function AdminWeekScreen({ week }: { week: AdminWeek }) {
             )}
           </>
         ) : (
-          <p className="text-meta font-bold text-state-pending-text">{t.notSettled}</p>
+          <>
+            <p className="text-meta font-bold text-state-pending-text">{t.notSettled}</p>
+            <PointsBar
+              {...weekSoFar(week)}
+              lower={week.week.levels.lower}
+              upper={week.week.levels.upper}
+              subject={`${String(week.taker.id)}/${String(week.week.periodId)}`}
+            />
+          </>
         )}
         <p className="text-meta text-muted">{cs.week.carried(formatPoints(week.carriedIn))}</p>
       </div>

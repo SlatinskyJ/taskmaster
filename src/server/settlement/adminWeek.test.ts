@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import type { Db } from '~/server/db'
-import { settlements } from '~/server/db/schema'
+import { periods, settlements } from '~/server/db/schema'
 import { correctSettlementIn } from '~/server/corrections'
 import { listPeriods, rollPeriods } from '~/server/periods'
 import { must } from '~/server/tasks/testing'
@@ -277,6 +277,24 @@ describe('getAdminWeek', () => {
   it('first week: carriedIn 0', () => {
     const f = week()
     expect(view(f, f.p1.id, f.starsi).carriedIn).toBe(0)
+  })
+
+  it("levels: each week shows its own period's levels, not the first one's", () => {
+    const { f, p1, p2 } = twoWeeks()
+    f.db.update(periods).set({ lowerLevel: 40, upperLevel: 90 }).where(eq(periods.id, p2.id)).run()
+    expect(view(f, p1.id, f.starsi).week.levels).toEqual({ lower: 50, upper: 100 })
+    expect(view(f, p2.id, f.starsi).week.levels).toEqual({ lower: 40, upper: 90 })
+  })
+
+  it('two completions at the same time: the higher task id first', () => {
+    const f = week()
+    const at = plus(f.p1.startsAt, H)
+    const a = doneTask(f, { score: 3, completedAt: at, earner: f.starsi })
+    const b = doneTask(f, { score: 4, completedAt: at, earner: f.starsi })
+    expect(view(f, f.p1.id, f.starsi).items.map((i) => i.taskId)).toEqual([
+      Math.max(a, b),
+      Math.min(a, b),
+    ])
   })
 
   it('unknown period or user → null', () => {

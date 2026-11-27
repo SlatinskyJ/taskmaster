@@ -129,6 +129,28 @@ describe('AdminWeekScreen', () => {
     for (const l of Object.values(cs.meeting.level)) expect(out).not.toContain(`>${l}<`)
     expect(out).not.toContain(cs.week.total)
     expect(out).toContain('Z minula převedeno 12 bodů')
+    // The week so far: 12 carried + 40 confirmed + 5 adjustment ✔, 3 waiting ⏳.
+    expect(out).toContain(`aria-label="57 bodů ${cs.points.confirmed}`)
+    expect(out).toContain(`3 ${cs.points.pending}`)
+  })
+
+  it('a settled week has no points bar: its history line says the total', () => {
+    expect(html(adminWeek())).not.toContain(`aria-label="57 bodů`)
+  })
+
+  it('a week with only an adjustment: the adjustment row, not the empty line', () => {
+    const out = html(adminWeek({ items: [] }))
+    expect(out).not.toContain(cs.admin.week.noItems)
+    expect(out).toContain('Pomoc s nákupem.')
+  })
+
+  it('each task row has its own state', () => {
+    const rows = html(adminWeek()).split('<li')
+    const rowOf = (name: string) => rows.find((r) => r.includes(name)) ?? ''
+    expect(rowOf(LONG)).toContain('data-state="confirmed"')
+    expect(rowOf(LONG)).not.toContain('data-state="pending"')
+    expect(rowOf('Vynést koš')).toContain('data-state="pending"')
+    expect(rowOf('Vynést koš')).not.toContain('data-state="confirmed"')
   })
 
   it('an empty week: the empty line', () => {

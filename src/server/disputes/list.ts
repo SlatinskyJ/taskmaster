@@ -42,7 +42,7 @@ export type AdminDisputeEntry = Omit<DisputeListEntry, 'mark'> & {
   page: ItemPage | null
   /**
    * The brother's week the card opens (#263): a settlement's own week, the week an adjustment
-   * was made in (§5.5); null for every other kind and for an adjustment outside every period.
+   * was made in (by its made_at, #220); null for every other kind and for an adjustment outside every period.
    */
   weekPage: WeekPage | null
 }
