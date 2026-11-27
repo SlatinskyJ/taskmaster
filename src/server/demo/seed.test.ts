@@ -224,8 +224,10 @@ describe('demo seed (#62)', () => {
     }
   })
 
-  it('every seed: the family logs in and the audit log is in time order', async () => {
-    for (const name of Object.keys(SEEDS)) {
+  // One test per seed: a single loop over every seed outgrew the 5 s budget on CI.
+  it.each(Object.keys(SEEDS))(
+    'seed %s: the family logs in and the audit log is in time order',
+    async (name) => {
       const db = createTestDb()
       seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: name }, T0)
       for (const username of ['admin', 'tata', 'starsi', 'mladsi']) {
@@ -239,8 +241,8 @@ describe('demo seed (#62)', () => {
         .all()
         .map((r) => r.at)
       expect(at, name).toEqual([...at].sort())
-    }
-  })
+    },
+  )
 
   it('all or nothing: a failing switch leaves nobody, no tasks, every switch as it was', () => {
     const db = createTestDb()
