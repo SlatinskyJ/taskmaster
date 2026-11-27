@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { marker } from '~/lib/liveSubs.testing'
 import { cs } from '~/lib/strings'
 import type { HistoryEntry, TaskView } from '~/server/tasks/functions'
+import { TaskHistory } from './TaskHistory'
 
 // The task page itself (#150), rendered statically through its route: the router hands the page
 // the test's user and task. Lives here, not in src/routes, because the router generator treats
@@ -97,6 +98,14 @@ vi.mock('~/server/descriptions/functions', () => ({
 vi.mock('~/server/disputes/functions', () => ({
   getItemMarkFn: vi.fn(() => Promise.resolve(null)),
   openDisputeFn: vi.fn(),
+}))
+
+// The sheets are shut in a static render; these stand-ins show what the page hands them (#281).
+vi.mock('~/components/descriptions/DescriptionSheet', () => ({
+  DescriptionSheet: ({ warn }: { warn: string }) => <i data-sheet-warn={warn} />,
+}))
+vi.mock('~/components/disputes/DisputeDrawer', () => ({
+  DisputeDrawer: ({ value }: { value: string }) => <i data-drawer-value={value} />,
 }))
 
 const { Route } = await import('~/routes/_app/ukol/$taskId')
@@ -276,6 +285,14 @@ describe('task page: price, cancel, history (#36)', () => {
     expect(html).not.toContain(cs.cancelTask.action)
     // Never reopened: no round dividers (#212).
     expect(html).not.toContain('role="separator"')
+  })
+
+  it('an empty history renders nothing: no Historie section, no heading (#290)', () => {
+    expect(renderToStaticMarkup(<TaskHistory entries={[]} meId={3} />)).toBe('')
+    page.history = []
+    const html = render(STARSI, reserved)
+    expect(html).not.toContain('history-label')
+    expect(html).not.toContain(`>${cs.history.title}<`)
   })
 
   it('a reopened price: Historie keeps every round, each under its own divider (#212)', () => {
@@ -742,5 +759,77 @@ describe('task page: description (#207)', () => {
       expect(html).toContain(cs.description.waitingTitle)
       expect(html).toContain(`>${cs.description.agree}<`)
     })
+  })
+})
+
+describe('task page: the proposed hints and the parent-only parts (#281)', () => {
+  const TATA = { id: 2, role: 'giver', displayName: 'Táta' } as const
+  const STARSI = { id: 3, role: 'taker', displayName: 'Starší' } as const
+  const MLADSI = { id: 4, role: 'taker', displayName: 'Mladší' } as const
+  const offer: TaskView = {
+    ...reserved,
+    status: 'proposed',
+    reservedBy: null,
+    approvedBy: ['Táta', 'Starší'],
+    waitingFor: [{ id: 4, name: 'Mladší' }],
+  }
+  const free: TaskView = { ...reserved, status: 'open', reservedBy: null }
+
+  it('a proposed task says who agreed and who it waits for, on one line each', () => {
+    expect(render(TATA, offer)).toContain(
+      `<p class="text-meta text-muted">${cs.bids.agreed}: Táta ✓, Starší ✓<br/>${cs.bids.waitingFor}: Mladší</p>`,
+    )
+    expect(render(MLADSI, offer)).toContain(
+      `${cs.bids.agreed}: Táta ✓, Starší ✓<br/>${cs.bids.waitingFor}: ${cs.bids.youAcc}</p>`,
+    )
+    // Nobody left to wait for: no break, no empty line.
+    expect(render(TATA, { ...offer, waitingFor: [] })).toContain(
+      `<p class="text-meta text-muted">${cs.bids.agreed}: Táta ✓, Starší ✓</p>`,
+    )
+  })
+
+  it('an agreed task has no Souhlasí line', () => {
+    for (const task of [reserved, free]) {
+      expect(render(TATA, task)).not.toContain(`${cs.bids.agreed}: `)
+    }
+  })
+
+  it('the header meta: who offers it, who reserved it, or nothing at all', () => {
+    expect(render(TATA, offer)).toContain(
+      `<span class="text-meta text-muted">${cs.tasks.offeredBy} Táta</span>`,
+    )
+    expect(render(MLADSI)).toContain(
+      `<span class="text-meta text-muted">${cs.work.reservedBy} Starší</span>`,
+    )
+    expect(render(TATA, free)).not.toMatch(/<span class="text-meta text-muted"><\/span>/)
+  })
+
+  it('editing the description of a proposed task warns that the agreements reset', () => {
+    page.descriptions = true
+    const proposed = render(TATA, offer)
+    const agreed = render(TATA, reserved)
+    page.descriptions = false
+    expect(proposed).toContain(`data-sheet-warn="${cs.description.resetWarn}"`)
+    expect(agreed).toContain(`data-sheet-warn="${cs.description.waitWarn}"`)
+  })
+
+  it('Rozporovat on a confirmed task names the brother who did it to a parent, not to a brother', () => {
+    const confirmed: TaskView = {
+      ...reserved,
+      status: 'confirmed',
+      completedBy: { id: 3, name: 'Starší' },
+      completedAt: '2026-11-21T09:00:00.000Z',
+      earnerId: 3,
+    }
+    page.disputes = true
+    const parent = render(TATA, confirmed)
+    const brother = render(MLADSI, confirmed)
+    const own = render(STARSI, confirmed)
+    page.disputes = false
+    const named = 'data-drawer-value="Starší · Vyluxovat celý obývák a chodbu · 8 bodů"'
+    expect(parent).toContain(named)
+    expect(brother).not.toContain(named)
+    expect(own).not.toContain(named)
+    expect(brother).toContain('data-drawer-value="Vyluxovat celý obývák a chodbu · 8 bodů"')
   })
 })
