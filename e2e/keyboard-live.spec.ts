@@ -13,7 +13,8 @@ const FREE = 'Umýt okna v obýváku i v ložnici'
 const VACUUM = 'Vyluxovat celý obývák a chodbu'
 
 const banner = (page: Page) =>
-  page.locator('[data-sonner-toast]').filter({
+  // A toast Sonner is removing stays in the DOM while it slides out: it is not the banner.
+  page.locator('[data-sonner-toast]:not([data-removed="true"])').filter({
     has: page.getByRole('button', { name: cs.live.banner.refresh, includeHidden: true }),
   })
 
@@ -160,7 +161,8 @@ test.describe('the stream', () => {
     await expect(banner(page)).toBeVisible()
     await page.getByRole('link', { name: cs.tasks.new }).click()
     await expect(page).toHaveURL(/\/ukoly\/novy/)
-    await expect(banner(page)).toHaveCount(0)
+    // Gone from the DOM, not only sliding out: by then the old stream is closed too.
+    await expect(page.locator('[data-sonner-toast]')).toHaveCount(0)
     const before = stream.urls.length
     await page.waitForTimeout(3_000)
     expect(stream.urls.length).toBe(before)
@@ -182,8 +184,10 @@ test.describe('at 360 px', () => {
     test(`${name}: wraps whole inside the screen, both buttons 44 px`, async ({ page }) => {
       expect(LONG_TITLE).toHaveLength(TASK_TITLE_MAX)
       const stream = await scriptStream(page)
-      stream.now(frame({ id: 5, text }))
       await login(page)
+      // Send the change once Domů's stream is open, so no later reload resets it mid-measure.
+      await expect.poll(() => stream.urls.length).toBeGreaterThanOrEqual(1)
+      stream.now(frame({ id: 5, text }))
       const b = banner(page)
       await expect(b).toHaveText(text)
       // Sonner slides the toast in from above: measure once it has arrived.
