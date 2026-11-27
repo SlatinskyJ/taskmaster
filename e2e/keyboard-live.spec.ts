@@ -142,12 +142,21 @@ test.describe('the stream', () => {
     page,
   }) => {
     const stream = await scriptStream(page)
-    stream.now(frame({ id: 5, text: 'Starší · jedna' }))
-    stream.now(frame({ id: 5, text: 'Starší · jedna' }))
-    stream.now(frame({ id: 6, change: 4 }) + frame({ id: 7, change: 5 }))
+    // Queue each connection's frames only once the one before has been answered: queued all at
+    // once, the tab can take all three before the in-between banner is checked (#345).
+    const nextConnection = async (body: string) => {
+      const seen = stream.urls.length
+      stream.now(body)
+      await expect.poll(() => stream.urls.length).toBeGreaterThan(seen)
+    }
     await login(page)
+    await expect.poll(() => stream.urls.length).toBeGreaterThanOrEqual(1)
+    await nextConnection(frame({ id: 5, text: 'Starší · jedna' }))
     await expect(banner(page)).toHaveText('Starší · jedna')
-    await expect.poll(() => stream.urls.length).toBeGreaterThanOrEqual(3)
+    await nextConnection(frame({ id: 5, text: 'Starší · jedna' }))
+    await expect(banner(page)).toHaveText('Starší · jedna')
+    await nextConnection(frame({ id: 6, change: 4 }) + frame({ id: 7, change: 5 }))
+    expect(stream.urls.length).toBeGreaterThanOrEqual(3)
     await expect(banner(page)).toHaveText(cs.live.banner.many(2))
   })
 

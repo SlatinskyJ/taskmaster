@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { THEME_COLORS, themeBootScript } from '../lib/themeColor'
 import { OFFLINE_TOKENS, offlinePage } from './offline'
 
 // The offline page carries its own copy of the Pastelky tokens (it loads without the app's
@@ -49,7 +50,38 @@ describe('offlinePage', () => {
     expect(html).toContain('<html lang="cs">')
     expect(html).toContain('Jsi &lt;offline&gt;')
     expect(html).toContain('a &amp; b')
-    expect(html).not.toContain('<script')
+  })
+
+  it('carries the in-app theme script in <head>, no other script, and both theme-colors', () => {
+    const html = offlinePage('Taskmaster', text)
+    expect(html.match(/<script/g)).toHaveLength(1)
+    const script = html.indexOf(`<script>${themeBootScript}</script>`)
+    expect(script).toBeGreaterThan(-1)
+    // Before first paint: the script runs in <head>, where it puts a forced theme-color first.
+    expect(script).toBeLessThan(html.indexOf('</head>'))
+    expect(html).toContain(
+      `<meta name="theme-color" content="${THEME_COLORS.light}" media="(prefers-color-scheme: light)">`,
+    )
+    expect(html).toContain(
+      `<meta name="theme-color" content="${THEME_COLORS.dark}" media="(prefers-color-scheme: dark)">`,
+    )
+  })
+
+  it('applies a forced theme by data-theme, and keeps following the phone otherwise', () => {
+    const html = offlinePage('Taskmaster', text)
+    const darkVars = Object.entries(OFFLINE_TOKENS.dark)
+      .map(([name, value]) => `--${name}:${value}`)
+      .join(';')
+    expect(html).toContain(
+      `@media (prefers-color-scheme: dark){:root:not([data-theme=light]){${darkVars}}}`,
+    )
+    expect(html).toContain(`:root[data-theme=dark]{${darkVars}}`)
+    expect(html).not.toContain(`{:root{${darkVars}`)
+  })
+
+  it('uses the same page colours as the theme-color', () => {
+    expect(OFFLINE_TOKENS.light.bg).toBe(THEME_COLORS.light.toLowerCase())
+    expect(OFFLINE_TOKENS.dark.bg).toBe(THEME_COLORS.dark.toLowerCase())
   })
 
   it('keeps the retry button at least 44 px tall (UI doc touch target)', () => {
