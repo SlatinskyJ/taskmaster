@@ -114,6 +114,14 @@ export const SUITES: readonly Suite[] = [
   { name: 'install', spec: 'install.spec.ts', seed: 'family' },
   // Launch switches in Správa (#296). Its own server: it flips switches for good.
   { name: 'switches', spec: 'switches.spec.ts', seed: 'launch' },
+  // The public demo (#327): lock, link removal and dev pages on a demo server. Its own server:
+  // it creates tasks for good. The demo needs TRUST_PROXY=1 to boot.
+  {
+    name: 'demo',
+    spec: 'demo.spec.ts',
+    seed: 'demo',
+    env: { TASKMASTER_ENV: 'demo', TRUST_PROXY: '1' },
+  },
 ]
 
 /** Passkeys on (localhost) for the `on` suite only, at its own port. */
