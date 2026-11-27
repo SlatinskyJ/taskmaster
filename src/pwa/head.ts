@@ -2,13 +2,14 @@
 // and the iOS tags Safari still reads instead of the manifest.
 
 import { cs } from '~/lib/strings'
+import { THEME_COLORS } from '~/lib/theme'
 
-/** Page background (UI doc §2.1 `bg`), used for the browser and status bar colour. */
-export const THEME_COLORS = { light: '#FFF5EE', dark: '#1D1524' } as const
+export { THEME_COLORS }
 
 /**
  * One theme-color per colour scheme. Rendered straight into <head> by the root route, because
- * the router's head() keeps only one meta per name.
+ * the router's head() keeps only one meta per name. A forced theme sets both to its colour
+ * (themeBootScript, applyThemePref in ~/lib/theme).
  */
 export const themeColorMeta = [
   { name: 'theme-color', content: THEME_COLORS.light, media: '(prefers-color-scheme: light)' },

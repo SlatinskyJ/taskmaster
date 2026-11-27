@@ -1,23 +1,19 @@
 import { useCallback, useSyncExternalStore } from 'react'
+import { THEME_STORAGE_KEY, parseThemePref, themeColorFor, type ThemePref } from './themeColor'
 
 // Light / dark / auto (UI doc §1, §7.4). `auto` follows the system; the others set
-// `data-theme` on <html>, which src/styles/theme.css reads. Stored on this device;
-// the profile screen (#31) decides whether it also follows the user.
+// `data-theme` on <html>, which src/styles/theme.css reads, and the theme-color metas.
+// Stored on this device; the profile screen (#31) decides whether it also follows the user.
 
-export const THEME_PREFS = ['auto', 'light', 'dark'] as const
-export type ThemePref = (typeof THEME_PREFS)[number]
-
-export const THEME_STORAGE_KEY = 'tm-theme'
-
-export function parseThemePref(value: unknown): ThemePref {
-  return value === 'light' || value === 'dark' ? value : 'auto'
-}
-
-/**
- * Runs inline in <head> before first paint, so a forced theme never flashes the other one.
- * Keep it tiny and dependency-free: it is serialised into the HTML as a string.
- */
-export const themeBootScript = `try{var t=localStorage.getItem('${THEME_STORAGE_KEY}');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}`
+export {
+  THEME_COLORS,
+  THEME_PREFS,
+  THEME_STORAGE_KEY,
+  parseThemePref,
+  themeBootScript,
+  themeColorFor,
+  type ThemePref,
+} from './themeColor'
 
 function readStored(): ThemePref {
   try {
@@ -31,6 +27,9 @@ export function applyThemePref(pref: ThemePref): void {
   const root = document.documentElement
   if (pref === 'auto') delete root.dataset.theme
   else root.dataset.theme = pref
+  for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
+    meta.content = themeColorFor(pref, meta.media)
+  }
   try {
     if (pref === 'auto') localStorage.removeItem(THEME_STORAGE_KEY)
     else localStorage.setItem(THEME_STORAGE_KEY, pref)
