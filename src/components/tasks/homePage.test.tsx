@@ -312,6 +312,53 @@ describe('Domů', () => {
     expect(html).not.toContain('Opakované úkoly')
   })
 
+  it('a parent sees no taker board: no Moje, no Volné, no Rezervovat (#166)', () => {
+    const free: TaskView = {
+      planDay: null,
+      id: 8,
+      title: 'Umýt okna v obýváku',
+      description: null,
+      status: 'open',
+      score: 6,
+      approvalRequired: true,
+      createdByName: 'Táta',
+      offeredByName: null,
+      approvedBy: [],
+      approverIds: [],
+      bids: [],
+      lowest: null,
+      lastBids: [],
+      reservedBy: null,
+      completedBy: null,
+      completedAt: null,
+      earnerId: null,
+      origin: 'one_time',
+      templateId: null,
+      dueAt: null,
+      graceEndsAt: null,
+      createdAt: '2026-11-17T10:00:00.000Z',
+      waitingFor: [],
+      scoreChange: null,
+      rebidding: null,
+    }
+    const reserved: TaskView = {
+      ...free,
+      id: 9,
+      status: 'reserved',
+      reservedBy: { id: 4, name: 'Starší' },
+    }
+    const over = { board: [free, reserved] }
+    const parent = render({ id: 2, role: 'giver', displayName: 'Táta' }, [], over)
+    expect(parent).not.toContain('mine-label')
+    expect(parent).not.toContain('free-label')
+    expect(parent).not.toContain(`aria-label="${cs.work.reserve}"`)
+    // The same board for a brother: both sections.
+    const brother = render({ id: 4, role: 'taker', displayName: 'Starší' }, [], over)
+    expect(brother).toContain('id="mine-label"')
+    expect(brother).toContain('id="free-label"')
+    expect(brother).toContain(`aria-label="${cs.work.reserve}"`)
+  })
+
   it('a parent sees the bid to answer and no recurring list', () => {
     const html = render({ id: 2, role: 'giver', displayName: 'Táta' }, [])
     expect(html).toContain('Mladší chce 5')
