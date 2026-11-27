@@ -45,6 +45,11 @@ export interface StreamDeps {
   now: () => Date
   setInterval: (run: () => void, ms: number) => unknown
   clearInterval: (handle: unknown) => void
+  /**
+   * The public demo's per-IP cap (src/server/demo/caps.ts), only there: taken once the request
+   * passed every check (none → 429), given back when the stream ends.
+   */
+  streamSlot?: { open(): boolean; close(): void }
 }
 
 const HEADERS = {
@@ -98,6 +103,10 @@ export function openStream(req: StreamRequest, deps: StreamDeps): Response {
   // Never older than the data the tokens were issued with.
   const start = Math.max(lastEventId ?? since ?? asOf, asOf)
 
+  // The demo's per-IP cap, taken only now that the request passed every check.
+  const slot = deps.streamSlot
+  if (slot && !slot.open()) return status(429)
+
   const encoder = new TextEncoder()
   let controller!: ReadableStreamDefaultController<Uint8Array>
   let timer: unknown = null
@@ -111,6 +120,7 @@ export function openStream(req: StreamRequest, deps: StreamDeps): Response {
   const end = (reason?: 'replaced') => {
     if (ended) return
     ended = true
+    slot?.close()
     if (timer !== null) deps.clearInterval(timer)
     detach?.()
     try {
@@ -131,8 +141,16 @@ export function openStream(req: StreamRequest, deps: StreamDeps): Response {
   })
 
   // Catch-up and attach in one synchronous block: no flush can fall between them.
-  const hub = deps.hub()
-  const caught = hub.changesSince(start, topics, CATCH_UP_LIMIT, { id: user.id, role: user.role })
+  let hub: ReturnType<StreamDeps['hub']>
+  let caught: ReturnType<typeof hub.changesSince>
+  try {
+    hub = deps.hub()
+    caught = hub.changesSince(start, topics, CATCH_UP_LIMIT, { id: user.id, role: user.role })
+  } catch (err) {
+    // No stream owns the demo slot yet, so give it back here.
+    slot?.close()
+    throw err
+  }
   const stream: Stream = {
     sessionId: session.id,
     userId: user.id,
@@ -147,6 +165,7 @@ export function openStream(req: StreamRequest, deps: StreamDeps): Response {
   detach = hub.attach(stream, caught.lastId)
   if (!detach) {
     ended = true
+    slot?.close()
     return status(503)
   }
   write(OPEN_LINE)

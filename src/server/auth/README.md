@@ -6,10 +6,11 @@ passkeys ([`src/server/passkeys`](../passkeys/README.md)) build on this.
 - `login.ts`: `login()` / `logout()`. Each writes its audit entry in the same transaction.
 - `sessions.ts`: random 256-bit token in the cookie, SHA-256 in `sessions`. ~90-day sliding
   expiry, renewed at most once a day. `endUserSessions()` runs on a password reset.
-- `rateLimit.ts`: failed logins per username and per IP in the last 15 minutes (`login_failures`).
+- `rateLimit.ts`: failed logins per username and per IP in the last 15 minutes (`login_failures`);
+  on the public demo also every attempt per IP (below).
 - `http.ts`: the cookie (`__Host-tm_session`, HttpOnly, Secure, SameSite=Lax) and the client IP.
   `currentUser()` is the one way server code learns who is signed in.
-- `frame.ts`, `frameLogin.ts`: viewer frames on dev and previews (below).
+- `frame.ts`, `frameLogin.ts`: viewer frames on dev, previews and the demo (below).
 - `functions.ts`: server functions `loginFn`, `logoutFn`, `getCurrentUserFn`, `frameLoginFn`.
 - `authorize.ts`: the one role check (`authorize`) and each role's landing page.
 - `guards.ts`: `requireUser` / `requireRole(...)` middlewares for server functions.
@@ -36,12 +37,34 @@ what protects the data.
   entry. Without it every request looks like it comes from the proxy, and the per-IP limit
   then counts the whole family's failures together. Set it wherever the app sits behind a proxy.
 - `WEBAUTHN_RP_ID`, `WEBAUTHN_ORIGIN`: passkeys, see [`src/server/passkeys`](../passkeys/README.md).
+- `TASKMASTER_ENV=demo`: the public demo (next section).
 
-## Viewer frames (dev and previews)
+## The public demo
+
+`TASKMASTER_ENV=demo` with no `ADMIN_PASSWORD` (`isDemo`, `src/server/env/demo.ts`; with
+`ADMIN_PASSWORD` set it turns nothing on) runs a server anyone may try: the demo seed and dev pages
+as on a preview, plus:
+
+- **Lock** (`src/server/demo/lock.ts`): `demoLock`, listed after the role guard, refuses with 403
+  `demo_locked` the server functions in `DEMO_LOCKED_FNS` (people, passwords, launch switches).
+  `tests/server-fn-guards.test.ts` pins the list against the code. A refusal changes nothing, so
+  it writes no audit entry.
+- **No links** (`src/server/demo/links.ts`): a function middleware registered first in
+  `src/start.ts` removes every `http://`, `https://` or `www.` run up to the next whitespace from
+  every string a server function receives, before the function's own validator.
+- **Passkeys off**, whatever `WEBAUTHN_RP_ID` says.
+- **Login limits**: the demo family's names skip the per-username limit (one visitor's typos must
+  not lock them for the next); instead each IP gets `DEMO_ATTEMPTS_PER_IP` attempts, right or
+  wrong, per 15 minutes (key `demo-ip:<ip>`). The per-IP failure limit stays.
+- **Live streams**: at most `DEMO_STREAMS_PER_IP` open per IP (`src/server/demo/caps.ts`, in
+  memory); the next gets 429.
+- It needs `TRUST_PROXY=1` (the caps must see the visitor): without it the server won't boot.
+
+## Viewer frames (dev, previews and the demo)
 
 The multi-user viewer (`/dev/multi`, spec "Multi-user viewer") shows several people at once, one
 per iframe, so a frame can't use the shared cookie. Only where `devPagesAllowed` holds (dev, PR
-previews), `frame.ts` marks a request as a frame by the `x-tm-frame` header (server function
+previews, the demo), `frame.ts` marks a request as a frame by the `x-tm-frame` header (server function
 calls), the `tmFrame` query (document loads) or `Sec-Fetch-Dest: iframe`; the value is the frame's
 session token, or `-` for none. In a frame:
 

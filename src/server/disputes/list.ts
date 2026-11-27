@@ -2,8 +2,9 @@ import { and, asc, desc, eq, ne } from 'drizzle-orm'
 import type { Role } from '~/domain'
 import type { Tx } from '~/server/audit'
 import type { Db } from '~/server/db'
-import { disputes, users } from '~/server/db/schema'
+import { disputes, pointAdjustments, settlements, users } from '~/server/db/schema'
 import type { DisputeRow } from '~/server/db/schema'
+import { periodAtInstant } from '~/server/periods'
 import { toMark } from './disputes'
 import type { DisputeMark } from './disputes'
 import { loadTarget } from './targets'
@@ -39,6 +40,17 @@ export type AdminDisputeEntry = Omit<DisputeListEntry, 'mark'> & {
   takerId: number | null
   /** Where tapping the card opens the item (#222); null: no page (a settlement, an adjustment, a gone item). */
   page: ItemPage | null
+  /**
+   * The brother's week the card opens (#263): a settlement's own week, the week an adjustment
+   * was made in (by its made_at, #220); null for every other kind and for an adjustment outside every period.
+   */
+  weekPage: WeekPage | null
+}
+
+/** The admin's view of one brother's week (#263). */
+export interface WeekPage {
+  periodId: number
+  takerId: number
 }
 
 interface Viewer {
@@ -151,6 +163,27 @@ export function listOpenForAdmin(db: Db | Tx): AdminDisputeEntry[] {
     .all()
     .map((r) => {
       const d = describe(db, names, r)
-      return { ...d.entry, value: d.value, takerId: d.takerId, page: d.page }
+      const weekPage = weekPageOf(db, d.entry.item)
+      return { ...d.entry, value: d.value, takerId: d.takerId, page: d.page, weekPage }
     })
+}
+
+/** The week a settlement or adjustment counts in (#263); null for the rest. */
+function weekPageOf(db: Db | Tx, item: DisputeItem): WeekPage | null {
+  if (item.kind === 'settlement') {
+    const s = db
+      .select({ periodId: settlements.periodId, takerId: settlements.takerId })
+      .from(settlements)
+      .where(eq(settlements.id, item.id))
+      .get()
+    return s ?? null
+  }
+  if (item.kind !== 'adjustment') return null
+  const a = db
+    .select({ takerId: pointAdjustments.takerId, madeAt: pointAdjustments.madeAt })
+    .from(pointAdjustments)
+    .where(eq(pointAdjustments.id, item.id))
+    .get()
+  const p = a ? periodAtInstant(db, new Date(a.madeAt)) : undefined
+  return a && p ? { periodId: p.id, takerId: a.takerId } : null
 }

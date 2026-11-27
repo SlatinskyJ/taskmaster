@@ -113,5 +113,5 @@ test("Táta's counter at a bid is refused once a brother agreed the chore meanwh
   await tata.reload()
   await expect(tata.getByText(cs.templatePrice.now(4))).toBeVisible()
   await expect(tata.getByRole('button', { name: /^Přijmout/ })).toHaveCount(0)
-  await expect(threadRow(tata, /nabízí 6(?!\d)/)).toHaveCount(0)
+  await expect(threadRow(tata, /nabídka 6(?!\d)/)).toHaveCount(0)
 })

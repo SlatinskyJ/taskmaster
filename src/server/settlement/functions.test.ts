@@ -9,7 +9,15 @@ import { family, must } from '~/server/tasks/testing'
 import { settled } from './actions'
 import { settlePeriod } from './meeting'
 import { doneTask, MEETING, plus, SAT, week } from './testing'
-import { meetingRead, parseSettle, viewerOf, weekRead } from './functions'
+import {
+  adminWeekHandler,
+  adminWeekRead,
+  meetingRead,
+  parseAdminWeek,
+  parseSettle,
+  viewerOf,
+  weekRead,
+} from './functions'
 
 // Input checks and the response shape of the meeting server functions.
 
@@ -225,5 +233,66 @@ describe('topics (#299)', () => {
       `points:${String(f.starsi)}`,
       `points:${String(f.mladsi)}`,
     ])
+  })
+})
+
+describe('the admin week (#263)', () => {
+  const admin = (f: ReturnType<typeof family>) => ({
+    id: f.admin,
+    username: 'admin',
+    displayName: 'Admin',
+    role: 'admin' as const,
+  })
+  const setDisputes = (f: ReturnType<typeof family>, enabled: boolean) =>
+    f.db.update(featureFlags).set({ enabled }).where(eq(featureFlags.key, 'disputes')).run()
+
+  it('feature_off with disputes off; the week with it on; null for an unknown period', () => {
+    const f = example()
+    setDisputes(f, false)
+    expect(adminWeekHandler(f.db, { periodId: f.p1.id, takerId: f.starsi })).toEqual({
+      error: 'feature_off',
+    })
+    setDisputes(f, true)
+    const w = adminWeekHandler(f.db, { periodId: f.p1.id, takerId: f.starsi })
+    expect(w).toMatchObject({ taker: { id: f.starsi, name: 'Starší' }, record: null })
+    expect(adminWeekHandler(f.db, { periodId: f.p1.id + 100, takerId: f.starsi })).toBeNull()
+  })
+
+  it('parseAdminWeek takes positive safe integers', () => {
+    expect(parseAdminWeek({ periodId: 4, takerId: 2 })).toEqual({ periodId: 4, takerId: 2 })
+    expect(parseAdminWeek({ periodId: 4, takerId: 2, extra: 1 })).toEqual({
+      periodId: 4,
+      takerId: 2,
+    })
+  })
+
+  it.each([
+    null,
+    {},
+    { periodId: 1 },
+    { takerId: 1 },
+    { periodId: 0, takerId: 1 },
+    { periodId: 1, takerId: -1 },
+    { periodId: 1.5, takerId: 1 },
+    { periodId: '3', takerId: 1 },
+    { periodId: 1, takerId: Number.MAX_SAFE_INTEGER + 1 },
+  ])('parseAdminWeek refuses %j', (input) => {
+    expect(() => parseAdminWeek(input)).toThrow('Invalid input')
+  })
+
+  it("topics: week, people and the boy's points; none when off or not found", () => {
+    const f = example()
+    setDisputes(f, true)
+    const a = admin(f)
+    const read = (periodId: number) =>
+      adminWeekRead.read(f.db, a, { periodId, takerId: f.starsi }, MEETING)
+    expect(adminWeekRead.topics(a, read(f.p1.id), f.db)).toEqual([
+      'week',
+      'people',
+      `points:${String(f.starsi)}`,
+    ])
+    expect(adminWeekRead.topics(a, read(f.p1.id + 100), f.db)).toEqual([])
+    setDisputes(f, false)
+    expect(adminWeekRead.topics(a, read(f.p1.id), f.db)).toEqual([])
   })
 })

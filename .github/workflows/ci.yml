@@ -17,7 +17,7 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# The workflow name `CI` is the trigger of merge-queue.yml (workflow_run); rename both together.
+# The workflow name `CI` is the trigger of merge-queue.yml and red-main.yml (workflow_run); rename all three together.
 # Job names are required status checks in the main ruleset. Rename only together with the ruleset.
 # `preview` (and the preview.yml / preview-cleanup.yml jobs) is deliberately not required: it
 # runs only for labelled PRs, so requiring it would block every other PR.

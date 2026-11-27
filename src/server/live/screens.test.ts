@@ -30,7 +30,7 @@ import { loggableTemplatesRead, weekPlanRead } from '~/server/instances/function
 import { periodDefaultsRead } from '~/server/periods/functions'
 import { proposalsRead } from '~/server/periods/proposalFunctions'
 import { pointsRead } from '~/server/points/functions'
-import { meetingRead, weekRead } from '~/server/settlement/functions'
+import { adminWeekRead, meetingRead, weekRead } from '~/server/settlement/functions'
 import {
   bidsToAnswerRead,
   boardRead,
@@ -100,6 +100,16 @@ function run<A, T>(def: LiveRead<A, T>, arg?: (db: Db) => A): Read {
 
 /** The demo's task page under test: a one-time task with a completion dispute (task 22). */
 const TASK_PAGE = (db: Db) => ({ taskId: demoTask(db) })
+/** The demo's admin week under test (#263): Starší's settled week. */
+const ADMIN_WEEK = (db: Db) => {
+  const row = db
+    .select({ periodId: settlements.periodId, takerId: settlements.takerId })
+    .from(settlements)
+    .where(eq(settlements.takerId, person(db, 'starsi').id))
+    .get()
+  if (!row) throw new Error('no settlement')
+  return row
+}
 /** The demo's chore page under test: an active chore with a score dispute (template 4). */
 const CHORE_PAGE = (db: Db) => ({ templateId: demoChore(db) })
 
@@ -215,6 +225,12 @@ const SCREENS: Screen[] = [
       getAdminSuggestionsFn: run(adminSuggestionsRead),
       getFeaturesFn: 'none',
     }),
+  },
+  {
+    route: 'src/routes/_app/sprava_/tyden/$periodId/$takerId.tsx',
+    roles: ['admin'],
+    // Only while `disputes` is on: off, beforeLoad sends the admin back to Správa.
+    reads: () => ({ getAdminWeekFn: run(adminWeekRead, ADMIN_WEEK) }),
   },
   {
     route: 'src/routes/_app/profil.tsx',
