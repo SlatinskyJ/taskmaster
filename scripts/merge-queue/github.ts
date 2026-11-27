@@ -367,15 +367,20 @@ export function makeGh(
     )
     let approvedSha: string | null = null
     let approvedLower: Lower | null = null
-    let latest: { handover: NonNullable<PrFacts['handover']>; at: number } | null = null
+    let latest = null as { handover: NonNullable<PrFacts['handover']>; at: number } | null
     let rearms = 0
     let resumedSha: string | null = null
     const requests: { sha: string; at: number }[] = []
+    // The Action posts as SlatinskyJ (PAT). On a public repo anyone can paste a copy of a signed
+    // marker, so only his comments count; a replayed older hand-over must not close a newer one.
+    const keep = (h: NonNullable<PrFacts['handover']>, at: number) => {
+      if (!latest || h.n >= latest.handover.n) latest = { handover: h, at }
+    }
     for (const [at, c] of since.entries()) {
-      const body = c.body ?? ''
+      const body = c.user?.login === JAKUB ? (c.body ?? '') : ''
       const o = OLD_HANDOFF_RE.exec(body)
       if (o?.[1] && verify(markerKey, `handoff:${pr}:${label.id}`, o[1])) {
-        latest = { handover: { kind: 'final', n: Infinity, redSha: null }, at }
+        keep({ kind: 'final', n: Infinity, redSha: null }, at)
       }
       const h = HANDOFF_RE.exec(body)
       if (
@@ -386,7 +391,7 @@ export function makeGh(
         verify(markerKey, `handoff:${pr}:${label.id}:${h[1]}:${h[2]}:${h[3]}`, h[4])
       ) {
         const kind = h[1] as HandoverKind
-        latest = { handover: { kind, n: Number(h[2]), redSha: h[3] === '-' ? null : h[3] }, at }
+        keep({ kind, n: Number(h[2]), redSha: h[3] === '-' ? null : h[3] }, at)
       }
       // The highest n, not the count: a pasted copy of a resumed marker changes nothing.
       const r = RESUMED_RE.exec(body)
@@ -402,7 +407,7 @@ export function makeGh(
         }
       }
       const q = REARM_RE.exec(body)
-      if (q?.[1] && c.user?.login === JAKUB) requests.push({ sha: q[1], at })
+      if (q?.[1]) requests.push({ sha: q[1], at })
       const a = APPROVED_RE.exec(body)
       if (
         a?.[1] &&

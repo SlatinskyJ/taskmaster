@@ -629,6 +629,38 @@ describe('labelledPrs: hand-overs and re-arms', () => {
     expect(pr).toMatchObject({ rearms: 1 })
   })
 
+  it('a replayed older hand-over marker does not close the newer open hand-over', async () => {
+    const older = handoffMarker(KEY, 9, LABEL_ID, 'ci', 1, A)
+    const [pr] = await factsOf({
+      comments: [
+        approvedOk(),
+        handoff('ci', 1, A, 30),
+        resumed(1, H, 40),
+        handoff('final', 2, null, 50),
+        by('SlatinskyJ', older, 55),
+      ],
+    })
+    expect(pr).toMatchObject({ handover: { kind: 'final', n: 2, redSha: null }, rearms: 1 })
+  })
+
+  it('ignores signed markers posted by anyone other than SlatinskyJ', async () => {
+    const [pr] = await factsOf({
+      comments: [
+        approvedOk(),
+        handoff('ci', 1, A, 30),
+        by('stranger', resumedMarker(KEY, 9, LABEL_ID, 1, H), 40),
+      ],
+    })
+    expect(pr).toMatchObject({ handover: { kind: 'ci', n: 1, redSha: A }, rearms: 0 })
+    const [noHandover] = await factsOf({
+      comments: [
+        approvedOk(),
+        by('stranger', handoffMarker(KEY, 9, LABEL_ID, 'final', 1, null), 30),
+      ],
+    })
+    expect(noHandover).toMatchObject({ handover: null })
+  })
+
   it('a second hand-over is open; a request from before it is stale, one after it counts', async () => {
     const base = [approvedOk(), handoff('fix', 1, null, 30), resumed(1, A, 40)]
     const [before] = await factsOf({
