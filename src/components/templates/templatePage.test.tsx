@@ -223,6 +223,17 @@ describe('template page: Rozporovat (#46)', () => {
     expect(getItemMarkFn).not.toHaveBeenCalled()
   })
 
+  it('loader: a mark it reads reaches the page; a failed read gives no mark (#310)', async () => {
+    vi.mocked(getItemMarkFn).mockResolvedValueOnce({ status: 'open' })
+    expect((await load(dishes, true)).disputeMark).toEqual({ status: 'open' })
+    const closed = { status: 'dismissed', note: 'Platí, jak bylo.' } as const
+    vi.mocked(getItemMarkFn).mockResolvedValueOnce(closed)
+    expect((await load(dishes, true)).disputeMark).toEqual(closed)
+    // The switch went off on the server (an error result): no mark, so the page offers Rozporovat.
+    vi.mocked(getItemMarkFn).mockResolvedValueOnce({ error: 'feature_off' })
+    expect((await load(dishes, true)).disputeMark).toBeNull()
+  })
+
   it('active, switch on: Rozporovat on the score; off: none', () => {
     page.disputes = true
     const html = render(TATA)
@@ -279,6 +290,37 @@ describe('a proposed chore’s page (#205)', () => {
     expect(html).toContain('Platí 3 b.')
     expect(html).not.toContain('Navržená cena')
     expect(html).toContain('Historie ceny')
+  })
+
+  // The card's own Souhlasím (AgreeToChore): only for a proposed chore without bidding (#281).
+  const agrees = (html: string) =>
+    /<button[^>]*class="[^"]*w-full[^"]*"[^>]*>Souhlasím<\/button>/.test(html)
+
+  it('an active chore never gets the card’s Souhlasím, even with a name left in waitingFor', () => {
+    page.waitingFor = both
+    const html = render(STARSI)
+    page.waitingFor = []
+    expect(agrees(html)).toBe(false)
+    expect(agrees(render(STARSI, [], bins))).toBe(false)
+  })
+
+  it('with bidding the card has no Souhlasím of its own; the price panel holds it (#209)', () => {
+    const bidding: TemplateView = {
+      ...bins,
+      bidding: { offer: { score: 4, byName: 'Táta' }, bids: [], lowest: null, lastBids: [] },
+    }
+    page.waitingFor = both
+    const waited = render(STARSI, [], bidding)
+    page.waitingFor = []
+    const plain = render(STARSI, [], bidding)
+    const count = (html: string) => html.split('>Souhlasím<').length - 1
+    // Waited for or not, the same Souhlasím buttons: none is added on the card.
+    expect(count(waited)).toBe(count(plain))
+    // Without bidding, the card adds its one.
+    page.waitingFor = both
+    const card = render(STARSI, [], bins)
+    page.waitingFor = []
+    expect(agrees(card)).toBe(true)
   })
 })
 

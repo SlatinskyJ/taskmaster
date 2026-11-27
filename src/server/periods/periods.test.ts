@@ -260,6 +260,17 @@ describe('endRunningPeriod: settling ends the period (spec §5.8)', () => {
     expect(audits(db)).toHaveLength(before)
   })
 
+  it('a confirm at the cutoff before its roll ends nothing: the latest period is not running', () => {
+    // The first period is still the latest, so only the domain's `endPeriodEarly` refuses.
+    for (const at of [CUTOFF, SAT]) {
+      const { db, first } = rolled()
+      const before = audits(db).length
+      expect(endAt(db, first.id, at)).toEqual({ ok: false, error: 'not_running' })
+      expect(listPeriods(db).map((p) => [p.startsAt, p.endedAt])).toEqual([[SAT, null]])
+      expect(audits(db)).toHaveLength(before)
+    }
+  })
+
   it('the roll after an early end does nothing until the new cutoff', () => {
     const { db, first } = rolled()
     endAt(db, first.id, MEETING)

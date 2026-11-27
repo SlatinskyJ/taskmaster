@@ -191,4 +191,16 @@ describe('savePeriodDefaults', () => {
     expect(f.db.select().from(periodDefaults).get()?.updatedBy).toBeNull()
     expect(settingsAudit(f.db)[0]).toMatchObject({ actorKind: 'system', actorUserId: null })
   })
+
+  it('a system write after an admin save clears the stored user', () => {
+    // Pins `updatedBy: null` on the update path: a value left out of the update would keep the
+    // admin's id from the save before.
+    const f = family()
+    must(savePeriodDefaults(f.db, f.admin, NEW, SAVE_AT))
+    expect(f.db.select().from(periodDefaults).get()?.updatedBy).toBe(f.admin)
+    f.db.transaction((tx) => {
+      writePeriodDefaults(tx, { kind: 'system' }, D, plus(SAVE_AT, 1000))
+    })
+    expect(f.db.select().from(periodDefaults).get()?.updatedBy).toBeNull()
+  })
 })
