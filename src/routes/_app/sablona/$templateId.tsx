@@ -6,7 +6,8 @@ import { templateDispute } from '~/components/disputes/disputeProps'
 import { EmptyState } from '~/components/EmptyState'
 import { Screen } from '~/components/shell/Screen'
 import { SectionLabel } from '~/components/shell/SectionLabel'
-import { BidThread } from '~/components/tasks/BidThread'
+import { ChatHistory } from '~/components/tasks/ChatHistory'
+import { threadItems } from '~/components/tasks/historyText'
 import { StateChip } from '~/components/tasks/StateChip'
 import { AgreeToChore, choreWaitingText } from '~/components/templates/ProposedChore'
 import { TemplatePricePanel } from '~/components/templates/TemplatePricePanel'
@@ -21,7 +22,7 @@ import { getItemMarkFn } from '~/server/disputes/functions'
 import { getTemplateDetailFn } from '~/server/templates/functions'
 
 // A recurring template's price page (#138, TApprove "price change" / GTask "change price", UI doc
-// §7): the score that applies now, the whole history of offers and bids, and what this person can
+// §7): the score that applies now, the whole history of offers and bids (as chat bubbles, #289), and what this person can
 // do about it. The old score stays until someone accepts (spec §5.1). A proposed one (#205) shows
 // its proposed score, who it waits for and Souhlasím; it has no price history yet.
 export const Route = createFileRoute('/_app/sablona/$templateId')({
@@ -97,16 +98,16 @@ function TemplatePage() {
         )}
         {dispute && <DisputeControl {...dispute} mark={disputeMark} lead />}
       </Card>
-      {(!proposed || t.bidding) && (
-        <section className="grid gap-2" aria-labelledby="history-label">
-          <SectionLabel id="history-label">{cs.templatePrice.history}</SectionLabel>
-          {thread.length === 0 ? (
+      {(!proposed || t.bidding) &&
+        (thread.length === 0 ? (
+          <section className="grid gap-2" aria-labelledby="history-label">
+            <SectionLabel id="history-label">{cs.templatePrice.history}</SectionLabel>
             <EmptyState>{cs.templatePrice.noHistory}</EmptyState>
-          ) : (
-            <BidThread entries={thread} me={user.id} />
-          )}
-        </section>
-      )}
+          </section>
+        ) : (
+          // The same chat bubbles as a task's Historie (#289).
+          <ChatHistory title={cs.templatePrice.history} items={threadItems(thread, user.id)} />
+        ))}
       <TemplatePricePanel
         key={`${String(t.score)}-${String(thread.length)}`}
         template={t}
