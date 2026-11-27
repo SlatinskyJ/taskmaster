@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { planFixture } from '~/components/week/fixtures'
+import { marker, withMarker } from '~/lib/liveSubs.testing'
 import { getWeekPlanFn } from '~/server/instances/functions'
 import type { Meeting } from '~/server/settlement/functions'
 import { getMeetingFn } from '~/server/settlement/functions'
@@ -28,14 +29,14 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
 }))
 vi.mock('~/server/settlement/functions', () => ({
-  getMeetingFn: vi.fn(() => Promise.resolve('meeting')),
+  getMeetingFn: vi.fn(() => Promise.resolve(withMarker('getMeetingFn', 'meeting'))),
   settlePeriodFn: vi.fn(),
 }))
 vi.mock('~/server/instances/functions', () => ({
-  getWeekPlanFn: vi.fn(() => Promise.resolve('week')),
+  getWeekPlanFn: vi.fn(() => Promise.resolve(withMarker('getWeekPlanFn', 'week'))),
 }))
 vi.mock('~/server/tasks/functions', () => ({
-  listPlanTasksFn: vi.fn(() => Promise.resolve('plan')),
+  listPlanTasksFn: vi.fn(() => Promise.resolve(withMarker('listPlanTasksFn', 'plan'))),
   approveTaskFn: vi.fn(),
   rejectTaskFn: vi.fn(),
   reserveTaskFn: vi.fn(),
@@ -52,7 +53,7 @@ const route = Route as unknown as RouteOpts
 
 const load = (weekPlan: boolean) => route.loader({ context: { features: { weekPlan } } })
 const meetingIs = (m: Meeting) => {
-  vi.mocked(getMeetingFn).mockResolvedValueOnce(m)
+  vi.mocked(getMeetingFn).mockResolvedValueOnce(withMarker('getMeetingFn', m))
 }
 const render = (meeting: Meeting, weekPlan: unknown = null) => {
   page.data = { meeting, plan: [], weekPlan }
@@ -69,13 +70,20 @@ const thrown = (f: () => void): unknown => {
 const stillRunning = (settledToday: boolean) =>
   noWeek({ runningCutoffAt: '2026-12-06T22:59:00.000Z', settledToday })
 
+const TWO = [marker('getMeetingFn'), marker('listPlanTasksFn')]
+
 beforeEach(() => {
   vi.clearAllMocks()
 })
 
 describe('Schůzka page', () => {
   it('the loader asks for the meeting and the plan tasks', async () => {
-    expect(await load(false)).toEqual({ meeting: 'meeting', plan: 'plan', weekPlan: null })
+    expect(await load(false)).toEqual({
+      meeting: 'meeting',
+      plan: 'plan',
+      weekPlan: null,
+      live: [marker('getMeetingFn'), marker('listPlanTasksFn')],
+    })
     expect(getMeetingFn).toHaveBeenCalledTimes(1)
     expect(listPlanTasksFn).toHaveBeenCalledTimes(1)
   })
@@ -93,21 +101,26 @@ describe('the week plan at Schůzka (#259)', () => {
   it('switch off: meeting and plan tasks only, even settled today', async () => {
     const m = stillRunning(true)
     meetingIs(m)
-    expect(await load(false)).toEqual({ meeting: m, plan: 'plan', weekPlan: null })
+    expect(await load(false)).toEqual({ meeting: m, plan: 'plan', weekPlan: null, live: TWO })
     expect(getWeekPlanFn).not.toHaveBeenCalled()
   })
 
   it('switch on, not settled today: no plan request', async () => {
     const m = stillRunning(false)
     meetingIs(m)
-    expect(await load(true)).toEqual({ meeting: m, plan: 'plan', weekPlan: null })
+    expect(await load(true)).toEqual({ meeting: m, plan: 'plan', weekPlan: null, live: TWO })
     expect(getWeekPlanFn).not.toHaveBeenCalled()
   })
 
   it('switch on, settled today: the plan is fetched', async () => {
     const m = stillRunning(true)
     meetingIs(m)
-    expect(await load(true)).toEqual({ meeting: m, plan: 'plan', weekPlan: 'week' })
+    expect(await load(true)).toEqual({
+      meeting: m,
+      plan: 'plan',
+      weekPlan: 'week',
+      live: [...TWO, marker('getWeekPlanFn')],
+    })
     expect(getWeekPlanFn).toHaveBeenCalledTimes(1)
   })
 

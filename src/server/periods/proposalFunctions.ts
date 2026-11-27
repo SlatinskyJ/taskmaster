@@ -5,6 +5,8 @@ import { requireRole } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
 import type { Db } from '~/server/db'
 import { getFlags } from '~/server/features'
+import { liveRead } from '~/server/live/define'
+import { serveLive } from '~/server/live/read'
 import { int, parseDefaults, record } from './validators'
 import {
   approveProposal,
@@ -93,9 +95,15 @@ export function withdrawProposalHandler(db: Db, userId: number, ref: ProposalRef
   return isOn(db) ? result(withdrawProposal(db, userId, ref.kind, ref.id, now)) : OFF
 }
 
+/** Switch off: nothing read, nothing subscribed. */
+export const proposalsRead = liveRead({
+  read: (db, _viewer, _arg: undefined, now) => proposalsHandler(db, now),
+  topics: (_viewer, data) => ('error' in data ? [] : (['proposals'] as const)),
+})
+
 export const getProposalsFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
-  .handler(() => proposalsHandler(getDb(), new Date()))
+  .handler(({ context }) => serveLive(proposalsRead, context.user, undefined))
 
 export const proposePeriodFn = createServerFn({ method: 'POST' })
   .middleware([requireRole('giver', 'taker')])

@@ -2,6 +2,7 @@ import { createFileRoute, redirect } from '@tanstack/react-router'
 import { DefaultsProposalScreen } from '~/components/proposals/DefaultsProposalScreen'
 import { Screen } from '~/components/shell/Screen'
 import { Card } from '~/components/ui/card'
+import { liveSubs } from '~/lib/liveSubs'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { getProposalsFn } from '~/server/periods/functions'
@@ -14,13 +15,17 @@ export const Route = createFileRoute('/_app/tyden/vychozi')({
     // eslint-disable-next-line @typescript-eslint/only-throw-error -- the router's redirect
     if (!context.features.periodProposals) throw redirect({ to: '/tyden' })
   },
-  loader: () => getProposalsFn(),
+  loader: async () => {
+    const live = liveSubs()
+    const proposals = live.take(await getProposalsFn())
+    return { proposals, live: live.all() }
+  },
   component: DefaultsPage,
 })
 
 export function DefaultsPage() {
   const { user } = Route.useRouteContext()
-  const data = Route.useLoaderData()
+  const { proposals: data } = Route.useLoaderData()
   return (
     <Screen title={cs.proposals.defaultsTitle} user={user} back="/tyden/pristi">
       {'error' in data ? (

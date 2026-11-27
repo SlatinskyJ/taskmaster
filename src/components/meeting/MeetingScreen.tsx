@@ -64,7 +64,10 @@ export function MeetingScreen({
   const router = useRouter()
   const [ui, dispatch] = useReducer(reduce, START)
   const [refreshState, refreshDispatch] = useReducer(refreshReduce, REFRESH_START)
-  const refresh = useMemo(() => createRefresh(() => getWeekPlanFn(), refreshDispatch), [])
+  const refresh = useMemo(
+    () => createRefresh(() => getWeekPlanFn().then((r) => r.data), refreshDispatch),
+    [],
+  )
   const { view, shown } = meetingPlanView(
     stepOf(meeting, ui),
     meeting.settledToday,

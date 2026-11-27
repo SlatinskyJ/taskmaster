@@ -4,7 +4,7 @@ import type { Db } from '~/server/db'
 import { appMeta, auditLog } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { AUDIT_ACTIONS } from './actions'
-import { REDACTED, withAudit, writeAudit } from './audit'
+import { onAuditWritten, REDACTED, withAudit, writeAudit } from './audit'
 import type { AuditEntry } from './audit'
 
 const dad = { kind: 'user', userId: 7 } as const
@@ -54,6 +54,7 @@ describe('withAudit', () => {
         before: null,
         after: '{"key":"k","value":"v"}',
         reason: 'test',
+        changeId: null,
       },
     ])
   })
@@ -272,5 +273,129 @@ describe('action types', () => {
   it('are unique and follow <entity>.<verb>', () => {
     expect(new Set(AUDIT_ACTIONS).size).toBe(AUDIT_ACTIONS.length)
     for (const action of AUDIT_ACTIONS) expect(action).toMatch(/^[a-z]+\.[a-z_]+$/)
+  })
+})
+
+describe('changes (#299)', () => {
+  const changeIds = () => auditRows().map((r) => [r.id, r.changeId])
+  /** A later request: a fresh task, after every microtask of this one. */
+  const nextRequest = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+  it('withAudit with three entries stores change_id null, first.id, first.id', () => {
+    withAudit(db, () => undefined, [entry(), entry(), entry()])
+    expect(changeIds()).toEqual([
+      [1, null],
+      [2, 1],
+      [3, 1],
+    ])
+  })
+
+  it('two separate withAudit calls are two changes (both change_id null)', async () => {
+    withAudit(db, () => undefined, entry())
+    await nextRequest()
+    withAudit(db, () => undefined, entry())
+    expect(changeIds()).toEqual([
+      [1, null],
+      [2, null],
+    ])
+  })
+
+  it('writeAudit twice inside one db.transaction groups them', () => {
+    db.transaction((tx) => {
+      writeAudit(tx, entry())
+      writeAudit(tx, entry())
+    })
+    expect(changeIds()).toEqual([
+      [1, null],
+      [2, 1],
+    ])
+  })
+
+  it('an entry written through a nested tx.transaction joins the outer change', () => {
+    db.transaction((tx) => {
+      writeAudit(tx, entry())
+      tx.transaction((inner) => {
+        writeAudit(inner, entry())
+      })
+    })
+    expect(changeIds()).toEqual([
+      [1, null],
+      [2, 1],
+    ])
+  })
+
+  it('one synchronous run of several transactions is one change (a scheduler tick)', () => {
+    withAudit(db, () => undefined, entry())
+    withAudit(db, () => undefined, entry())
+    expect(changeIds()).toEqual([
+      [1, null],
+      [2, 1],
+    ])
+  })
+
+  it('after a microtask, the next write starts a new change', async () => {
+    withAudit(db, () => undefined, entry())
+    await Promise.resolve()
+    withAudit(db, () => undefined, [entry(), entry()])
+    expect(changeIds()).toEqual([
+      [1, null],
+      [2, null],
+      [3, 2],
+    ])
+  })
+
+  it('a rolled-back first entry does not leave the next change pointing at it', () => {
+    expect(() =>
+      withAudit(
+        db,
+        () => {
+          throw new Error('boom')
+        },
+        entry(),
+      ),
+    ).toThrow('boom')
+    expect(() =>
+      db.transaction((tx) => {
+        writeAudit(tx, entry())
+        throw new Error('boom')
+      }),
+    ).toThrow('boom')
+    withAudit(db, () => undefined, [entry(), entry()])
+    expect(changeIds()).toEqual([
+      [1, null],
+      [2, 1],
+    ])
+  })
+
+  it('onAuditWritten gets each row id in order; unsubscribe stops it', () => {
+    const heard: unknown[] = []
+    const off = onAuditWritten((row) => heard.push(row))
+    try {
+      withAudit(db, () => undefined, [entry(), entry()])
+    } finally {
+      off()
+    }
+    withAudit(db, () => undefined, entry())
+    expect(heard).toEqual([
+      { id: 1, changeId: null },
+      { id: 2, changeId: 1 },
+    ])
+    expect(auditRows()).toHaveLength(3)
+  })
+
+  it('a throwing listener does not roll back the write', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const off = onAuditWritten(() => {
+      throw new Error('listener')
+    })
+    try {
+      withAudit(db, (tx) => tx.insert(appMeta).values({ key: 'k', value: 'v' }).run(), entry())
+      expect(error).toHaveBeenCalledWith('[audit] write listener failed', expect.any(Error))
+    } finally {
+      off()
+      error.mockRestore()
+    }
+    expect(auditRows()).toHaveLength(1)
+    expect(metaRows()).toHaveLength(1)
   })
 })

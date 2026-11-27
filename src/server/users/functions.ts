@@ -2,6 +2,8 @@ import { createServerFn } from '@tanstack/react-start'
 import { requireRole, requireUser } from '~/server/auth/guards'
 import { clientIp, sessionToken } from '~/server/auth/http'
 import { getDb } from '~/server/db'
+import { liveRead } from '~/server/live/define'
+import { serveLive } from '~/server/live/read'
 import {
   changePasswordAction,
   createUserAction,
@@ -27,9 +29,14 @@ export type {
 }
 
 /** Everyone, for the people list on Správa. Never the password hash (see `listUsers`). */
+export const usersRead = liveRead({
+  read: (db) => listUsers(db),
+  topics: () => ['people'] as const,
+})
+
 export const listUsersFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('admin')])
-  .handler(() => listUsers(getDb()))
+  .handler(({ context }) => serveLive(usersRead, context.user, undefined))
 
 /** Adds a person with a starting password the admin passes on. */
 export const createUserFn = createServerFn({ method: 'POST' })

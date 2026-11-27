@@ -3,8 +3,14 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { ALL_FEATURES } from '~/lib/features'
 import { cs } from '~/lib/strings'
+import { marker, withMarker } from '~/lib/liveSubs.testing'
+import { listTasksFn } from '~/server/tasks/functions'
 import type { TaskView } from '~/server/tasks/functions'
+import { listTemplatesFn } from '~/server/templates/functions'
 import type { TemplateView } from '~/server/templates/functions'
+
+// The Úkoly loader's live subscriptions, in call order (#299).
+const LIVE = ['listTasksFn', 'listTemplatesFn']
 
 // Úkoly itself (#41), rendered statically through its route: one-time tasks grouped by state.
 // Lives here, not in src/routes, because the router generator treats every file there as a route.
@@ -54,6 +60,15 @@ vi.mock('~/server/tasks/functions', () => ({
 vi.mock('~/server/templates/functions', () => ({ listTemplatesFn: vi.fn() }))
 
 const { Route } = await import('~/routes/_app/ukoly/index')
+
+describe('Úkoly loader (#299)', () => {
+  it('returns the tasks, the chores and the live subscriptions in call order', async () => {
+    vi.mocked(listTasksFn).mockResolvedValueOnce(withMarker('listTasksFn', []))
+    vi.mocked(listTemplatesFn).mockResolvedValueOnce(withMarker('listTemplatesFn', []))
+    const loader = (Route as unknown as { loader: () => Promise<unknown> }).loader
+    expect(await loader()).toEqual({ list: [], templates: [], live: LIVE.map(marker) })
+  })
+})
 
 const boys = [
   { id: 3, name: 'Starší' },

@@ -3,11 +3,13 @@ import { fail, ok } from '~/domain/result'
 import type { SettlementRow } from '~/server/db/schema'
 import type { Period } from '~/domain'
 import type { Db } from '~/server/db'
-import { must } from '~/server/tasks/testing'
-import { meetingNow, settled } from './actions'
+import { eq } from 'drizzle-orm'
+import { featureFlags } from '~/server/db/schema'
+import { family, must } from '~/server/tasks/testing'
+import { settled } from './actions'
 import { settlePeriod } from './meeting'
 import { doneTask, MEETING, plus, SAT, week } from './testing'
-import { parseSettle, viewerOf } from './functions'
+import { meetingRead, parseSettle, viewerOf, weekRead } from './functions'
 
 // Input checks and the response shape of the meeting server functions.
 
@@ -17,7 +19,12 @@ function example() {
   return f
 }
 const shownOf = (db: Db, now: Date) => {
-  const m = meetingNow(db, now)
+  const m = meetingRead.read(
+    db,
+    { id: 0, username: '', displayName: '', role: 'giver' },
+    undefined,
+    now,
+  )
   return m.period ? m.takers.map((t) => ({ takerId: t.id, total: t.total })) : []
 }
 
@@ -118,18 +125,91 @@ describe('viewerOf', () => {
   })
 })
 
-describe('getMeetingFn handler (meetingNow) shape (#259)', () => {
+describe('getMeetingFn (meetingRead) shape (#259)', () => {
   it('returns exactly the old keys plus settledToday, with no settlement rows', () => {
     const f = example()
-    expect(Object.keys(meetingNow(f.db, MEETING)).sort()).toEqual([
+    const tata = { id: f.tata, username: 'tata', displayName: 'Táta', role: 'giver' as const }
+    const read = (now: Date) => meetingRead.read(f.db, tata, undefined, now)
+    expect(Object.keys(read(MEETING)).sort()).toEqual([
       'pending',
       'period',
       'settledToday',
       'takers',
     ])
     must(settlePeriod(f.db, f.tata, f.p1.id, shownOf(f.db, MEETING), MEETING, true))
-    const after = meetingNow(f.db, plus(MEETING, 60_000))
+    const after = read(plus(MEETING, 60_000))
     expect(Object.keys(after).sort()).toEqual(['period', 'runningCutoffAt', 'settledToday'])
     expect(after.settledToday).toBe(true)
+  })
+})
+
+describe('topics (#299)', () => {
+  const as = (id: number, role: 'giver' | 'taker') => ({
+    id,
+    username: role,
+    displayName: role,
+    role,
+  })
+  const setDisputes = (f: ReturnType<typeof family>, enabled: boolean) =>
+    f.db.update(featureFlags).set({ enabled }).where(eq(featureFlags.key, 'disputes')).run()
+
+  it("a taker's week: week, points and disputes:about of himself only", () => {
+    const f = week()
+    setDisputes(f, true)
+    const starsi = as(f.starsi, 'taker')
+    const data = weekRead.read(f.db, starsi, undefined, MEETING)
+    const topics = weekRead.topics(starsi, data, f.db)
+    expect(topics).toEqual([
+      'week',
+      `points:${String(f.starsi)}`,
+      `disputes:about:${String(f.starsi)}`,
+    ])
+    for (const t of topics) expect(t.endsWith(`:${String(f.mladsi)}`)).toBe(false)
+  })
+
+  it("a giver's week: every boy's points and disputes:about, people", () => {
+    const f = week()
+    setDisputes(f, true)
+    const tata = as(f.tata, 'giver')
+    const data = weekRead.read(f.db, tata, undefined, MEETING)
+    expect([...weekRead.topics(tata, data, f.db)].sort()).toEqual(
+      [
+        'week',
+        'people',
+        `points:${String(f.starsi)}`,
+        `points:${String(f.mladsi)}`,
+        `disputes:about:${String(f.starsi)}`,
+        `disputes:about:${String(f.mladsi)}`,
+      ].sort(),
+    )
+  })
+
+  it('disputes off: no disputes:about on the week', () => {
+    const f = week()
+    setDisputes(f, false)
+    const tata = as(f.tata, 'giver')
+    const topics = weekRead.topics(tata, weekRead.read(f.db, tata, undefined, MEETING), f.db)
+    expect(topics.some((t) => t.startsWith('disputes'))).toBe(false)
+  })
+
+  it('meeting without a period: week and people only', () => {
+    const f = family()
+    const tata = as(f.tata, 'giver')
+    const data = meetingRead.read(f.db, tata, undefined, MEETING)
+    expect(data.period).toBeNull()
+    expect(meetingRead.topics(tata, data, f.db)).toEqual(['week', 'people'])
+  })
+
+  it("meeting with a week to settle: week, people and each settled taker's points", () => {
+    const f = week()
+    const tata = as(f.tata, 'giver')
+    const data = meetingRead.read(f.db, tata, undefined, MEETING)
+    expect(data.period).not.toBeNull()
+    expect(meetingRead.topics(tata, data, f.db)).toEqual([
+      'week',
+      'people',
+      `points:${String(f.starsi)}`,
+      `points:${String(f.mladsi)}`,
+    ])
   })
 })

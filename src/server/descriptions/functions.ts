@@ -4,6 +4,8 @@ import type { Result } from '~/domain/result'
 import type { Db } from '~/server/db'
 import { getDb } from '~/server/db'
 import { getFlags } from '~/server/features'
+import { liveRead } from '~/server/live/define'
+import { serveLive } from '~/server/live/read'
 import { answerDescriptionChange, changeDescriptionOf } from './descriptions'
 import { rawDescription } from './parse'
 import { listDescriptionChangesWaiting } from './rows'
@@ -106,6 +108,13 @@ export function descriptionChangesWaitingHandler(db: Db, userId: number): Descri
   return getFlags(db).descriptions ? listDescriptionChangesWaiting(db, userId) : []
 }
 
+export const descriptionChangesWaitingRead = liveRead({
+  read: (db, viewer) => descriptionChangesWaitingHandler(db, viewer.id),
+  // Switch off: nothing read, nothing subscribed.
+  topics: (_viewer, _data, db) =>
+    getFlags(db).descriptions ? (['tasks', 'templates'] as const) : [],
+})
+
 export const listDescriptionChangesWaitingFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('taker')])
-  .handler(({ context }) => descriptionChangesWaitingHandler(getDb(), context.user.id))
+  .handler(({ context }) => serveLive(descriptionChangesWaitingRead, context.user, undefined))

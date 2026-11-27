@@ -102,6 +102,7 @@ describe('demo seed (#62)', () => {
       descriptions: false,
       weekPlan: false,
       suggestions: false,
+      liveChanges: false,
     })
   })
 
@@ -261,6 +262,7 @@ describe('demo seed (#62)', () => {
       descriptions: false,
       weekPlan: false,
       suggestions: false,
+      liveChanges: false,
     })
   })
 })

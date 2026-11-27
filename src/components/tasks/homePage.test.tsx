@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { marker } from '~/lib/liveSubs.testing'
 import { cs } from '~/lib/strings'
 import { getProposalsFn } from '~/server/periods/functions'
 import type { TaskView } from '~/server/tasks/functions'
@@ -61,14 +62,22 @@ const features = vi.hoisted(() => ({
 vi.mock('./useTaskAction', () => ({ useTaskAction: () => ({ busy: null, run: vi.fn() }) }))
 vi.mock('./bidCalls', () => ({ callBid: vi.fn(), BID_CALLS: {} }))
 // The loader's server calls, each returning a marker so the test can see where it went.
-vi.mock('~/server/tasks/functions', () => ({
-  listPendingApprovalsFn: vi.fn(() => Promise.resolve(['waiting'])),
-  listBoardFn: vi.fn(() => Promise.resolve(['board'])),
-  listPendingCompletionsFn: vi.fn(() => Promise.resolve(['toApprove'])),
-  listBidsToAnswerFn: vi.fn(() => Promise.resolve(['bids'])),
-  listScoreChangesWaitingFn: vi.fn(() => Promise.resolve(['taskPriceChanges'])),
-  listTasksFn: vi.fn(() => Promise.resolve(['tasks'])),
-}))
+// A data function with a live subscription (#299) answers `{ data, live: marker(<its name>) }`.
+vi.mock('~/server/tasks/functions', async () => {
+  const { withMarker: m } = await import('~/lib/liveSubs.testing')
+  return {
+    listPendingApprovalsFn: vi.fn(() => Promise.resolve(m('listPendingApprovalsFn', ['waiting']))),
+    listBoardFn: vi.fn(() => Promise.resolve(m('listBoardFn', ['board']))),
+    listPendingCompletionsFn: vi.fn(() =>
+      Promise.resolve(m('listPendingCompletionsFn', ['toApprove'])),
+    ),
+    listBidsToAnswerFn: vi.fn(() => Promise.resolve(m('listBidsToAnswerFn', ['bids']))),
+    listScoreChangesWaitingFn: vi.fn(() =>
+      Promise.resolve(m('listScoreChangesWaitingFn', ['taskPriceChanges'])),
+    ),
+    listTasksFn: vi.fn(() => Promise.resolve(m('listTasksFn', ['tasks']))),
+  }
+})
 const points = vi.hoisted(() => ({
   value: {
     levels: { lower: 40, upper: 90 },
@@ -80,20 +89,34 @@ const points = vi.hoisted(() => ({
     }[],
   },
 }))
-vi.mock('~/server/descriptions/functions', () => ({
-  listDescriptionChangesWaitingFn: vi.fn(() => Promise.resolve(['descriptionChanges'])),
-}))
-vi.mock('~/server/periods/functions', () => ({
-  getProposalsFn: vi.fn(() => Promise.resolve('proposals')),
-}))
-vi.mock('~/server/points/functions', () => ({
-  getPointsFn: vi.fn(() => Promise.resolve(['points'])),
-}))
-vi.mock('~/server/templates/functions', () => ({
-  listPendingTemplateApprovalsFn: vi.fn(() => Promise.resolve(['waitingTemplates'])),
-  listPendingTemplatePriceChangesFn: vi.fn(() => Promise.resolve(['priceChanges'])),
-  listTemplatesFn: vi.fn(() => Promise.resolve(['recurring'])),
-}))
+vi.mock('~/server/descriptions/functions', async () => {
+  const { withMarker: m } = await import('~/lib/liveSubs.testing')
+  return {
+    listDescriptionChangesWaitingFn: vi.fn(() =>
+      Promise.resolve(m('listDescriptionChangesWaitingFn', ['descriptionChanges'])),
+    ),
+  }
+})
+vi.mock('~/server/periods/functions', async () => {
+  const { withMarker: m } = await import('~/lib/liveSubs.testing')
+  return { getProposalsFn: vi.fn(() => Promise.resolve(m('getProposalsFn', 'proposals'))) }
+})
+vi.mock('~/server/points/functions', async () => {
+  const { withMarker: m } = await import('~/lib/liveSubs.testing')
+  return { getPointsFn: vi.fn(() => Promise.resolve(m('getPointsFn', ['points']))) }
+})
+vi.mock('~/server/templates/functions', async () => {
+  const { withMarker: m } = await import('~/lib/liveSubs.testing')
+  return {
+    listPendingTemplateApprovalsFn: vi.fn(() =>
+      Promise.resolve(m('listPendingTemplateApprovalsFn', ['waitingTemplates'])),
+    ),
+    listPendingTemplatePriceChangesFn: vi.fn(() =>
+      Promise.resolve(m('listPendingTemplatePriceChangesFn', ['priceChanges'])),
+    ),
+    listTemplatesFn: vi.fn(() => Promise.resolve(m('listTemplatesFn', ['recurring']))),
+  }
+})
 
 const { Route } = await import('~/routes/_app/index')
 
@@ -325,6 +348,27 @@ describe('Domů points (#40)', () => {
   })
 })
 
+// The live subscriptions each role's Domů returns (#299), in call order.
+const TAKER_LIVE = [
+  'listPendingApprovalsFn',
+  'listPendingTemplateApprovalsFn',
+  'listPendingTemplatePriceChangesFn',
+  'listScoreChangesWaitingFn',
+  'listBoardFn',
+  'listTemplatesFn',
+  'getPointsFn',
+]
+const GIVER_LIVE = [
+  'listPendingApprovalsFn',
+  'listPendingTemplateApprovalsFn',
+  'listPendingTemplatePriceChangesFn',
+  'listScoreChangesWaitingFn',
+  'listPendingCompletionsFn',
+  'listBidsToAnswerFn',
+  'listTasksFn',
+  'getPointsFn',
+]
+
 describe('Domů loader', () => {
   type Loader = (args: {
     context: {
@@ -348,11 +392,23 @@ describe('Domů loader', () => {
     expect(getProposalsFn).toHaveBeenCalledTimes(1)
     expect((await load('giver', true)).proposals).toBe('proposals')
     expect(getProposalsFn).toHaveBeenCalledTimes(2)
+    // Its subscription comes right after the price changes, in both roles.
+    const withProposals = (names: string[]) =>
+      [...names.slice(0, 4), 'getProposalsFn', ...names.slice(4)].map(marker)
+    expect((await load('taker', true)).live).toEqual(withProposals(TAKER_LIVE))
+    expect((await load('giver', true)).live).toEqual(withProposals(GIVER_LIVE))
   })
 
   it('descriptions (#207 ruling 6): a brother gets his waiting changes only with the switch on', async () => {
     expect((await load('taker')).descriptionChanges).toEqual([])
-    expect((await load('taker', false, true)).descriptionChanges).toEqual(['descriptionChanges'])
+    const on = await load('taker', false, true)
+    expect(on.descriptionChanges).toEqual(['descriptionChanges'])
+    // Its subscription comes after the task price changes, before the board.
+    expect(on.live).toEqual(
+      [...TAKER_LIVE.slice(0, 4), 'listDescriptionChangesWaitingFn', ...TAKER_LIVE.slice(4)].map(
+        marker,
+      ),
+    )
     expect((await load('giver', false, true)).descriptionChanges).toEqual([])
   })
 
@@ -370,6 +426,7 @@ describe('Domů loader', () => {
       bids: [],
       tasks: [],
       points: ['points'],
+      live: TAKER_LIVE.map(marker),
     })
   })
 
@@ -387,6 +444,7 @@ describe('Domů loader', () => {
       bids: ['bids'],
       tasks: ['tasks'],
       points: ['points'],
+      live: GIVER_LIVE.map(marker),
     })
   })
 })

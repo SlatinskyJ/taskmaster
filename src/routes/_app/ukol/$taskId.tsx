@@ -24,6 +24,7 @@ import {
 import { buttonVariants } from '~/components/ui/button'
 import { Card } from '~/components/ui/card'
 import { parseIdParam } from '~/lib/idParam'
+import { liveSubs } from '~/lib/liveSubs'
 import { guardDisputeReader } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { getItemMarkFn } from '~/server/disputes/functions'
@@ -44,7 +45,8 @@ export const Route = createFileRoute('/_app/ukol/$taskId')({
     // TanStack Router's notFound() is thrown by design; it is not an Error.
     // eslint-disable-next-line @typescript-eslint/only-throw-error
     if (taskId === null) throw notFound()
-    const detail = await getTaskDetailFn({ data: { taskId } })
+    const live = liveSubs()
+    const detail = live.take(await getTaskDetailFn({ data: { taskId } }))
     // eslint-disable-next-line @typescript-eslint/only-throw-error
     if (!detail) throw notFound()
     // Rozporovat (#46): the marks of the score and the completion, only with the switch on.
@@ -64,6 +66,7 @@ export const Route = createFileRoute('/_app/ukol/$taskId')({
     return {
       ...detail,
       disputeMarks: Object.fromEntries(marks) as Partial<Record<string, DisputeMark | null>>,
+      live: live.all(),
     }
   },
   component: TaskPage,

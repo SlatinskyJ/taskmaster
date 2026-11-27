@@ -2,6 +2,8 @@ import { createServerFn } from '@tanstack/react-start'
 import { requireRole } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
 import type { Db } from '~/server/db'
+import { liveRead } from '~/server/live/define'
+import { serveLive } from '~/server/live/read'
 import type { TaskRow } from '~/server/db/schema'
 import type { Result } from '~/domain/result'
 import { getFlags } from '~/server/features'
@@ -49,13 +51,18 @@ export const selfLogFn = createServerFn({ method: 'POST' })
   )
 
 /** Zapsat: a tile per agreed template, and the "Kdy?" times open now. */
+export const loggableTemplatesRead = liveRead({
+  read: (db, _viewer, _arg: undefined, now) => ({
+    tiles: listLoggableTemplates(db, now),
+    choices: logChoicesAt(db, now),
+  }),
+  // The tiles are agreed chores; a tile's state follows its copies (tasks).
+  topics: () => ['templates', 'tasks'] as const,
+})
+
 export const listLoggableTemplatesFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('taker')])
-  .handler(() => {
-    const db = getDb()
-    const now = new Date()
-    return { tiles: listLoggableTemplates(db, now), choices: logChoicesAt(db, now) }
-  })
+  .handler(({ context }) => serveLive(loggableTemplatesRead, context.user, undefined))
 
 /** What `getWeekPlanFn` answers: the plan, or `feature_off` while the `weekPlan` switch is off. */
 export type PlanAnswer = WeekPlan | { error: 'feature_off' }
@@ -65,6 +72,15 @@ export function weekPlanHandler(db: Db, now: Date): PlanAnswer {
   return getFlags(db).weekPlan ? getWeekPlan(db, now) : { error: 'feature_off' }
 }
 
+/**
+ * One board for everyone (#299): the week's days, its chores and their copies; switch off:
+ * nothing read, nothing subscribed.
+ */
+export const weekPlanRead = liveRead({
+  read: (db, _viewer, _arg: undefined, now) => weekPlanHandler(db, now),
+  topics: (_viewer, data) => ('error' in data ? [] : (['week', 'templates', 'tasks'] as const)),
+})
+
 export const getWeekPlanFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
-  .handler(() => weekPlanHandler(getDb(), new Date()))
+  .handler(({ context }) => serveLive(weekPlanRead, context.user, undefined))

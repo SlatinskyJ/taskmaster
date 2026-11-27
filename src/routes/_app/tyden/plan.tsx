@@ -3,6 +3,7 @@ import { weekLabel } from '~/components/period/periodView'
 import { Screen } from '~/components/shell/Screen'
 import { Card } from '~/components/ui/card'
 import { WeekPlanTable } from '~/components/week/WeekPlanTable'
+import { liveSubs } from '~/lib/liveSubs'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { getWeekPlanFn } from '~/server/instances/functions'
@@ -15,13 +16,17 @@ export const Route = createFileRoute('/_app/tyden/plan')({
     // eslint-disable-next-line @typescript-eslint/only-throw-error -- the router's redirect
     if (!context.features.weekPlan) throw redirect({ to: '/tyden' })
   },
-  loader: () => getWeekPlanFn(),
+  loader: async () => {
+    const live = liveSubs()
+    const plan = live.take(await getWeekPlanFn())
+    return { plan, live: live.all() }
+  },
   component: PlanPage,
 })
 
 export function PlanPage() {
   const { user } = Route.useRouteContext()
-  const data = Route.useLoaderData()
+  const { plan: data } = Route.useLoaderData()
   return (
     <Screen title={cs.plan.title} user={user} back="/tyden" wide>
       {'error' in data ? (

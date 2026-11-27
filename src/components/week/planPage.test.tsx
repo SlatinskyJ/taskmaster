@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { cs } from '~/lib/strings'
+import { marker, withMarker } from '~/lib/liveSubs.testing'
 import { getWeekPlanFn } from '~/server/instances/functions'
 import { planFixture } from './fixtures'
 
@@ -23,7 +24,7 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ to, children }: { to?: string; children: ReactNode }) => <a href={to}>{children}</a>,
 }))
 vi.mock('~/server/instances/functions', () => ({
-  getWeekPlanFn: vi.fn(() => Promise.resolve('plan')),
+  getWeekPlanFn: vi.fn(() => Promise.resolve(withMarker('getWeekPlanFn', 'plan'))),
 }))
 vi.mock('~/server/tasks/functions', () => ({ reserveTaskFn: vi.fn(), releaseTaskFn: vi.fn() }))
 
@@ -52,7 +53,7 @@ beforeEach(() => {
 
 describe('Plán týdne route (#258)', () => {
   it('loader calls getWeekPlanFn once', async () => {
-    expect(await plan.loader()).toBe('plan')
+    expect(await plan.loader()).toEqual({ plan: 'plan', live: [marker('getWeekPlanFn')] })
     expect(getWeekPlanFn).toHaveBeenCalledTimes(1)
   })
 
@@ -87,7 +88,7 @@ describe('Plán týdne route (#258)', () => {
   })
 
   it("title Plán týdne, back to /tyden, the week's dates", () => {
-    page.data = planFixture()
+    page.data = { plan: planFixture(), live: [] }
     const html = renderToStaticMarkup(<plan.component />)
     expect(html).toContain(`>${cs.plan.title}<`)
     expect(html).toContain('href="/tyden"')
@@ -98,7 +99,7 @@ describe('Plán týdne route (#258)', () => {
   })
 
   it('feature_off answer shows the not-allowed card', () => {
-    page.data = { error: 'feature_off' }
+    page.data = { plan: { error: 'feature_off' }, live: [] }
     const html = renderToStaticMarkup(<plan.component />)
     expect(html).toContain(cs.tasks.errors.notAllowed)
     expect(html).not.toContain('data-slot="plan-days"')

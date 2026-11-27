@@ -8,6 +8,7 @@ import { RecurringList } from '~/components/templates/RecurringList'
 import { ToApprove } from '~/components/tasks/ToApprove'
 import { WaitingForYou } from '~/components/tasks/WaitingForYou'
 import { buttonVariants } from '~/components/ui/button'
+import { liveSubs } from '~/lib/liveSubs'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import {
@@ -34,16 +35,18 @@ export const Route = createFileRoute('/_app/')({
     guardScreen(context.user.role, '/')
   },
   loader: async ({ context }) => {
-    const waiting = await listPendingApprovalsFn()
-    const waitingTemplates = await listPendingTemplateApprovalsFn()
-    const priceChanges = await listPendingTemplatePriceChangesFn()
-    const taskPriceChanges = await listScoreChangesWaitingFn()
+    // Every data function's live subscription, in call order (#299, src/lib/liveSubs.ts).
+    const live = liveSubs()
+    const waiting = live.take(await listPendingApprovalsFn())
+    const waitingTemplates = live.take(await listPendingTemplateApprovalsFn())
+    const priceChanges = live.take(await listPendingTemplatePriceChangesFn())
+    const taskPriceChanges = live.take(await listScoreChangesWaitingFn())
     // Proposals for next week (#43): only with the launch switch on, so off means no call.
-    const proposals = context.features.periodProposals ? await getProposalsFn() : null
+    const proposals = context.features.periodProposals ? live.take(await getProposalsFn()) : null
     if (context.user.role === 'taker') {
       // Waiting description changes (#207 ruling 6): only a brother answers them, only with the switch on.
       const descriptionChanges = context.features.descriptions
-        ? await listDescriptionChangesWaitingFn()
+        ? live.take(await listDescriptionChangesWaitingFn())
         : []
       return {
         descriptionChanges,
@@ -52,12 +55,13 @@ export const Route = createFileRoute('/_app/')({
         priceChanges,
         taskPriceChanges,
         proposals,
-        board: await listBoardFn(),
-        recurring: await listTemplatesFn(),
+        board: live.take(await listBoardFn()),
+        recurring: live.take(await listTemplatesFn()),
         toApprove: [],
         bids: [],
         tasks: [],
-        points: await getPointsFn(),
+        points: live.take(await getPointsFn()),
+        live: live.all(),
       }
     }
     return {
@@ -69,10 +73,11 @@ export const Route = createFileRoute('/_app/')({
       proposals,
       board: [],
       recurring: [],
-      toApprove: await listPendingCompletionsFn(),
-      bids: await listBidsToAnswerFn(),
-      tasks: await listTasksFn(),
-      points: await getPointsFn(),
+      toApprove: live.take(await listPendingCompletionsFn()),
+      bids: live.take(await listBidsToAnswerFn()),
+      tasks: live.take(await listTasksFn()),
+      points: live.take(await getPointsFn()),
+      live: live.all(),
     }
   },
   component: Home,

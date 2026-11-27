@@ -100,6 +100,8 @@ export const SUITES: readonly Suite[] = [
   // The multi-user viewer (#265): logs frames in and out and proposes tasks, so its own server.
   // `week`: the boys' Týden tab is on.
   { name: 'multi', spec: 'multi.spec.ts', seed: 'week' },
+  // The live change stream's route (#299): read-only, `demo` has the liveChanges switch on.
+  { name: 'live', spec: 'live.spec.ts', seed: 'demo' },
   // Profil → Aplikace (#302): a fake install event. Read-only: changes no data.
   { name: 'install', spec: 'install.spec.ts', seed: 'family' },
   // Launch switches in Správa (#296). Its own server: it flips switches for good.

@@ -28,6 +28,7 @@ import {
   answerDescriptionHandler,
   changeDescriptionHandler,
   descriptionChangesWaitingHandler,
+  descriptionChangesWaitingRead,
   parseDescriptionAnswer,
   parseDescriptionChange,
 } from './functions'
@@ -366,5 +367,34 @@ describe('Domů: waiting description changes (ruling 6)', () => {
     must(changeDescriptionOf(f.db, { kind: 'task', id }, f.tata, 'I chodba.', T1))
     setFlag(f, 'descriptions', false)
     expect(descriptionChangesWaitingHandler(f.db, f.starsi)).toEqual([])
+  })
+})
+
+describe('topics (#299)', () => {
+  const setDescriptions = (f: Family, enabled: boolean) =>
+    f.db.update(featureFlags).set({ enabled }).where(eq(featureFlags.key, 'descriptions')).run()
+  const starsiOf = (f: Family) => ({
+    id: f.starsi,
+    username: 'starsi',
+    displayName: 'Starší',
+    role: 'taker' as const,
+  })
+
+  it('descriptions on: tasks and templates', () => {
+    const f = family()
+    setDescriptions(f, true)
+    const data = descriptionChangesWaitingRead.read(f.db, starsiOf(f), undefined, T0)
+    expect(descriptionChangesWaitingRead.topics(starsiOf(f), data, f.db)).toEqual([
+      'tasks',
+      'templates',
+    ])
+  })
+
+  it('descriptions off: no topics', () => {
+    const f = family()
+    setDescriptions(f, false)
+    const data = descriptionChangesWaitingRead.read(f.db, starsiOf(f), undefined, T0)
+    expect(data).toEqual([])
+    expect(descriptionChangesWaitingRead.topics(starsiOf(f), data, f.db)).toEqual([])
   })
 })

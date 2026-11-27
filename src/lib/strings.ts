@@ -867,6 +867,10 @@ export const cs = {
           name: 'Návrhy zlepšení',
           hint: 'Návrhy z Profilu, admin je posílá na GitHub',
         },
+        liveChanges: {
+          name: 'Živé změny',
+          hint: 'Lišta nahoře, když někdo jiný změní otevřenou obrazovku',
+        },
       } satisfies Record<FeatureKey, { name: string; hint: string }>,
     },
   },

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import { marker, withMarker } from '~/lib/liveSubs.testing'
 import { cs } from '~/lib/strings'
 import { getWeekFn } from '~/server/settlement/functions'
 import { getDisputeListFn } from '~/server/disputes/functions'
@@ -45,17 +46,17 @@ vi.mock('@tanstack/react-router', () => ({
     ),
 }))
 vi.mock('~/server/periods/functions', () => ({
-  getProposalsFn: vi.fn(() => Promise.resolve(proposalsView())),
+  getProposalsFn: vi.fn(() => Promise.resolve(withMarker('getProposalsFn', proposalsView()))),
 }))
 vi.mock('~/server/disputes/functions', () => ({
-  getDisputeListFn: vi.fn(() => Promise.resolve([])),
+  getDisputeListFn: vi.fn(() => Promise.resolve(withMarker('getDisputeListFn', []))),
   openDisputeFn: vi.fn(),
 }))
 vi.mock('~/server/instances/functions', () => ({
-  getWeekPlanFn: vi.fn(() => Promise.resolve('plan')),
+  getWeekPlanFn: vi.fn(() => Promise.resolve(withMarker('getWeekPlanFn', 'plan'))),
 }))
 vi.mock('~/server/settlement/functions', () => ({
-  getWeekFn: vi.fn(() => Promise.resolve('week')),
+  getWeekFn: vi.fn(() => Promise.resolve(withMarker('getWeekFn', 'week'))),
 }))
 
 const { Route } = await import('~/routes/_app/tyden/index')
@@ -82,7 +83,10 @@ describe('Týden page', () => {
   })
 
   it('weekPlan on: the loader asks for the plan once; the card links to /tyden/plan with "Volných: 2" and sits before the tabs', async () => {
-    expect(await load(false, false, true)).toMatchObject({ plan: 'plan' })
+    expect(await load(false, false, true)).toMatchObject({
+      plan: 'plan',
+      live: [marker('getWeekFn'), marker('getWeekPlanFn')],
+    })
     expect(getWeekPlanFn).toHaveBeenCalledTimes(1)
     page.user = { id: 3, role: 'taker', displayName: 'Starší' }
     // The fixture's free copies from today on: Wednesday's table and one of the two vacuums.
@@ -108,6 +112,7 @@ describe('Týden page', () => {
       proposals: null,
       disputeList: null,
       plan: null,
+      live: [marker('getWeekFn')],
     })
     expect(getWeekFn).toHaveBeenCalledTimes(1)
     expect(getProposalsFn).not.toHaveBeenCalled()
@@ -119,6 +124,7 @@ describe('Týden page', () => {
       proposals: proposalsView(),
       disputeList: null,
       plan: null,
+      live: [marker('getWeekFn'), marker('getProposalsFn')],
     })
     expect(getProposalsFn).toHaveBeenCalledTimes(1)
   })
@@ -130,8 +136,12 @@ describe('Týden page', () => {
       proposals: null,
       disputeList: [],
       plan: null,
+      live: [marker('getWeekFn'), marker('getDisputeListFn')],
     })
-    expect(getDisputeListFn).toHaveBeenCalledTimes(1)
+    expect((await load(true, true)) as { live: unknown }).toMatchObject({
+      live: [marker('getWeekFn'), marker('getProposalsFn'), marker('getDisputeListFn')],
+    })
+    expect(getDisputeListFn).toHaveBeenCalledTimes(2)
   })
 
   it('disputes switch on: Rozporovat on the giver Týden; off: none', () => {
