@@ -39,34 +39,38 @@
 **Interfaces:**
 - Produces:
   ```ts
-  export interface Run { id: number; runNumber: number; headSha: string; title: string; conclusion: string | null; htmlUrl: string }
+  export interface Run { id: number; runNumber: number; attempt: number; headSha: string; title: string; conclusion: string | null; htmlUrl: string }
   export type Mail = { subject: string; text: string }
   export type Action = { kind: 'send'; mail: Mail } | { kind: 'none'; reason: string }
   /** `completed`: recent completed push runs on main, any order, may include `run`. */
-  export function decide(run: Run, completed: Run[], failedJobs: string[]): Action
+  /** `previousAttemptRed`: run.attempt > 1 and that run's attempt (attempt - 1) was red. */
+  export function decide(run: Run, completed: Run[], failedJobs: string[], previousAttemptRed: boolean, repoUrl: string): Action
   export function formatMail(from: string, to: string, mail: Mail, date: Date): string  // RFC 5322 text, CRLF line ends
   ```
 - Red is `failure | timed_out | startup_failure`, and green is `success`.
 - `decide` returns `none` when:
   - any run in `completed` has `runNumber > run.runNumber` (`newer run`),
   - the run is neither red nor green (`not red or green`),
-  - or the run is green and the previous red-or-green run in `completed` (the highest `runNumber` below it) is not red, or there is none (`still green`).
+  - or the run is green, `previousAttemptRed` is false, and the previous red-or-green run in `completed` (the highest `runNumber` below it) is not red, or there is none (`still green`). A re-run that turns a red run green (same `run_number`, a higher attempt) therefore sends "green again".
 - Otherwise it returns `send`:
-  - Red: subject `Taskmaster: main is broken (<short sha>)`, text = the commit title, the commit link `https://github.com/SlatinskyJ/taskmaster/commit/<sha>`, the run link, the failed job names one per line, and "Production was not deployed from this commit."
+  - Red: subject `Taskmaster: main is broken (<short sha>)`, text = the commit title, the commit link `<run.htmlUrl's repo base>/commit/<sha>`, built from `GITHUB_REPOSITORY` and `GITHUB_SERVER_URL` and passed in by `run.ts` (`decide` takes `repoUrl: string` as a fifth parameter), the run link, the failed job names one per line, and "Production was not deployed from this commit."
   - Green: subject `Taskmaster: main is green again (<short sha>)`, text = the commit title and the run link.
-- `formatMail` writes `From`, `To`, `Subject`, `Date`, `MIME-Version: 1.0`, `Content-Type: text/plain; charset=utf-8` and `Content-Transfer-Encoding: 8bit`, a blank line, then the text. Header values lose `\r` and `\n`, and the subject is cut to 120 characters.
+- `formatMail` writes `From`, `To`, `Subject`, `Date`, `MIME-Version: 1.0`, `Content-Type: text/plain; charset=utf-8` and `Content-Transfer-Encoding: 8bit`, a blank line, then the text. Header values lose `\r` and `\n`, and the subject is cut to 120 characters. Every line ending in the whole message, the body included, is CRLF (bare `\n` in the body becomes `\r\n`): SMTP needs CRLF, and curl does not convert without `--crlf`.
 
 - [ ] **Step 1:** Write the failing tests:
   - `red with no newer run sends "main is broken" naming sha, run, commit and every failed job`
   - `red after red sends again`
   - `green right after red sends "green again"`
-  - `green after green sends nothing`
+  - `green after green sends nothing, even with an older red further back` (510 red, 511 green, 512 green → none)
   - `green with no earlier run sends nothing`
+  - `a re-run green attempt after a red attempt sends "green again"` (512 attempt 2 green, previousAttemptRed true, 511 green)
+  - `a re-run green attempt after a green attempt with 511 green sends nothing`
   - `green skips a cancelled run in between: red, cancelled, green sends "green again"`
   - `a newer completed run (run_number + 1) means none; the run itself in the list (same run_number) does not count` (the boundary)
   - `cancelled, skipped, neutral, action_required and stale send nothing` (it.each)
   - `timed_out and startup_failure count as red` (it.each)
-  - `formatMail strips CR and LF from the subject and cuts it at 120 characters; the body stays as given`
+  - `formatMail strips CR and LF from the subject and cuts it at 120 characters`
+  - `formatMail turns every body line ending into CRLF and leaves no bare LF anywhere`
   - `formatMail uses CRLF and the UTF-8 headers`
 - [ ] **Step 2:** `pnpm vitest run tests/red-main-decide.test.ts` fails (no module).
 - [ ] **Step 3:** Implement `decide.ts`.
@@ -84,11 +88,12 @@
 - `github.ts` uses REST over `fetch` with base `https://api.github.com`, `Authorization: Bearer $GH_TOKEN`, `X-GitHub-Api-Version: 2022-11-28` and a 15 s `AbortSignal.timeout`:
   - `getRun(id): Promise<Run>` → `GET /repos/{repo}/actions/runs/{id}`
   - `completedRuns(): Promise<Run[]>` → `GET /repos/{repo}/actions/workflows/ci.yml/runs?branch=main&event=push&status=completed&per_page=10`. `event=push` matters, because PR runs share the `run_number` counter.
-  - Mapping: `id` ← `id`, `runNumber` ← `run_number`, `headSha` ← `head_sha`, `title` ← `display_title`, `conclusion`, `htmlUrl` ← `html_url`.
+  - Mapping: `id` ← `id`, `runNumber` ← `run_number`, `headSha` ← `head_sha`, `title` ← `display_title`, `attempt` ← `run_attempt`, `conclusion`, `htmlUrl` ← `html_url`.
+  - `attemptConclusion(id, attempt): Promise<string | null>` → `GET .../runs/{id}/attempts/{attempt}`; called only for a green run with `attempt > 1`, with `attempt - 1`.
   - `failedJobs(id): Promise<string[]>` → `GET .../runs/{id}/jobs?filter=latest&per_page=100`, the names of red jobs.
   - A non-2xx response throws `Error('GitHub GET <path>: HTTP <status>')`, with no headers and no body.
 - Produces: `export async function main(fetchFn: typeof fetch, env: NodeJS.ProcessEnv): Promise<Action>` in `run.ts`. It reads `getRun(RUN_ID)` and `completedRuns()`, reads `failedJobs` only for a red run, and calls `decide`. On `send`, it writes `formatMail(env.ALERT_SMTP_USER, env.ALERT_EMAIL_TO, …)` to `env.MAIL_FILE` and appends `send=true` to `env.GITHUB_OUTPUT`. It logs `red-main: <kind> <reason or subject>`. Run as a script, with the entry guard from `scripts/merge-queue/run.ts`, it calls `main(fetch, process.env)`.
-- Missing `GH_TOKEN` or `RUN_ID` throws `Error('red-main: GH_TOKEN missing')` / `'RUN_ID missing'` before any fetch.
+- Order in `main`: first, if `env.RED_MAIN_TEST === 'true'`, write the test mail (`{ subject: 'Taskmaster: red-main test', text: 'Test of the red-main email. Nothing is broken.' }`), set `send=true` and return, with no fetch and no `RUN_ID` needed (a `workflow_dispatch` run has none). Only then: missing `GH_TOKEN` or `RUN_ID` throws `Error('red-main: GH_TOKEN missing')` / `'RUN_ID missing'` before any fetch.
 
 - [ ] **Step 1:** Write failing tests with a fake `fetch`. It matches each call on method, path **and the full query string**, records every call, and fails the test on an unexpected call. Run fixtures use `id` values that differ from `run_number` and are larger than it (`id: 46042649467, run_number: 512`). The jobs fixture mixes `lint` success, `build` failure, `test` timed_out and `mutation` skipped. Temp dirs come from `fs.mkdtemp`.
   - `red run: writes MAIL_FILE whose body lists build and test only, and sets send=true`
@@ -96,6 +101,8 @@
   - `a late red run behind a newer green: none, with the runs list in either order`
   - `the runs query is exactly branch=main&event=push&status=completed&per_page=10`
   - `the jobs call is made only for a red run`
+  - `the attempts call is made only for a green run with run_attempt > 1, for attempt - 1`
+  - `RED_MAIN_TEST=true with no RUN_ID and no GH_TOKEN: zero fetch calls, MAIL_FILE holds the test mail, send=true`
   - `an HTTP 403 throws with path and status, and the token is not in the message`
   - `running the script file itself (spawn node scripts/red-main/run.ts with no GH_TOKEN) exits non-zero with "GH_TOKEN missing"` (the real entry point, once)
 - [ ] **Step 2:** `pnpm vitest run tests/red-main-run.test.ts` fails.
@@ -121,10 +128,19 @@ on:
     workflows: [CI]
     types: [completed]
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      test:
+        description: Send one test email
+        type: boolean
+        default: false
 permissions: {}
 jobs:
   alert:
-    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main'
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main') ||
+      (github.event_name == 'workflow_dispatch' && github.actor == 'SlatinskyJ')
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     permissions: { actions: read }
@@ -133,7 +149,7 @@ jobs:
       - checkout (pinned SHA as in merge-queue.yml), ref: main, persist-credentials: false   [if ready]
       - setup-node (pinned SHA), node-version-file: .nvmrc                                    [if ready]
       - id: decide; run: node scripts/red-main/run.ts                                           [if ready]
-        env: { GH_TOKEN: ${{ github.token }}, RUN_ID: ${{ github.event.workflow_run.id }}, MAIL_FILE: ${{ runner.temp }}/mail.txt, ALERT_SMTP_USER, ALERT_EMAIL_TO from secrets }
+        env: { GH_TOKEN: ${{ github.token }}, RUN_ID: ${{ github.event.workflow_run.id }}, RED_MAIN_TEST: ${{ github.event_name == 'workflow_dispatch' && inputs.test }}, MAIL_FILE: ${{ runner.temp }}/mail.txt, ALERT_SMTP_USER, ALERT_EMAIL_TO from secrets }
       - name: Send the email                                                                     [if steps.decide.outputs.send == 'true']
         env: { ALERT_SMTP_URL, ALERT_SMTP_USER, ALERT_SMTP_PASSWORD, ALERT_EMAIL_TO from secrets, MAIL_FILE }
         run: |
@@ -147,7 +163,7 @@ A netrc file keeps the password off curl's command line.
 - [ ] **Step 1:** Write the workflow, the `ci.yml` comment and the CLAUDE.md line.
 - [ ] **Step 2:** `pnpm format:check` and `pnpm lint` are clean. Run `actionlint` if it is installed; otherwise check the file against `merge-queue.yml` by eye.
 - [ ] **Step 3:** Commit: `Email Jakub after a red CI run on main`.
-- [ ] **Step 4:** Live check after the merge and after Jakub adds the secrets (in the brief): the next green `main` run shows `red-main / alert` green with `red-main: none still green`. Jakub tests the send path by hand with the `workflow_dispatch` input `test: true`, which sends one test email with the subject `Taskmaster: red-main test`. Add that input: `main` sends `{ subject: 'Taskmaster: red-main test', text: 'Test of the red-main email. Nothing is broken.' }` when `env.RED_MAIN_TEST === 'true'`, and the `if` also allows `github.event_name == 'workflow_dispatch' && github.actor == 'SlatinskyJ'`. Add a test in Task 2: `RED_MAIN_TEST=true writes the test mail without reading runs`.
+- [ ] **Step 4:** Live check after the merge and after Jakub adds the secrets (in the brief): the next green `main` run shows `red-main / alert` green, and its log says `red-main: none still green`. Jakub tests the send path by hand: Actions → red-main → Run workflow with `test` on. That sends one email with the subject `Taskmaster: red-main test`.
 
 ## Out of scope
 
