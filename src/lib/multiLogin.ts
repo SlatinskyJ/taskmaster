@@ -1,5 +1,6 @@
 import type { FrameLoginResult } from '~/server/auth/frameLogin'
-import type { DemoLogin, Device } from './multiLayout'
+import type { DemoLogin } from './demoAccounts'
+import type { Device } from './multiLayout'
 
 // Logging one viewer frame in (/dev/multi): the frame gets its own session from frameLoginFn.
 // A refusal or a failed call fails that frame only; the page offers a retry.

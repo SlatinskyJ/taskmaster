@@ -157,3 +157,10 @@ test('ScoreDial digits are Fredoka', async ({ page }) => {
   expect(dial.length).toBeGreaterThan(0)
   for (const scan of dial) expect(families(scan)).toEqual([expect.stringMatching(/Fredoka/)])
 })
+
+// The public demo's marker and noindex (#328) never show on a preview.
+test('a preview shows no demo marker and no noindex', async ({ page }) => {
+  await ready(page, '/login', cs.login.submit)
+  await expect(page.locator('[data-slot="demo-marker"]')).toHaveCount(0)
+  await expect(page.locator('meta[name="robots"]')).toHaveCount(0)
+})

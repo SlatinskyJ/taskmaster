@@ -1,5 +1,6 @@
 import type { Db } from '~/server/db'
-import { DEMO_PASSWORD, DEMO_USERS } from '~/server/demo'
+import { DEMO_PASSWORD } from '~/lib/demoAccounts'
+import { DEMO_USERS } from '~/server/demo'
 import { devPagesAllowed } from '~/server/env/devPages'
 import { login } from './login'
 import type { LoginError } from './login'

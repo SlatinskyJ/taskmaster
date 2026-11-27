@@ -2,6 +2,7 @@ import { redirect } from '@tanstack/react-router'
 import { createMiddleware, createServerOnlyFn } from '@tanstack/react-start'
 import { setResponseStatus } from '@tanstack/react-start/server'
 import type { Role } from '~/domain/parties'
+import { DEMO_LOCKED } from '~/lib/demoAccounts'
 import { authorize } from './authorize'
 import { currentUser } from './http'
 import type { CurrentUser } from './sessions'
@@ -33,6 +34,9 @@ export const PUBLIC_SERVER_FNS: Readonly<Record<string, string>> = {
   passkeyLoginFn: 'passkeys/functions.ts',
   // /dev/ui asks whether dev pages exist here; a yes/no about the deployment, no user data.
   getDevPagesAllowed: 'env/functions.ts',
+  // The login screen and the app shell ask whether this is the public demo; a yes/no about the
+  // deployment.
+  getIsDemoFn: 'env/functions.ts',
 }
 
 /** Thrown (with HTTP 403) when a signed-in user's role may not call a server function. */
@@ -49,7 +53,7 @@ export class ForbiddenError extends Error {
  */
 export class DemoLockedError extends Error {
   constructor() {
-    super('demo_locked')
+    super(DEMO_LOCKED)
     this.name = 'DemoLockedError'
   }
 }

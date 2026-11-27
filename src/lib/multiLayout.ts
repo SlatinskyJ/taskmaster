@@ -1,11 +1,9 @@
+import { DEMO_LOGINS, type DemoLogin } from '~/lib/demoAccounts'
 import { FRAME_QUERY, NO_TOKEN } from '~/lib/frame'
 
 // The multi-user viewer's layout (/dev/multi, dev and PR previews only): which devices are on
 // the desk, their sizes, the address and session of each, and how that is remembered in the
 // browser. Framework-free: the route renders it, the tests pin it.
-
-export const DEMO_LOGINS = ['admin', 'tata', 'starsi', 'mladsi'] as const
-export type DemoLogin = (typeof DEMO_LOGINS)[number]
 
 /** Frame sizes in CSS pixels; the tablet is drawn smaller so it fits next to the phones. */
 export const SIZES = {

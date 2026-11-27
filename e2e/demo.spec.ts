@@ -76,6 +76,32 @@ test('Starší cannot change his password; the old one still logs in', async ({ 
   await expect(page).not.toHaveURL(/\/login/)
 })
 
+/** The demo marker and the robots meta, as every demo screen has them (#328). */
+async function expectDemoChrome(page: Page) {
+  await expect(page.locator('[data-slot="demo-marker"]')).toHaveText(cs.demo.marker)
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex, nofollow')
+}
+
+test('every screen shows the demo marker and noindex', async ({ page }) => {
+  await page.goto('/login')
+  await expectDemoChrome(page)
+  expect(await (await page.request.get('/login')).text()).toContain('name="robots"')
+
+  await login(page, 'tata')
+  await expect(page).toHaveURL(/\/$/)
+  await expectDemoChrome(page)
+  await logout(page)
+
+  await login(page, 'admin')
+  await expect(page).toHaveURL(/\/sprava$/)
+  await expectDemoChrome(page)
+
+  await page.setViewportSize({ width: 1440, height: 1200 })
+  await page.goto('/dev/multi')
+  await expect(page.locator('[data-device]')).toHaveCount(3)
+  await expectDemoChrome(page)
+})
+
 test('/dev/multi loads and a frame logs in as Mladší', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1200 })
   await page.goto('/dev/multi')
