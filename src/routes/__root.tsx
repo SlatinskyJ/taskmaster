@@ -35,16 +35,17 @@ function RootDocument({ children }: { children: ReactNode }) {
     if (url) location.replace(url)
   }, [])
   return (
-    // data-theme is set before hydration by the boot script, so React must not fight it.
+    // The boot script sets data-theme and the theme-color metas before hydration, so React
+    // must not fight either. The metas come first: the script writes to them.
     <html lang="cs" suppressHydrationWarning>
       <head>
+        {themeColorMeta.map((meta) => (
+          <meta key={meta.media} {...meta} suppressHydrationWarning />
+        ))}
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         {/* beforeinstallprompt can fire before hydration; keep it for Profil (#302). */}
         <script dangerouslySetInnerHTML={{ __html: installBootScript }} />
         <HeadContent />
-        {themeColorMeta.map((meta) => (
-          <meta key={meta.media} {...meta} />
-        ))}
       </head>
       <body>
         {children}
