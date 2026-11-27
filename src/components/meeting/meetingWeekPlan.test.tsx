@@ -78,6 +78,14 @@ describe('MeetingWeekPlanView', () => {
     expect(noRows).toContain('29. 11. – 6. 12.')
   })
 
+  it('no rows: no Obnovit hint (nothing to reserve), Obnovit stays', () => {
+    for (const plan of [planFixture({ rows: [] }), planFixture({ period: null, rows: [] })]) {
+      const html = render(plan)
+      expect(html).not.toContain(cs.meeting.planHint)
+      expect(refreshButton(html)).toContain(cs.meeting.refresh)
+    }
+  })
+
   it('tap targets: Obnovit is at least 44 px and stays whole', () => {
     const button = refreshButton(render())
     expect(button).toContain('min-h-tap')

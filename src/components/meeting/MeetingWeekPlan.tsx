@@ -50,7 +50,10 @@ export function MeetingWeekPlanView({
           {cs.meeting.refresh}
         </Button>
       </div>
-      <p className="text-meta break-words text-muted">{cs.meeting.planHint}</p>
+      {/* No rows: nothing to reserve, so the hint would only contradict #258's empty state. */}
+      {plan.rows.length > 0 && (
+        <p className="text-meta break-words text-muted">{cs.meeting.planHint}</p>
+      )}
       {failed && (
         <p role="alert" className="text-meta font-bold break-words text-destructive">
           {cs.meeting.refreshFailed}
