@@ -40,4 +40,24 @@ describe('FeaturesCard', () => {
     expect(html).toContain(`>${t.retry}<`)
     expect(html).not.toContain('role="switch"')
   })
+
+  it('locked on the demo (#328): every switch disabled, the lock note instead of the usual one', () => {
+    const html = renderToStaticMarkup(
+      <FeaturesCard features={NO_FEATURES} failed={false} locked onToggle={noop} onRetry={noop} />,
+    )
+    const switches = html.match(/<button[^>]*role="switch"[^>]*>/g) ?? []
+    expect(switches).toHaveLength(FEATURE_KEYS.length)
+    for (const b of switches) expect(b).toContain('disabled=""')
+    expect(html).toContain(cs.demo.lockedNote)
+    expect(html).not.toContain(t.note)
+  })
+
+  it('unlocked: switches enabled, the usual note, no lock note', () => {
+    const html = renderToStaticMarkup(
+      <FeaturesCard features={NO_FEATURES} failed={false} onToggle={noop} onRetry={noop} />,
+    )
+    expect(html).not.toContain('disabled=""')
+    expect(html).toContain(t.note)
+    expect(html).not.toContain(cs.demo.lockedNote)
+  })
 })

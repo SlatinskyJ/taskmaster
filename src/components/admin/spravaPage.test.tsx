@@ -15,11 +15,14 @@ import { listUsersFn } from '~/server/users/functions'
 
 // Správa through its route (#47): the loader asks for the default week, and the page renders the
 // Výchozí týden card above Lidé. Lives here, not in src/routes (the router generator owns that).
-const page = vi.hoisted(() => ({ data: {} }))
+const page = vi.hoisted(() => ({ data: {}, demo: false }))
 vi.mock('@tanstack/react-router', () => ({
   createFileRoute: () => (opts: Record<string, unknown>) => ({
     ...opts,
-    useRouteContext: () => ({ user: { id: 1, role: 'admin', displayName: 'Admin' } }),
+    useRouteContext: () => ({
+      user: { id: 1, role: 'admin', displayName: 'Admin' },
+      demo: page.demo,
+    }),
     useLoaderData: () => page.data,
   }),
   redirect: vi.fn(),
@@ -260,5 +263,44 @@ describe('Správa: Funkce (#296)', () => {
     const html = render({ error: 'failed' })
     expect(html).toContain(cs.admin.features.failedLoad)
     expect(html).not.toContain('role="switch"')
+  })
+})
+
+describe('Správa on the public demo (#328)', () => {
+  const render = (demo: boolean) => {
+    page.demo = demo
+    page.data = {
+      people: [],
+      passkeys: {},
+      defaults: DEFAULT_PERIOD_DEFAULTS,
+      disputes: [],
+      fixable: [],
+      suggestions: { error: 'feature_off' },
+      switches: NO_FEATURES,
+    }
+    const Page = route.component
+    try {
+      return renderToStaticMarkup(<Page />)
+    } finally {
+      page.demo = false
+    }
+  }
+  const addButton = (html: string) =>
+    new RegExp(`<button[^>]*>${cs.admin.add}</button>`).exec(html)?.[0] ?? ''
+
+  it('Přidat člověka is disabled, the lock note follows it', () => {
+    const html = render(true)
+    expect(addButton(html)).toContain('disabled=""')
+    const add = html.indexOf(`>${cs.admin.add}<`)
+    const note = html.indexOf(cs.demo.lockedNote, add)
+    expect(note).toBeGreaterThan(add)
+    expect(note).toBeLessThan(html.indexOf(`>${cs.admin.features.title}<`))
+  })
+
+  it('elsewhere Přidat člověka is enabled', () => {
+    const html = render(false)
+    expect(addButton(html)).not.toBe('')
+    expect(addButton(html)).not.toContain('disabled=""')
+    expect(html).not.toContain(cs.demo.lockedNote)
   })
 })

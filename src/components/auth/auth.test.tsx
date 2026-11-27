@@ -4,6 +4,7 @@ import { cs } from '~/lib/strings'
 import { AdminPasskeys } from './AdminPasskeys'
 import { PasskeyList } from './PasskeyList'
 import { PasskeyLoginButton } from './PasskeyLoginButton'
+import { ProfilePassword } from './ProfilePassword'
 
 describe('PasskeyLoginButton', () => {
   it('shows the Czech label and the first-login hint', () => {
@@ -96,5 +97,31 @@ describe('AdminPasskeys', () => {
     )
     expect(html).toContain('3 klíče')
     expect(html).toContain(cs.passkeys.admin.removeAll)
+  })
+})
+
+// Profil → Heslo on the public demo (#328): the row stays, disabled, with the lock note.
+describe('ProfilePassword', () => {
+  const row = (html: string) =>
+    new RegExp(`<button[^>]*>${cs.profile.passwordRow}`).exec(html)?.[0] ?? ''
+
+  it('locked: the row is disabled and the note shown', () => {
+    const html = renderToStaticMarkup(<ProfilePassword enabled locked username="starsi" />)
+    expect(row(html)).toContain('disabled=""')
+    expect(html).toContain(cs.demo.lockedNote)
+  })
+
+  it('unlocked: the row works, no note', () => {
+    const html = renderToStaticMarkup(<ProfilePassword enabled username="starsi" />)
+    expect(row(html)).not.toBe('')
+    expect(row(html)).not.toContain('disabled=""')
+    expect(html).not.toContain(cs.demo.lockedNote)
+  })
+
+  it('switch off: nothing, locked or not', () => {
+    expect(renderToStaticMarkup(<ProfilePassword enabled={false} username="starsi" />)).toBe('')
+    expect(renderToStaticMarkup(<ProfilePassword enabled={false} locked username="starsi" />)).toBe(
+      '',
+    )
   })
 })

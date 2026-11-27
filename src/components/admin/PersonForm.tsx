@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select'
+import { demoLockedMessage } from '~/lib/demo'
 import { cs } from '~/lib/strings'
 import { MAX_DISPLAY_NAME, MAX_PASSWORD_LENGTH, MIN_USER_PASSWORD } from '~/lib/userLimits'
 import type { PersonSummary } from '~/server/users/functions'
@@ -55,9 +56,21 @@ interface Props {
   onSubmit: (values: PersonFormValues) => Promise<string | null>
   /** Opens the reset password dialog (edit mode, not self). */
   onReset?: () => void
+  /**
+   * The public demo (#328): the form shows, every control disabled through its one fieldset
+   * (the controls carry no `disabled` of their own for it), with the lock note at the top.
+   */
+  locked?: boolean
 }
 
-export function PersonForm({ mode, person, isSelf = false, onSubmit, onReset }: Props) {
+export function PersonForm({
+  mode,
+  person,
+  isSelf = false,
+  onSubmit,
+  onReset,
+  locked = false,
+}: Props) {
   const [values, setValues] = useState<PersonFormValues>({
     displayName: person?.displayName ?? '',
     username: person?.username ?? '',
@@ -94,8 +107,8 @@ export function PersonForm({ mode, person, isSelf = false, onSubmit, onReset }: 
     setError(null)
     try {
       setError(await onSubmit(values))
-    } catch {
-      setError(cs.login.failed)
+    } catch (e) {
+      setError(demoLockedMessage(e) ?? cs.login.failed)
     } finally {
       setBusy(false)
     }
@@ -111,116 +124,121 @@ export function PersonForm({ mode, person, isSelf = false, onSubmit, onReset }: 
     >
       <div
         data-slot="person-form-body"
-        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-1"
+        className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-1"
       >
-        <label className="grid gap-1.5">
-          <span className={sectionLabelClass}>{cs.admin.displayName}</span>
-          <Input
-            name="displayName"
-            required
-            ref={nameRef}
-            enterKeyHint={personEnterKeyHint(mode, 'displayName')}
-            onKeyDown={(e) => {
-              onReturn('displayName', e)
-            }}
-            maxLength={MAX_DISPLAY_NAME}
-            value={values.displayName}
-            onChange={(e) => {
-              set({ displayName: e.target.value })
-            }}
-            className="font-bold"
-          />
-        </label>
-        {shows('username') && (
+        <fieldset disabled={locked} className="m-0 flex min-w-0 flex-col gap-3 border-0 p-0">
+          {locked && (
+            <p className="text-meta font-bold break-words text-muted">{cs.demo.lockedNote}</p>
+          )}
           <label className="grid gap-1.5">
-            <span className={sectionLabelClass}>{cs.admin.username}</span>
+            <span className={sectionLabelClass}>{cs.admin.displayName}</span>
             <Input
-              name="username"
+              name="displayName"
               required
-              {...plainTextField}
-              ref={usernameRef}
-              enterKeyHint={personEnterKeyHint(mode, 'username')}
+              ref={nameRef}
+              enterKeyHint={personEnterKeyHint(mode, 'displayName')}
               onKeyDown={(e) => {
-                onReturn('username', e)
+                onReturn('displayName', e)
               }}
-              value={values.username}
+              maxLength={MAX_DISPLAY_NAME}
+              value={values.displayName}
               onChange={(e) => {
-                set({ username: e.target.value })
+                set({ displayName: e.target.value })
               }}
-              aria-describedby={`${id}-username-hint`}
+              className="font-bold"
             />
-            <span id={`${id}-username-hint`} className="text-meta font-bold text-muted">
-              {cs.admin.usernameHint}
-            </span>
           </label>
-        )}
-        {isSelf ? (
-          <p className="text-meta font-bold text-muted">{cs.admin.selfHint}</p>
-        ) : (
-          <div className="grid gap-1.5">
-            <span id={`${id}-role`} className={sectionLabelClass}>
-              {cs.admin.role}
-            </span>
-            <Select
-              value={values.role}
-              onValueChange={(role) => {
-                set({ role: role as Role })
-              }}
-            >
-              <SelectTrigger aria-labelledby={`${id}-role`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ROLES.map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {cs.roles[r]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-        {shows('password') && (
-          <label className="grid gap-1.5">
-            <span className={sectionLabelClass}>{cs.admin.password}</span>
-            <Input
-              name="password"
-              required
-              {...plainTextField}
-              ref={passwordRef}
-              enterKeyHint={personEnterKeyHint(mode, 'password')}
-              onKeyDown={(e) => {
-                onReturn('password', e)
-              }}
-              maxLength={MAX_PASSWORD_LENGTH}
-              value={values.password}
-              onChange={(e) => {
-                set({ password: e.target.value })
-              }}
-              aria-describedby={`${id}-password-hint`}
-            />
-            <span id={`${id}-password-hint`} className="text-meta font-bold text-muted">
-              {cs.admin.startPasswordHint(MIN_USER_PASSWORD)}
-            </span>
-          </label>
-        )}
-        {mode === 'edit' && !isSelf && onReset && (
-          <div className="mt-1 border-t-2 border-track pt-3">
-            <Button type="button" variant="ghost" className="w-full" onClick={onReset}>
-              {cs.admin.reset}
+          {shows('username') && (
+            <label className="grid gap-1.5">
+              <span className={sectionLabelClass}>{cs.admin.username}</span>
+              <Input
+                name="username"
+                required
+                {...plainTextField}
+                ref={usernameRef}
+                enterKeyHint={personEnterKeyHint(mode, 'username')}
+                onKeyDown={(e) => {
+                  onReturn('username', e)
+                }}
+                value={values.username}
+                onChange={(e) => {
+                  set({ username: e.target.value })
+                }}
+                aria-describedby={`${id}-username-hint`}
+              />
+              <span id={`${id}-username-hint`} className="text-meta font-bold text-muted">
+                {cs.admin.usernameHint}
+              </span>
+            </label>
+          )}
+          {isSelf ? (
+            <p className="text-meta font-bold text-muted">{cs.admin.selfHint}</p>
+          ) : (
+            <div className="grid gap-1.5">
+              <span id={`${id}-role`} className={sectionLabelClass}>
+                {cs.admin.role}
+              </span>
+              <Select
+                value={values.role}
+                onValueChange={(role) => {
+                  set({ role: role as Role })
+                }}
+              >
+                <SelectTrigger aria-labelledby={`${id}-role`}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLES.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {cs.roles[r]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {shows('password') && (
+            <label className="grid gap-1.5">
+              <span className={sectionLabelClass}>{cs.admin.password}</span>
+              <Input
+                name="password"
+                required
+                {...plainTextField}
+                ref={passwordRef}
+                enterKeyHint={personEnterKeyHint(mode, 'password')}
+                onKeyDown={(e) => {
+                  onReturn('password', e)
+                }}
+                maxLength={MAX_PASSWORD_LENGTH}
+                value={values.password}
+                onChange={(e) => {
+                  set({ password: e.target.value })
+                }}
+                aria-describedby={`${id}-password-hint`}
+              />
+              <span id={`${id}-password-hint`} className="text-meta font-bold text-muted">
+                {cs.admin.startPasswordHint(MIN_USER_PASSWORD)}
+              </span>
+            </label>
+          )}
+          {mode === 'edit' && !isSelf && onReset && (
+            <div className="mt-1 border-t-2 border-track pt-3">
+              <Button type="button" variant="ghost" className="w-full" onClick={onReset}>
+                {cs.admin.reset}
+              </Button>
+            </div>
+          )}
+          <div className="grid gap-3 pt-3">
+            {error && (
+              <p ref={alertRef} role="alert" className="font-bold text-state-rejected-text">
+                {error}
+              </p>
+            )}
+            <Button type="submit" size="lg" disabled={busy} className="w-full">
+              {busy ? cs.admin.saving : cs.admin.save}
             </Button>
           </div>
-        )}
-        <div className="grid gap-3 pt-3">
-          {error && (
-            <p ref={alertRef} role="alert" className="font-bold text-state-rejected-text">
-              {error}
-            </p>
-          )}
-          <Button type="submit" size="lg" disabled={busy} className="w-full">
-            {busy ? cs.admin.saving : cs.admin.save}
-          </Button>
-        </div>
+        </fieldset>
       </div>
     </form>
   )

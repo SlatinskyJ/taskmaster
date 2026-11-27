@@ -15,6 +15,8 @@ interface Props {
   isSelf?: boolean
   onSubmit: (values: PersonFormValues) => Promise<string | null>
   onReset?: () => void
+  /** The public demo (#328): see PersonForm. */
+  locked?: boolean
 }
 
 export function PersonDrawer({
@@ -25,6 +27,7 @@ export function PersonDrawer({
   isSelf,
   onSubmit,
   onReset,
+  locked = false,
 }: Props) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
@@ -41,6 +44,7 @@ export function PersonDrawer({
           isSelf={isSelf}
           onSubmit={onSubmit}
           onReset={onReset}
+          locked={locked}
         />
       </DrawerContent>
     </Drawer>

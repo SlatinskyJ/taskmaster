@@ -36,6 +36,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '~/components/ui/dialog'
+import { demoLockedMessage } from '~/lib/demo'
 import { forgetFeatures } from '~/lib/featureCache'
 import type { FeatureKey } from '~/lib/features'
 import { liveSubs } from '~/lib/liveSubs'
@@ -165,7 +166,7 @@ function SwitchConfirmDialog({
 type Sheet = { mode: 'add' } | { mode: 'edit'; person: PersonSummary } | null
 
 function Sprava() {
-  const { user } = Route.useRouteContext()
+  const { user, demo } = Route.useRouteContext()
   const { people, passkeys, defaults, disputes, fixable, suggestions, switches } =
     Route.useLoaderData()
   const router = useRouter()
@@ -258,9 +259,9 @@ function Sprava() {
     const { name } = cs.admin.features.names[key]
     try {
       await setSwitchFn({ data: { key, enabled: turnOn } })
-    } catch {
+    } catch (e) {
       setFlipOpen(false)
-      toast.error(cs.admin.features.failed)
+      toast.error(demoLockedMessage(e) ?? cs.admin.features.failed)
       return
     }
     // The admin's own app reads the new values on its next navigation, not within the hour.
@@ -419,15 +420,20 @@ function Sprava() {
       <Button
         size="lg"
         className="mt-3.5 w-full"
+        disabled={demo}
         onClick={() => {
           open({ mode: 'add' })
         }}
       >
         {cs.admin.add}
       </Button>
+      {demo && (
+        <p className="mt-1.5 text-meta font-bold break-words text-muted">{cs.demo.lockedNote}</p>
+      )}
       <FeaturesCard
         features={'error' in switches ? null : switches}
         failed={'error' in switches}
+        locked={demo}
         onToggle={(key, turnOn) => {
           setFlip({ key, turnOn })
           setFlipOpen(true)
@@ -448,6 +454,7 @@ function Sprava() {
         mode={sheet?.mode ?? 'add'}
         person={editing}
         isSelf={editing?.id === user.id}
+        locked={demo}
         onSubmit={save}
         onReset={() => {
           setResetOpen(true)

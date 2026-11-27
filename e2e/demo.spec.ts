@@ -1,12 +1,12 @@
 import { expect, test, type Page } from '@playwright/test'
 import { cs } from '../src/lib/strings'
 import { TASK_TITLE_MAX } from '../src/lib/taskLimits'
-import { logout, PASSWORD, passwordLogin } from './helpers'
+import { logout, passwordLogin } from './helpers'
 
 // The public demo (TASKMASTER_ENV=demo, #327) through the real entry points: links are removed
 // from what a visitor sends, the locked actions change nothing, and the dev pages work. Its own
-// server on the `demo` seed (every switch on). No screen changes yet (#328): a lock refusal
-// shows the screen's usual failure.
+// server on the `demo` seed (every switch on). The screens (#328): the marker and noindex, the
+// one-tap logins, the locked controls shown disabled and the lock refusal in Czech.
 
 test.use({ viewport: { width: 360, height: 800 } })
 test.describe.configure({ mode: 'serial' })
@@ -53,9 +53,8 @@ test('the admin cannot flip a launch switch', async ({ page }) => {
   const card = page.getByRole('region', { name: t.title })
   const zapsat = card.getByRole('switch', { name: t.names.log.name, exact: true })
   await expect(zapsat).toHaveAttribute('aria-checked', 'true')
-  await zapsat.click()
-  await page.getByRole('dialog').getByRole('button', { name: t.confirmOff, exact: true }).click()
-  await expect(page.getByText(t.failed)).toBeVisible()
+  await expect(zapsat).toBeDisabled()
+  await expect(card.getByText(cs.demo.lockedNote)).toBeVisible()
   await page.reload()
   await expect(zapsat).toHaveAttribute('aria-checked', 'true')
 })
@@ -63,17 +62,43 @@ test('the admin cannot flip a launch switch', async ({ page }) => {
 test('Starší cannot change his password; the old one still logs in', async ({ page }) => {
   await login(page, 'starsi')
   await page.goto('/profil')
-  await page.getByRole('button', { name: cs.profile.passwordRow }).click()
-  const sheet = page.getByRole('dialog', { name: cs.profile.passwordTitle })
-  await sheet.getByLabel(cs.profile.currentPassword, { exact: true }).fill(PASSWORD)
-  await sheet.getByLabel(cs.profile.newPassword, { exact: true }).fill('noveheslo1')
-  await sheet.getByLabel(cs.profile.newPasswordAgain, { exact: true }).fill('noveheslo1')
-  await sheet.getByRole('button', { name: cs.profile.passwordSubmit }).click()
-  await expect(sheet.getByRole('alert')).toBeVisible()
-  await expect(page.getByText(cs.profile.passwordChangedOthers)).toHaveCount(0)
+  await expect(page.getByRole('button', { name: cs.profile.passwordRow })).toBeDisabled()
+  await expect(page.getByText(cs.demo.lockedNote)).toBeVisible()
   await logout(page)
   await login(page, 'starsi')
   await expect(page).not.toHaveURL(/\/login/)
+})
+
+/** Táta's row on Správa opens his sheet. */
+async function openTata(page: Page) {
+  await page.getByRole('button', { name: cs.admin.editPerson('Táta') }).click()
+  return page.getByRole('dialog', { name: 'Táta' })
+}
+
+test('the admin sees people locked', async ({ page }) => {
+  await login(page, 'admin')
+  await expect(page.getByRole('button', { name: cs.admin.add, exact: true })).toBeDisabled()
+  const sheet = await openTata(page)
+  await expect(sheet.getByRole('textbox', { name: cs.admin.displayName })).toBeDisabled()
+  await expect(sheet.getByRole('button', { name: cs.admin.save, exact: true })).toBeDisabled()
+  await expect(sheet.getByRole('button', { name: cs.admin.reset, exact: true })).toBeDisabled()
+  await expect(sheet.getByText(cs.demo.lockedNote)).toBeVisible()
+})
+
+test('a forced save on the locked sheet shows the Czech lock error', async ({ page }) => {
+  await login(page, 'admin')
+  const sheet = await openTata(page)
+  // A visitor re-enabling the form in DevTools: the server still refuses.
+  await sheet.locator('fieldset').evaluate((el) => {
+    el.removeAttribute('disabled')
+  })
+  const name = sheet.getByRole('textbox', { name: cs.admin.displayName })
+  await name.fill('Taťka')
+  await sheet.getByRole('button', { name: cs.admin.save, exact: true }).click()
+  await expect(sheet.getByRole('alert')).toHaveText(cs.demo.lockedError)
+  await page.reload()
+  await expect(page.getByRole('button', { name: cs.admin.editPerson('Táta') })).toBeVisible()
+  await expect(page.getByRole('button', { name: cs.admin.editPerson('Taťka') })).toHaveCount(0)
 })
 
 /** The demo marker and the robots meta, as every demo screen has them (#328). */

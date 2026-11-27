@@ -14,11 +14,14 @@ const t = cs.admin.features
 export function FeaturesCard({
   features,
   failed,
+  locked = false,
   onToggle,
   onRetry,
 }: {
   features: Features | null
   failed: boolean
+  /** The public demo (#328): the switches show, disabled, with the lock note. */
+  locked?: boolean
   onToggle: (key: FeatureKey, turnOn: boolean) => void
   onRetry: () => void
 }) {
@@ -44,13 +47,18 @@ export function FeaturesCard({
                 label={row.name}
                 hint={`${row.hint} · ${row.on ? t.on : t.off}`}
                 checked={row.on}
+                disabled={locked}
                 onToggle={() => {
                   onToggle(row.key, !row.on)
                 }}
               />
             ))}
           </Card>
-          <p className="text-meta font-bold text-muted">{t.note}</p>
+          {locked ? (
+            <p className="text-meta font-bold break-words text-muted">{cs.demo.lockedNote}</p>
+          ) : (
+            <p className="text-meta font-bold text-muted">{t.note}</p>
+          )}
         </>
       )}
     </section>
