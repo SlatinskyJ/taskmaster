@@ -189,7 +189,21 @@ describe('topics (#299)', () => {
     setDisputes(f, false)
     const tata = as(f.tata, 'giver')
     const topics = weekRead.topics(tata, weekRead.read(f.db, tata, undefined, MEETING), f.db)
-    expect(topics.some((t) => t.startsWith('disputes'))).toBe(false)
+    expect([...topics].sort()).toEqual(
+      ['week', 'people', `points:${String(f.starsi)}`, `points:${String(f.mladsi)}`].sort(),
+    )
+  })
+
+  it('a taker with an empty takers list still holds only himself', () => {
+    const f = week()
+    setDisputes(f, true)
+    const starsi = as(f.starsi, 'taker')
+    const data = weekRead.read(f.db, starsi, undefined, MEETING)
+    expect(weekRead.topics(starsi, { ...data, takers: [] }, f.db)).toEqual([
+      'week',
+      `points:${String(f.starsi)}`,
+      `disputes:about:${String(f.starsi)}`,
+    ])
   })
 
   it('meeting without a period: week and people only', () => {

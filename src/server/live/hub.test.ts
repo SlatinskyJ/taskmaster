@@ -1,17 +1,23 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { withAudit, writeAudit } from '~/server/audit'
+import { inChangeScope, withAudit, writeAudit } from '~/server/audit'
 import type { AuditEntry } from '~/server/audit'
 import { disputes, pointAdjustments, settlements } from '~/server/db/schema'
 import { MEETING, week } from '~/server/settlement/testing'
 import { CATCH_UP_ROWS, createHub, STREAMS_PER_SESSION, STREAMS_TOTAL } from './hub'
 import type { Hub, LiveEvent, Stream } from './hub'
+import { car } from '~/server/tasks/testing'
 import * as mapping from './mapping'
+import * as text from './text'
 import { idTopic } from './topics'
 import type { Topic } from './topics'
+import type { Viewer } from './text'
 
 // The in-process hub (#299): committed changes to matching streams, once, grouped.
 
 type F = ReturnType<typeof week>
+
+/** The viewer of a catch-up in these tests: Táta. */
+const V: Viewer = { id: 2, role: 'giver' }
 
 /** Two settlement rows of P1, Starší's and Mladší's. */
 function settlementsIn(f: ReturnType<typeof week>): [number, number] {
@@ -54,6 +60,7 @@ function stream(topics: Topic[], over: Partial<Stream> = {}): Fake {
   const s: Fake = {
     sessionId: n,
     userId: 1,
+    role: 'giver',
     tab: `tab-${String(n)}`,
     topics: new Set(topics),
     got: [],
@@ -262,8 +269,150 @@ describe('delivery', () => {
     change(f, taskEntry(f, 77, { before: { secret: 1 }, after: { score: 5 }, reason: 'x' }))
     await settle()
     expect(Object.keys(s.got[0] ?? {}).sort()).toEqual(
-      ['action', 'actor', 'at', 'change', 'entityId', 'entityType', 'id'].sort(),
+      ['action', 'actor', 'at', 'change', 'entityId', 'entityType', 'id', 'text'].sort(),
     )
+  })
+})
+
+describe('one change per request, origin per change (#304)', () => {
+  it('two changes in one tick from two tabs: each tab is skipped only for its own', async () => {
+    const f = await setup()
+    const tabs = ['tab-A', 'tab-B']
+    const hub = hubOf(f, () => tabs.shift())
+    const a = stream(['tasks'], { tab: 'tab-A' })
+    const b = stream(['tasks'], { tab: 'tab-B' })
+    hub.attach(a, 0)
+    hub.attach(b, 0)
+    inChangeScope(() => {
+      change(f, taskEntry(f, 70))
+    })
+    inChangeScope(() => {
+      change(f, taskEntry(f, 71))
+    })
+    await settle()
+    expect(a.got.map((e) => e.entityId)).toEqual(['71'])
+    expect(b.got.map((e) => e.entityId)).toEqual(['70'])
+  })
+
+  it('a request writing, awaiting, writing again sends two events', async () => {
+    const f = await setup()
+    const hub = hubOf(f)
+    const s = stream(['tasks'])
+    hub.attach(s, 0)
+    await inChangeScope(async () => {
+      change(f, taskEntry(f, 70))
+      await Promise.resolve()
+      change(f, taskEntry(f, 71))
+    })
+    await settle()
+    expect(s.got.map((e) => [e.entityId, e.change])).toEqual([
+      ['70', s.got[0]?.id],
+      ['71', s.got[1]?.id],
+    ])
+    expect(s.got[0]?.id).not.toBe(s.got[1]?.id)
+  })
+
+  it('origins are cleared by the flush: a later change with no request reaches that tab', async () => {
+    const f = await setup()
+    let tab: string | undefined = 'tab-A'
+    const hub = hubOf(f, () => tab)
+    const s = stream(['tasks'], { tab: 'tab-A' })
+    hub.attach(s, 0)
+    change(f, taskEntry(f, 70))
+    await settle()
+    expect(s.got).toEqual([])
+    tab = undefined
+    change(f, taskEntry(f, 71, { actor: { kind: 'system' }, action: 'instance.expired' }))
+    await settle()
+    expect(s.got.map((e) => e.entityId)).toEqual(['71'])
+  })
+
+  it("each event's text is for its stream's viewer", async () => {
+    const f = await setup()
+    const hub = hubOf(f)
+    const task = car(f)
+    await settle()
+    const giver = stream(['tasks'], { userId: f.tata, role: 'giver' })
+    const boy = stream(['tasks'], { userId: f.starsi, role: 'taker' })
+    const other = stream(['tasks'], { userId: f.mladsi, role: 'taker' })
+    for (const s of [giver, boy, other]) hub.attach(s, 0)
+    change(
+      f,
+      taskEntry(f, task, {
+        actor: { kind: 'user', userId: f.starsi },
+        action: 'task.agreed',
+        after: { score: 8, reservedBy: f.starsi },
+      }),
+    )
+    await settle()
+    expect(giver.got.map((e) => e.text)).toEqual([
+      'Starší · domluveno za 8 b · rezervace: Starší · Umýt auto',
+    ])
+    expect(boy.got.map((e) => e.text)).toEqual([
+      'Ty · domluveno za 8 b · rezervace: ty · Umýt auto',
+    ])
+    expect(other.got.map((e) => e.text)).toEqual([
+      'Starší · domluveno za 8 b · rezervace: Starší · Umýt auto',
+    ])
+    // The catch-up says the same, for its viewer.
+    const since = (giver.got[0]?.id ?? 0) - 1
+    const caught = hub.changesSince(since, new Set<Topic>(['tasks']), 100, {
+      id: f.starsi,
+      role: 'taker',
+    })
+    expect(caught.events.map((e) => e.text)).toEqual([
+      'Ty · domluveno za 8 b · rezervace: ty · Umýt auto',
+    ])
+  })
+
+  it('the fallback failing too: the event says "Automaticky · změna"', async () => {
+    const f = await setup()
+    const hub = hubOf(f)
+    const s = stream(['tasks'])
+    hub.attach(s, 0)
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const live = vi.spyOn(text, 'liveText').mockImplementationOnce(() => {
+      throw new Error('text')
+    })
+    const fallback = vi.spyOn(text, 'fallbackText').mockImplementationOnce(() => {
+      throw new Error('fallback')
+    })
+    try {
+      change(f)
+      await settle()
+    } finally {
+      live.mockRestore()
+      fallback.mockRestore()
+      error.mockRestore()
+    }
+    expect(s.got.map((e) => e.text)).toEqual(['Automaticky · změna'])
+  })
+
+  it('liveText throwing: logged, the event goes out with the fallback, the next change still delivered', async () => {
+    const f = await setup()
+    const hub = hubOf(f)
+    const task = car(f)
+    await settle()
+    const s = stream(['tasks'], { userId: f.starsi, role: 'taker' })
+    hub.attach(s, 0)
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const spy = vi.spyOn(text, 'liveText').mockImplementationOnce(() => {
+      throw new Error('text')
+    })
+    try {
+      change(f, taskEntry(f, task, { action: 'task.reserved' }))
+      await settle()
+      expect(error).toHaveBeenCalledWith(
+        `[live] no text for audit entry ${String(s.got[0]?.id)}`,
+        expect.any(Error),
+      )
+      change(f, taskEntry(f, task, { action: 'task.released' }))
+      await settle()
+    } finally {
+      spy.mockRestore()
+      error.mockRestore()
+    }
+    expect(s.got.map((e) => e.text)).toEqual(['Táta · změna', 'Táta · uvolněno · Umýt auto'])
   })
 })
 
@@ -271,11 +420,11 @@ describe('nothing twice, nothing lost', () => {
   it('a stream attached after a commit but before its flush gets the change once', async () => {
     const f = await setup()
     const hub = hubOf(f)
-    const since = hub.changesSince(0, new Set(), 1).lastId
+    const since = hub.changesSince(0, new Set(), 1, V).lastId
     change(f)
     const s = stream(['tasks'])
     // Catch-up first (what the stream endpoint does), then attach from its last id.
-    const caught = hub.changesSince(since, s.topics, 100)
+    const caught = hub.changesSince(since, s.topics, 100, V)
     for (const e of caught.events) s.send(e)
     hub.attach(s, caught.lastId)
     await settle()
@@ -378,17 +527,17 @@ describe('limits', () => {
 })
 
 describe('changesSince', () => {
-  it('changesSince(5, topics) returns changes with newest id > 5 that match, grouped, oldest first', async () => {
+  it('changesSince(5, topics, V) returns changes with newest id > 5 that match, grouped, oldest first', async () => {
     const f = await setup()
     const hub = hubOf(f)
-    const base = hub.changesSince(0, new Set(['tasks']), 100).lastId
+    const base = hub.changesSince(0, new Set(['tasks']), 100, V).lastId
     for (let i = 0; i < 3; i++) {
       change(f, [taskEntry(f, 70 + i), taskEntry(f, 70 + i, { action: 'task.agreed' })])
       await settle()
     }
     change(f, taskEntry(f, 1, { action: 'user.updated', entityType: 'user' }))
     await settle()
-    const got = hub.changesSince(base + 2, new Set<Topic>(['tasks']), 100)
+    const got = hub.changesSince(base + 2, new Set<Topic>(['tasks']), 100, V)
     expect(got.events.map((e) => [e.id, e.change, e.entityId])).toEqual([
       [base + 4, base + 3, '71'],
       [base + 6, base + 5, '72'],
@@ -400,25 +549,25 @@ describe('changesSince', () => {
   it('a change split by afterId is sent once, by its newest id, with its first entry', async () => {
     const f = await setup()
     const hub = hubOf(f)
-    const base = hub.changesSince(0, new Set(['tasks']), 100).lastId
+    const base = hub.changesSince(0, new Set(['tasks']), 100, V).lastId
     change(f, [taskEntry(f, 70), taskEntry(f, 71, { action: 'task.agreed' })])
-    const got = hub.changesSince(base + 1, new Set<Topic>(['tasks']), 100)
+    const got = hub.changesSince(base + 1, new Set<Topic>(['tasks']), 100, V)
     expect(got.events.map((e) => [e.id, e.entityId, e.action])).toEqual([
       [base + 2, '70', 'task.created'],
     ])
-    expect(hub.changesSince(base + 2, new Set<Topic>(['tasks']), 100).events).toEqual([])
+    expect(hub.changesSince(base + 2, new Set<Topic>(['tasks']), 100, V).events).toEqual([])
   })
 
   it('overflow past the limit', async () => {
     const f = await setup()
     const hub = hubOf(f)
-    const base = hub.changesSince(0, new Set(['tasks']), 100).lastId
+    const base = hub.changesSince(0, new Set(['tasks']), 100, V).lastId
     for (let i = 0; i < 3; i++) {
       change(f)
       await settle()
     }
-    expect(hub.changesSince(base, new Set<Topic>(['tasks']), 3).overflow).toBe(false)
-    const over = hub.changesSince(base, new Set<Topic>(['tasks']), 2)
+    expect(hub.changesSince(base, new Set<Topic>(['tasks']), 3, V).overflow).toBe(false)
+    const over = hub.changesSince(base, new Set<Topic>(['tasks']), 2, V)
     expect(over.overflow).toBe(true)
     expect(over.lastId).toBe(base + 3)
   })
@@ -447,13 +596,13 @@ describe('cost bounds', () => {
     const f = await setup()
     const hub = hubOf(f)
     expect(CATCH_UP_ROWS).toBe(1000)
-    const base = hub.changesSince(0, new Set(), 1).lastId
+    const base = hub.changesSince(0, new Set(), 1, V).lastId
     change(
       f,
       Array.from({ length: 1000 }, () => taskEntry(f, 70)),
     )
     await settle()
-    const at = hub.changesSince(base, new Set<Topic>(['tasks']), 100)
+    const at = hub.changesSince(base, new Set<Topic>(['tasks']), 100, V)
     expect(at.overflow).toBe(false)
     expect(at.events).toHaveLength(1)
     expect(at.lastId).toBe(base + 1000)
@@ -462,7 +611,7 @@ describe('cost bounds', () => {
     await settle()
     const spy = vi.spyOn(mapping, 'topicsOf')
     try {
-      const past = hub.changesSince(base, new Set<Topic>(['tasks']), 100)
+      const past = hub.changesSince(base, new Set<Topic>(['tasks']), 100, V)
       expect(past).toEqual({ events: [], overflow: true, lastId: base + 1001 })
       expect(spy).not.toHaveBeenCalled()
     } finally {

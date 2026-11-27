@@ -179,4 +179,17 @@ describe('serveLive', () => {
     req.token = undefined
     expect(serveLive(def(['week']), starsi, { n: 4 }).live).toBeNull()
   })
+
+  it('serveLive passes a Date as now', () => {
+    req.db = db()
+    req.token = KEY
+    const seen = liveRead({
+      read: (_db, _viewer, _arg: undefined, now) => {
+        expect(now).toBeInstanceOf(Date)
+        return now
+      },
+      topics: () => ['week'] as const,
+    })
+    expect(serveLive(seen, starsi, undefined).data).toBeInstanceOf(Date)
+  })
 })

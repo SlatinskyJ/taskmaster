@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { fail, ok } from '~/domain/result'
 import type { TaskRow } from '~/server/db/schema'
-import { family } from '~/server/tasks/testing'
+import { family, T0 } from '~/server/tasks/testing'
 import { instanceResult, loggableTemplatesRead } from './functions'
+import { listLoggableTemplates, logChoicesAt } from './instances'
 import { parseSelfLog } from './parse'
 
 // What the instance server functions take and give back (#38). Roles: tests/server-fn-guards.
@@ -50,7 +51,11 @@ describe('topics (#299)', () => {
   it('Zapsat: templates and tasks (the tiles follow their copies)', () => {
     const f = family()
     const starsi = { id: f.starsi, username: 's', displayName: 'S', role: 'taker' as const }
-    const data = loggableTemplatesRead.read(f.db, starsi, undefined, new Date())
+    const data = loggableTemplatesRead.read(f.db, starsi, undefined, T0)
+    expect(data).toEqual({
+      tiles: listLoggableTemplates(f.db, T0),
+      choices: logChoicesAt(f.db, T0),
+    })
     expect(loggableTemplatesRead.topics(starsi, data, f.db)).toEqual(['templates', 'tasks'])
   })
 })

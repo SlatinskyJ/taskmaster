@@ -819,13 +819,13 @@ describe("every action on a proposed chore that left the boys' lists", () => {
       schedule: null,
       deadline: null,
     }
-    const chore = must(createTemplate(f.db, f.tata, input, new Date())).id
+    const chore = must(createTemplate(f.db, f.tata, input, T0)).id
     must(updateUser(f.db, { kind: 'user', userId: f.admin }, f.tata, { active: false }))
     must(approveTemplateScore(f.db, f.mladsi, chore, 6))
     return { ...f, mama, chore }
   }
 
-  const now = () => new Date()
+  const now = () => T0
   /** A boy's page showed no description (the descriptions switch is on). */
   const SAW = { seenDescription: null }
   const ACTIONS: [name: string, choreBidding: boolean, act: (f: F) => unknown][] = [
@@ -900,16 +900,16 @@ describe("every action on a proposed chore that left the boys' lists", () => {
     ]),
   ]
 
-  let wrote = 0
+  /** The entries `act` writes on the chore, on a fresh chore. */
+  const onChore = (f: F, act: (f: F) => unknown) =>
+    written(f.db, () => act(f)).filter(
+      (r) => r.entityType === 'template' && r.entityId === String(f.chore),
+    )
+
   for (const [name, choreBidding, act] of ACTIONS) {
     it(name, () => {
       const f = setupChore(choreBidding)
-      const rows = written(f.db, () => act(f))
-      const onChore = rows.filter(
-        (r) => r.entityType === 'template' && r.entityId === String(f.chore),
-      )
-      if (onChore.length === 0) return
-      wrote += 1
+      if (onChore(f, act).length === 0) return
       const row = f.db.select().from(templates).where(eq(templates.id, f.chore)).get()
       if (!row) throw new Error('gone')
       if (row.status === 'active') return
@@ -926,7 +926,10 @@ describe("every action on a proposed chore that left the boys' lists", () => {
     })
   }
 
-  it('the list is not vacuous: most actions wrote an entry', () => {
-    expect(wrote).toBeGreaterThanOrEqual(4)
+  it('most actions write an entry on the chore', () => {
+    const count = ACTIONS.filter(
+      ([, choreBidding, act]) => onChore(setupChore(choreBidding), act).length > 0,
+    ).length
+    expect(count).toBeGreaterThanOrEqual(4)
   })
 })

@@ -2,11 +2,14 @@ import { createCsrfMiddleware, createMiddleware, createStart } from '@tanstack/r
 import { frameHeader } from '~/lib/frame'
 import { TAB_HEADER, tabId } from '~/lib/tab'
 import { frameRedirectMiddleware } from '~/server/auth/frameRedirect'
+import { changeScopeMiddleware } from '~/server/live/changeScopeMiddleware'
 
-// The app's Start instance. A custom src/start.ts replaces Start's default CSRF check, so it is
-// registered here again, as the default does it: Origin / Sec-Fetch-Site on server function
-// calls (src/server/auth/README.md "CSRF"; e2e/frames.spec.ts checks it). After it, a viewer
-// frame's page redirects keep the frame's `tmFrame` query (src/server/auth/frameRedirect.ts).
+// The app's Start instance. First, each request gets its own audit change scope
+// (src/server/live/changeScopeMiddleware.ts). A custom src/start.ts replaces Start's default CSRF
+// check, so it is registered here again, as the default does it: Origin / Sec-Fetch-Site on
+// server function calls (src/server/auth/README.md "CSRF"; e2e/frames.spec.ts checks it). After
+// it, a viewer frame's page redirects keep the frame's `tmFrame` query
+// (src/server/auth/frameRedirect.ts).
 
 /**
  * In a viewer frame (dev and previews), every server function call carries the frame's own
@@ -27,6 +30,8 @@ const tabMiddleware = createMiddleware({ type: 'function' }).client(({ next }) =
 
 export const startInstance = createStart(() => ({
   requestMiddleware: [
+    // First: every request's audit writes form its own change (#304).
+    changeScopeMiddleware,
     createCsrfMiddleware({ filter: (ctx) => ctx.handlerType === 'serverFn' }),
     frameRedirectMiddleware,
   ],

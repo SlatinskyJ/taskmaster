@@ -6,8 +6,12 @@ import { TAB_HEADER } from '~/lib/tab'
 import type { Db } from '~/server/db'
 import { getDb } from '~/server/db'
 import { auditLog } from '~/server/db/schema'
+import type { UserRole } from '~/server/db/schema'
+import { cs } from '~/lib/strings'
 import { topicsOf } from './mapping'
 import { newestAuditId } from './subscription'
+import { fallbackText, liveText } from './text'
+import type { TitleCache, Viewer } from './text'
 import type { Topic } from './topics'
 
 // The in-process hub (#299): every committed change becomes one event for each open stream
@@ -26,11 +30,15 @@ export interface LiveEvent {
   entityId: string
   actor: { kind: 'user'; userId: number } | { kind: 'system' }
   at: string
+  /** The change's sentence for the stream's viewer (./text.ts). */
+  text: string
 }
 
 export interface Stream {
   sessionId: number
   userId: number
+  /** The user's role as signed in the stream's tokens: the viewer the event's text is for. */
+  role: UserRole
   /** The tab that opened it (`x-tm-tab`); a change made from this tab is not echoed to it. */
   tab: string
   topics: ReadonlySet<Topic>
@@ -49,6 +57,7 @@ export interface Hub {
     afterId: number,
     topics: ReadonlySet<Topic>,
     limit: number,
+    viewer: Viewer,
   ): { events: LiveEvent[]; overflow: boolean; lastId: number }
   /** Number of attached streams (tests, logs). */
   size(): number
@@ -111,8 +120,28 @@ function group(db: Db, rows: readonly AuditLogRow[]): Change[] {
   return [...byKey.values()].sort((a, b) => a.newest - b.newest)
 }
 
-/** The change as `topics` sees it, or null when none of its entries touches them. */
-function eventFor(change: Change, topics: ReadonlySet<Topic>): LiveEvent | null {
+/** The entry's sentence for the viewer; a throw is logged and becomes "<actor> · změna". */
+function safeText(db: Db, row: AuditLogRow, viewer: Viewer, cache: TitleCache): string {
+  try {
+    return liveText(db, row, viewer, cache)
+  } catch (err) {
+    console.error(`[live] no text for audit entry ${String(row.id)}`, err)
+    try {
+      return fallbackText(db, row, viewer)
+    } catch {
+      return cs.live.system + cs.live.sep + cs.history.other
+    }
+  }
+}
+
+/** The change as `topics` sees it, for `viewer`, or null when none of its entries touches them. */
+function eventFor(
+  db: Db,
+  change: Change,
+  topics: ReadonlySet<Topic>,
+  viewer: Viewer,
+  cache: TitleCache,
+): LiveEvent | null {
   const seen = change.entries.find((e) => e.topics.some((t) => topics.has(t)))
   if (!seen) return null
   const { row } = seen
@@ -127,6 +156,7 @@ function eventFor(change: Change, topics: ReadonlySet<Topic>): LiveEvent | null 
         ? { kind: 'user', userId: row.actorUserId }
         : { kind: 'system' },
     at: row.at,
+    text: safeText(db, row, viewer, cache),
   }
 }
 
@@ -135,13 +165,20 @@ export function createHub(db: Db, opts: { originTab?: () => string | undefined }
   /** Attached streams, oldest first, with the newest id each has been sent (or skipped). */
   const streams = new Map<Stream, { lastId: number }>()
   let lastSent = newestAuditId(db)
-  let pending: { origin: string | undefined } | null = null
+  /**
+   * The tab each change since the last flush came from, by change key, set at its first entry.
+   * A change is one synchronous run (audit README), so it never spans two flushes.
+   */
+  const origins = new Map<number, string | undefined>()
+  let scheduled = false
 
   function detach(s: Stream): void {
     streams.delete(s)
   }
 
-  function flush(origin: string | undefined): void {
+  function flush(): void {
+    const from = new Map(origins)
+    origins.clear()
     const rows = db
       .select()
       .from(auditLog)
@@ -154,15 +191,16 @@ export function createHub(db: Db, opts: { originTab?: () => string | undefined }
     // Nobody listening: nothing to map.
     if (streams.size === 0) return
     const changes = group(db, rows)
+    // One title read per (entity, viewer) for this flush.
+    const cache: TitleCache = new Map()
     for (const [stream, state] of [...streams]) {
-      if (origin !== undefined && stream.tab === origin) {
-        state.lastId = Math.max(state.lastId, last.id)
-        continue
-      }
+      const viewer = { id: stream.userId, role: stream.role }
       for (const change of changes) {
         if (change.newest <= state.lastId) continue
         state.lastId = change.newest
-        const event = eventFor(change, stream.topics)
+        // Made from this tab: it already shows it.
+        if (from.get(change.key) === stream.tab) continue
+        const event = eventFor(db, change, stream.topics, viewer, cache)
         if (!event) continue
         try {
           stream.send(event)
@@ -180,15 +218,15 @@ export function createHub(db: Db, opts: { originTab?: () => string | undefined }
     }
   }
 
-  const unsubscribe = onAuditWritten(() => {
-    if (pending) return
-    pending = { origin: originTab() }
+  const unsubscribe = onAuditWritten(({ id, changeId }) => {
+    if (changeId === null) origins.set(id, originTab())
+    if (scheduled) return
+    scheduled = true
     queueMicrotask(() => {
-      const origin = pending?.origin
-      pending = null
+      scheduled = false
       // A throw in a microtask would end the process: log it instead.
       try {
-        flush(origin)
+        flush()
       } catch (err) {
         console.error('[live] flush failed', err)
       }
@@ -209,7 +247,7 @@ export function createHub(db: Db, opts: { originTab?: () => string | undefined }
       }
     },
 
-    changesSince(afterId, topics, limit) {
+    changesSince(afterId, topics, limit, viewer) {
       const rows = db
         .select()
         .from(auditLog)
@@ -247,8 +285,9 @@ export function createHub(db: Db, opts: { originTab?: () => string | undefined }
       }
       const events: LiveEvent[] = []
       let overflow = false
+      const cache: TitleCache = new Map()
       for (const change of group(db, [...head, ...rows])) {
-        const event = eventFor(change, topics)
+        const event = eventFor(db, change, topics, viewer, cache)
         if (!event) continue
         if (events.length === limit) {
           overflow = true

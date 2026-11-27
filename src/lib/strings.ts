@@ -472,6 +472,48 @@ export const cs = {
     descriptionDiscarded: 'návrh popisu propadl',
     other: 'změna',
   },
+  /**
+   * A live change notice's sentence (#299): "<who> · <phrase>[ · <title>]". Task and chore steps
+   * reuse `history`; these are the rest. The viewer's own other tab or phone is `you`, the
+   * automatic steps (the scheduler, an approval carried over, an agreement after a people change)
+   * `system`.
+   */
+  live: {
+    you: 'Ty',
+    system: 'Automaticky',
+    sep: ' · ',
+    userCreated: 'nový účet',
+    userUpdated: 'úprava účtu',
+    settingsChanged: 'nové nastavení',
+    templateUpdated: 'upraveno',
+    periodCreated: 'nový týden',
+    periodEnded: 'konec týdne',
+    period: {
+      created: 'návrh příštího týdne',
+      approved: 'souhlas s příštím týdnem',
+      rejected: 'nesouhlas s příštím týdnem',
+      withdrawn: 'návrh příštího týdne stažen',
+      agreed: 'příští týden domluven',
+      lapsed: 'návrh příštího týdne propadl',
+    },
+    defaults: {
+      created: 'návrh výchozího týdne',
+      approved: 'souhlas s výchozím týdnem',
+      rejected: 'nesouhlas s výchozím týdnem',
+      withdrawn: 'návrh výchozího týdne stažen',
+      agreed: 'výchozí týden domluven',
+    },
+    settled: 'vyúčtování týdne',
+    settlementCorrected: 'oprava vyúčtování',
+    pointsAdjusted: 'oprava bodů',
+    disputeOpened: 'nový spor',
+    disputeCorrected: 'spor vyřešen opravou',
+    disputeDismissed: 'spor uzavřen beze změny',
+    suggestionCreated: 'nový návrh na zlepšení',
+    suggestionSent: 'návrh poslán na GitHub',
+    suggestionDone: 'návrh vyřízen',
+    suggestionDismissed: 'návrh zamítnut',
+  },
   home: {
     greeting: 'Ahoj',
     /** "Čeká na tebe (2)" (UI doc §6 [call]: always at the top of Domů). */

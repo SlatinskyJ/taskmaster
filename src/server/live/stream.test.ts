@@ -5,12 +5,13 @@ import { withAudit } from '~/server/audit'
 import type { AuditEntry } from '~/server/audit'
 import { toCurrentUser } from '~/server/auth'
 import { createSession, deleteSession, findSession } from '~/server/auth/sessions'
-import { sessions, users } from '~/server/db/schema'
+import { auditLog, featureFlags, sessions, users } from '~/server/db/schema'
 import type { UserRole } from '~/server/db/schema'
-import { family, T0 } from '~/server/tasks/testing'
+import { family, must, T0 } from '~/server/tasks/testing'
+import { createTemplate } from '~/server/templates/templates'
 import { createHub } from './hub'
 import type { Hub, LiveEvent } from './hub'
-import { CATCH_UP_LIMIT, HEARTBEAT_MS, openStream } from './stream'
+import { CATCH_UP_LIMIT, HEARTBEAT_MS, OPEN_LINE, openStream } from './stream'
 import type { StreamDeps, StreamRequest } from './stream'
 import { signSubscription } from './subscription'
 import { TOPIC_LIMIT } from './topics'
@@ -344,6 +345,7 @@ describe('catch-up and live events', () => {
       entityId: '70',
       actor: { kind: 'user', userId: s.f.tata },
       at: T0.toISOString(),
+      text: 'Táta · změna',
     })
     expect(live[0]).toStrictEqual({
       id: 2,
@@ -353,6 +355,7 @@ describe('catch-up and live events', () => {
       entityId: '71',
       actor: { kind: 'user', userId: s.f.tata },
       at: T0.toISOString(),
+      text: 'Táta · změna',
     })
   })
 
@@ -362,7 +365,7 @@ describe('catch-up and live events', () => {
     const text = await reader(
       openStream(request({ tokens: [sign(s, ['tasks'])] }), s.deps()),
     ).text()
-    expect(text.startsWith('id: 1\ndata: {')).toBe(true)
+    expect(text.startsWith(`${OPEN_LINE}id: 1\ndata: {`)).toBe(true)
   })
 
   it('Last-Event-ID 9 beats since 3: nothing ≤ 9 is sent', async () => {
@@ -395,13 +398,84 @@ describe('catch-up and live events', () => {
     await change(s.f, 70)
     const body = reader(openStream(request({ tokens: [sign(s, ['tasks'])] }), s.deps()))
     const text = await body.text()
-    expect(text).toBe('id: 101\nevent: overflow\ndata: {}\n\n')
+    expect(text).toBe(`${OPEN_LINE}id: 101\nevent: overflow\ndata: {}\n\n`)
     await change(s.f, 71)
     expect(events(await body.text()).map((e) => [e.id, e.entityId])).toEqual([[102, '71']])
   })
 })
 
+describe("an event's text is for the stream's viewer", () => {
+  it('a proposed chore a taker may not load: the giver gets its title, the taker only "Táta · změna" (live and catch-up)', async () => {
+    const s = await setup()
+    const { f } = s
+    for (const key of ['choreBidding', 'openRows'] as const) {
+      f.db
+        .insert(featureFlags)
+        .values({ key, enabled: false })
+        .onConflictDoUpdate({ target: featureFlags.key, set: { enabled: false } })
+        .run()
+    }
+    const input = { title: 'Umýt okna', score: 6, approvalRequired: true }
+    const chore = must(
+      createTemplate(f.db, f.tata, { ...input, schedule: null, deadline: null }, T0),
+    ).id
+    await settle()
+    const tataKey = createSession(f.db, f.tata, 'password', T0).token
+    const tata = { id: f.tata, role: 'giver' as const }
+    const tataRow = f.db.select().from(users).where(eq(users.id, f.tata)).get()
+    if (!tataRow) throw new Error('no user')
+    const open = (since: string | null) => ({
+      taker: reader(
+        openStream(request({ tokens: [sign(s, ['templates:proposed'])], since }), s.deps()),
+      ),
+      giver: reader(
+        openStream(
+          request({
+            tokens: [sign(s, ['templates:proposed'], 0, tataKey, tata)],
+            since,
+            tab: 'tab-2',
+          }),
+          s.deps({ currentUser: toCurrentUser(tataRow), sessionKey: tataKey }),
+        ),
+      ),
+    })
+    const live = open(null)
+    await live.taker.text()
+    await live.giver.text()
+    const before = f.db.select().from(auditLog).all().length
+    await change(f, chore, {
+      action: 'template.score_countered',
+      entityType: 'template',
+      after: { score: 4 },
+    })
+    const texts = async (r: ReturnType<typeof reader>) => events(await r.text()).map((e) => e.text)
+    expect(await texts(live.giver)).toEqual(['Ty · nabídka 4 b · Umýt okna'])
+    expect(await texts(live.taker)).toEqual(['Táta · změna'])
+
+    const caught = open(String(before))
+    expect(await texts(caught.giver)).toEqual(['Ty · nabídka 4 b · Umýt okna'])
+    expect(await texts(caught.taker)).toEqual(['Táta · změna'])
+  })
+})
+
 describe('heartbeat and the session', () => {
+  it("a stream with no catch-up has ': open' before any ping (#309)", async () => {
+    const s = await setup()
+    const body = reader(openStream(request({ tokens: [sign(s, ['tasks'])] }), s.deps()))
+    expect(OPEN_LINE).toBe(': open\n\n')
+    expect(await body.text()).toBe(OPEN_LINE)
+    expect(s.hasPing()).toBe(true)
+  })
+
+  it("': open' comes before the catch-up", async () => {
+    const s = await setup()
+    await change(s.f, 70)
+    const text = await reader(
+      openStream(request({ tokens: [sign(s, ['tasks'])], since: '0' }), s.deps()),
+    ).text()
+    expect(text.startsWith(`${OPEN_LINE}id: 1\ndata: `)).toBe(true)
+  })
+
   it('ping every 25 s; an expired session ends the stream at the next ping', async () => {
     const s = await setup()
     const body = reader(openStream(request({ tokens: [sign(s, ['tasks'])] }), s.deps()))
@@ -472,7 +546,7 @@ describe('heartbeat and the session', () => {
     const body = reader(openStream(request({ tokens: [sign(s, ['tasks'])] }), s.deps()))
     s.setNow(new Date(T0.getTime() + 2 * 24 * 60 * 60 * 1000))
     s.ping()
-    expect(await body.text()).toBe(': ping\n\n')
+    expect(await body.text()).toBe(`${OPEN_LINE}: ping\n\n`)
     expect(s.f.db.select().from(sessions).all()).toEqual(before)
   })
 

@@ -348,6 +348,17 @@ describe('topics (#299)', () => {
     ])
   })
 
+  it('the read returns exactly what disputeListHandler returns, for a giver and a taker', () => {
+    const f = withSwitch(true)
+    const input = { kind: 'completion', id: f.confirmed, reason: 'Byl i kufr.' } as const
+    expect(openDisputeHandler(f.db, f.starsi, input, MEETING)).toEqual({ ok: true })
+    for (const v of [viewer(f.tata, 'giver'), viewer(f.starsi, 'taker')]) {
+      const read = disputeListRead.read(f.db, v, undefined, MEETING)
+      expect(read).toEqual(disputeListHandler(f.db, { id: v.id, role: v.role }))
+      expect(read).toHaveLength(1)
+    }
+  })
+
   it('disputes off: no topics on the dispute list', () => {
     const f = withSwitch(false)
     for (const v of [viewer(f.tata, 'giver'), viewer(f.starsi, 'taker')]) {

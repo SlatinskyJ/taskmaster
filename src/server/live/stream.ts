@@ -14,6 +14,8 @@ import type { Topic } from './topics'
 export const HEARTBEAT_MS = 25_000
 /** Most changes a reconnect replays one by one; more become one `overflow` event. */
 export const CATCH_UP_LIMIT = 100
+/** Written as soon as the stream is attached, so it is open before the first heartbeat (#309). */
+export const OPEN_LINE = ': open\n\n'
 
 export interface StreamRequest {
   /** The `t` query values: signed subscriptions (./subscription.ts). */
@@ -126,10 +128,11 @@ export function openStream(req: StreamRequest, deps: StreamDeps): Response {
 
   // Catch-up and attach in one synchronous block: no flush can fall between them.
   const hub = deps.hub()
-  const caught = hub.changesSince(start, topics, CATCH_UP_LIMIT)
+  const caught = hub.changesSince(start, topics, CATCH_UP_LIMIT, { id: user.id, role: user.role })
   const stream: Stream = {
     sessionId: session.id,
     userId: user.id,
+    role: user.role,
     tab,
     topics,
     send(e) {
@@ -142,6 +145,7 @@ export function openStream(req: StreamRequest, deps: StreamDeps): Response {
     ended = true
     return status(503)
   }
+  write(OPEN_LINE)
   if (caught.overflow) write(`id: ${String(caught.lastId)}\nevent: overflow\ndata: {}\n\n`)
   else for (const e of caught.events) write(frame(e))
 

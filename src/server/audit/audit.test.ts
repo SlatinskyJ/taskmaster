@@ -5,6 +5,7 @@ import { appMeta, auditLog } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { AUDIT_ACTIONS } from './actions'
 import { onAuditWritten, REDACTED, withAudit, writeAudit } from './audit'
+import { inChangeScope } from './changeScope'
 import type { AuditEntry } from './audit'
 
 const dad = { kind: 'user', userId: 7 } as const
@@ -365,6 +366,138 @@ describe('changes (#299)', () => {
       [1, null],
       [2, 1],
     ])
+  })
+
+  describe('per request (#304)', () => {
+    const w = (over: Partial<AuditEntry> = {}) => {
+      withAudit(db, () => undefined, entry(over))
+    }
+    /** A write whose first entry is rolled back after it was written. */
+    const rolledBack = (over: Partial<AuditEntry>) => {
+      expect(() =>
+        db.transaction((tx) => {
+          writeAudit(tx, entry(over))
+          throw new Error('boom')
+        }),
+      ).toThrow('boom')
+    }
+
+    it('two requests whose runs fall in one tick are two changes', async () => {
+      await Promise.all([
+        inChangeScope(async () => {
+          await Promise.resolve()
+          w()
+          w()
+        }),
+        inChangeScope(async () => {
+          await Promise.resolve()
+          w()
+          w()
+        }),
+      ])
+      expect(changeIds()).toEqual([
+        [1, null],
+        [2, 1],
+        [3, null],
+        [4, 3],
+      ])
+    })
+
+    it('two requests whose writes interleave in one tick share no change', async () => {
+      await Promise.all([
+        inChangeScope(async () => {
+          w()
+          await Promise.resolve()
+          w()
+        }),
+        inChangeScope(async () => {
+          w()
+          await Promise.resolve()
+          w()
+        }),
+      ])
+      expect(changeIds()).toEqual([
+        [1, null],
+        [2, null],
+        [3, null],
+        [4, null],
+      ])
+    })
+
+    it('one request with an await between two writes is two changes', async () => {
+      await inChangeScope(async () => {
+        w()
+        await Promise.resolve()
+        w()
+      })
+      expect(changeIds()).toEqual([
+        [1, null],
+        [2, null],
+      ])
+    })
+
+    it('in a scope, a rolled-back first entry: the next write starts the change again', () => {
+      inChangeScope(() => {
+        rolledBack({})
+        w()
+        w()
+      })
+      expect(changeIds()).toEqual([
+        [1, null],
+        [2, 1],
+      ])
+    })
+
+    it('a rolled-back first entry whose id another request took meanwhile: no shared change', async () => {
+      inChangeScope(() => {
+        queueMicrotask(() => {
+          w({ action: 'settings.changed', entityId: 'b' })
+        })
+      })
+      inChangeScope(() => {
+        queueMicrotask(() => {
+          w({ action: 'task.created', entityType: 'task', entityId: 'a' })
+        })
+        rolledBack({ action: 'task.created', entityType: 'task', entityId: 'a' })
+      })
+      await nextRequest()
+      expect(auditRows().map((r) => [r.id, r.action, r.changeId])).toEqual([
+        [1, 'settings.changed', null],
+        [2, 'task.created', null],
+      ])
+    })
+
+    it.each([
+      ['another entity', { entityId: 'b' }],
+      ['another time', { at: new Date('2026-11-16T17:00:01.000Z') }],
+    ] as const)(
+      'a freed first id taken by an entry of the same action on %s: no shared change',
+      async (_name, over) => {
+        rolledBack({})
+        inChangeScope(() => {
+          w(over)
+        })
+        w()
+        await nextRequest()
+        expect(changeIds()).toEqual([
+          [1, null],
+          [2, null],
+        ])
+      },
+    )
+
+    it('outside a scope too: a freed first id taken by a request does not join its change', async () => {
+      rolledBack({ action: 'task.created', entityType: 'task', entityId: 'a' })
+      inChangeScope(() => {
+        w({ action: 'settings.changed', entityId: 'b' })
+      })
+      w({ action: 'task.created', entityType: 'task', entityId: 'a' })
+      await nextRequest()
+      expect(auditRows().map((r) => [r.id, r.action, r.changeId])).toEqual([
+        [1, 'settings.changed', null],
+        [2, 'task.created', null],
+      ])
+    })
   })
 
   it('onAuditWritten gets each row id in order; unsubscribe stops it', () => {
