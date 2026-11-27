@@ -5,11 +5,19 @@ import { suiteServers } from './e2e/suites'
 // (e2e/suites.ts), each on a fresh, empty data folder with its own seed (#183), all started at
 // once. Locally, point PW_CHROMIUM_PATH at a Chromium if Playwright's own is not installed.
 
+// Chromium draws `<input type="time">` in its own interface language, not the page's `locale`:
+// without these, screenshots show "11:59 PM" where a Czech phone shows 23:59 (#221). Linux reads
+// LANG/LANGUAGE, other systems the --lang switch.
+const czech = {
+  args: ['--lang=cs-CZ'],
+  env: { ...process.env, LANG: 'cs_CZ.UTF-8', LANGUAGE: 'cs' },
+}
+
 const chromium = {
   ...devices['Desktop Chrome'],
   launchOptions: process.env.PW_CHROMIUM_PATH
-    ? { executablePath: process.env.PW_CHROMIUM_PATH }
-    : {},
+    ? { ...czech, executablePath: process.env.PW_CHROMIUM_PATH }
+    : czech,
 }
 
 const servers = suiteServers()

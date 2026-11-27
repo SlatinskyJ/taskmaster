@@ -285,54 +285,75 @@ function history(
   adjusted: Adjusted[],
 ): HistoryWeek[] {
   const weeks: HistoryWeek[] = []
-  const latest = latestCorrections(
-    db,
-    rows.map((r) => r.id),
-  )
+  const records = historyRecords(db, rows, names, spans, adjusted, marks)
+  const all = records.map((record, i) => ({ periodId: rows[i]?.periodId, record }))
   for (const p of [...listPeriods(db)].reverse()) {
-    const span = spans.get(p.id)
-    const within = (takerId: number) =>
-      span
-        ? adjusted
-            .filter(
-              (a) => a.takerId === takerId && a.madeAt >= span.startsAt && a.madeAt < span.endsAt,
-            )
-            .map((a) => ({ ...a.row, waiting: false }))
-        : []
-    const records = rows
+    const mine = all
       .filter((r) => r.periodId === p.id)
+      .map((r) => r.record)
       .sort((a, b) => a.takerId - b.takerId)
-      .map((r) => ({
-        id: r.id,
-        takerId: r.takerId,
-        name: names.get(r.takerId) ?? '',
-        totalBefore: r.totalBefore,
-        level: r.level,
-        deducted: r.deducted,
-        carryOver: r.carryOver,
-        dispute: marks.get(markKey({ kind: 'settlement', id: r.id })) ?? null,
-        correction: correctionOf(r, latest.get(r.id)),
-        adjustments: within(r.takerId),
-      }))
-    if (records.length === 0) continue
+    if (mine.length === 0) continue
     weeks.push({
       periodId: p.id,
       startsAt: toIsoUtc(p.startsAt),
       endsAt: toIsoUtc(periodEnd(p)),
       levels: p.levels,
-      records,
+      records: mine,
     })
   }
   return weeks
 }
 
-interface Span {
+/**
+ * The settlement records as Týden's Historie shows them, in the order of `rows`: each with its
+ * latest correction and the adjustments made in its week. Without `marks` every `dispute` is
+ * null (the admin's week view, #263).
+ */
+export function historyRecords(
+  db: Db | Tx,
+  rows: (typeof settlements.$inferSelect)[],
+  names: Map<number, string>,
+  spans: Map<number, Span>,
+  adjusted: Adjusted[],
+  marks?: Map<string, DisputeMark>,
+): HistoryRecord[] {
+  const latest = latestCorrections(
+    db,
+    rows.map((r) => r.id),
+  )
+  return rows.map((r) => ({
+    id: r.id,
+    takerId: r.takerId,
+    name: names.get(r.takerId) ?? '',
+    totalBefore: r.totalBefore,
+    level: r.level,
+    deducted: r.deducted,
+    carryOver: r.carryOver,
+    dispute: marks?.get(markKey({ kind: 'settlement', id: r.id })) ?? null,
+    correction: correctionOf(r, latest.get(r.id)),
+    adjustments: withinSpan(adjusted, r.takerId, spans.get(r.periodId)),
+  }))
+}
+
+/** His adjustments made in `span` ([start, end)), oldest first, none waiting. */
+export function withinSpan(
+  adjusted: Adjusted[],
+  takerId: number,
+  span: Span | undefined,
+): WeekAdjustment[] {
+  if (!span) return []
+  return adjusted
+    .filter((a) => a.takerId === takerId && a.madeAt >= span.startsAt && a.madeAt < span.endsAt)
+    .map((a) => ({ ...a.row, waiting: false }))
+}
+
+export interface Span {
   startsAt: string
   endsAt: string
 }
 
 /** Every period's [start, end) in UTC ISO, by id. */
-function periodSpans(db: Db | Tx): Map<number, Span> {
+export function periodSpans(db: Db | Tx): Map<number, Span> {
   return new Map(
     listPeriods(db).map((p) => [
       p.id,
@@ -341,7 +362,7 @@ function periodSpans(db: Db | Tx): Map<number, Span> {
   )
 }
 
-interface Adjusted {
+export interface Adjusted {
   takerId: number
   madeAt: string
   row: Omit<WeekAdjustment, 'waiting'>
@@ -349,7 +370,7 @@ interface Adjusted {
 }
 
 /** The given takers' adjustments, oldest first, with a correction's week (#48). */
-function adjustmentsOf(db: Db | Tx, ids: number[], spans: Map<number, Span>): Adjusted[] {
+export function adjustmentsOf(db: Db | Tx, ids: number[], spans: Map<number, Span>): Adjusted[] {
   if (ids.length === 0) return []
   const all = db
     .select()
