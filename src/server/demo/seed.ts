@@ -11,12 +11,13 @@ import type { SeedName } from './seeds'
 // Demo data for previews, dev and E2E (#62): an empty database gets the family with known
 // passwords, so a preview is clickable right away. This is the only source of test users
 // (Jakub 2026-11-17); production gets its one admin from ADMIN_PASSWORD (../users/bootstrap).
-// Runs at boot (src/server/plugins) only when `TASKMASTER_ENV=preview`; to try it locally:
-// `TASKMASTER_ENV=preview pnpm dev` on a fresh `DATA_DIR`.
+// Runs at boot (src/server/plugins) only when `TASKMASTER_ENV=preview` or `demo` (the public
+// demo, src/server/env/demo.ts); to try it locally: `TASKMASTER_ENV=preview pnpm dev` on a
+// fresh `DATA_DIR`.
 //
-// Guards: never without the preview flag, never when ADMIN_PASSWORD is set (a real deploy
-// sets it), and never on a database that already has people (a real family's database always
-// does). All tested.
+// Guards: never without the preview or demo flag, never when ADMIN_PASSWORD is set (a real
+// deploy sets it), and never on a database that already has people (a real family's database
+// always does). All tested.
 //
 // What else it holds is picked by `TASKMASTER_SEED` (#183): a named seed (./seeds.ts) is a list
 // of pieces (./pieces.ts, one per feature's sample data) and the launch switches it turns on;
@@ -25,7 +26,10 @@ import type { SeedName } from './seeds'
 // shows features production still hides. Each e2e suite names its own seed in e2e/suites.ts.
 // Everything runs in one transaction, through the real actions.
 
-/** Known on purpose: previews are tailnet-only and hold no real data. Never used in production. */
+/**
+ * Known on purpose: previews are tailnet-only and the public demo is for anyone; neither holds
+ * real data, and the demo locks password changes (./lock.ts). Never used in production.
+ */
 export const DEMO_PASSWORD = 'demo1234'
 
 export const DEMO_USERS: readonly NewUser[] = [
