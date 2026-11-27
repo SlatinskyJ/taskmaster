@@ -24,7 +24,7 @@ export function LiveToast({
   onClose: () => void
 }) {
   return (
-    <div className="flex w-full items-start gap-1 rounded-card bg-ink py-1 pr-1 pl-4 font-display text-bg">
+    <div className="flex w-full items-start gap-1 rounded-card bg-ink py-1 pr-1 pl-4 font-display text-bg select-none">
       <p
         data-live-text
         className="min-w-0 flex-1 py-2.5 text-[15px] leading-snug font-semibold break-words"

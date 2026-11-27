@@ -15,8 +15,6 @@ export interface BannerState {
   overflow: boolean
   /** False after a dismiss, until a new change. */
   shown: boolean
-  /** A text field in a dialog or sheet has focus: the banner waits (#299 Q2). */
-  held: boolean
 }
 
 export const BANNER_START: BannerState = {
@@ -24,39 +22,17 @@ export const BANNER_START: BannerState = {
   text: null,
   overflow: false,
   shown: false,
-  held: false,
 }
 
 export type BannerEvent =
   | { type: 'change'; event: Pick<LiveEvent, 'change' | 'text'> }
   | { type: 'overflow' }
   | { type: 'dismiss' }
-  /** A text field in a dialog or sheet got focus. */
-  | { type: 'hold' }
-  /** Focus left it (blur, the dialog closed). */
-  | { type: 'release' }
-
-/** Input types a person does not type into: focusing one does not hold the banner. */
-const NOT_TYPED = new Set(['checkbox', 'radio', 'button', 'submit', 'range', 'time', 'date'])
-
-interface FocusTarget {
-  tagName: string
-  type?: string
-  closest?(sel: string): unknown
-}
-
-/** A typed field inside a dialog or sheet: the banner would cover it (keyboard open). */
-export function holdsBanner(el: FocusTarget | null): boolean {
-  if (typeof el?.tagName !== 'string' || typeof el.closest !== 'function') return false
-  const tag = el.tagName.toUpperCase()
-  const typed = tag === 'TEXTAREA' || (tag === 'INPUT' && !NOT_TYPED.has(el.type ?? 'text'))
-  return typed && el.closest('[role="dialog"]') !== null
-}
 
 /**
  * Ties one shown toast's dismiss to the key it was shown for. Sonner 2.0.8 also calls
  * `onDismiss` from an effect after a programmatic `toast.dismiss`, so a dismiss the banner made
- * itself (key change, hold) must not count as the person's.
+ * itself (key change) must not count as the person's.
  */
 export function dismissGuard(
   key: string,
@@ -89,16 +65,12 @@ export function bannerReduce(s: BannerState, e: BannerEvent): BannerState {
       return { ...s, overflow: true, shown: true }
     case 'dismiss':
       return { ...s, shown: false }
-    case 'hold':
-      return { ...s, held: true }
-    case 'release':
-      return { ...s, held: false }
   }
 }
 
 /** What the toast says, or null for no toast. */
 export function bannerText(s: BannerState): string | null {
-  if (s.held || !s.shown) return null
+  if (!s.shown) return null
   if (s.overflow) return cs.live.banner.overflow
   if (s.changes.size >= 2) return cs.live.banner.many(s.changes.size)
   return s.text

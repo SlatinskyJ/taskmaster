@@ -8,7 +8,6 @@ import {
   bannerReduce,
   bannerText,
   dismissGuard,
-  holdsBanner,
   subsKey,
   subsOf,
 } from '~/lib/liveBanner'
@@ -50,14 +49,13 @@ function browserDeps(): ConnectDeps {
   }
 }
 
-/** The banner state of one subscription key; another key starts again (the hold carries over). */
+/** The banner state of one subscription key; another key starts again. */
 interface Keyed {
   key: string
   s: BannerState
 }
 
-const forKey = (st: Keyed, key: string): BannerState =>
-  st.key === key ? st.s : { ...BANNER_START, held: st.s.held }
+const forKey = (st: Keyed, key: string): BannerState => (st.key === key ? st.s : BANNER_START)
 
 export function LiveBanner({ features }: { features: Pick<Features, 'liveChanges'> }) {
   const router = useRouter()
@@ -101,38 +99,18 @@ export function LiveBanner({ features }: { features: Pick<Features, 'liveChanges
     }
   }, [key, dispatch])
 
-  // While a typed field in a dialog or sheet has focus, the banner waits (#299 Q2): it would
-  // cover the field with the keyboard open.
-  useEffect(() => {
-    const onIn = (e: FocusEvent) => {
-      if (holdsBanner(e.target as HTMLElement | null)) dispatch(keyRef.current, { type: 'hold' })
-    }
-    let pending: number | null = null
-    const onOut = () => {
-      if (pending !== null) window.clearTimeout(pending)
-      pending = window.setTimeout(() => {
-        pending = null
-        if (!holdsBanner(document.activeElement)) {
-          dispatch(keyRef.current, { type: 'release' })
-        }
-      }, 0)
-    }
-    document.addEventListener('focusin', onIn)
-    document.addEventListener('focusout', onOut)
-    return () => {
-      document.removeEventListener('focusin', onIn)
-      document.removeEventListener('focusout', onOut)
-      if (pending !== null) window.clearTimeout(pending)
-    }
-  }, [dispatch])
-
+  // The loaders run again and sign new subscriptions: a new key, a new stream, a new count. If
+  // nothing was written since they last ran, the tokens and the key stay the same, and the count
+  // starts again here.
   const refresh = useCallback(async () => {
+    const before = keyRef.current
     setBusy(true)
     try {
       await router.invalidate()
     } finally {
       setBusy(false)
     }
+    setSt((prev) => (prev.key === before ? { key: before, s: BANNER_START } : prev))
   }, [router])
 
   const text = key === '' ? null : bannerText(forKey(st, key))

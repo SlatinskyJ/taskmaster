@@ -5,7 +5,6 @@ import {
   bannerReduce,
   bannerText,
   dismissGuard,
-  holdsBanner,
   offersLiveRefresh,
   subsKey,
   subsOf,
@@ -53,31 +52,6 @@ describe('bannerReduce and bannerText', () => {
     expect(bannerText(s)).toBeNull()
   })
 
-  it("hold, then a change: no banner; release: that change's sentence", () => {
-    const held = run({ type: 'hold' }, change(1, FREE))
-    expect(bannerText(held)).toBeNull()
-    expect(bannerText(bannerReduce(held, { type: 'release' }))).toBe(FREE)
-  })
-
-  it('a hold hides a banner already shown, and release brings it back', () => {
-    const held = run(change(1, FREE), { type: 'hold' })
-    expect(bannerText(held)).toBeNull()
-    expect(held.shown).toBe(true)
-    expect(bannerText(bannerReduce(held, { type: 'release' }))).toBe(FREE)
-  })
-
-  it('hold, two changes, release: Více změn (2)', () => {
-    expect(bannerText(run({ type: 'hold' }, change(1), change(2), { type: 'release' }))).toBe(
-      'Více změn (2)',
-    )
-  })
-
-  it('hold after a dismiss, release: still no banner', () => {
-    expect(
-      bannerText(run(change(1), { type: 'dismiss' }, { type: 'hold' }, { type: 'release' })),
-    ).toBeNull()
-  })
-
   it('overflow: Více změn (100+), also with later changes', () => {
     const s = run(change(1), { type: 'overflow' })
     expect(bannerText(s)).toBe('Více změn (100+)')
@@ -103,37 +77,7 @@ describe('bannerReduce and bannerText', () => {
       text: null,
       overflow: false,
       shown: false,
-      held: false,
     })
-  })
-})
-
-describe('holdsBanner', () => {
-  const el = (tagName: string, inDialog: boolean, type?: string) => ({
-    tagName,
-    type,
-    closest: (sel: string) => (inDialog && sel === '[role="dialog"]' ? {} : null),
-  })
-
-  it('a textarea or a text input inside a dialog holds it; the same outside does not', () => {
-    expect(holdsBanner(el('TEXTAREA', true))).toBe(true)
-    expect(holdsBanner(el('INPUT', true, 'text'))).toBe(true)
-    expect(holdsBanner(el('INPUT', true, 'number'))).toBe(true)
-    expect(holdsBanner(el('TEXTAREA', false))).toBe(false)
-    expect(holdsBanner(el('INPUT', false, 'text'))).toBe(false)
-  })
-
-  it.each(['checkbox', 'radio', 'button', 'submit', 'range', 'time', 'date'])(
-    'an input of type %s does not hold it',
-    (type) => {
-      expect(holdsBanner(el('INPUT', true, type))).toBe(false)
-    },
-  )
-
-  it('a button, null, or a target without closest does not hold it', () => {
-    expect(holdsBanner(el('BUTTON', true))).toBe(false)
-    expect(holdsBanner(null)).toBe(false)
-    expect(holdsBanner({ tagName: 'INPUT' })).toBe(false)
   })
 })
 
