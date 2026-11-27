@@ -17,7 +17,9 @@ const banner = (page: Page) =>
 
 /** Resolves once the page's live stream answered 200. */
 const streamOpen = (page: Page) =>
-  page.waitForResponse((r) => r.url().includes('/api/live') && r.status() === 200)
+  page.waitForResponse((r) => r.url().includes('/api/live') && r.status() === 200, {
+    timeout: 15_000,
+  })
 
 async function signedIn(browser: Browser, who: string): Promise<Page> {
   const page = await (await browser.newContext({ locale: 'cs-CZ' })).newPage()
