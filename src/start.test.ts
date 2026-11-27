@@ -3,6 +3,7 @@ import type { Db } from '~/server/db'
 import { auditLog } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { withAudit } from '~/server/audit'
+import { demoLinkMiddleware } from '~/server/demo/links'
 import { changeScopeMiddleware } from '~/server/live/changeScopeMiddleware'
 import { startInstance } from './start'
 
@@ -54,5 +55,14 @@ describe('request middleware', () => {
       [3, null],
       [4, 3],
     ])
+  })
+})
+
+// The demo's link removal (src/server/demo/links.ts) is a middleware validator, which only the
+// server runs: first, so every server function's own validator sees clean input.
+describe('function middleware', () => {
+  it('the demo link removal is registered first', async () => {
+    const options = await startInstance.getOptions()
+    expect(options.functionMiddleware?.[0]).toBe(demoLinkMiddleware)
   })
 })
