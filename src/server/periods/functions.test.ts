@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
-import { family } from '~/server/tasks/testing'
+import { family, T0 } from '~/server/tasks/testing'
 import { defaultsView, parseDefaults, periodDefaultsRead, saveResult } from './functions'
 
 const valid = {
@@ -62,7 +62,7 @@ describe('topics (#299)', () => {
   it('Výchozí týden on Správa: settings', () => {
     const f = family()
     const admin = { id: f.admin, username: 'admin', displayName: 'Admin', role: 'admin' as const }
-    const data = periodDefaultsRead.read(f.db, admin, undefined, new Date())
+    const data = periodDefaultsRead.read(f.db, admin, undefined, T0)
     expect(periodDefaultsRead.topics(admin, data, f.db)).toEqual(['settings'])
   })
 })

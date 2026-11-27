@@ -541,13 +541,13 @@ export const declineTaskScoreChangeFn = createServerFn({ method: 'POST' })
     changed(declineTaskScoreChange(getDb(), context.user.id, data.taskId, data.changeId)),
   )
 
-/** "Čeká na tebe": price changes waiting for this person. */
 export const scoreChangesWaitingRead = liveRead({
   read: (db, viewer, _arg: undefined, now): TaskView[] =>
     listScoreChangesWaiting(db, viewer.id, shown(db, now)),
   topics: () => TASKS,
 })
 
+/** "Čeká na tebe": price changes waiting for this person. */
 export const listScoreChangesWaitingFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
   .handler(({ context }) => serveLive(scoreChangesWaitingRead, context.user, undefined))
