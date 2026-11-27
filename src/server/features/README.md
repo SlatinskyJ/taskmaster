@@ -23,8 +23,12 @@ before turning it on again.
   calls it once per page load (cached in the browser for an hour, `src/lib/clientCache.ts`) and
   hands screens `context.features`.
 
-No admin screen yet. Flip a switch in the database; a page reload picks it up (an open app within the hour), no
-restart:
+The admin flips a switch in Správa → _Funkce_ (`setSwitchFn`, `setSwitch` in `flags.ts`), with a
+confirm step and a `feature.switched` audit entry with the admin as actor. The admin's own app reads
+the new values at once; others on their next page load (an open app within the hour), no restart.
+
+Fallback when Správa can't be used (e.g. the admin can't log in): flip it in the database by hand.
+A hand flip writes no audit entry.
 
 The image has no `sqlite3`, so use Node's built-in SQLite inside the running container
 (`<container>` is its name; `/data` is `DATA_DIR` in the image):

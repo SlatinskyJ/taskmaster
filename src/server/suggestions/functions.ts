@@ -1,6 +1,10 @@
 import { createServerFn } from '@tanstack/react-start'
 import { requireRole, requireUser } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
+import { liveRead } from '~/server/live/define'
+import { serveLive } from '~/server/live/read'
+import { idTopic } from '~/server/live/topics'
+import type { Topic } from '~/server/live/topics'
 import {
   closeSuggestionAction,
   createSuggestionAction,
@@ -24,15 +28,29 @@ export const createSuggestionFn = createServerFn({ method: 'POST' })
     createSuggestionAction(getDb(), context.user.id, data, new Date()),
   )
 
+// Live topics (#299): one's own suggestions are a slice (`suggestions:by:<self>`), the admin's
+// list is all of them; switch off: nothing read, nothing subscribed.
+
+export const mySuggestionsRead = liveRead({
+  read: (db, viewer) => listMySuggestionsAction(db, viewer.id),
+  topics: (viewer, data): Topic[] =>
+    'error' in data ? [] : [idTopic('suggestions:by', viewer.id)],
+})
+
+export const adminSuggestionsRead = liveRead({
+  read: (db) => getAdminSuggestionsAction(db, process.env),
+  topics: (_viewer, data): Topic[] => ('error' in data ? [] : ['suggestions']),
+})
+
 /** Profil: the caller's own suggestions and their state. */
 export const listMySuggestionsFn = createServerFn({ method: 'GET' })
   .middleware([requireUser])
-  .handler(({ context }) => listMySuggestionsAction(getDb(), context.user.id))
+  .handler(({ context }) => serveLive(mySuggestionsRead, context.user, undefined))
 
 /** Správa: everyone's suggestions, and whether the send is available. */
 export const getAdminSuggestionsFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('admin')])
-  .handler(() => getAdminSuggestionsAction(getDb(), process.env))
+  .handler(({ context }) => serveLive(adminSuggestionsRead, context.user, undefined))
 
 /** Správa: Hotovo or Zamítnout. */
 export const closeSuggestionFn = createServerFn({ method: 'POST' })

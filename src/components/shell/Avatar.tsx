@@ -29,7 +29,8 @@ export function Avatar({
 }: {
   userId: number
   name: string
-  size?: 'md' | 'lg'
+  /** sm: 26 px, decoration inside a bigger tap target (a plan-table cell, #258). */
+  size?: 'sm' | 'md' | 'lg'
   className?: string
 }) {
   return (
@@ -37,7 +38,11 @@ export function Avatar({
       aria-hidden="true"
       className={cn(
         'grid shrink-0 place-items-center rounded-full font-display font-bold text-bg',
-        size === 'lg' ? 'size-14 text-2xl' : 'size-tap text-lg',
+        size === 'lg'
+          ? 'size-14 text-2xl'
+          : size === 'sm'
+            ? 'size-[26px] text-sm'
+            : 'size-tap text-lg',
         avatarColour(userId),
         className,
       )}

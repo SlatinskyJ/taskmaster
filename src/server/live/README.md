@@ -76,16 +76,20 @@ parent), and per screen and role the changes it must show reach it and a brother
 | `getPointsFn`                                                                      | `people`, `points:<id>` R                                                                  | `points:<self>`                                                      | -                         |
 | `getWeekFn`                                                                        | `week`, `people`, `points:<id>` R, + `disputes:about:<id>` R with `disputes`               | `week`, `points:<self>`, + `disputes:about:<self>` with `disputes`   | -                         |
 | `getDisputeListFn` (off → none)                                                    | `disputes`                                                                                 | `disputes:by:<self>`, `disputes:about:<self>`, `disputes:about:none` | -                         |
+| `getWeekPlanFn` (off → none)                                                       | `week`, `templates`, `tasks`                                                               | same                                                                 | -                         |
+| `listMySuggestionsFn` (off → none)                                                 | `suggestions:by:<self>`                                                                    | same                                                                 | same                      |
 | `getMeetingFn`                                                                     | `week`, `people`, `points:<id>` R (only with a week to settle)                             | -                                                                    | -                         |
 | `listUsersFn`                                                                      | -                                                                                          | -                                                                    | `people`                  |
 | `getPeriodDefaultsFn`                                                              | -                                                                                          | -                                                                    | `settings`                |
 | `getAdminDisputesFn` (off → none)                                                  | -                                                                                          | -                                                                    | `disputes`                |
 | `getFixableFn` (off → none)                                                        | -                                                                                          | -                                                                    | `people`, `points:<id>` R |
+| `getAdminSuggestionsFn` (off → none)                                               | -                                                                                          | -                                                                    | `suggestions`             |
 | `getItemMarkFn`                                                                    | none: a mark's changes fire its page topic (`mapping.ts`), which the page holds            |                                                                      |                           |
 
-Out of scope (Jakub 2026-11-26): launch switches, passkeys and logins. Profil
-(`getPasskeysEnabledFn`, `listMyPasskeysFn`), Správa's `listPasskeyCountsFn`, Klíč and Nový
-issue no topics; a screen with no topics opens no stream.
+Out of scope (Jakub 2026-11-26): launch switches, passkeys and logins. Profil's
+`getPasskeysEnabledFn` and `listMyPasskeysFn`, Správa's `listPasskeyCountsFn` and
+`getFeaturesFn`, Klíč and Nový issue no topics; a screen with no topics opens no stream (Profil
+with `suggestions` off).
 
 **Why a taker holds `templates:proposed`.** His Čeká na tebe shows every proposed chore waiting
 for the takers (`templateWaitsFor`); usually that is every proposed chore, since the creating

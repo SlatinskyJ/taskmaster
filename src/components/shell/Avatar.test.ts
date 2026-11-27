@@ -1,5 +1,7 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { avatarColour, initial } from './Avatar'
+import { Avatar, avatarColour, initial } from './Avatar'
 
 describe('initial', () => {
   it('takes the first letter, upper case, Czech-aware', () => {
@@ -20,5 +22,15 @@ describe('avatarColour', () => {
 
   it('only uses state text tokens, which theme.test.ts checks against the background', () => {
     for (let id = 0; id < 10; id++) expect(avatarColour(id)).toMatch(/^bg-state-\w+-text$/)
+  })
+})
+
+describe('Avatar sizes', () => {
+  it('size sm has size-[26px] (#258: inside a plan-table cell)', () => {
+    const html = renderToStaticMarkup(
+      createElement(Avatar, { userId: 3, name: 'Starší', size: 'sm' }),
+    )
+    expect(html).toContain('size-[26px]')
+    expect(html).not.toContain('size-tap')
   })
 })

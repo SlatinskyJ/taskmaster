@@ -1,7 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
-import { requireUser } from '~/server/auth/guards'
+import { requireRole, requireUser } from '~/server/auth/guards'
 import { getDb } from '~/server/db'
-import { getFlags } from './flags'
+import { getFlags, parseSwitchInput, setSwitch } from './flags'
 
 // Server functions screens may import (see the ESLint rule for src/routes).
 
@@ -9,3 +9,11 @@ import { getFlags } from './flags'
 export const getFeaturesFn = createServerFn({ method: 'GET' })
   .middleware([requireUser])
   .handler(() => getFlags(getDb()))
+
+/** Správa → Funkce: the admin turns one launch switch on or off (#296). */
+export const setSwitchFn = createServerFn({ method: 'POST' })
+  .middleware([requireRole('admin')])
+  .validator(parseSwitchInput)
+  .handler(({ data, context }) =>
+    setSwitch(getDb(), context.user.id, data.key, data.enabled, new Date()),
+  )

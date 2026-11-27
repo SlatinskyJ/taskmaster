@@ -26,7 +26,7 @@ import { openDisputeIn } from '~/server/disputes/disputes'
 import { adminDisputesRead, disputeListRead } from '~/server/disputes/functions'
 import { fixableRead } from '~/server/corrections/functions'
 import { getFlags } from '~/server/features'
-import { loggableTemplatesRead } from '~/server/instances/functions'
+import { loggableTemplatesRead, weekPlanRead } from '~/server/instances/functions'
 import { periodDefaultsRead } from '~/server/periods/functions'
 import { proposalsRead } from '~/server/periods/proposalFunctions'
 import { pointsRead } from '~/server/points/functions'
@@ -61,6 +61,8 @@ import {
   createTemplate,
   pendingTemplateApprovals,
 } from '~/server/templates/templates'
+import { createSuggestionAction } from '~/server/suggestions/actions'
+import { adminSuggestionsRead, mySuggestionsRead } from '~/server/suggestions/functions'
 import { usersRead } from '~/server/users/functions'
 import { createUser, updateUser } from '~/server/users/manage'
 import { topicsOf } from './mapping'
@@ -171,7 +173,13 @@ const SCREENS: Screen[] = [
       getWeekFn: run(weekRead),
       ...(f.periodProposals ? { getProposalsFn: run(proposalsRead) } : {}),
       ...(f.disputes ? { getDisputeListFn: run(disputeListRead) } : {}),
+      ...(f.weekPlan ? { getWeekPlanFn: run(weekPlanRead) } : {}),
     }),
+  },
+  {
+    route: 'src/routes/_app/tyden/plan.tsx',
+    roles: ['giver', 'taker'],
+    reads: () => ({ getWeekPlanFn: run(weekPlanRead) }),
   },
   {
     route: 'src/routes/_app/tyden/pristi.tsx',
@@ -192,19 +200,25 @@ const SCREENS: Screen[] = [
   {
     route: 'src/routes/_app/sprava.tsx',
     roles: ['admin'],
-    // Passkeys are out of scope (Jakub 2026-11-26).
+    // Passkeys and launch switches are out of scope (Jakub 2026-11-26).
     reads: () => ({
       listUsersFn: run(usersRead),
       listPasskeyCountsFn: 'none',
       getPeriodDefaultsFn: run(periodDefaultsRead),
       getAdminDisputesFn: run(adminDisputesRead),
       getFixableFn: run(fixableRead),
+      getAdminSuggestionsFn: run(adminSuggestionsRead),
+      getFeaturesFn: 'none',
     }),
   },
   {
     route: 'src/routes/_app/profil.tsx',
     roles: ['giver', 'taker', 'admin'],
-    reads: () => ({ getPasskeysEnabledFn: 'none', listMyPasskeysFn: 'none' }),
+    reads: () => ({
+      getPasskeysEnabledFn: 'none',
+      listMyPasskeysFn: 'none',
+      listMySuggestionsFn: run(mySuggestionsRead),
+    }),
   },
 ]
 
@@ -397,6 +411,22 @@ const C = {
   ],
 }
 
+/** A suggestion made through the real action. */
+const suggested = (by: string): Change => [
+  `suggestion.created by ${by}`,
+  (db) =>
+    written(db, () =>
+      must(
+        createSuggestionAction(
+          db,
+          id(db, by),
+          { title: 'Tmavý režim', description: 'Prosím.' },
+          T0,
+        ),
+      ),
+    ),
+]
+
 interface Drift {
   route: string
   username: string
@@ -566,8 +596,32 @@ const DRIFT: Drift[] = [
         (db) => opened(db, 'mladsi', { kind: 'adjustment', id: adjustmentOf(db, 'mladsi') }),
       ],
       C.adjusted('starsi'),
+      suggested('starsi'),
     ],
   },
+  ...(['tata', 'starsi'] as const).map((username): Drift => ({
+    route: '_app/tyden/plan.tsx',
+    username,
+    mustCatch: [
+      [
+        'instance.reserved on a week copy',
+        (db) =>
+          entry(db, {
+            action: 'instance.reserved',
+            entityType: 'task',
+            entityId: taskWhere(db, 'open'),
+          }),
+      ],
+      C.activeChore('template.updated'),
+    ],
+  })),
+  ...(['tata', 'starsi', 'admin'] as const).map((username): Drift => ({
+    route: '_app/profil.tsx',
+    username,
+    mustCatch: [suggested(username)],
+    // Another person's suggestion is not on his Profil.
+    mustNotCatch: [suggested(username === 'starsi' ? 'mladsi' : 'starsi')],
+  })),
 ]
 
 // ── Tests ───────────────────────────────────────────────────────────────────────────────
@@ -630,9 +684,21 @@ describe('the limit', () => {
     }
   }
 
-  it('Profil issues no topics: it opens no stream', () => {
+  it('Profil: only his own suggestions; with suggestions off no topics, so no stream', () => {
     for (const role of ['giver', 'taker', 'admin'] as const) {
-      expect(topicsFor(db, screen('_app/profil.tsx'), VIEWER[role]).size).toBe(0)
+      const viewer = person(db, VIEWER[role])
+      expect([...topicsFor(db, screen('_app/profil.tsx'), VIEWER[role])]).toEqual([
+        `suggestions:by:${String(viewer.id)}`,
+      ])
+    }
+    const offDb = demo()
+    offDb
+      .update(featureFlags)
+      .set({ enabled: false })
+      .where(eq(featureFlags.key, 'suggestions'))
+      .run()
+    for (const role of ['giver', 'taker', 'admin'] as const) {
+      expect(topicsFor(offDb, screen('_app/profil.tsx'), VIEWER[role]).size).toBe(0)
     }
   })
 })

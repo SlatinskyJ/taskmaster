@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { ChevronRight } from 'lucide-react'
+import { CalendarDays, ChevronRight } from 'lucide-react'
 import { DisputeControl } from '~/components/disputes/DisputeControl'
 import { DisputeList } from '~/components/disputes/DisputeList'
 import {
@@ -47,10 +47,36 @@ export function NextWeekCard({ pending }: { pending: boolean }) {
   )
 }
 
+/** The way into Plán týdne (#258, wireframe 1): the role's line and the free copies from today. */
+export function PlanCard({ free, viewerRole }: { free: number; viewerRole: 'taker' | 'giver' }) {
+  return (
+    <Link
+      to="/tyden/plan"
+      data-slot="plan-card"
+      className="mb-3.5 flex min-h-tap items-center gap-3 rounded-card bg-surface px-4 py-2.5 shadow-sticker"
+    >
+      <span
+        aria-hidden="true"
+        className="grid size-tap shrink-0 place-items-center rounded-button bg-tint text-accent-strong"
+      >
+        <CalendarDays className="size-6" />
+      </span>
+      <span className="grid min-w-0 flex-1">
+        <span className="font-display text-row font-bold">{cs.plan.title}</span>
+        <span className="text-meta text-muted">
+          {viewerRole === 'giver' ? cs.plan.cardGiver : cs.plan.cardTaker} {cs.plan.freeCount(free)}
+        </span>
+      </span>
+      <ChevronRight aria-hidden="true" className="shrink-0" />
+    </Link>
+  )
+}
+
 export function WeekScreen({
   week,
   viewerRole,
   nextWeek,
+  plan,
   disputes = false,
   disputeList = [],
   links = false,
@@ -61,25 +87,30 @@ export function WeekScreen({
   links?: boolean
   /** Set with the `periodProposals` switch on: the Příští týden card shows. */
   nextWeek?: { pending: boolean }
+  /** Set with the `weekPlan` switch on (#258): the Plán týdne card shows, above the tabs. */
+  plan?: { free: number }
   /** The `disputes` switch (#46): Rozporovat on locked items, Rozporováno on Historie. */
   disputes?: boolean
   disputeList?: readonly DisputeListEntry[]
 }) {
   const shared = { viewerRole, disputes, disputeList, links }
   return (
-    <Tabs defaultValue="this">
-      <TabsList>
-        <TabsTrigger value="this">{cs.week.thisWeek}</TabsTrigger>
-        <TabsTrigger value="history">{cs.week.history}</TabsTrigger>
-      </TabsList>
-      <TabsContent value="this">
-        {nextWeek && <NextWeekCard pending={nextWeek.pending} />}
-        <WeekBody week={week} tab="this" {...shared} />
-      </TabsContent>
-      <TabsContent value="history">
-        <WeekBody week={week} tab="history" {...shared} />
-      </TabsContent>
-    </Tabs>
+    <>
+      {plan && <PlanCard free={plan.free} viewerRole={viewerRole} />}
+      <Tabs defaultValue="this">
+        <TabsList>
+          <TabsTrigger value="this">{cs.week.thisWeek}</TabsTrigger>
+          <TabsTrigger value="history">{cs.week.history}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="this">
+          {nextWeek && <NextWeekCard pending={nextWeek.pending} />}
+          <WeekBody week={week} tab="this" {...shared} />
+        </TabsContent>
+        <TabsContent value="history">
+          <WeekBody week={week} tab="history" {...shared} />
+        </TabsContent>
+      </Tabs>
+    </>
   )
 }
 

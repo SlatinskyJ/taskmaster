@@ -23,6 +23,7 @@ import { Route as DevMultiRouteImport } from './routes/dev/multi'
 import { Route as DevUiRouteImport } from './routes/dev/ui'
 import { Route as AppSablonaTemplateIdRouteImport } from './routes/_app/sablona/$templateId'
 import { Route as AppTydenIndexRouteImport } from './routes/_app/tyden/index'
+import { Route as AppTydenPlanRouteImport } from './routes/_app/tyden/plan'
 import { Route as AppTydenPristiRouteImport } from './routes/_app/tyden/pristi'
 import { Route as AppTydenVychoziRouteImport } from './routes/_app/tyden/vychozi'
 import { Route as AppUkolTaskIdRouteImport } from './routes/_app/ukol/$taskId'
@@ -98,6 +99,11 @@ const AppTydenIndexRoute = AppTydenIndexRouteImport.update({
   path: '/tyden/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppTydenPlanRoute = AppTydenPlanRouteImport.update({
+  id: '/tyden/plan',
+  path: '/tyden/plan',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppTydenPristiRoute = AppTydenPristiRouteImport.update({
   id: '/tyden/pristi',
   path: '/tyden/pristi',
@@ -137,6 +143,7 @@ export interface FileRoutesByFullPath {
   '/dev/multi': typeof DevMultiRoute
   '/dev/ui': typeof DevUiRoute
   '/sablona/$templateId': typeof AppSablonaTemplateIdRoute
+  '/tyden/plan': typeof AppTydenPlanRoute
   '/tyden/pristi': typeof AppTydenPristiRoute
   '/tyden/vychozi': typeof AppTydenVychoziRoute
   '/ukol/$taskId': typeof AppUkolTaskIdRoute
@@ -157,6 +164,7 @@ export interface FileRoutesByTo {
   '/dev/ui': typeof DevUiRoute
   '/': typeof AppIndexRoute
   '/sablona/$templateId': typeof AppSablonaTemplateIdRoute
+  '/tyden/plan': typeof AppTydenPlanRoute
   '/tyden/pristi': typeof AppTydenPristiRoute
   '/tyden/vychozi': typeof AppTydenVychoziRoute
   '/ukol/$taskId': typeof AppUkolTaskIdRoute
@@ -179,6 +187,7 @@ export interface FileRoutesById {
   '/dev/ui': typeof DevUiRoute
   '/_app/': typeof AppIndexRoute
   '/_app/sablona/$templateId': typeof AppSablonaTemplateIdRoute
+  '/_app/tyden/plan': typeof AppTydenPlanRoute
   '/_app/tyden/pristi': typeof AppTydenPristiRoute
   '/_app/tyden/vychozi': typeof AppTydenVychoziRoute
   '/_app/ukol/$taskId': typeof AppUkolTaskIdRoute
@@ -201,6 +210,7 @@ export interface FileRouteTypes {
     | '/dev/multi'
     | '/dev/ui'
     | '/sablona/$templateId'
+    | '/tyden/plan'
     | '/tyden/pristi'
     | '/tyden/vychozi'
     | '/ukol/$taskId'
@@ -221,6 +231,7 @@ export interface FileRouteTypes {
     | '/dev/ui'
     | '/'
     | '/sablona/$templateId'
+    | '/tyden/plan'
     | '/tyden/pristi'
     | '/tyden/vychozi'
     | '/ukol/$taskId'
@@ -242,6 +253,7 @@ export interface FileRouteTypes {
     | '/dev/ui'
     | '/_app/'
     | '/_app/sablona/$templateId'
+    | '/_app/tyden/plan'
     | '/_app/tyden/pristi'
     | '/_app/tyden/vychozi'
     | '/_app/ukol/$taskId'
@@ -359,6 +371,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTydenIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/tyden/plan': {
+      id: '/_app/tyden/plan'
+      path: '/tyden/plan'
+      fullPath: '/tyden/plan'
+      preLoaderRoute: typeof AppTydenPlanRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/tyden/pristi': {
       id: '/_app/tyden/pristi'
       path: '/tyden/pristi'
@@ -405,6 +424,7 @@ interface AppRouteChildren {
   AppZapsatRoute: typeof AppZapsatRoute
   AppIndexRoute: typeof AppIndexRoute
   AppSablonaTemplateIdRoute: typeof AppSablonaTemplateIdRoute
+  AppTydenPlanRoute: typeof AppTydenPlanRoute
   AppTydenPristiRoute: typeof AppTydenPristiRoute
   AppTydenVychoziRoute: typeof AppTydenVychoziRoute
   AppUkolTaskIdRoute: typeof AppUkolTaskIdRoute
@@ -421,6 +441,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppZapsatRoute: AppZapsatRoute,
   AppIndexRoute: AppIndexRoute,
   AppSablonaTemplateIdRoute: AppSablonaTemplateIdRoute,
+  AppTydenPlanRoute: AppTydenPlanRoute,
   AppTydenPristiRoute: AppTydenPristiRoute,
   AppTydenVychoziRoute: AppTydenVychoziRoute,
   AppUkolTaskIdRoute: AppUkolTaskIdRoute,

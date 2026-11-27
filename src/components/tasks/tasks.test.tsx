@@ -165,8 +165,7 @@ describe('TaskRow for templates (#37)', () => {
   })
 
   it('detail is a full line that wraps, not cut', () => {
-    const detail =
-      'Po, Út, St, Čt, Pá, So, Ne v 18:00 · do dalšího dne 7:00 (+2 h) · schvaluje rodič'
+    const detail = 'každý den v 18:00 · do dalšího dne 7:00 (+2 h) · schvaluje rodič'
     const html = renderToStaticMarkup(
       <TaskRow described={false} name="Vynést koše" state="proposed" points={4} detail={detail} />,
     )
@@ -235,7 +234,7 @@ describe('WaitingForYou with templates (#37)', () => {
     )
     expect(html).toContain(`${cs.home.waiting} (2)`)
     expect(html).toContain(
-      'Po, Út, St, Čt, Pá, So, Ne v 18:00 · do dalšího dne 7:00 (+2 h) · schvaluje rodič · Souhlasí: Táta',
+      'každý den v 18:00 · do dalšího dne 7:00 (+2 h) · schvaluje rodič · Souhlasí: Táta',
     )
     expect(html).toContain(cs.templates.recurringMeta)
   })

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { burstConfetti } from '~/components/effects/confetti'
+import { PENDING_STRIPES } from '~/components/tasks/stateStyles'
 import { useEffectsEnabled } from '~/lib/effects'
 import { cs, plural, pointWords } from '~/lib/strings'
 import { cn } from '~/lib/utils'
@@ -79,7 +80,8 @@ export function PointsBar({
       >
         <div
           className={cn(
-            'absolute inset-y-0 left-0 rounded-full bg-[repeating-linear-gradient(-45deg,var(--s-pending)_0_6px,color-mix(in_srgb,var(--s-pending)_50%,transparent)_6px_12px)]',
+            'absolute inset-y-0 left-0 rounded-full',
+            PENDING_STRIPES,
             effects && 'bar-grow',
           )}
           style={{ width: `${String(layout.totalPct)}%` }}

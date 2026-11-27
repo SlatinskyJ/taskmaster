@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import type { TemplateView } from '~/server/templates/functions'
-import { describeTemplate, templateDetail } from './templateText'
+import { describeDays, describeTemplate, templateDetail } from './templateText'
 
 type Def = Pick<TemplateView, 'schedule' | 'deadline'>
 const deadline = (dayOffset: number, due: string, graceMinutes: number) => ({
   dayOffset,
   due,
   graceMinutes,
+})
+
+describe('describeDays (#258)', () => {
+  it('all seven days read "každý den"; others Monday first', () => {
+    expect(describeDays([0, 1, 2, 3, 4, 5, 6])).toBe('každý den')
+    expect(describeDays([5, 2])).toBe('Út, Pá')
+    expect(describeDays([0, 1, 2, 3, 4, 5])).toBe('Po, Út, St, Čt, Pá, Ne')
+  })
 })
 
 describe('describeTemplate', () => {
@@ -29,7 +37,7 @@ describe('describeTemplate', () => {
         schedule: { days: [0, 1, 2, 3, 4, 5, 6], time: '18:00' },
         deadline: deadline(1, '07:00', 120),
       },
-      'Po, Út, St, Čt, Pá, So, Ne v 18:00 · do dalšího dne 7:00 (+2 h)',
+      'každý den v 18:00 · do dalšího dne 7:00 (+2 h)',
     ],
     [
       'same day, no grace',
