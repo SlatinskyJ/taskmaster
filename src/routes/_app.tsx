@@ -1,5 +1,6 @@
 import { createFileRoute, Outlet, redirect, useLocation } from '@tanstack/react-router'
 import { FloatLayer } from '~/components/effects/FloatLayer'
+import { LiveBanner } from '~/components/live/LiveBanner'
 import { BottomNav } from '~/components/shell/BottomNav'
 import { showsBar } from '~/lib/nav'
 import { loadFeatures } from '~/lib/featureCache'
@@ -23,7 +24,10 @@ export const Route = createFileRoute('/_app')({
   component: AppLayout,
 })
 
-/** The app shell: the screen, the "+N" layer (UI doc §4), then the role's bottom bar (UI doc §6). */
+/**
+ * The app shell: the screen, the "+N" layer (UI doc §4), the live change banner (#299), then the
+ * role's bottom bar (UI doc §6).
+ */
 function AppLayout() {
   const { user, features } = Route.useRouteContext()
   const { pathname } = useLocation()
@@ -32,6 +36,7 @@ function AppLayout() {
     <div className={cn('min-h-dvh', hasBar && 'pb-[calc(4.5rem+env(safe-area-inset-bottom))]')}>
       <Outlet />
       <FloatLayer />
+      <LiveBanner features={features} />
       {hasBar && <BottomNav role={user.role} features={features} />}
     </div>
   )
