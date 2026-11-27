@@ -95,13 +95,14 @@
 - Produces: `export async function main(fetchFn: typeof fetch, env: NodeJS.ProcessEnv): Promise<Action>` in `run.ts`. It reads `getRun(RUN_ID)` and `completedRuns()`, reads `failedJobs` only for a red run, and calls `decide`. On `send`, it writes `formatMail(env.ALERT_SMTP_USER, env.ALERT_EMAIL_TO, …)` to `env.MAIL_FILE` and appends `send=true` to `env.GITHUB_OUTPUT`. It logs `red-main: <kind> <reason or subject>`. Run as a script, with the entry guard from `scripts/merge-queue/run.ts`, it calls `main(fetch, process.env)`.
 - Order in `main`: first, if `env.RED_MAIN_TEST === 'true'`, write the test mail (`{ subject: 'Taskmaster: red-main test', text: 'Test of the red-main email. Nothing is broken.' }`), set `send=true` and return, with no fetch and no `RUN_ID` needed (a `workflow_dispatch` run has none). Only then: missing `GH_TOKEN` or `RUN_ID` throws `Error('red-main: GH_TOKEN missing')` / `'RUN_ID missing'` before any fetch.
 
-- [ ] **Step 1:** Write failing tests with a fake `fetch`. It matches each call on method, path **and the full query string**, records every call, and fails the test on an unexpected call. Run fixtures use `id` values that differ from `run_number` and are larger than it (`id: 46042649467, run_number: 512`). The jobs fixture mixes `lint` success, `build` failure, `test` timed_out and `mutation` skipped. Temp dirs come from `fs.mkdtemp`.
+- [ ] **Step 1:** Write failing tests with a fake `fetch`. It matches each call on method, path **and the full query string**, records every call, and fails the test on an unexpected call. Run fixtures use `id` values that differ from `run_number` and are larger than it (`id: 46042649467, run_number: 512`). The jobs fixture mixes `lint` success, `build` failure, `test` timed_out and `mutation` skipped. Temp dirs come from `fs.mkdtemp`. The shared env fixture sets `RED_MAIN_TEST: 'false'`, the string the workflow passes on every `workflow_run`, so a truthy check such as `if (env.RED_MAIN_TEST)` fails the red-run test.
   - `red run: writes MAIL_FILE whose body lists build and test only, and sets send=true`
   - `green after green: no MAIL_FILE and no send output`
   - `a late red run behind a newer green: none, with the runs list in either order`
   - `the runs query is exactly branch=main&event=push&status=completed&per_page=10`
   - `the jobs call is made only for a red run`
   - `the attempts call is made only for a green run with run_attempt > 1, for attempt - 1`
+  - `green attempt 2 whose attempt 1 conclusion is failure (attempts response) writes the "green again" mail through main`
   - `RED_MAIN_TEST=true with no RUN_ID and no GH_TOKEN: zero fetch calls, MAIL_FILE holds the test mail, send=true`
   - `an HTTP 403 throws with path and status, and the token is not in the message`
   - `running the script file itself (spawn node scripts/red-main/run.ts with no GH_TOKEN) exits non-zero with "GH_TOKEN missing"` (the real entry point, once)
@@ -140,7 +141,7 @@ jobs:
     if: >-
       (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'push' &&
         github.event.workflow_run.head_branch == 'main') ||
-      (github.event_name == 'workflow_dispatch' && github.actor == 'SlatinskyJ')
+      (github.event_name == 'workflow_dispatch' && github.actor == 'SlatinskyJ' && inputs.test)
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     permissions: { actions: read }
