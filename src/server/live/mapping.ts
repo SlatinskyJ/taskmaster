@@ -272,6 +272,19 @@ function suggestionTopics(db: Db, id: number, out: Set<Topic>): void {
   if (s) out.add(idTopic('suggestions:by', s.authorId))
 }
 
+/**
+ * Whether a `user.*` entry may change who counts as a party (#299): a new active user, or a
+ * change of role or of active. Without both keys on the sides it says yes (over-fire, never miss).
+ */
+function partiesChanged(row: AuditLogRow): boolean {
+  const before = json(row.before)
+  const after = json(row.after)
+  if (row.action === 'user.created') return !('active' in after) || after.active !== false
+  const keys = ['role', 'active'] as const
+  if (!keys.every((k) => k in before && k in after)) return true
+  return keys.some((k) => before[k] !== after[k])
+}
+
 /** The topics one audit entry fires: deduplicated, sorted; `[]` for out of scope actions. */
 export function topicsOf(db: Db, row: AuditLogRow): Topic[] {
   if (MAPPED[row.action] === 'none' || SILENT_ENTITIES.has(row.entityType)) return []
@@ -316,7 +329,9 @@ export function topicsOf(db: Db, row: AuditLogRow): Topic[] {
       out.add('people')
       // Approvals count only active parties, live: a people change (the brother whose yes it
       // held deactivated) can move a proposed chore onto or off a boy's list with no chore entry.
+      // Only who is active or their role moves it; a rename or a password reset does not.
       if (
+        partiesChanged(row) &&
         db
           .select({ id: templates.id })
           .from(templates)

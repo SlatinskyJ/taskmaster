@@ -260,7 +260,7 @@ describe('periods, proposals, settings and people', () => {
   })
 
   it.each(['user.created', 'user.updated'] as const)(
-    'user.created and user.updated fire people and templates:proposed while a template is proposed (%s)',
+    'user.created and user.updated without before/after json fire people and templates:proposed while a template is proposed (%s)',
     (action) => {
       const f = week()
       template(f, 'active')
@@ -269,6 +269,87 @@ describe('periods, proposals, settings and people', () => {
       expect(of(f, row)).toEqual(['people', 'templates:proposed'])
     },
   )
+
+  describe('user.* fire templates:proposed only when who is active or their role changed', () => {
+    const VIEW = {
+      username: 'mladsi',
+      displayName: 'Mladší',
+      role: 'taker',
+      active: true,
+      hashSet: true,
+    }
+    const CASES: [string, AuditAction, unknown, unknown, string[]][] = [
+      [
+        'user.updated renaming fires people only',
+        'user.updated',
+        VIEW,
+        { ...VIEW, displayName: 'Nejmladší' },
+        ['people'],
+      ],
+      [
+        'user.updated from a password reset fires people only',
+        'user.updated',
+        VIEW,
+        { ...VIEW, hashChanged: true, sessionsEnded: 2 },
+        ['people'],
+      ],
+      [
+        'user.updated changing role fires people and templates:proposed',
+        'user.updated',
+        VIEW,
+        { ...VIEW, role: 'giver' },
+        ['people', 'templates:proposed'],
+      ],
+      [
+        'user.updated deactivating fires people and templates:proposed',
+        'user.updated',
+        VIEW,
+        { ...VIEW, active: false },
+        ['people', 'templates:proposed'],
+      ],
+      [
+        'user.updated reactivating fires people and templates:proposed',
+        'user.updated',
+        { ...VIEW, active: false },
+        VIEW,
+        ['people', 'templates:proposed'],
+      ],
+      [
+        'user.updated with only one side fires templates:proposed (the safe side)',
+        'user.updated',
+        undefined,
+        VIEW,
+        ['people', 'templates:proposed'],
+      ],
+      [
+        'user.created of an active user fires people and templates:proposed',
+        'user.created',
+        undefined,
+        VIEW,
+        ['people', 'templates:proposed'],
+      ],
+      [
+        'user.created of an inactive user fires people only',
+        'user.created',
+        undefined,
+        { ...VIEW, active: false },
+        ['people'],
+      ],
+      [
+        'user.created without an active key fires templates:proposed (the safe side)',
+        'user.created',
+        undefined,
+        { displayName: 'Máma' },
+        ['people', 'templates:proposed'],
+      ],
+    ]
+    it.each(CASES)('%s', (_name, action, before, after, topics) => {
+      const f = week()
+      template(f, 'proposed')
+      const row = log(f, { action, entityType: 'user', entityId: f.mladsi, before, after })
+      expect(of(f, row)).toEqual(topics)
+    })
+  })
 
   it.each(['user.created', 'user.updated'] as const)(
     'without a proposed template they fire people only (%s)',
