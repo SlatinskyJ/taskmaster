@@ -3,6 +3,8 @@ import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
 import { writeAudit } from '~/server/audit'
 import type { Db } from '~/server/db'
+import { DEMO_USERS } from '~/server/demo'
+import { isDemo } from '~/server/env/demo'
 import { users } from '~/server/db/schema'
 import { MAX_PASSWORD_LENGTH } from '~/lib/userLimits'
 import { dummyHash, verifyPassword } from './password'
@@ -48,11 +50,17 @@ export async function login(
   db: Db,
   input: LoginInput,
   now: Date = new Date(),
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<Result<LoginSuccess, LoginError>> {
   const username = input.username.trim().toLowerCase().slice(0, MAX_USERNAME_LENGTH)
   // Counted as a failure now, taken back on success (see reserveAttempt). A refusal here is not
-  // logged: past the limit the log would grow at the attacker's pace.
-  const attempt = reserveAttempt(db, limitKeys(username, input.ip), now)
+  // logged: past the limit the log would grow at the attacker's pace. On the public demo the
+  // demo family's names skip the per-username limit and every IP has an attempt cap instead.
+  const demo = isDemo(env)
+  const attempt = reserveAttempt(db, limitKeys(username, input.ip), now, {
+    skipUser: demo && DEMO_USERS.some((u) => u.username === username),
+    demoIp: demo,
+  })
   if (!attempt) return fail('rate_limited')
 
   const user = db.select().from(users).where(eq(users.username, username)).get()

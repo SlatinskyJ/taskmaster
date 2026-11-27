@@ -2,6 +2,7 @@ import { createCsrfMiddleware, createMiddleware, createStart } from '@tanstack/r
 import { frameHeader } from '~/lib/frame'
 import { TAB_HEADER, tabId } from '~/lib/tab'
 import { frameRedirectMiddleware } from '~/server/auth/frameRedirect'
+import { demoLinkMiddleware } from '~/server/demo/links'
 import { changeScopeMiddleware } from '~/server/live/changeScopeMiddleware'
 
 // The app's Start instance. First, each request gets its own audit change scope
@@ -10,6 +11,9 @@ import { changeScopeMiddleware } from '~/server/live/changeScopeMiddleware'
 // server function calls (src/server/auth/README.md "CSRF"; e2e/frames.spec.ts checks it). After
 // it, a viewer frame's page redirects keep the frame's `tmFrame` query
 // (src/server/auth/frameRedirect.ts).
+// Function middleware: first, on the public demo, links are removed from every server function's
+// input (src/server/demo/links.ts; its validator runs on the server only, before each function's
+// own validator). Elsewhere it passes input on unchanged.
 
 /**
  * In a viewer frame (dev and previews), every server function call carries the frame's own
@@ -35,5 +39,5 @@ export const startInstance = createStart(() => ({
     createCsrfMiddleware({ filter: (ctx) => ctx.handlerType === 'serverFn' }),
     frameRedirectMiddleware,
   ],
-  functionMiddleware: [frameMiddleware, tabMiddleware],
+  functionMiddleware: [demoLinkMiddleware, frameMiddleware, tabMiddleware],
 }))

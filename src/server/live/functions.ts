@@ -1,8 +1,9 @@
 import { createServerOnlyFn } from '@tanstack/react-start'
 import { eq } from 'drizzle-orm'
-import { currentUser, sessionToken } from '~/server/auth/http'
+import { clientIp, currentUser, sessionToken } from '~/server/auth/http'
 import { findSession } from '~/server/auth/sessions'
 import { getDb } from '~/server/db'
+import { demoStreamSlot } from '~/server/demo/caps'
 import { users } from '~/server/db/schema'
 import { getFlags } from '~/server/features'
 import { liveHub } from './hub'
@@ -42,6 +43,8 @@ export const liveStreamResponse = createServerOnlyFn((request: Request): Respons
       clearInterval: (handle) => {
         clearInterval(handle as ReturnType<typeof setInterval>)
       },
+      // The public demo's per-IP cap; none elsewhere.
+      streamSlot: demoStreamSlot(process.env, clientIp()),
     },
   )
 })
