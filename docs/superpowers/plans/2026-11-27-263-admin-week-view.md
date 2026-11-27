@@ -39,7 +39,7 @@
 
 **Files:**
 - Create: `src/server/settlement/adminWeek.ts`
-- Modify: `src/server/settlement/week.ts` (export `periodSpans`, `adjustmentsOf`, `correctionOf`, and the `Span`/`Adjusted` types; no behaviour change)
+- Modify: `src/server/settlement/week.ts`: extract `export function historyRecords(db, rows, names, spans, adjusted, marks?): HistoryRecord[]` (the record-building body of `history()`, which then calls it; with no `marks` every `dispute` is `null`) and export `periodSpans`, `adjustmentsOf` and the `Span`/`Adjusted` types. No behaviour change: Týden's tests stay green unchanged.
 - Test: `src/server/settlement/adminWeek.test.ts`
 
 **Interfaces:**
@@ -74,7 +74,8 @@ export function getAdminWeek(db: Db | Tx, periodId: number, takerId: number): Ad
 - [ ] **Step 1: Write the failing tests** in `adminWeek.test.ts` (fixtures from `~/server/settlement/testing` / `~/server/tasks/testing`, `createTestDb()`):
   - `settled week: the record, carry-in from his earlier settlement, his tasks and adjustments` — two settled weeks for Starší; `getAdminWeek(db, week2, starsi)` → `record` has `totalBefore`, `level`, `deducted`, `carryOver` of week 2's settlement; `carriedIn` = week 1's `carryOver`; `items` = his confirmed completions of week 2 newest first; `adjustments` = the adjustment made in week 2.
   - `boundaries: completed at the start counts, at the end does not` — completions at exactly `startsAt` (in) and exactly `endsAt` (out, it is in the next week); same for an adjustment's `madeAt`.
-  - `only this taker` — Mladší's completion and adjustment in the same week are not in Starší's view.
+  - `only this taker` — both brothers settled in weeks 1 and 2 with different totals, levels and carry-overs, each with a completion and an adjustment in week 2: Starší's view of week 2 has Starší's record (`record.takerId`, `totalBefore`, `level`, `carryOver`), Starší's week-1 carry-over as `carriedIn`, and none of Mladší's items or adjustments; and the same the other way round.
+  - `carriedIn of an older week` — weeks 1, 2, 3 settled for Starší: the view of week 2 has week 1's `carryOver` (not week 3's), the view of week 1 has 0.
   - `only confirmed and waiting completions` — a rejected, a cancelled and an open task of his in the week are absent; a `done_unconfirmed` one is present with its status.
   - `corrected settlement` — after a correction, `record.correction` holds the corrected level and deduction; the correction's adjustment (made in a later week) appears in that later week's `adjustments` with `fromWeek` set, not in the corrected week.
   - `running week: record null` — the current period, Starší with a completion and an adjustment: `record === null`, items and adjustments listed, `carriedIn` from his latest settlement.
@@ -82,7 +83,7 @@ export function getAdminWeek(db: Db | Tx, periodId: number, takerId: number): Ad
   - `unknown period or user → null`.
   - `shape` — `Object.keys` of the result and of `taker` pinned exactly (`['taker','week','record','carriedIn','items','adjustments']`, `['id','name']`): no other user fields.
 - [ ] **Step 2: Run** `pnpm test src/server/settlement/adminWeek.test.ts` — expected FAIL (module missing).
-- [ ] **Step 3: Implement** `getAdminWeek` in `adminWeek.ts`. Period by id via `listPeriods`/`toPeriod`; span from `periodSpans`; name from `users.displayName`. Items: `tasks` where `earnerId = takerId`, status in `confirmed`/`done_unconfirmed`, `completedAt >= startsAt and < endsAt`, sorted `at` desc then `taskId` desc. Adjustments: `adjustmentsOf(db, [takerId], spans)` filtered to the span, `waiting: false`. Record: his settlement with `periodId`, built with `correctionOf` and `latestCorrections` exactly as `history()` in `week.ts` builds a `HistoryRecord`. `carriedIn`: `carryOver` of his settlement whose period starts latest before this period's start, else 0.
+- [ ] **Step 3: Implement** `getAdminWeek` in `adminWeek.ts`. Period by id via `listPeriods`/`toPeriod`; span from `periodSpans`; name from `users.displayName`. Items: `tasks` where `earnerId = takerId`, status in `confirmed`/`done_unconfirmed`, `completedAt >= startsAt and < endsAt`, sorted `at` desc then `taskId` desc. Adjustments: `adjustmentsOf(db, [takerId], spans)` filtered to the span, `waiting: false`. Record: his settlement with `periodId`, through `historyRecords` (no marks). `carriedIn`: `carryOver` of his settlement whose period starts latest before this period's start, else 0.
 - [ ] **Step 4: Run** the test file and `pnpm test src/server/settlement` (Týden unchanged) — PASS.
 - [ ] **Step 5: Commit** `Admin week read for a brother's week (#263)`.
 
@@ -93,17 +94,17 @@ export function getAdminWeek(db: Db | Tx, periodId: number, takerId: number): Ad
 - Test: `src/server/disputes/targets.test.ts` (create if missing, else add), `src/server/disputes/list.test.ts` (or the existing admin list test)
 
 **Interfaces:**
-- Produces: `export interface WeekPage { periodId: number; takerId: number }`; `ItemAbout.week` stays the settlement's span; new `ItemAbout.weekPage: WeekPage | null`; `AdminDisputeEntry.weekPage: WeekPage | null`. `ItemPage` is **not** extended: `mapping.ts` turns `page` into a live topic (`task:`/`template:`), and a week is not one.
+- Produces: `export interface WeekPage { periodId: number; takerId: number }` (in `list.ts`); `AdminDisputeEntry.weekPage: WeekPage | null`. `loadTarget` and `ItemPage` are **not** changed: many paths call `loadTarget`, and `mapping.ts` turns `page` into a live topic (`task:`/`template:`), which a week is not.
 
 - [ ] **Step 1: Failing tests:**
-  - `a settlement names its week` — `loadTarget(db, {kind:'settlement', id}).about.weekPage` = `{ periodId: s.periodId, takerId: s.takerId }`.
+  All through `listOpenForAdmin(db)` (open disputes on each item):
+  - `a settlement names its week` — the entry's `weekPage` = `{ periodId: s.periodId, takerId: s.takerId }`.
   - `an adjustment names the week it was made in` — made inside the running period → that period; made inside a settled one → that one.
   - `an adjustment made exactly at a week's end names the next week` — `madeAt === periodEnd(p1)` → p2.
   - `an adjustment outside every period names none` — before the first period → `null`.
   - `other kinds have none` — task_score, completion, template_score, rejection → `null`.
-  - `listOpenForAdmin carries weekPage` — the settlement and adjustment entries carry it; a score entry has `null`.
 - [ ] **Step 2: Run** them — FAIL.
-- [ ] **Step 3: Implement:** settlement case sets `weekPage` from the row. Adjustment case: the period `p` from `listPeriods` with `startsAt ≤ madeAt < periodEnd(p)` (UTC ISO compare), else null. Every other case `weekPage: null`. `describe()` in `list.ts` passes `weekPage` through for the admin entry only (`DisputeListEntry` for parties is unchanged).
+- [ ] **Step 3: Implement** `weekPageOf(db, item, takerId): WeekPage | null` in `list.ts`, called only from `listOpenForAdmin`: settlement → its row's `periodId` and `takerId`; adjustment → `periodAtInstant(db, new Date(madeAt))` (`~/server/periods`, the §5.5 rule), its id, else null; every other kind null. `DisputeListEntry` for parties is unchanged.
 - [ ] **Step 4: Run** `pnpm test src/server/disputes src/server/live` — PASS (mapping untouched).
 - [ ] **Step 5: Commit** `Sporné entries name a settlement's or adjustment's week (#263)`.
 
@@ -125,7 +126,7 @@ export const getAdminWeekFn // GET, requireRole('admin'), validator parseAdminWe
 export type { AdminWeek, AdminWeekItem }
 ```
 
-- [ ] **Step 1: Failing tests:** `adminWeekHandler` → `{ error: 'feature_off' }` with `disputes` off; the week with it on; `null` for an unknown period. `parseAdminWeek` refuses `0`, `-1`, `1.5`, `'3'`, missing keys. `adminWeekRead.topics` = `['week','people','points:<takerId>']`, and `[]` for off/null. Wrong actor: `getAdminWeekFn` is guarded by `requireRole('admin')` — test it the way the existing admin functions are tested (if `functions.test.ts` has a guard test for `getFixableFn`/`getAdminDisputesFn`, add the same for a giver and a taker calling it; else assert through the e2e in task 6 that a brother opening the URL lands on his own landing page).
+- [ ] **Step 1: Failing tests:** `adminWeekHandler` → `{ error: 'feature_off' }` with `disputes` off; the week with it on; `null` for an unknown period. `parseAdminWeek` refuses `0`, `-1`, `1.5`, `'3'`, missing keys. `adminWeekRead.topics` = `['week','people','points:<takerId>']`, and `[]` for off/null. Wrong actor: the server function's guard is pinned in task 6's e2e (a brother and a parent replay the admin's real request and are refused).
 - [ ] **Step 2: Run** — FAIL.
 - [ ] **Step 3: Implement** in `functions.ts` (`getFlags(db).disputes` gate first). Add the README row: `getAdminWeekFn` (off → none) | - | - | `week`, `people`, `points:<taker>`. Add the screen to `screens.test.ts`'s registry so the "every loader's calls have a row" check passes and the admin's union stays under `TOPIC_LIMIT`.
 - [ ] **Step 4: Run** `pnpm test src/server/settlement src/server/live` — PASS.
@@ -153,11 +154,18 @@ week: {
 },
 ```
 
-Reused as on Týden: `cs.week.carried(...)` (carry-in), `cs.week.happened` (section label), `cs.week.noItems` (empty), `cs.meeting.levelsLabel`.
+Two more, since Týden's `happened`/`noItems` say "this week" and "zatím", wrong for a past week:
 
-Layout, top to bottom, inside one `rounded-card bg-surface p-4 shadow-sticker` card like Týden's history card: the week label and levels (`weekLabel · Hranice lower / upper`); settled: the level badge (corrected level when corrected), `historyLine(record)`, `correctionLine(record)` when corrected; unsettled: `notSettled` in `text-meta font-bold text-state-pending-text`; then `cs.week.carried(carriedIn)`. Below the card, section `Co se stalo` (`cs.week.happened`): adjustments first (`adjustmentRow` → `TaskRow`, no footer), then items (`TaskRow`, chip `confirmed`/`pending`, points = score, meta = `dayLabel(at)`, `link={taskLink(taskId)}`: the admin may open a task page while `disputes` is on, #222). No items and no adjustments → `EmptyState` with `cs.week.noItems`.
+```ts
+  happened: 'Co se v týdnu stalo',
+  noItems: 'V týdnu nic hotového.',
+```
 
-- [ ] **Step 1: Failing tests:** settled week renders the level label, the history line text and both rows; corrected week renders the corrected level badge and the correction line; unsettled week renders `notSettled` and no level badge; empty week renders `noItems`; a task row links to `/ukol/<id>`; a long name (`Vyluxovat celý obývák a chodbu`) is in the markup whole with `break-words` on its container; no `Rozporovat` text anywhere.
+Reused as on Týden: `cs.week.carried(...)` (carry-in), `cs.meeting.levelsLabel`.
+
+Layout, top to bottom, inside one `rounded-card bg-surface p-4 shadow-sticker` card like Týden's history card: the week label and levels (`weekLabel · Hranice lower / upper`); settled: the level badge (corrected level when corrected), `historyLine(record)`, `correctionLine(record)` when corrected; unsettled: `notSettled` in `text-meta font-bold text-state-pending-text`; then `cs.week.carried(carriedIn)`. Below the card, section `cs.admin.week.happened`: adjustments first (`adjustmentRow` → `TaskRow`, no footer), then items (`TaskRow`, chip `confirmed`/`pending`, points = score, meta = `dayLabel(at)`, `link={taskLink(taskId)}`: the admin may open a task page while `disputes` is on, #222). No items and no adjustments → `EmptyState` with `cs.admin.week.noItems`.
+
+- [ ] **Step 1: Failing tests:** settled week renders the level label, the history line text and both rows; corrected week renders the corrected level badge and the correction line; unsettled week renders `notSettled` and no level badge; empty week renders `cs.admin.week.noItems`; a task row links to `/ukol/<id>`; a long name (`Vyluxovat celý obývák a chodbu`) is in the markup whole with `break-words` on its container; no `Rozporovat` text anywhere.
 - [ ] **Step 2: Run** — FAIL.
 - [ ] **Step 3: Implement** the component and the strings.
 - [ ] **Step 4: Run** `pnpm test src/components/admin src/lib/strings.test.ts` — PASS.
@@ -166,17 +174,17 @@ Layout, top to bottom, inside one `rounded-card bg-surface p-4 shadow-sticker` c
 ### Task 5: route, nav, and the Sporné card link
 
 **Files:**
-- Create: `src/routes/_app/sprava_.tyden.$periodId.$takerId.tsx` (path `/sprava/tyden/$periodId/$takerId`, not nested in Správa's component; `src/routeTree.gen.ts` regenerated by `pnpm build`/`dev` and committed)
-- Modify: `src/lib/nav.ts` (`APP_PATHS` + `SCREEN_ROLES['/sprava/tyden/$periodId/$takerId'] = ['admin']`), `src/lib/nav.test.ts`, `src/components/admin/DisputesCard.tsx`, `src/components/admin/disputesCard.test.tsx`
+- Create: `src/routes/_app/sprava_/tyden/$periodId/$takerId.tsx` (folder routes like the rest; path `/sprava/tyden/$periodId/$takerId`, not nested in Správa's component; `src/routeTree.gen.ts` regenerated by `pnpm build`/`dev` and committed)
+- Modify: `src/lib/screenGuard.ts`, `src/lib/screenGuard.test.ts`, `src/lib/nav.ts` (`APP_PATHS` + `SCREEN_ROLES['/sprava/tyden/$periodId/$takerId'] = ['admin']`), `src/lib/nav.test.ts`, `src/components/admin/DisputesCard.tsx`, `src/components/admin/disputesCard.test.tsx`
 
 **Interfaces:**
 - Consumes: `getAdminWeekFn` (task 3), `AdminWeekScreen` (task 4), `AdminDisputeEntry.weekPage` (task 2).
 
-Route: `beforeLoad` → `guardScreen(role, path)`, and with `context.features.disputes` off `throw redirect({ to: '/sprava' })`. Loader: `parseIdParam` both params, `null` → `notFound()`; `live.take(await getAdminWeekFn({ data }))`; `null` or `feature_off` → `notFound()`. Screen: `<Screen title={cs.admin.week.title(week.taker.name)} back="/sprava" user={user}>`; loader errors fall to the app's existing `RouteError` (Czech message + Zkusit znovu), not-found to `NotFound`. `live: live.all()` returned like every other loader.
+Route: `beforeLoad` → new `guardAdminWeek(role: Role, disputesOn: boolean): void` in `screenGuard.ts`: `guardScreen(role, '/sprava/tyden/$periodId/$takerId')` (others go to their landing), then with the switch off `throw redirect({ to: '/sprava' })`. Loader: `parseIdParam` both params, `null` → `notFound()`; `live.take(await getAdminWeekFn({ data }))`; `null` or `feature_off` → `notFound()`. Screen: `<Screen title={cs.admin.week.title(week.taker.name)} back="/sprava" user={user}>`; loader errors fall to the app's existing `RouteError` (Czech message + Zkusit znovu), not-found to `NotFound`. `live: live.all()` returned like every other loader.
 
 DisputesCard: the stretched link goes to the week when `e.weekPage` is set (`to: '/sprava/tyden/$periodId/$takerId'`, params as strings), with the same `aria-label={t.openFor(cs.disputes.what[e.item.kind], l.name)}` and the same `relative`/`z-10` handling as a page link, so Ponechat and Opravit never open it. Entries with neither `page` nor `weekPage` stay unlinked.
 
-- [ ] **Step 1: Failing tests:** `nav.test.ts` matrix row `'/sprava/tyden/$periodId/$takerId': 'admin'`; `disputesCard.test.tsx`: a settlement entry with `weekPage {periodId: 4, takerId: 2}` renders `href="/sprava/tyden/4/2"` with the `openFor` label; an adjustment entry likewise; an entry with no `page`/`weekPage` has no `<a>`.
+- [ ] **Step 1: Failing tests:** `screenGuard.test.ts`: `guardAdminWeek('admin', true)` passes; `('admin', false)` throws a redirect to `/sprava`; `('taker', true)` and `('giver', true)` throw a redirect to `/`. `nav.test.ts` matrix row `'/sprava/tyden/$periodId/$takerId': 'admin'`; `disputesCard.test.tsx`: a settlement entry with `weekPage {periodId: 4, takerId: 2}` renders `href="/sprava/tyden/4/2"` with the `openFor` label; an adjustment entry likewise; an entry with no `page`/`weekPage` has no `<a>`.
 - [ ] **Step 2: Run** — FAIL.
 - [ ] **Step 3: Implement** route, nav, card; run `pnpm build` to regenerate `routeTree.gen.ts`.
 - [ ] **Step 4: Run** `pnpm typecheck && pnpm lint && pnpm test` — PASS.
@@ -192,8 +200,9 @@ The `corrections` seed already has an open dispute on Mladší's corrected settl
 
 - [ ] **Step 1: Write the tests:**
   - `the admin opens a disputed settlement: its level, correction and tasks` — log in `admin`, Správa, click the link named `openFor(what.settlement, <week label>)` on Mladší's card; URL matches `/sprava/tyden/\d+/\d+`; title `Týden: Mladší`; the corrected level label and the correction line are visible; at least one task row is visible; no `Rozporovat` button; back goes to `/sprava`.
-  - `the admin opens a disputed adjustment: the week it counts in` — Starší's adjustment card → his week; the adjustment row (`Úprava bodů`, `+5`) is visible; if that week is the running one, `Týden ještě není vyúčtovaný.` is visible.
+  - `the admin opens a disputed adjustment: the week it counts in` — Starší's adjustment card → his week; the adjustment row (`Úprava bodů`, `+5`) is visible; `Týden ještě není vyúčtovaný.` is visible (the seed makes the adjustment now, in the running week).
   - `a brother cannot open it` — log in `starsi`, `goto('/sprava/tyden/1/2')` → lands on his landing page (`/`).
+  - `the server function refuses a brother and a parent` — while the admin opens the view, record the `getAdminWeekFn` request (`page.waitForRequest` on the server-function URL: method, URL, body); then in fresh contexts logged in as `starsi` and as `tata`, replay it with `context.request.fetch(url, { method, headers, data })` and assert the response is not 2xx and its body has neither `Mladší` nor `totalBefore`.
   - `unknown week → Nenalezeno` — admin `goto('/sprava/tyden/9999/2')` shows the not-found screen.
 - [ ] **Step 2: Run** `pnpm exec playwright test e2e/admin-week.spec.ts --trace off` (through the suite runner as the other suites) — PASS.
 - [ ] **Step 3: Commit** `E2e: the admin opens a disputed week (#263)`.
