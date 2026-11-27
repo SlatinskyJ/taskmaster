@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
 import { family, T0 } from '~/server/tasks/testing'
-import { defaultsView, parseDefaults, periodDefaultsRead, saveResult } from './functions'
+import {
+  defaultsView,
+  int,
+  parseDefaults,
+  periodDefaultsRead,
+  record,
+  saveResult,
+} from './functions'
 
 const valid = {
   lengthDays: 14,
@@ -36,6 +43,32 @@ describe('parseDefaults', () => {
     ['an extra key in levels', { ...valid, levels: { ...valid.levels, middle: 80 } }],
   ])('throws on %s', (_name, input) => {
     expect(() => parseDefaults(input)).toThrow('Invalid input')
+  })
+})
+
+describe('record and int (#193)', () => {
+  // Called directly: through parseDefaults the key count check alone already refuses these.
+  it.each([
+    ['a string', 'ab', ['0', '1']],
+    ['a number', 5, []],
+    ['an array', ['a'], ['0']],
+  ])('record refuses %s even when its keys match', (_name, input, keys) => {
+    expect(() => record(input, keys)).toThrow('Invalid input')
+  })
+
+  it('record passes an object with exactly the keys, in any order', () => {
+    const r = { b: 2, a: 1 }
+    expect(record(r, ['a', 'b'])).toBe(r)
+  })
+
+  it('record refuses as many keys when only some of them match', () => {
+    expect(() => record({ a: 1, c: 3 }, ['a', 'b'])).toThrow('Invalid input')
+  })
+
+  it('int: the max itself is allowed, one more is not', () => {
+    expect(int(59, 59)).toBe(59)
+    expect(() => int(60, 59)).toThrow('Invalid input')
+    expect(int(0, 59)).toBe(0)
   })
 })
 

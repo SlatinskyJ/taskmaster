@@ -27,6 +27,7 @@ import {
   periodAgreementWaitingFor,
   isValidDefaults,
   lapsePeriodSettings,
+  MAX_LENGTH_DAYS,
   nextPeriod,
   periodAt,
   periodsToStart,
@@ -801,5 +802,75 @@ describe('settle only on the last day (#211, spec §5.8, Jakub 2026-11-24)', () 
     expect(periodToSettle([WEEK, running], new Set([WEEK.id]), prague(2026, 11, 29, 9), true)).toBe(
       running,
     )
+  })
+})
+
+describe('bounds and guards (#167, #193)', () => {
+  const NOW = prague(2026, 11, 22, 19)
+  const CURRENT: Period = {
+    id: 2,
+    startsAt: WEEK.cutoffAt,
+    cutoffAt: prague(2026, 11, 29, 18),
+    levels: DEFAULTS.levels,
+  }
+  const settings = { cutoffAt: prague(2026, 12, 5, 12), levels: { lower: 40, upper: 80 } }
+  const pending = () => value(proposePeriodSettings(family, DAD, CURRENT, settings, [], NOW))
+  /** A user id that is no person in the list. */
+  const NOBODY = 99
+
+  it('default settings: every bound is inclusive', () => {
+    const cutoff = (weekday: number, hour: number, minute: number) => ({
+      ...DEFAULTS,
+      cutoff: { weekday: weekday as 0, hour, minute },
+    })
+    expect(isValidDefaults({ ...DEFAULTS, lengthDays: 7 })).toBe(true)
+    expect(isValidDefaults({ ...DEFAULTS, lengthDays: MAX_LENGTH_DAYS })).toBe(true)
+    expect(isValidDefaults({ ...DEFAULTS, lengthDays: MAX_LENGTH_DAYS + 7 })).toBe(false)
+    expect(isValidDefaults(cutoff(6, 23, 59))).toBe(true)
+    expect(isValidDefaults(cutoff(0, 0, 0))).toBe(true)
+    expect(isValidDefaults(cutoff(7, 18, 0))).toBe(false)
+    expect(isValidDefaults(cutoff(-1, 18, 0))).toBe(false)
+    expect(isValidDefaults(cutoff(0, -1, 0))).toBe(false)
+    expect(isValidDefaults(cutoff(0, 18, -1))).toBe(false)
+  })
+
+  it('the default cutoff is after the start even when a nearer one is at or before it', () => {
+    // A length under half a week (not valid as defaults) puts the start's own cutoff, or the
+    // one just before it, nearest the target; the cutoff a week on is taken.
+    expect(defaultCutoff(WEEK.startsAt, { ...DEFAULTS, lengthDays: 1 })).toEqual(WEEK.cutoffAt)
+    expect(defaultCutoff(plus(WEEK.startsAt, HOUR), { ...DEFAULTS, lengthDays: 3 })).toEqual(
+      WEEK.cutoffAt,
+    )
+  })
+
+  it('an unknown person is no party: cannot propose, approve or reject', () => {
+    expect(error(proposePeriodSettings(family, NOBODY, CURRENT, settings, [], NOW))).toBe(
+      'not_a_party',
+    )
+    expect(error(approvePeriodSettings(pending(), family, NOBODY, CURRENT, NOW))).toBe(
+      'not_a_party',
+    )
+    expect(error(rejectPeriodProposal(pending(), family, NOBODY))).toBe('not_a_party')
+    const defaults = value(proposeDefaults(family, DAD, DEFAULTS, []))
+    expect(error(approveDefaults(defaults, family, NOBODY))).toBe('not_a_party')
+    expect(error(proposeDefaults(family, NOBODY, DEFAULTS, []))).toBe('not_a_giver')
+    expect(error(setDefaults(family, NOBODY, DEFAULTS))).toBe('not_admin')
+  })
+
+  it('a closed proposal is never promoted, even once everyone approved', () => {
+    const all = [DAD, OLDER, YOUNGER]
+    for (const status of ['rejected', 'withdrawn', 'lapsed'] as const) {
+      const closed = { ...pending(), approvedBy: all, status, closedBy: OLDER }
+      expect(resolvePeriodProposal(closed, family)).toBe(closed)
+    }
+  })
+
+  it('a closed proposal cannot be rejected or withdrawn again', () => {
+    const rejected = value(rejectPeriodProposal(pending(), family, OLDER))
+    const withdrawn = value(withdrawPeriodProposal(pending(), DAD))
+    for (const closed of [rejected, withdrawn, agreedProposal(CURRENT.id, settings)]) {
+      expect(error(rejectPeriodProposal(closed, family, YOUNGER))).toBe('not_pending')
+      expect(error(withdrawPeriodProposal(closed, DAD))).toBe('not_pending')
+    }
   })
 })
