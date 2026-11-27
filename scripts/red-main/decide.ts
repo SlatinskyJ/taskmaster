@@ -17,8 +17,9 @@ export interface Mail {
 export type Action = { kind: 'send'; mail: Mail } | { kind: 'none'; reason: string }
 
 const RED = new Set(['failure', 'timed_out', 'startup_failure'])
-const isRed = (r: Run) => r.conclusion !== null && RED.has(r.conclusion)
-const isGreen = (r: Run) => r.conclusion === 'success'
+/** Red: failure, timed_out or startup_failure. */
+export const isRed = (conclusion: string | null) => conclusion !== null && RED.has(conclusion)
+const isGreen = (conclusion: string | null) => conclusion === 'success'
 
 /**
  * `completed`: recent completed push runs on main, any order, may include `run`.
@@ -35,7 +36,7 @@ export function decide(
   if (completed.some((r) => r.runNumber > run.runNumber))
     return { kind: 'none', reason: 'newer run' }
   const short = run.headSha.slice(0, 7)
-  if (isRed(run)) {
+  if (isRed(run.conclusion)) {
     const text = [
       run.title,
       '',
@@ -50,11 +51,11 @@ export function decide(
     ].join('\n')
     return { kind: 'send', mail: { subject: `Taskmaster: main is broken (${short})`, text } }
   }
-  if (!isGreen(run)) return { kind: 'none', reason: 'not red or green' }
+  if (!isGreen(run.conclusion)) return { kind: 'none', reason: 'not red or green' }
   const previous = completed
-    .filter((r) => r.runNumber < run.runNumber && (isRed(r) || isGreen(r)))
+    .filter((r) => r.runNumber < run.runNumber && (isRed(r.conclusion) || isGreen(r.conclusion)))
     .sort((a, b) => b.runNumber - a.runNumber)[0]
-  if (!previousAttemptRed && !(previous && isRed(previous))) {
+  if (!previousAttemptRed && !(previous && isRed(previous.conclusion))) {
     return { kind: 'none', reason: 'still green' }
   }
   const text = [run.title, '', `Run: ${run.htmlUrl}`, ''].join('\n')
