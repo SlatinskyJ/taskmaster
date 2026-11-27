@@ -20,7 +20,7 @@ export function FeaturesCard({
 }: {
   features: Features | null
   failed: boolean
-  /** The public demo (#328): the switches show, disabled, with the lock note. */
+  /** The public demo (#328): the switches show, disabled, under the lock note. */
   locked?: boolean
   onToggle: (key: FeatureKey, turnOn: boolean) => void
   onRetry: () => void
@@ -39,6 +39,9 @@ export function FeaturesCard({
         </Card>
       ) : (
         <>
+          {locked && (
+            <p className="text-meta font-bold break-words text-muted">{cs.demo.lockedNote}</p>
+          )}
           <Card className="grid p-0">
             {switchRows(features).map((row) => (
               <SwitchRow
@@ -54,11 +57,7 @@ export function FeaturesCard({
               />
             ))}
           </Card>
-          {locked ? (
-            <p className="text-meta font-bold break-words text-muted">{cs.demo.lockedNote}</p>
-          ) : (
-            <p className="text-meta font-bold text-muted">{t.note}</p>
-          )}
+          {!locked && <p className="text-meta font-bold text-muted">{t.note}</p>}
         </>
       )}
     </section>

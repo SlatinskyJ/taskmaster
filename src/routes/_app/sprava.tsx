@@ -417,6 +417,7 @@ function Sprava() {
           })}
         </ul>
       </Card>
+      {/* Locked on the demo: keep in step with DEMO_LOCKED_FNS in src/server/demo/lock.ts. */}
       <Button
         size="lg"
         className="mt-3.5 w-full"

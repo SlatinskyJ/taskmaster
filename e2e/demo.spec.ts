@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { cs } from '../src/lib/strings'
 import { TASK_TITLE_MAX } from '../src/lib/taskLimits'
-import { logout, passwordLogin } from './helpers'
+import { forceClick, logout, PASSWORD, passwordLogin } from './helpers'
 
 // The public demo (TASKMASTER_ENV=demo, #327) through the real entry points: links are removed
 // from what a visitor sends, the locked actions change nothing, and the dev pages work. Its own
@@ -55,6 +55,10 @@ test('the admin cannot flip a launch switch', async ({ page }) => {
   await expect(zapsat).toHaveAttribute('aria-checked', 'true')
   await expect(zapsat).toBeDisabled()
   await expect(card.getByText(cs.demo.lockedNote)).toBeVisible()
+  // Forced past the disabled control: the server still refuses.
+  await forceClick(zapsat)
+  await page.getByRole('dialog').getByRole('button', { name: t.confirmOff, exact: true }).click()
+  await expect(page.getByText(cs.demo.lockedError, { exact: true })).toBeVisible()
   await page.reload()
   await expect(zapsat).toHaveAttribute('aria-checked', 'true')
 })
@@ -62,8 +66,18 @@ test('the admin cannot flip a launch switch', async ({ page }) => {
 test('Starší cannot change his password; the old one still logs in', async ({ page }) => {
   await login(page, 'starsi')
   await page.goto('/profil')
-  await expect(page.getByRole('button', { name: cs.profile.passwordRow })).toBeDisabled()
+  const row = page.getByRole('button', { name: cs.profile.passwordRow })
+  await expect(row).toBeDisabled()
   await expect(page.getByText(cs.demo.lockedNote)).toBeVisible()
+  // Forced past the disabled row: the server still refuses.
+  await forceClick(row)
+  const sheet = page.getByRole('dialog', { name: cs.profile.passwordTitle })
+  await sheet.getByLabel(cs.profile.currentPassword, { exact: true }).fill(PASSWORD)
+  await sheet.getByLabel(cs.profile.newPassword, { exact: true }).fill('noveheslo1')
+  await sheet.getByLabel(cs.profile.newPasswordAgain, { exact: true }).fill('noveheslo1')
+  await sheet.getByRole('button', { name: cs.profile.passwordSubmit }).click()
+  await expect(sheet.getByRole('alert')).toHaveText(cs.demo.lockedError)
+  await expect(page.getByText(cs.profile.passwordChangedOthers)).toHaveCount(0)
   await logout(page)
   await login(page, 'starsi')
   await expect(page).not.toHaveURL(/\/login/)
@@ -99,6 +113,23 @@ test('a forced save on the locked sheet shows the Czech lock error', async ({ pa
   await page.reload()
   await expect(page.getByRole('button', { name: cs.admin.editPerson('Táta') })).toBeVisible()
   await expect(page.getByRole('button', { name: cs.admin.editPerson('Taťka') })).toHaveCount(0)
+})
+
+test('a forced password reset on the locked sheet shows the Czech lock error', async ({ page }) => {
+  await login(page, 'admin')
+  const sheet = await openTata(page)
+  // The reset button is disabled by the fieldset only, so removing its attribute re-enables it.
+  await sheet.locator('fieldset').evaluate((el) => {
+    el.removeAttribute('disabled')
+  })
+  await sheet.getByRole('button', { name: cs.admin.reset, exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: cs.admin.resetTitle })
+  await dialog.getByRole('textbox', { name: cs.admin.password }).fill('noveheslo1')
+  await dialog.getByRole('button', { name: cs.admin.resetSubmit, exact: true }).click()
+  await expect(dialog.getByRole('alert')).toHaveText(cs.demo.lockedError)
+  await logout(page)
+  await login(page, 'tata')
+  await expect(page).not.toHaveURL(/\/login/)
 })
 
 /** The demo marker and the robots meta, as every demo screen has them (#328). */

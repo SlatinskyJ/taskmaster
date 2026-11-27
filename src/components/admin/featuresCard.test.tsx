@@ -41,7 +41,7 @@ describe('FeaturesCard', () => {
     expect(html).not.toContain('role="switch"')
   })
 
-  it('locked on the demo (#328): every switch disabled, the lock note instead of the usual one', () => {
+  it('locked on the demo (#328): every switch disabled, the lock note above them instead of the usual one', () => {
     const html = renderToStaticMarkup(
       <FeaturesCard features={NO_FEATURES} failed={false} locked onToggle={noop} onRetry={noop} />,
     )
@@ -49,6 +49,7 @@ describe('FeaturesCard', () => {
     expect(switches).toHaveLength(FEATURE_KEYS.length)
     for (const b of switches) expect(b).toContain('disabled=""')
     expect(html).toContain(cs.demo.lockedNote)
+    expect(html.indexOf(cs.demo.lockedNote)).toBeLessThan(html.indexOf('role="switch"'))
     expect(html).not.toContain(t.note)
   })
 
