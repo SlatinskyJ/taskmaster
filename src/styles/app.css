@@ -15,3 +15,9 @@
     format('woff2-variations');
   unicode-range: U+0030-0039;
 }
+
+/* An open dialog or sheet sets `pointer-events: none` on body; the live change banner stays
+   tappable over it (#299, src/components/ui/outside.ts). */
+[data-sonner-toast] {
+  pointer-events: auto;
+}

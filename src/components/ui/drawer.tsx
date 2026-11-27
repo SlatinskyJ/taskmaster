@@ -1,6 +1,7 @@
 import type { ComponentProps } from 'react'
 import { Drawer as DrawerPrimitive } from 'vaul'
 import { cn } from '~/lib/utils'
+import { keepOpenForToaster } from './outside'
 
 // UI doc §5: bottom sheet for task actions, reasons and disputes.
 export function Drawer(props: ComponentProps<typeof DrawerPrimitive.Root>) {
@@ -13,6 +14,8 @@ export const DrawerClose = DrawerPrimitive.Close
 export function DrawerContent({
   className,
   children,
+  onPointerDownOutside,
+  onInteractOutside,
   ...props
 }: ComponentProps<typeof DrawerPrimitive.Content>) {
   return (
@@ -28,6 +31,9 @@ export function DrawerContent({
           className,
         )}
         {...props}
+        // A tap on the live change banner keeps the sheet open (#299, ./outside.ts).
+        onPointerDownOutside={keepOpenForToaster(onPointerDownOutside)}
+        onInteractOutside={keepOpenForToaster(onInteractOutside)}
       >
         <div aria-hidden className="mx-auto my-3 h-1.5 w-12 shrink-0 rounded-full bg-track" />
         {children}
