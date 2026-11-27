@@ -102,6 +102,11 @@ export const SEEDS = {
     pieces: [lastDayWeek],
     features: ['recurring', 'week', 'meeting', 'weekPlan', 'settleLastDay'],
   },
+  /** The same with live change notices on (#313): the banner refreshes the Schůzka plan. */
+  planmeetinglive: {
+    pieces: [lastDayWeek],
+    features: ['recurring', 'week', 'meeting', 'weekPlan', 'settleLastDay', 'liveChanges'],
+  },
   /** Suggestions on Profil and Správa (#247): two new, one done, one dismissed. */
   suggestions: { pieces: [suggestions], features: ['suggestions'] },
   /** Previews and dev: everything. */

@@ -15,7 +15,12 @@ vi.mock('~/server/instances/functions', () => ({ getWeekPlanFn: vi.fn() }))
 
 const { MeetingWeekPlanView } = await import('./MeetingWeekPlan')
 
-const render = (plan: PlanAnswer = planFixture(), busy = false, failed = false) =>
+const render = (
+  plan: PlanAnswer = planFixture(),
+  busy = false,
+  failed = false,
+  liveRefresh?: boolean,
+) =>
   renderToStaticMarkup(
     <MeetingWeekPlanView
       plan={plan}
@@ -23,6 +28,7 @@ const render = (plan: PlanAnswer = planFixture(), busy = false, failed = false) 
       failed={failed}
       viewerId={2}
       onRefresh={vi.fn()}
+      liveRefresh={liveRefresh}
     />,
   )
 const refreshButton = (html: string) =>
@@ -63,6 +69,24 @@ describe('MeetingWeekPlanView', () => {
     expect(html).toContain(cs.meeting.refreshFailed)
     expect(html).toContain('aria-label="Prostřít stůl k večeři, St: volné"')
     expect(refreshButton(html)).not.toContain('disabled=""')
+  })
+
+  it('live refresh on (#313): no Obnovit, no hint, no refresh error; header and table stay', () => {
+    const html = render(planFixture(), false, true, true)
+    expect(html).not.toContain(cs.meeting.refresh)
+    expect(html).not.toContain(cs.meeting.planHint)
+    expect(html).not.toContain(cs.meeting.refreshFailed)
+    expect(refreshButton(html)).toBe('')
+    expect(html).toContain(`>${cs.plan.title}<`)
+    expect(html).toContain('29. 11. – 6. 12.')
+    expect(html).toContain('aria-label="Prostřít stůl k večeři, St: volné"')
+  })
+
+  it('live refresh off (the default and false): Obnovit and the hint show', () => {
+    for (const html of [render(), render(planFixture(), false, false, false)]) {
+      expect(refreshButton(html)).toContain(cs.meeting.refresh)
+      expect(html).toContain(cs.meeting.planHint)
+    }
   })
 
   it('feature_off answer renders nothing', () => {

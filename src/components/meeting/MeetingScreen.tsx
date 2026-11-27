@@ -49,6 +49,7 @@ export function MeetingScreen({
   otherLevels = false,
   weekPlan = null,
   viewerId,
+  liveRefresh = false,
   frame = (body) => body,
 }: {
   meeting: Meeting
@@ -58,6 +59,8 @@ export function MeetingScreen({
   /** The loader's week plan (#259): set only with `weekPlan` on, on the settlement's day. */
   weekPlan?: PlanAnswer | null
   viewerId: number
+  /** The live change banner offers the refresh (#313): the plan block drops Obnovit. */
+  liveRefresh?: boolean
   /** Wraps the body in the screen; `wide` exactly while the plan block shows. */
   frame?: (body: ReactNode, wide: boolean) => ReactNode
 }) {
@@ -99,7 +102,12 @@ export function MeetingScreen({
       otherLevels={otherLevels}
       weekPlan={
         shown && view && tap ? (
-          <MeetingWeekPlanView {...view} viewerId={viewerId} onRefresh={() => void tap()} />
+          <MeetingWeekPlanView
+            {...view}
+            viewerId={viewerId}
+            onRefresh={() => void tap()}
+            liveRefresh={liveRefresh}
+          />
         ) : undefined
       }
     />,
