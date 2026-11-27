@@ -21,9 +21,19 @@ one synchronous run, e.g. one tap or one scheduler tick). One change is one even
   change's first entry whose own topics the stream has, never of an entry it did not subscribe
   to. `id` is the change's newest audit id (the SSE id), `change` its key. Never `before` /
   `after`.
-- The tab that made the change is skipped (`x-tm-tab`, sent by every server function call from
-  a tab, `src/lib/tab.ts`); the same person's other tabs and phones get it. Replayed events
-  have no tab.
+- `text` (`text.ts`, `liveText`): that entry's Czech sentence for the stream's viewer,
+  `"<actor> · <phrase>[ · <title>]"`, e.g. `Táta · domluveno za 8 b · Vynést koš`. The actor
+  is a display name, `Ty` (the viewer's own other tab or phone) or `Podle rozvrhu` (the
+  system). Task and chore steps use the task Historie's wording (`historyText`); the rest have
+  their own phrase (`cs.live`, `PHRASED` lists every action). A title, and any score, only when
+  the viewer's own detail screen would load the entity (`taskDetailHandler`,
+  `templateDetailHandler`); otherwise, and for every `user.*` entry a taker gets,
+  `"<actor> · změna"`. Titles are read once per entity and viewer per flush.
+- The tab that made a change is skipped for that change (`x-tm-tab`, sent by every server
+  function call from a tab, `src/lib/tab.ts`); the same person's other tabs and phones get it.
+  The hub keeps each change's tab from its first entry until the flush; each request is its own
+  change (`changeScopeMiddleware.ts`), so two saves from two tabs in one tick each skip only
+  their own tab. Replayed events have no tab.
 
 ## Topics
 
@@ -101,8 +111,9 @@ turn-down start a new offer round), agrees it (a giver's yes), happens under `ch
 where a boy loads every proposed chore's page (bids), or is the other boy's yes from a screen
 loaded before his brother's (both boys have then said yes to it, so both saw it).
 `template.updated` and `template.cancelled` are never written on a proposed chore. A people
-change can bring it back with no chore entry, so `user.created` and `user.updated` also fire
-`templates:proposed` while any template is proposed (`mapping.ts`). The tests: the last two
+change can bring it back with no chore entry, so `user.created` of an active user and a
+`user.updated` that changes a role or who is active also fire `templates:proposed` while any
+template is proposed (`mapping.ts`); a rename or a password reset does not. The tests: the last two
 blocks of `screens.test.ts`. (The design's "a proposed template is hidden from the boys" is
 looser than the code; this follows the code.)
 

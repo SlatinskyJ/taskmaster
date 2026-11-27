@@ -291,6 +291,11 @@ function stepPhrase(
   return historyText(entry, viewer.id)
 }
 
+/** "<actor> · změna": the sentence when the viewer may not learn more (or none could be built). */
+export function fallbackText(db: Db, row: AuditLogRow, viewer: Viewer): string {
+  return actorWord(db, row, viewer) + cs.live.sep + cs.history.other
+}
+
 /** One audit entry's sentence for one viewer. A cache shared over a flush saves detail reads. */
 export function liveText(
   db: Db,

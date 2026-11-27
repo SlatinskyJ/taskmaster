@@ -2,6 +2,8 @@ import { eq } from 'drizzle-orm'
 import type { Db } from '~/server/db'
 import { auditLog } from '~/server/db/schema'
 import type { AuditAction, EntityType } from './actions'
+import { currentScope } from './changeScope'
+import type { ChangeScope, FirstEntry } from './changeScope'
 
 /** A Drizzle transaction on the app database. Only code inside `withAudit` gets one. */
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0]
@@ -81,16 +83,22 @@ export function onAuditWritten(listener: AuditListener): () => void {
 }
 
 /**
- * The first entry of the current change: one change is one synchronous run (README). Reset in a
- * microtask, so the next request or tick starts a new change.
+ * Outside a request's scope (the scheduler): the first entry of the current change. One change
+ * is one synchronous run (README); reset in a microtask, so the next tick starts a new change.
  */
-let currentChange: number | null = null
+const fallback: ChangeScope = { first: null }
 
-/** The run's change is still in the log, i.e. its first entry was not rolled back. */
-function changeAlive(tx: Tx, id: number): boolean {
-  return (
-    tx.select({ id: auditLog.id }).from(auditLog).where(eq(auditLog.id, id)).get() !== undefined
-  )
+/**
+ * The run's change is still in the log: the row with its first entry's id is that entry (not
+ * rolled back, and its freed id not taken by another request's row since).
+ */
+function changeAlive(tx: Tx, first: FirstEntry): boolean {
+  const row = tx
+    .select({ action: auditLog.action, entityId: auditLog.entityId, at: auditLog.at })
+    .from(auditLog)
+    .where(eq(auditLog.id, first.id))
+    .get()
+  return row?.action === first.action && row.entityId === first.entityId && row.at === first.at
 }
 
 /**
@@ -98,16 +106,20 @@ function changeAlive(tx: Tx, id: number): boolean {
  * entries (e.g. settlement per taker); otherwise prefer `withAudit`.
  */
 export function writeAudit(tx: Tx, entry: AuditEntry): void {
-  const changeId = currentChange !== null && changeAlive(tx, currentChange) ? currentChange : null
+  const holder = currentScope() ?? fallback
+  const first = holder.first
+  const changeId = first !== null && changeAlive(tx, first) ? first.id : null
+  const at = (entry.at ?? new Date()).toISOString()
+  const entityId = String(entry.entityId)
   const { id } = tx
     .insert(auditLog)
     .values({
-      at: (entry.at ?? new Date()).toISOString(),
+      at,
       actorKind: entry.actor.kind,
       actorUserId: entry.actor.kind === 'user' ? entry.actor.userId : null,
       action: entry.action,
       entityType: entry.entityType,
-      entityId: String(entry.entityId),
+      entityId,
       before: toJson(entry.before),
       after: toJson(entry.after),
       reason: entry.reason ?? null,
@@ -116,12 +128,12 @@ export function writeAudit(tx: Tx, entry: AuditEntry): void {
     .returning({ id: auditLog.id })
     .get()
   if (changeId === null) {
-    if (currentChange === null) {
+    if (holder.first === null) {
       queueMicrotask(() => {
-        currentChange = null
+        holder.first = null
       })
     }
-    currentChange = id
+    holder.first = { id, action: entry.action, entityId, at }
   }
   for (const listener of listeners) {
     try {
