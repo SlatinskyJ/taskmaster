@@ -102,6 +102,62 @@ test('every screen shows the demo marker and noindex', async ({ page }) => {
   await expectDemoChrome(page)
 })
 
+const demoButton = (page: Page, name: string) =>
+  page.getByRole('region', { name: cs.demo.tryAs }).getByRole('button', { name, exact: true })
+
+test('each demo button logs in with one tap', async ({ page }) => {
+  for (const login of ['admin', 'tata', 'starsi', 'mladsi'] as const) {
+    const name = cs.demo.users[login]
+    await page.goto('/login')
+    await demoButton(page, name).click()
+    if (login === 'admin') {
+      await expect(page).toHaveURL(/\/sprava$/)
+      await expect(page.getByRole('heading', { name: cs.admin.title, exact: true })).toBeVisible()
+    } else {
+      await expect(page).toHaveURL(/\/$/)
+      await expect(
+        page.getByRole('heading', { name: `${cs.home.greeting}, ${name}!` }),
+      ).toBeVisible()
+    }
+    await logout(page)
+  }
+})
+
+test('Více zařízení opens the viewer', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1200 })
+  await page.goto('/login')
+  await page.getByRole('link', { name: cs.demo.multi, exact: true }).click()
+  await expect(page).toHaveURL(/\/dev\/multi$/)
+  await expect(page.locator('[data-device]')).toHaveCount(3)
+})
+
+test('the form still works under the buttons', async ({ page }) => {
+  await passwordLogin(page, 'starsi')
+  await expect(page).toHaveURL(/\/$/)
+})
+
+test('a failed one-tap login can be tried again', async ({ page }) => {
+  let failed = false
+  await page.route('**/_serverFn/**', async (route) => {
+    const body = route.request().postData() ?? ''
+    if (!failed && route.request().method() === 'POST' && body.includes('tata')) {
+      failed = true
+      await route.fulfill({ status: 500, body: 'boom' })
+      return
+    }
+    await route.continue()
+  })
+  await page.goto('/login')
+  await demoButton(page, cs.demo.users.tata).click()
+  await expect(page.locator('#login-error')).toHaveText(cs.login.failed)
+  for (const login of ['admin', 'tata', 'starsi', 'mladsi'] as const)
+    await expect(demoButton(page, cs.demo.users[login])).toBeEnabled()
+  await expect(page.getByRole('button', { name: cs.login.submit, exact: true })).toBeEnabled()
+  await demoButton(page, cs.demo.users.tata).click()
+  await expect(page).toHaveURL(/\/$/)
+  expect(failed).toBe(true)
+})
+
 test('/dev/multi loads and a frame logs in as Mladší', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1200 })
   await page.goto('/dev/multi')
