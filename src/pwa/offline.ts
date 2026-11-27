@@ -1,6 +1,10 @@
 // The page the service worker shows when a navigation fails because the device is offline.
 // Built at build time from the Czech strings and baked into sw.js, so it needs no network.
-// Self-contained: inline styles with the Pastelky tokens (UI doc §2.1), no scripts.
+// Self-contained: inline styles with the Pastelky tokens (UI doc §2.1), and one inline script,
+// the app's theme boot script, so a theme forced in Profil applies here too (#124).
+// Imported by vite.config.ts through ./vite-plugin: relative imports only.
+
+import { THEME_COLORS, themeBootScript } from '../lib/themeColor'
 
 /**
  * The Pastelky tokens the page uses, named as in src/styles/theme.css (light `:root` and the
@@ -51,10 +55,14 @@ export function offlinePage(appName: string, text: OfflineText): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="${THEME_COLORS.light}" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="${THEME_COLORS.dark}" media="(prefers-color-scheme: dark)">
+<script>${themeBootScript}</script>
 <title>${escapeHtml(appName)}</title>
 <style>
 :root{${cssVars(OFFLINE_TOKENS.light)}}
-@media (prefers-color-scheme: dark){:root{${cssVars(OFFLINE_TOKENS.dark)}}}
+@media (prefers-color-scheme: dark){:root:not([data-theme=light]){${cssVars(OFFLINE_TOKENS.dark)}}}
+:root[data-theme=dark]{${cssVars(OFFLINE_TOKENS.dark)}}
 body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--ink);font-family:ui-rounded,system-ui,sans-serif;text-align:center}
 main{padding:16px;max-width:360px}
 h1{font-size:26px;margin:0 0 8px}

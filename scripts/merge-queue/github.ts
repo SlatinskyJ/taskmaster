@@ -1,7 +1,7 @@
 // GitHub side of the merge-me Action (#253): reads the facts decide.ts needs, and does the
 // four writes (update, merge, comment, unlabel). REST and GraphQL over fetch; no dependency.
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import type { Ci, PrFacts } from './decide.ts'
+import type { Ci, HandoverKind, PrFacts } from './decide.ts'
 
 // The Action's token is a PAT, so its comments post as SlatinskyJ, like the agents do. A
 // marker counts only when its HMAC (key MERGE_MARKER_KEY, which only the workflow holds)
@@ -33,12 +33,42 @@ export function approvedMarker(
   const l = lower ? `${lower.pr}@${lower.sha}` : '-'
   return `<!-- merge-queue:approved ${sha} ${l} ${sign(key, `approved:${pr}:${labelEventId}:${sha}:${l}`)} -->`
 }
-export function handoffMarker(key: string, pr: number, labelEventId: number): string {
-  return `<!-- merge-queue:handoff ${sign(key, `handoff:${pr}:${labelEventId}`)} -->`
+/**
+ * A hand-over: its kind (what the PR may do next), its count n (re-arms so far + 1) and, for
+ * kind ci, the head the Action saw red (else -).
+ */
+export function handoffMarker(
+  key: string,
+  pr: number,
+  labelEventId: number,
+  kind: HandoverKind,
+  n: number,
+  redSha: string | null,
+): string {
+  const red = redSha ?? '-'
+  return `<!-- merge-queue:handoff ${kind} ${n} ${red} ${sign(key, `handoff:${pr}:${labelEventId}:${kind}:${n}:${red}`)} -->`
+}
+/** Re-arm n of this label: the PR is back in the queue, and later commits count from `sha`. */
+export function resumedMarker(
+  key: string,
+  pr: number,
+  labelEventId: number,
+  n: number,
+  sha: string,
+): string {
+  return `<!-- merge-queue:resumed ${n} ${sha} ${sign(key, `resumed:${pr}:${labelEventId}:${n}:${sha}`)} -->`
 }
 const APPROVED_RE =
   /<!-- merge-queue:approved ([0-9a-f]{40}) (\d+@[0-9a-f]{40}|-) ([0-9a-f]{64}) -->/
-const HANDOFF_RE = /<!-- merge-queue:handoff ([0-9a-f]{64}) -->/
+const HANDOFF_RE =
+  /<!-- merge-queue:handoff (ci|fix|final) (\d+) ([0-9a-f]{40}|-) ([0-9a-f]{64}) -->/
+/** Before #344: no kind and no count. Still verifies, as kind final. */
+const OLD_HANDOFF_RE = /<!-- merge-queue:handoff ([0-9a-f]{64}) -->/
+const RESUMED_RE = /<!-- merge-queue:resumed (\d+) ([0-9a-f]{40}) ([0-9a-f]{64}) -->/
+/** The owner thread's re-arm request: unsigned, so it counts only from SlatinskyJ (see factsFor). */
+const REARM_RE = /<!-- merge-queue:rearm ([0-9a-f]{40}) -->/
+/** Subject prefix of every commit skill merge-approved-prs makes (its section 3). */
+const FIX_PREFIX = 'merge-approved-prs: '
 export const FOOTER = '---\n_Posted by the merge-me Action_'
 export const LABEL = 'merge-me'
 export const JAKUB = 'SlatinskyJ'
@@ -47,6 +77,7 @@ export interface GhCommit {
   sha: string
   parents: { sha: string }[]
   commit: {
+    message: string
     committer: { name: string; email: string } | null
     verification: { verified: boolean } | null
   }
@@ -201,18 +232,22 @@ export function makeGh(
     return on
   }
 
+  /** The PR's commits after `from` up to `head`; null when `head` does not follow `from`. */
+  async function commitsAfter(pr: number, from: string, head: string): Promise<GhCommit[] | null> {
+    const commits = await getAll<GhCommit>(`${base}/pulls/${pr}/commits`)
+    const at = commits.findIndex((c) => c.sha === from)
+    const after = at < 0 ? [] : commits.slice(at + 1)
+    return after.length === 0 || after.at(-1)?.sha !== head ? null : after
+  }
+
   async function walk(
     pr: number,
     approved: string,
     head: string,
   ): Promise<{ headIsApproved: boolean; updatedByAction: boolean }> {
     if (head === approved) return { headIsApproved: true, updatedByAction: false }
-    const commits = await getAll<GhCommit>(`${base}/pulls/${pr}/commits`)
-    const at = commits.findIndex((c) => c.sha === approved)
-    const after = at < 0 ? [] : commits.slice(at + 1)
-    if (after.length === 0 || after.at(-1)?.sha !== head) {
-      return { headIsApproved: false, updatedByAction: false }
-    }
+    const after = await commitsAfter(pr, approved, head)
+    if (!after) return { headIsApproved: false, updatedByAction: false }
     const mainShas = new Set<string>()
     for (const c of after) {
       const second = c.parents[1]?.sha
@@ -225,6 +260,28 @@ export function makeGh(
       prev = c.sha
     }
     return { headIsApproved: true, updatedByAction: true }
+  }
+
+  /**
+   * Every commit after `baseline` is a merge of main on the previous commit (any committer:
+   * conflict resolutions included) or a non-merge commit whose subject starts with FIX_PREFIX.
+   * The prefix keeps an agent's feature commit out; it is no proof against forgery, which is
+   * the same trust as skill merge-approved-prs section 3 under Jakub's label.
+   */
+  async function walkFixed(pr: number, baseline: string, head: string): Promise<boolean> {
+    if (head === baseline) return true
+    const after = await commitsAfter(pr, baseline, head)
+    if (!after) return false
+    let prev = baseline
+    for (const c of after) {
+      const [first, second, ...rest] = c.parents
+      if (first?.sha !== prev || rest.length > 0) return false
+      if (second) {
+        if (!(await isOnMain(second.sha))) return false
+      } else if (!(c.commit.message.split('\n')[0] ?? '').startsWith(FIX_PREFIX)) return false
+      prev = c.sha
+    }
+    return true
   }
 
   async function unresolvedThreads(pr: number): Promise<number> {
@@ -308,13 +365,50 @@ export function makeGh(
     const since = (await getAll<IssueComment>(`${base}/issues/${pr}/comments`)).filter(
       (c) => Date.parse(c.created_at) >= labelledAt,
     )
-    let handedOver = false
     let approvedSha: string | null = null
     let approvedLower: Lower | null = null
-    for (const c of since) {
-      const h = HANDOFF_RE.exec(c.body ?? '')
-      if (h?.[1] && verify(markerKey, `handoff:${pr}:${label.id}`, h[1])) handedOver = true
-      const a = APPROVED_RE.exec(c.body ?? '')
+    let latest = null as { handover: NonNullable<PrFacts['handover']>; at: number } | null
+    let rearms = 0
+    let resumedSha: string | null = null
+    const requests: { sha: string; at: number }[] = []
+    // The Action posts as SlatinskyJ (PAT). On a public repo anyone can paste a copy of a signed
+    // marker, so only his comments count; a replayed older hand-over must not close a newer one.
+    const keep = (h: NonNullable<PrFacts['handover']>, at: number) => {
+      if (!latest || h.n >= latest.handover.n) latest = { handover: h, at }
+    }
+    for (const [at, c] of since.entries()) {
+      const body = c.user?.login === JAKUB ? (c.body ?? '') : ''
+      const o = OLD_HANDOFF_RE.exec(body)
+      if (o?.[1] && verify(markerKey, `handoff:${pr}:${label.id}`, o[1])) {
+        keep({ kind: 'final', n: Infinity, redSha: null }, at)
+      }
+      const h = HANDOFF_RE.exec(body)
+      if (
+        h?.[1] &&
+        h[2] &&
+        h[3] &&
+        h[4] &&
+        verify(markerKey, `handoff:${pr}:${label.id}:${h[1]}:${h[2]}:${h[3]}`, h[4])
+      ) {
+        const kind = h[1] as HandoverKind
+        keep({ kind, n: Number(h[2]), redSha: h[3] === '-' ? null : h[3] }, at)
+      }
+      // The highest n, not the count: a pasted copy of a resumed marker changes nothing.
+      const r = RESUMED_RE.exec(body)
+      if (
+        r?.[1] &&
+        r[2] &&
+        r[3] &&
+        verify(markerKey, `resumed:${pr}:${label.id}:${r[1]}:${r[2]}`, r[3])
+      ) {
+        if (Number(r[1]) > rearms) {
+          rearms = Number(r[1])
+          resumedSha = r[2]
+        }
+      }
+      const q = REARM_RE.exec(body)
+      if (q?.[1]) requests.push({ sha: q[1], at })
+      const a = APPROVED_RE.exec(body)
       if (
         a?.[1] &&
         a[2] &&
@@ -326,6 +420,9 @@ export function makeGh(
         approvedLower = n && s ? { pr: Number(n), sha: s } : null
       }
     }
+    const open = latest && latest.handover.n > rearms ? latest : null
+    // A request counts only after the open hand-over: one from before a later hand-over is stale.
+    const request = open ? requests.filter((q) => q.at > open.at).at(-1) : undefined
     const detail = await getJson<PullDetail>(`${base}/pulls/${pr}`)
     const needsJakubAfterLabel =
       detail.labels.some((l) => l.name === 'needs-jakub') &&
@@ -352,11 +449,20 @@ export function makeGh(
       stack: null,
       lower: 'none',
       behind: false,
-      handedOver,
+      handover: open?.handover ?? null,
+      rearms,
+      rearmRequest: request?.sha ?? null,
+      headIsFixed: false,
     }
-    // decide.ts never acts on these beyond a hand-over, so skip the costly reads.
-    if (handedOver || approvedSha === null) return facts
-    Object.assign(facts, await walk(pr, approvedSha, detail.head.sha))
+    // Unrecorded or handed over for good: decide.ts never acts beyond a hand-over, so skip the
+    // costly reads.
+    if (approvedSha === null || facts.handover?.kind === 'final') return facts
+    // Later commits count from the latest re-arm, else from the commit Jakub labelled.
+    const baseline = resumedSha ?? approvedSha
+    Object.assign(facts, await walk(pr, baseline, detail.head.sha))
+    facts.headIsFixed =
+      facts.headIsApproved ||
+      (facts.handover !== null && (await walkFixed(pr, baseline, detail.head.sha)))
     const { check_runs } = await getJson<{ check_runs: GhCheckRun[] }>(
       `${base}/commits/${detail.head.sha}/check-runs?per_page=100`,
     )

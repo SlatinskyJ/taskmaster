@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import type { HistoryEntry } from '~/server/tasks/functions'
-import { historyItems, historyReason, historyRounds, historyText, historyTime } from './historyText'
+import type { HistoryEntry, ThreadEntry } from '~/server/tasks/functions'
+import {
+  historyItems,
+  historyReason,
+  historyRounds,
+  historyText,
+  historyTime,
+  threadItems,
+} from './historyText'
 
 const AT = '2026-11-21T09:12:00.000Z'
 const entry = (over: Partial<HistoryEntry>): HistoryEntry => ({
@@ -255,5 +262,82 @@ describe('historyItems (#248)', () => {
     })
     const [note] = historyItems([entry({ id: 1, by: null, reason: 'Zrušeno systémem.' })], 3)
     expect(note).toMatchObject({ kind: 'note', reason: '„Zrušeno systémem.“' })
+  })
+})
+
+describe('threadItems (#289)', () => {
+  const row = (over: Partial<ThreadEntry>): ThreadEntry => ({
+    id: 1,
+    side: 'taker',
+    by: { id: 4, name: 'Starší' },
+    score: 8,
+    at: AT,
+    state: 'open',
+    ...over,
+  })
+
+  it('newest on top; mine left with no name, theirs right with a name; the history wording', () => {
+    const items = threadItems(
+      [
+        row({ id: 1, side: 'giver', by: { id: 2, name: 'Táta' }, score: 6, state: 'replaced' }),
+        row({ id: 2, score: 9 }),
+      ],
+      4,
+    )
+    expect(items).toEqual([
+      {
+        kind: 'bubble',
+        id: 2,
+        side: 'mine',
+        name: null,
+        text: 'chce 9 b',
+        reason: null,
+        time: 'so 21. 11. 10:12',
+        joinAbove: false,
+        joinBelow: false,
+      },
+      {
+        kind: 'bubble',
+        id: 1,
+        side: 'theirs',
+        name: 'Táta',
+        text: 'nabídka 6 b',
+        reason: 'změněno',
+        time: 'so 21. 11. 10:12',
+        joinAbove: false,
+        joinBelow: false,
+      },
+    ])
+  })
+
+  it('a closed or accepted row carries its state word; an open one none', () => {
+    const items = threadItems(
+      [row({ id: 1, state: 'closed' }), row({ id: 2, state: 'accepted' }), row({ id: 3 })],
+      2,
+    )
+    expect(items.map((i) => (i.kind === 'bubble' ? i.reason : '?'))).toEqual([
+      null,
+      'přijato',
+      'uzavřeno',
+    ])
+  })
+
+  it('a run: the same person in a row joins, the name only on the first; another person ends it', () => {
+    const items = threadItems(
+      [row({ id: 1, by: { id: 5, name: 'Mladší' } }), row({ id: 2 }), row({ id: 3 })],
+      2,
+    )
+    expect(
+      items.map((i) => (i.kind === 'bubble' ? [i.name, i.joinAbove, i.joinBelow] : null)),
+    ).toEqual([
+      ['Starší', false, true],
+      [null, true, false],
+      ['Mladší', false, false],
+    ])
+  })
+
+  it('mine is by id, not by name', () => {
+    const [item] = threadItems([row({ by: { id: 7, name: 'Starší' } })], 4)
+    expect(item).toMatchObject({ side: 'theirs', name: 'Starší' })
   })
 })

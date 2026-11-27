@@ -1,8 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { entryCheck, nextActions, type PrFacts } from '../scripts/merge-queue/decide.ts'
+import {
+  entryCheck,
+  handoverKind,
+  nextActions,
+  type PrFacts,
+} from '../scripts/merge-queue/decide.ts'
 
 const A = 'a'.repeat(40)
 const H = 'h'.repeat(40)
+const FINAL = { kind: 'final', n: 1, redSha: null } as const
 
 function facts(over: Partial<PrFacts> = {}): PrFacts {
   return {
@@ -22,7 +28,10 @@ function facts(over: Partial<PrFacts> = {}): PrFacts {
     stack: null,
     lower: 'none',
     behind: false,
-    handedOver: false,
+    handover: null,
+    rearms: 0,
+    rearmRequest: null,
+    headIsFixed: true,
     ...over,
   }
 }
@@ -35,37 +44,53 @@ describe('entryCheck', () => {
     expect(entryCheck(facts({ ci: 'pending' }))).toEqual({ ok: true })
   })
   it('fails a draft', () => {
-    expect(entryCheck(facts({ draft: true }))).toEqual({ ok: false, reason: 'draft' })
+    expect(entryCheck(facts({ draft: true }))).toEqual({
+      ok: false,
+      code: 'draft',
+      reason: 'draft',
+    })
   })
   it('fails an open question', () => {
     expect(entryCheck(facts({ needsJakubAfterLabel: true }))).toEqual({
       ok: false,
+      code: 'needs-jakub',
       reason: 'open question (needs-jakub)',
     })
   })
   it('fails new commits after the label', () => {
     expect(entryCheck(facts({ headIsApproved: false }))).toEqual({
       ok: false,
+      code: 'new-commits',
       reason: 'new commits after the label',
     })
   })
   it('fails red CI', () => {
-    expect(entryCheck(facts({ ci: 'red' }))).toEqual({ ok: false, reason: 'CI red' })
+    expect(entryCheck(facts({ ci: 'red' }))).toEqual({
+      ok: false,
+      code: 'ci-red',
+      reason: 'CI red',
+    })
   })
   it('fails one unresolved thread', () => {
     expect(entryCheck(facts({ unresolvedThreads: 1 }))).toEqual({
       ok: false,
+      code: 'threads',
       reason: '1 unresolved thread',
     })
   })
   it('counts several unresolved threads', () => {
     expect(entryCheck(facts({ unresolvedThreads: 3 }))).toEqual({
       ok: false,
+      code: 'threads',
       reason: '3 unresolved threads',
     })
   })
   it('fails a PR from a fork (its author could rewrite an update merge in the web editor)', () => {
-    expect(entryCheck(facts({ fromFork: true }))).toEqual({ ok: false, reason: 'PR from a fork' })
+    expect(entryCheck(facts({ fromFork: true }))).toEqual({
+      ok: false,
+      code: 'fork',
+      reason: 'PR from a fork',
+    })
   })
   it('passes a PR on a lower PR or in a stack: nextActions makes it wait', () => {
     expect(entryCheck(facts({ baseIsMain: false }))).toEqual({ ok: true })
@@ -80,7 +105,14 @@ describe('nextActions', () => {
 
   it('hands over a PR whose approval was never recorded once the label is 15 minutes old', () => {
     expect(nextActions([facts({ approvedSha: null, labelAgeMinutes: 15 })])).toEqual([
-      { kind: 'hand-over', pr: 9, reason: 'approval not recorded: add merge-me again' },
+      {
+        kind: 'hand-over',
+        pr: 9,
+        reason: 'approval not recorded: add merge-me again',
+        as: 'final',
+        n: 1,
+        redSha: null,
+      },
     ])
   })
 
@@ -96,11 +128,11 @@ describe('nextActions', () => {
   })
 
   it('does nothing for a handed-over PR, even one that would pass now', () => {
-    expect(nextActions([facts({ handedOver: true })])).toEqual([{ kind: 'idle' }])
+    expect(nextActions([facts({ handover: FINAL })])).toEqual([{ kind: 'idle' }])
   })
 
   it('never hands over a handed-over PR a second time', () => {
-    expect(nextActions([facts({ handedOver: true, draft: true })])).toEqual([{ kind: 'idle' }])
+    expect(nextActions([facts({ handover: FINAL, draft: true })])).toEqual([{ kind: 'idle' }])
   })
 
   it('updates a clean PR that is behind', () => {
@@ -133,7 +165,7 @@ describe('nextActions', () => {
     expect(
       nextActions([facts({ number: 12, behind: true }), facts({ number: 9, draft: true })]),
     ).toEqual([
-      { kind: 'hand-over', pr: 9, reason: 'draft' },
+      { kind: 'hand-over', pr: 9, reason: 'draft', as: 'final', n: 1, redSha: null },
       { kind: 'update', pr: 12 },
     ])
   })
@@ -167,7 +199,7 @@ describe('nextActions: stacks', () => {
 
   it('does not unstack while a PR of the stack is handed over', () => {
     const prs = [
-      facts({ number: 10, stack: st([10, 11]), handedOver: true }),
+      facts({ number: 10, stack: st([10, 11]), handover: FINAL }),
       facts({ number: 11, baseIsMain: false, stack: st([10, 11]) }),
     ]
     expect(nextActions(prs)).toEqual([{ kind: 'wait', pr: 11, for: 'its whole stack' }])
@@ -179,7 +211,7 @@ describe('nextActions: stacks', () => {
       facts({ number: 11, baseIsMain: false, stack: st([10, 11]) }),
     ]
     expect(nextActions(prs)).toEqual([
-      { kind: 'hand-over', pr: 10, reason: 'CI red' },
+      { kind: 'hand-over', pr: 10, reason: 'CI red', as: 'ci', n: 1, redSha: A },
       { kind: 'wait', pr: 11, for: 'its whole stack' },
     ])
   })
@@ -207,6 +239,7 @@ describe('nextActions: labelled on a lower PR', () => {
   it('hands over when its lower PR changed after the label or it was not up to date', () => {
     expect(entryCheck(facts({ lower: 'bad' }))).toEqual({
       ok: false,
+      code: 'lower-bad',
       reason: 'its lower PR changed after the label, or it was not up to date with it',
     })
   })
@@ -219,5 +252,173 @@ describe('nextActions: labelled on a lower PR', () => {
 
   it('lands once its lower PR merged on the recorded head', () => {
     expect(nextActions([facts({ lower: 'ok' })])).toEqual([{ kind: 'merge', pr: 9, sha: A }])
+  })
+})
+
+describe('handoverKind', () => {
+  it.each([
+    ['ci-red', 0, 'ci'],
+    ['ci-red', 2, 'ci'],
+    ['ci-red', 3, 'final'],
+    ['conflict', 0, 'fix'],
+    ['conflict', 2, 'fix'],
+    ['conflict', 3, 'final'],
+    ['merge-refused', 0, 'fix'],
+    ['merge-refused', 3, 'final'],
+    ['draft', 0, 'final'],
+    ['threads', 0, 'final'],
+    ['not-recorded', 0, 'final'],
+  ] as const)('%s after %i re-arms is %s', (code, rearms, kind) => {
+    expect(handoverKind(code, rearms)).toBe(kind)
+  })
+})
+
+describe('nextActions: re-arm', () => {
+  const ciOpen = { kind: 'ci', n: 1, redSha: A } as const
+  const fixOpen = { kind: 'fix', n: 1, redSha: null } as const
+
+  it('hands over red CI as kind ci with the red head', () => {
+    expect(nextActions([facts({ ci: 'red' })])).toEqual([
+      { kind: 'hand-over', pr: 9, reason: 'CI red', as: 'ci', n: 1, redSha: A },
+    ])
+  })
+
+  it('hands over the 4th time as final, also for red CI', () => {
+    expect(nextActions([facts({ ci: 'red', rearms: 3 })])).toEqual([
+      {
+        kind: 'hand-over',
+        pr: 9,
+        reason: 'CI red (3 re-arms used, add merge-me again)',
+        as: 'final',
+        n: 4,
+        redSha: null,
+      },
+    ])
+  })
+
+  it('hands over the 3rd time still as ci', () => {
+    expect(nextActions([facts({ ci: 'red', rearms: 2 })])).toEqual([
+      { kind: 'hand-over', pr: 9, reason: 'CI red', as: 'ci', n: 3, redSha: A },
+    ])
+  })
+
+  it('re-arms a parked PR once a newer head is green, then lands it', () => {
+    expect(nextActions([facts({ handover: ciOpen, headSha: H, updatedByAction: true })])).toEqual([
+      { kind: 'resume', pr: 9, n: 1, sha: H },
+      { kind: 'merge', pr: 9, sha: H },
+    ])
+  })
+
+  it('never re-arms a green re-run of the red head', () => {
+    const actions = nextActions([facts({ handover: ciOpen, headSha: A, ci: 'green' })])
+    expect(actions.some((a) => a.kind === 'resume' || a.kind === 'merge')).toBe(false)
+  })
+
+  it('updates a parked PR that is behind when no other PR is active', () => {
+    expect(nextActions([facts({ handover: ciOpen, ci: 'red', behind: true })])).toEqual([
+      { kind: 'update', pr: 9 },
+    ])
+  })
+
+  it('a parked PR that is not behind does not hold the queue', () => {
+    expect(nextActions([facts({ handover: ciOpen, ci: 'red' }), facts({ number: 10 })])).toEqual([
+      { kind: 'wait', pr: 9, for: 'CI red, parked' },
+      { kind: 'merge', pr: 10, sha: A },
+    ])
+  })
+
+  it('an updated parked PR is never the active one ahead of a non-parked PR', () => {
+    expect(
+      nextActions([
+        facts({ handover: ciOpen, ci: 'red', updatedByAction: true, headSha: H }),
+        facts({ number: 10 }),
+      ]),
+    ).toEqual([
+      { kind: 'wait', pr: 9, for: 'CI red, parked' },
+      { kind: 'merge', pr: 10, sha: A },
+    ])
+  })
+
+  it('updates a behind non-parked PR first, not the behind parked one', () => {
+    const actions = nextActions([
+      facts({ handover: ciOpen, ci: 'red', behind: true }),
+      facts({ number: 10, behind: true }),
+    ])
+    expect(actions.filter((a) => a.kind === 'update')).toEqual([{ kind: 'update', pr: 10 }])
+  })
+
+  it('needs-jakub after the label blocks the automatic re-arm', () => {
+    expect(
+      nextActions([facts({ handover: ciOpen, headSha: H, needsJakubAfterLabel: true })]),
+    ).toEqual([{ kind: 'idle' }])
+  })
+
+  it('does not re-arm a parked PR with new commits after the baseline', () => {
+    expect(nextActions([facts({ handover: ciOpen, headSha: H, headIsApproved: false })])).toEqual([
+      { kind: 'idle' },
+    ])
+  })
+
+  it('waits on a parked PR whose newer head is still in CI', () => {
+    expect(nextActions([facts({ handover: ciOpen, headSha: H, ci: 'pending' })])).toEqual([
+      { kind: 'wait', pr: 9, for: 'CI' },
+    ])
+  })
+
+  it('re-arms a fix hand-over on a request for the head, then waits for CI', () => {
+    expect(
+      nextActions([
+        facts({
+          handover: fixOpen,
+          headSha: H,
+          rearmRequest: H,
+          headIsApproved: false,
+          headIsFixed: true,
+          ci: 'pending',
+        }),
+      ]),
+    ).toEqual([
+      { kind: 'resume', pr: 9, n: 1, sha: H },
+      { kind: 'wait', pr: 9, for: 'CI' },
+    ])
+  })
+
+  it.each([
+    ['a stale request', { rearmRequest: A }],
+    ['a head that is not fixed', { headIsFixed: false }],
+    ['red CI', { ci: 'red' }],
+    ['needs-jakub', { needsJakubAfterLabel: true }],
+    ['a draft', { draft: true }],
+    ['an unresolved thread', { unresolvedThreads: 1 }],
+  ] as const)('does not re-arm a fix hand-over with %s', (_, over) => {
+    expect(
+      nextActions([
+        facts({
+          handover: fixOpen,
+          headSha: H,
+          rearmRequest: H,
+          headIsApproved: false,
+          ...over,
+        }),
+      ]),
+    ).toEqual([{ kind: 'idle' }])
+  })
+
+  it('a request never re-arms the red head', () => {
+    expect(nextActions([facts({ handover: ciOpen, headSha: A, rearmRequest: A })])).toEqual([
+      { kind: 'idle' },
+    ])
+  })
+
+  it('a final hand-over ignores a request', () => {
+    expect(nextActions([facts({ handover: FINAL, headSha: H, rearmRequest: H })])).toEqual([
+      { kind: 'idle' },
+    ])
+  })
+
+  it('a hand-over from before #344 (old marker) stays handed over, with no new comment', () => {
+    expect(
+      nextActions([facts({ handover: { kind: 'final', n: Infinity, redSha: null }, ci: 'red' })]),
+    ).toEqual([{ kind: 'idle' }])
   })
 })

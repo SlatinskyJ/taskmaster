@@ -195,6 +195,17 @@ describe('service worker', () => {
     expect(caches.stores.size).toBe(0)
   })
 
+  it('does not answer a frame’s page load (#274)', async () => {
+    const { dispatch } = startWorker('v1', new FakeCaches())
+    const frameLoad = {
+      url: `${ORIGIN}/login`,
+      method: 'GET',
+      mode: 'navigate',
+      destination: 'iframe',
+    } as Request
+    expect(await dispatch('fetch', frameLoad)).toBeUndefined()
+  })
+
   it('shows the offline page when a navigation fails', async () => {
     online = false
     const { dispatch } = startWorker('v1', new FakeCaches())

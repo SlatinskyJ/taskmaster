@@ -1,23 +1,43 @@
 import { useCallback, useSyncExternalStore } from 'react'
+import {
+  FORCED_META_ATTR,
+  THEME_STORAGE_KEY,
+  forcedThemeColor,
+  parseThemePref,
+  type ThemePref,
+} from './themeColor'
 
 // Light / dark / auto (UI doc §1, §7.4). `auto` follows the system; the others set
-// `data-theme` on <html>, which src/styles/theme.css reads. Stored on this device;
-// the profile screen (#31) decides whether it also follows the user.
+// `data-theme` on <html>, which src/styles/theme.css reads, and force the theme-color.
+// Stored on this device; the profile screen (#31) decides whether it also follows the user.
 
-export const THEME_PREFS = ['auto', 'light', 'dark'] as const
-export type ThemePref = (typeof THEME_PREFS)[number]
+export {
+  FORCED_META_ATTR,
+  THEME_COLORS,
+  THEME_PREFS,
+  THEME_STORAGE_KEY,
+  forcedThemeColor,
+  parseThemePref,
+  themeBootScript,
+  type ThemePref,
+} from './themeColor'
 
-export const THEME_STORAGE_KEY = 'tm-theme'
-
-export function parseThemePref(value: unknown): ThemePref {
-  return value === 'light' || value === 'dark' ? value : 'auto'
+/** The forced theme-color meta (see themeBootScript): added, updated, or removed for `auto`. */
+function applyThemeColor(pref: ThemePref): void {
+  const color = forcedThemeColor(pref)
+  let meta = document.querySelector<HTMLMetaElement>(`meta[${FORCED_META_ATTR}]`)
+  if (color === undefined) {
+    meta?.remove()
+    return
+  }
+  if (!meta) {
+    meta = document.createElement('meta')
+    meta.name = 'theme-color'
+    meta.setAttribute(FORCED_META_ATTR, '')
+    document.head.prepend(meta)
+  }
+  meta.content = color
 }
-
-/**
- * Runs inline in <head> before first paint, so a forced theme never flashes the other one.
- * Keep it tiny and dependency-free: it is serialised into the HTML as a string.
- */
-export const themeBootScript = `try{var t=localStorage.getItem('${THEME_STORAGE_KEY}');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}`
 
 function readStored(): ThemePref {
   try {
@@ -31,6 +51,7 @@ export function applyThemePref(pref: ThemePref): void {
   const root = document.documentElement
   if (pref === 'auto') delete root.dataset.theme
   else root.dataset.theme = pref
+  applyThemeColor(pref)
   try {
     if (pref === 'auto') localStorage.removeItem(THEME_STORAGE_KEY)
     else localStorage.setItem(THEME_STORAGE_KEY, pref)

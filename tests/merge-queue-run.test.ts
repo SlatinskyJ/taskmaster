@@ -1,7 +1,12 @@
 import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
 import type { PrFacts } from '../scripts/merge-queue/decide.ts'
-import { approvedMarker, handoffMarker, type Gh } from '../scripts/merge-queue/github.ts'
+import {
+  approvedMarker,
+  handoffMarker,
+  resumedMarker,
+  type Gh,
+} from '../scripts/merge-queue/github.ts'
 import { entry, record, run, step } from '../scripts/merge-queue/run.ts'
 
 const X = 'a'.repeat(40)
@@ -27,7 +32,10 @@ function facts(over: Partial<PrFacts> = {}): PrFacts {
     stack: null,
     lower: 'none',
     behind: false,
-    handedOver: false,
+    handover: null,
+    rearms: 0,
+    rearmRequest: null,
+    headIsFixed: true,
     ...over,
   }
 }
@@ -136,7 +144,7 @@ describe('run', () => {
     await run(f.gh, log, KEY)
     expect(f.writes().map((c) => c.op)).toEqual(['comment'])
     const [body] = f.comments()
-    expect(body?.startsWith(handoffMarker(KEY, 9, 501))).toBe(true)
+    expect(body?.startsWith(handoffMarker(KEY, 9, 501, 'final', 1, null))).toBe(true)
     expect(body).toContain('approval not recorded: add merge-me again')
     expect(body).not.toContain('merge-queue:approved')
   })
@@ -152,7 +160,7 @@ describe('run', () => {
     await run(f.gh, log, KEY)
     expect(f.writes().map((c) => c.op)).toEqual(['updateBranch', 'comment'])
     const [body] = f.comments()
-    expect(body?.startsWith(handoffMarker(KEY, 9, 501))).toBe(true)
+    expect(body?.startsWith(handoffMarker(KEY, 9, 501, 'fix', 1, null))).toBe(true)
     expect(body).toContain('update with main has a conflict')
     expect(body).toContain('Run skill merge-approved-prs for this PR.')
     expect(body?.endsWith(FOOTER)).toBe(true)
@@ -201,6 +209,79 @@ describe('run', () => {
     const f = fakeGh({ prs: [] })
     await run(f.gh, log, KEY)
     expect(f.writes()).toEqual([])
+  })
+})
+
+describe('run: hand-over kinds and re-arms', () => {
+  const H = 'c'.repeat(40)
+
+  it('a CI-red hand-over is kind ci on the red head, and says the Action takes it back', async () => {
+    const f = fakeGh({ prs: [facts({ ci: 'red' })] })
+    expect(await run(f.gh, log, KEY)).toEqual({ handedOver: [9] })
+    const [body] = f.comments()
+    expect(body?.startsWith(handoffMarker(KEY, 9, 501, 'ci', 1, X))).toBe(true)
+    expect(body).toContain('takes this PR back into the queue by itself once a newer head is green')
+    expect(body).toContain('at most 3 times')
+    expect(body).toContain('adds `needs-jakub`')
+    expect(body?.endsWith(FOOTER)).toBe(true)
+  })
+
+  it('a fix hand-over tells the owner thread how to ask for the re-arm', async () => {
+    const f = fakeGh({ prs: [facts({ behind: true })], update: 'conflict' })
+    await run(f.gh, log, KEY)
+    const [body] = f.comments()
+    expect(body).toContain('skill merge-approved-prs section 3')
+    expect(body).toContain('`<!-- merge-queue:rearm <head sha> -->`')
+  })
+
+  it('a final hand-over says it needs Jakub', async () => {
+    const f = fakeGh({ prs: [facts({ draft: true })] })
+    await run(f.gh, log, KEY)
+    const [body] = f.comments()
+    expect(body?.startsWith(handoffMarker(KEY, 9, 501, 'final', 1, null))).toBe(true)
+    expect(body).toContain('needs Jakub')
+  })
+
+  it('re-arms with one resumed comment and merges in the same run', async () => {
+    const f = fakeGh({
+      prs: [
+        facts({ handover: { kind: 'ci', n: 1, redSha: X }, headSha: H, updatedByAction: true }),
+      ],
+    })
+    expect(await run(f.gh, log, KEY)).toEqual({ handedOver: [] })
+    expect(f.writes().map((c) => c.op)).toEqual(['comment', 'merge', 'removeLabel'])
+    expect(f.comments()).toHaveLength(1)
+    expect(f.comments()[0]?.startsWith(resumedMarker(KEY, 9, 501, 1, H))).toBe(true)
+    expect(f.writes()[1]).toEqual({ op: 'merge', args: [9, H] })
+  })
+
+  it('a refused merge right after a re-arm hands over with the next count', async () => {
+    const f = fakeGh({
+      prs: [facts({ handover: { kind: 'ci', n: 1, redSha: X }, headSha: H })],
+      merge: 'refused',
+    })
+    expect(await run(f.gh, log, KEY)).toEqual({ handedOver: [9] })
+    const [, body] = f.comments()
+    expect(body?.startsWith(handoffMarker(KEY, 9, 501, 'fix', 2, null))).toBe(true)
+  })
+
+  it('an update conflict on a parked PR hands over fix with n = re-arms + 1', async () => {
+    const f = fakeGh({
+      prs: [
+        facts({ handover: { kind: 'ci', n: 2, redSha: X }, rearms: 1, ci: 'red', behind: true }),
+      ],
+      update: 'conflict',
+    })
+    await run(f.gh, log, KEY)
+    expect(f.comments()[0]?.startsWith(handoffMarker(KEY, 9, 501, 'fix', 2, null))).toBe(true)
+  })
+
+  it('after 3 re-arms an update conflict hands over final', async () => {
+    const f = fakeGh({ prs: [facts({ behind: true, rearms: 3 })], update: 'conflict' })
+    await run(f.gh, log, KEY)
+    const [body] = f.comments()
+    expect(body?.startsWith(handoffMarker(KEY, 9, 501, 'final', 4, null))).toBe(true)
+    expect(body).toContain('(3 re-arms used, add merge-me again)')
   })
 })
 
