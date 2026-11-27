@@ -1,4 +1,10 @@
-import { parseIsoUtc, toPragueWallTime } from '~/domain/dates'
+import {
+  addPragueDays,
+  parseIsoUtc,
+  startOfPragueDay,
+  toIsoUtc,
+  toPragueWallTime,
+} from '~/domain/dates'
 import type { Level } from '~/domain'
 import { cs } from '~/lib/strings'
 
@@ -17,9 +23,15 @@ export function dayMonth(iso: string): string {
   return `${String(t.day)}. ${String(t.month)}.`
 }
 
-/** "22. 11. – 29. 11.": a week from its start day to its end (cutoff, or the early end). */
+/**
+ * "22. 11. – 29. 11.": a week from its start day to its end (cutoff, or the early end).
+ * An end at 00:00 Prague names the day before: nothing of the week happens on the end day.
+ */
 export function weekLabel(startsAt: string, endsAt: string): string {
-  return `${dayMonth(startsAt)} – ${dayMonth(endsAt)}`
+  const end = parseIsoUtc(endsAt)
+  const lastDay =
+    startOfPragueDay(end).getTime() === end.getTime() ? toIsoUtc(addPragueDays(end, -1)) : endsAt
+  return `${dayMonth(startsAt)} – ${dayMonth(lastDay)}`
 }
 
 export function levelLabel(level: Level): string {
