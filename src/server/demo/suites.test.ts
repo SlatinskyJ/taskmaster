@@ -1,11 +1,11 @@
 import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
+import { DEFAULT_PERIOD_DEFAULTS, isLastDay, isRunning } from '~/domain'
 import { settlements, templates, users } from '~/server/db/schema'
 import { createTestDb } from '~/server/db/testing'
 import { listPeriods, proposalsView, rollPeriods } from '~/server/periods'
 import { takerPoints } from '~/server/points'
-import { getMeeting } from '~/server/settlement/meeting'
+import { getMeeting, settlePeriod } from '~/server/settlement/meeting'
 import { listTasks } from '~/server/tasks'
 import { rejectionsSince } from '~/server/tasks/rejections'
 import { getFlags } from '~/server/features/flags'
@@ -239,6 +239,119 @@ describe('e2e seeds (#183)', () => {
       // Tomorrow's vacuum is Starší's.
       expect(cell(1, at + 1)).toEqual([['reserved', 'Starší']])
       expect(getFlags(db)).toEqual({ ...NO_FEATURES, recurring: true, week: true, weekPlan: true })
+      const log = db
+        .select({ at: auditLog.at })
+        .from(auditLog)
+        .orderBy(auditLog.id)
+        .all()
+        .map((r) => r.at)
+      expect(log).toEqual([...log].sort())
+    },
+  )
+
+  it.each([16, 17, 18, 19, 20, 21, 22])(
+    'planmeeting (#259) on 11. %i. 2026 at 10:00: the running week on its last day, settled into a new week with its copies',
+    (day) => {
+      const now = fromPragueWallTime({ year: 2026, month: 11, day, hour: 10, minute: 0 })
+      const tomorrow = fromPragueWallTime({
+        year: 2026,
+        month: 11,
+        day: day + 1,
+        hour: 0,
+        minute: 0,
+      })
+      const db = createTestDb()
+      seedDemo(db, { TASKMASTER_ENV: 'preview', TASKMASTER_SEED: 'planmeeting' }, now)
+      // A short first week, settled with no points; the running week from six days ago 00:00 to
+      // tomorrow 00:00, so today is its last day.
+      const [first, running, ...rest] = listPeriods(db)
+      expect(rest).toEqual([])
+      expect(first && isRunning(first, now)).toBe(false)
+      const runningFrom = fromPragueWallTime({
+        year: 2026,
+        month: 11,
+        day: day - 6,
+        hour: 0,
+        minute: 0,
+      })
+      expect(first?.cutoffAt).toEqual(runningFrom)
+      expect(running?.startsAt).toEqual(runningFrom)
+      expect(running?.cutoffAt).toEqual(tomorrow)
+      expect(running && isRunning(running, now)).toBe(true)
+      expect(running && isLastDay(running, now)).toBe(true)
+      expect(
+        db
+          .select()
+          .from(settlements)
+          .all()
+          .map((r) => [r.periodId, r.totalBefore]),
+      ).toEqual([
+        [first?.id, 0],
+        [first?.id, 0],
+      ])
+      expect(getFlags(db)).toEqual({
+        ...NO_FEATURES,
+        recurring: true,
+        week: true,
+        meeting: true,
+        weekPlan: true,
+        settleLastDay: true,
+      })
+      // Today's meeting settles the running week: nothing pending, Starší at the lower level.
+      const meeting = getMeeting(db, now, true)
+      expect(meeting.period?.id).toBe(running?.id)
+      expect(meeting.period?.running).toBe(true)
+      expect(meeting.settledToday).toBe(false)
+      if (!meeting.period) throw new Error('nothing to settle')
+      expect(meeting.pending).toEqual([])
+      expect(meeting.takers.map((t) => [t.name, t.total, t.level])).toEqual([
+        ['Starší', 50, 'lower'],
+        ['Mladší', 16, 'none'],
+      ])
+      // Today's copies are open in the running week; the past days' everyday chores are done.
+      const before = getWeekPlan(db, now)
+      expect(before.days).toHaveLength(7)
+      const at = before.days.indexOf(before.today)
+      expect(at).toBe(6)
+      for (const r of before.rows.filter((r) => r.scheduleDays.length === 7)) {
+        expect(
+          r.cells[at]?.map((c) => c.status),
+          r.title,
+        ).toEqual(['open'])
+        expect(
+          r.cells.slice(0, at).every((c) => c.length === 1 && c[0]?.status === 'confirmed'),
+          r.title,
+        ).toBe(true)
+      }
+      // Settling starts the next week now, with its copies made in the same transaction.
+      const tata = db.select().from(users).where(eq(users.username, 'tata')).get()
+      const settleAt = new Date(now.getTime() + 5 * 60_000)
+      const shown = meeting.takers.map((t) => ({ takerId: t.id, total: t.total }))
+      const settled = settlePeriod(db, tata?.id ?? 0, meeting.period.id, shown, settleAt, true)
+      expect(settled.ok && settled.value.next?.startsAt).toEqual(settleAt)
+      // The new week's first column: today only if a copy of today is in it. The everyday chores
+      // have no time, so today's copies (slot 00:00) stay with the settled week (#258's start-day
+      // rule); only the bin's 18:00 copy on Út and Pá is the new week's.
+      const binToday = [2, 5].includes(new Date(now).getDay()) // Prague day = UTC day at 10:00
+      const plan = getWeekPlan(db, settleAt)
+      expect(plan.days[0]).toBe(binToday ? plan.today : tomorrow.toISOString())
+      expect(plan.days.length).toBeGreaterThanOrEqual(7)
+      const cellsOf = (title: string) =>
+        plan.rows.find((r) => r.title === title)?.cells.map((c) => c.map((x) => x.status)) ?? []
+      for (const title of [
+        'Prostřít stůl k večeři',
+        'Vyluxovat celý obývák a chodbu',
+        'Zalít kytky na balkoně',
+      ]) {
+        const cells = cellsOf(title)
+        expect(cells[0], title).toEqual(binToday ? [] : ['open'])
+        expect(
+          cells.slice(binToday ? 1 : 0).every((c) => c.length === 1 && c[0] === 'open'),
+          title,
+        ).toBe(true)
+      }
+      if (binToday) expect(cellsOf('Vynést koš na plasty')[0]).toEqual(['open'])
+      expect(getMeeting(db, settleAt, true).settledToday).toBe(true)
       const log = db
         .select({ at: auditLog.at })
         .from(auditLog)

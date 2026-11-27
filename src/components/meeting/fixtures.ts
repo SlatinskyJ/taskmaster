@@ -49,12 +49,18 @@ export const takers = [
   { id: 4, name: 'Mladší', total: 47, level: 'none' as const, deducted: 0, carryOver: 47 },
 ]
 
-export const week = (over: Partial<Extract<Meeting, { period: object }>> = {}): Meeting => ({
-  period,
-  pending: [],
-  takers,
-  ...over,
-})
+export const week = (over: Partial<Extract<Meeting, { period: object }>> = {}): Meeting => {
+  const { settledToday = false, ...rest } = over
+  return { period, pending: [], takers, settledToday, ...rest }
+}
+
+/** Step 3 with nothing to settle (`runningCutoffAt` null) or the week still running (set). */
+export const noWeek = (
+  over: Partial<Extract<Meeting, { period: null }>> = {},
+): Extract<Meeting, { period: null }> => {
+  const { settledToday = false, runningCutoffAt = null } = over
+  return { period: null, runningCutoffAt, settledToday }
+}
 
 export const pendingWeek = (): Meeting =>
   week({

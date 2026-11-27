@@ -1,4 +1,4 @@
-import { asc } from 'drizzle-orm'
+import { asc, max } from 'drizzle-orm'
 import {
   findPerson,
   isActiveGiver,
@@ -18,7 +18,7 @@ import type {
   SettlementError,
   SettlementRecord,
 } from '~/domain'
-import { toIsoUtc } from '~/domain/dates'
+import { parseIsoUtc, pragueDaysBetween, toIsoUtc } from '~/domain/dates'
 import { fail, ok } from '~/domain/result'
 import type { Result } from '~/domain/result'
 import { writeAudit } from '~/server/audit'
@@ -48,31 +48,39 @@ export interface MeetingTaker {
   carryOver: number
 }
 
-export type Meeting =
-  | {
-      period: null
-      /**
-       * The running week's cutoff (ISO UTC) when only the last-day rule keeps it from the meeting
-       * (#211): the screen says when the week ends. Null when there is nothing to settle at all.
-       */
-      runningCutoffAt: string | null
-    }
-  | {
-      period: {
-        id: number
-        startsAt: string
-        /** The week's end for its totals: now for the running week, else its end. */
-        endsAt: string
-        /** Where the week ends at the latest (the header shows it while the week runs). */
-        cutoffAt: string
-        running: boolean
-        levels: Levels
+/** Every meeting read says whether the latest settlement was confirmed today, Prague date (#259). */
+interface SettledToday {
+  /** The week plan shows at step 3 only on the Prague day of the latest settlement. */
+  settledToday: boolean
+}
+
+export type Meeting = SettledToday &
+  (
+    | {
+        period: null
+        /**
+         * The running week's cutoff (ISO UTC) when only the last-day rule keeps it from the meeting
+         * (#211): the screen says when the week ends. Null when there is nothing to settle at all.
+         */
+        runningCutoffAt: string | null
       }
-      /** Completions done before `endsAt` that still wait for a giver (step 1). */
-      pending: TaskView[]
-      /** What confirming would write, per active taker. */
-      takers: MeetingTaker[]
-    }
+    | {
+        period: {
+          id: number
+          startsAt: string
+          /** The week's end for its totals: now for the running week, else its end. */
+          endsAt: string
+          /** Where the week ends at the latest (the header shows it while the week runs). */
+          cutoffAt: string
+          running: boolean
+          levels: Levels
+        }
+        /** Completions done before `endsAt` that still wait for a giver (step 1). */
+        pending: TaskView[]
+        /** What confirming would write, per active taker. */
+        takers: MeetingTaker[]
+      }
+  )
 
 export type SettleError =
   | SettlementError
@@ -98,6 +106,21 @@ function settledIds(db: Db | Tx): Set<PeriodId> {
       .all()
       .map((s) => s.periodId),
   )
+}
+
+/** When the latest settlement was confirmed (ISO UTC), or null before the first. Corrections are not settlements. */
+export function lastSettledAt(db: Db | Tx): string | null {
+  return (
+    db
+      .select({ at: max(settlements.settledAt) })
+      .from(settlements)
+      .get()?.at ?? null
+  )
+}
+
+/** Whether `settledAt` falls on `now`'s Prague calendar date (DST-safe, not the UTC date). */
+export function settledOnPragueDay(settledAt: string | null, now: Date): boolean {
+  return settledAt !== null && pragueDaysBetween(parseIsoUtc(settledAt), now) === 0
 }
 
 /**
@@ -158,6 +181,8 @@ function preview(
  * `settleLastDay` switch, #211: only on the week's last day).
  */
 export function getMeeting(db: Db | Tx, now: Date, lastDayOnly: boolean): Meeting {
+  const settledToday = settledOnPragueDay(lastSettledAt(db), now)
+  const nothing: Meeting = { period: null, runningCutoffAt: null, settledToday }
   const people = listPeople(db)
   const periods = listPeriods(db)
   const settled = settledIds(db)
@@ -165,14 +190,15 @@ export function getMeeting(db: Db | Tx, now: Date, lastDayOnly: boolean): Meetin
   // The preview needs a giver for the domain's `settle`; with none there is nobody to settle.
   const giver = people.find(isActiveGiver)
   // No takers yet (accounts still being set up): nothing to settle, so no week is ended for it.
-  if (!giver || takersOf(db, people).length === 0) return NOTHING
+  if (!giver || takersOf(db, people).length === 0) return nothing
   if (!target) {
     const waiting = lastDayOnly ? periodToSettle(periods, settled, now, false) : undefined
-    return { period: null, runningCutoffAt: waiting ? toIsoUtc(waiting.cutoffAt) : null }
+    return { ...nothing, runningCutoffAt: waiting ? toIsoUtc(waiting.cutoffAt) : null }
   }
   const p = preview(db, people, giver.id, target, now)
-  if (!p.ok) return NOTHING
+  if (!p.ok) return nothing
   return {
+    settledToday,
     period: {
       id: target.id,
       startsAt: toIsoUtc(target.startsAt),
@@ -192,8 +218,6 @@ export function getMeeting(db: Db | Tx, now: Date, lastDayOnly: boolean): Meetin
     })),
   }
 }
-
-const NOTHING: Meeting = { period: null, runningCutoffAt: null }
 
 function sameTotals(records: readonly SettlementRecord[], shown: readonly ShownTotal[]): boolean {
   if (records.length !== shown.length) return false

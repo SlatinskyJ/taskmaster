@@ -7,7 +7,7 @@ import { createTestDb } from '~/server/db/testing'
 import { listPeriods, rollPeriods, savePeriodDefaults } from '~/server/periods'
 import { approveTemplateScore, createTemplate } from '~/server/templates'
 import { T0, failAuditOn, family, json, must } from '~/server/tasks/testing'
-import { getMeeting, settlePeriod, weekWaiting } from './meeting'
+import { getMeeting, lastSettledAt, settledOnPragueDay, settlePeriod, weekWaiting } from './meeting'
 import type { ShownTotal } from './meeting'
 import { adjustment, CUTOFF, doneTask, MEETING, plus, prague, SAT, week } from './testing'
 
@@ -48,7 +48,11 @@ function example() {
 
 describe('getMeeting', () => {
   it('nothing to settle before the first roll', () => {
-    expect(getMeeting(family().db, MEETING, false)).toEqual({ period: null, runningCutoffAt: null })
+    expect(getMeeting(family().db, MEETING, false)).toEqual({
+      period: null,
+      runningCutoffAt: null,
+      settledToday: false,
+    })
   })
 
   it('getMeeting on Sunday 20:00 lists pending done before now and previews each taker', () => {
@@ -316,7 +320,11 @@ describe('settlePeriod', () => {
   it('nothing to settle once every week is settled and the new one just started', () => {
     const f = example()
     const result = must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING, false))
-    expect(getMeeting(f.db, MEETING, false)).toEqual({ period: null, runningCutoffAt: null })
+    expect(getMeeting(f.db, MEETING, false)).toEqual({
+      period: null,
+      runningCutoffAt: null,
+      settledToday: true,
+    })
     expect(settlePeriod(f.db, f.tata, result.next?.id ?? 0, [], MEETING, false)).toEqual({
       ok: false,
       error: 'nothing_to_settle',
@@ -353,11 +361,16 @@ describe('settlePeriod', () => {
     const tata = user('tata', 'giver')
     rollPeriods(db, SAT, D)
     const [p1] = listPeriods(db)
-    expect(getMeeting(db, MEETING, false)).toEqual({ period: null, runningCutoffAt: null })
+    expect(getMeeting(db, MEETING, false)).toEqual({
+      period: null,
+      runningCutoffAt: null,
+      settledToday: false,
+    })
     // Mid-week with the rule on: still nothing to show, there is nobody to settle.
     expect(getMeeting(db, prague(2026, 11, 25, 10), true)).toEqual({
       period: null,
       runningCutoffAt: null,
+      settledToday: false,
     })
     expect(settlePeriod(db, admin, p1?.id ?? 0, [], MEETING, false)).toEqual({
       ok: false,
@@ -425,6 +438,7 @@ describe('last day only (#211, spec §5.8)', () => {
     expect(getMeeting(f.db, WED, true)).toEqual({
       period: null,
       runningCutoffAt: CUTOFF.toISOString(),
+      settledToday: false,
     })
     expect(getMeeting(f.db, WED, false).period?.id).toBe(f.p1.id)
   })
@@ -462,11 +476,16 @@ describe('last day only (#211, spec §5.8)', () => {
     expect(getMeeting(f.db, wednesday, true)).toEqual({
       period: null,
       runningCutoffAt: prague(2026, 12, 6, 23, 59).toISOString(),
+      settledToday: true,
     })
   })
 
   it('no takers or no week: nothing to show', () => {
-    expect(getMeeting(family().db, WED, true)).toEqual({ period: null, runningCutoffAt: null })
+    expect(getMeeting(family().db, WED, true)).toEqual({
+      period: null,
+      runningCutoffAt: null,
+      settledToday: false,
+    })
   })
 })
 
@@ -532,5 +551,95 @@ describe('week copies at the settlement (#257, spec §5.12)', () => {
     expect(copies(f.db, id)).toEqual([])
     must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING, false))
     expect(copies(f.db, id)).toEqual([])
+  })
+})
+
+describe('settledOnPragueDay (#259)', () => {
+  const iso = (d: Date) => d.toISOString()
+
+  it('null → false', () => {
+    expect(settledOnPragueDay(null, prague(2026, 11, 26, 10))).toBe(false)
+  })
+
+  it('settled at today 00:00 Prague → true from 00:01 to 23:59', () => {
+    const at = iso(prague(2026, 11, 26, 0, 0))
+    expect(settledOnPragueDay(at, prague(2026, 11, 26, 0, 1))).toBe(true)
+    expect(settledOnPragueDay(at, prague(2026, 11, 26, 23, 59))).toBe(true)
+  })
+
+  it('settled at yesterday 23:59 Prague → false at 00:00 and 00:01', () => {
+    const at = iso(prague(2026, 11, 25, 23, 59))
+    expect(settledOnPragueDay(at, prague(2026, 11, 26, 0, 0))).toBe(false)
+    expect(settledOnPragueDay(at, prague(2026, 11, 26, 0, 1))).toBe(false)
+  })
+
+  it('UTC date differs, Prague date same', () => {
+    const now = prague(2026, 11, 26, 10)
+    expect(settledOnPragueDay('2026-11-25T23:30:00.000Z', now)).toBe(true)
+    expect(settledOnPragueDay('2026-11-25T22:59:00.000Z', now)).toBe(false)
+  })
+
+  it('DST autumn (25 h day, 2026-10-25)', () => {
+    const at = iso(prague(2026, 10, 25, 0, 30))
+    expect(settledOnPragueDay(at, prague(2026, 10, 25, 23, 30))).toBe(true)
+    expect(settledOnPragueDay(at, prague(2026, 10, 26, 0, 5))).toBe(false)
+  })
+
+  it('DST spring (23 h day, 2026-03-29)', () => {
+    expect(settledOnPragueDay(iso(prague(2026, 3, 29, 0, 10)), prague(2026, 3, 29, 23, 50))).toBe(
+      true,
+    )
+    expect(settledOnPragueDay(iso(prague(2026, 3, 28, 23, 30)), prague(2026, 3, 29, 0, 30))).toBe(
+      false,
+    )
+  })
+
+  it('a later settlement time on the same day still counts (now before settledAt is not "today")', () => {
+    // Clock skew guard: only the calendar date matters, both ways.
+    expect(settledOnPragueDay(iso(prague(2026, 11, 26, 12)), prague(2026, 11, 26, 11))).toBe(true)
+    expect(settledOnPragueDay(iso(prague(2026, 11, 27, 1)), prague(2026, 11, 26, 23))).toBe(false)
+  })
+})
+
+describe('lastSettledAt (#259)', () => {
+  it('null with no settlements; the latest of two settled weeks', () => {
+    const f = example()
+    expect(lastSettledAt(f.db)).toBeNull()
+    must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING, false))
+    expect(lastSettledAt(f.db)).toBe(MEETING.toISOString())
+    const p2 = listPeriods(f.db)[1]
+    const at = prague(2026, 12, 6, 20)
+    must(settlePeriod(f.db, f.tata, p2?.id ?? 0, shown(f.db, at), at, false))
+    expect(lastSettledAt(f.db)).toBe(at.toISOString())
+  })
+})
+
+describe('getMeeting settledToday (#259)', () => {
+  it('true the same Prague day after settling, false the next day', () => {
+    const f = example()
+    must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING, true))
+    const late = getMeeting(f.db, prague(2026, 11, 29, 23, 59), true)
+    expect(late.period).toBeNull()
+    expect(late.settledToday).toBe(true)
+    const next = getMeeting(f.db, prague(2026, 11, 30, 0, 0), true)
+    expect(next.period).toBeNull()
+    expect(next.settledToday).toBe(false)
+  })
+
+  it('true on the period variant too, when an ended week still waits after a settlement today', () => {
+    const f = example()
+    must(settlePeriod(f.db, f.tata, f.p1.id, shown(f.db, MEETING), MEETING, false))
+    expect(getMeeting(f.db, plus(MEETING, 60_000), false)).toMatchObject({
+      period: { running: true },
+      settledToday: true,
+    })
+  })
+
+  it('false with no settlement ever: nothing to settle, and a running week', () => {
+    expect(getMeeting(family().db, MEETING, false).settledToday).toBe(false)
+    const f = example()
+    const m = getMeeting(f.db, MEETING, false)
+    expect(m.period?.id).toBe(f.p1.id)
+    expect(m.settledToday).toBe(false)
   })
 })
