@@ -9,8 +9,8 @@ import {
   choreDispute,
   descriptions,
   disputes,
-  endedWeek,
   instances,
+  lastDayWeek,
   negotiation,
   pastWeek,
   pastWeekScheduled,
@@ -95,11 +95,11 @@ export const SEEDS = {
   /** The plan table on Týden (#258): four chores, yesterday's and today's copies in each state. */
   plantable: { pieces: [planTable], features: ['recurring', 'week', 'weekPlan'] },
   /**
-   * The week plan at Schůzka (#259): an ended week to settle on any weekday with the last-day
-   * rule on, a running week from today 00:00, and the plan table's chores with every copy.
+   * The week plan at Schůzka (#259): the running week on its last day, to settle on any weekday
+   * with the last-day rule on (the next week starts then), and the plan table's chores.
    */
   planmeeting: {
-    pieces: [endedWeek],
+    pieces: [lastDayWeek],
     features: ['recurring', 'week', 'meeting', 'weekPlan', 'settleLastDay'],
   },
   /** Suggestions on Profil and Správa (#247): two new, one done, one dismissed. */

@@ -645,41 +645,78 @@ export const weekChores: Piece = ({ tx, id, now }) => {
 }
 
 /**
- * Test only (#259, seed `planmeeting`), not in `demo`: an ended, unsettled week and a running
- * week whose last day is never today, so e2e can settle at Schůzka on any weekday with the
- * last-day rule on and come back to step 3. The default week here ends at today's weekday 00:00:
- * the ended week runs from `start` (a week ago; the audit log stays in time order) to today
- * 00:00, and the running week from today 00:00 for seven days, as after a Sunday-evening
- * meeting. The plan table's chores are agreed in the ended week, as a family's chores are, so
- * the running week has a copy for every slot from its start, today's too (`planTable` agrees
- * them now inside a running week, and a slot before the agreement makes no copy). Mladší holds
- * today's "Vyluxovat…". Must come first in a seed: it writes at `start`.
+ * Test only (#259, seed `planmeeting`), not in `demo`: the running week on its last day, so e2e
+ * settles it at Schůzka on any weekday with the last-day rule on, as a real meeting does: the
+ * week ends now and the next one starts with its copies. The default week ends at tomorrow's
+ * weekday 00:00, so today is the last day. The family starts in a short first week (from
+ * `start`, a week ago, to six days ago 00:00; the audit log stays in time order) where Táta
+ * agrees the plan table's chores with Starší; Táta settles it with no points. The running week
+ * runs from six days ago 00:00 to tomorrow 00:00 with a copy for every slot: the brothers did
+ * the past days' everyday chores and Táta approved them (points to settle), the bin's past copies
+ * expired, and today's copies are open. Nothing waits for approval. Must come first in a seed: it writes at
+ * `start`.
  */
-export const endedWeek: Piece = ({ tx, id, now, start }) => {
-  const today = startOfPragueDay(now)
-  const defaults = {
-    ...getPeriodDefaults(tx),
-    lengthDays: 7,
-    cutoff: { weekday: toPragueWallTime(today).weekday, hour: 0, minute: 0 },
-  }
-  // First the week, so the save's own roll at `start` finds it running.
-  rollPeriods(tx, start, defaults)
-  writePeriodDefaults(tx, { kind: 'system' }, defaults, start)
-  const made = PLAN_CHORES.map((input) => {
-    const t = step(`template "${input.title}"`, createTemplateIn(tx, id('tata'), input, start))
+export const lastDayWeek: Piece = ({ tx, id, now, start }) => {
+  const tata = id('tata')
+  const tomorrow = addPragueDays(startOfPragueDay(now), 1)
+  const cutoff = { weekday: toPragueWallTime(tomorrow).weekday, hour: 0, minute: 0 }
+  const weekly = { ...getPeriodDefaults(tx), lengthDays: 7, cutoff }
+  const runningFrom = addPragueDays(tomorrow, -7)
+  // A one-day length makes the first week end at the nearest cutoff: six days ago 00:00.
+  rollPeriods(tx, start, { ...weekly, lengthDays: 1 })
+  const first = listPeriods(tx)[0]
+  if (first?.cutoffAt.getTime() !== runningFrom.getTime())
+    throw new Error('Demo seed: the first week does not end six days ago')
+  writePeriodDefaults(tx, { kind: 'system' }, weekly, start)
+  const [vacuum, table, flowers, bin] = PLAN_CHORES.map((input) => {
+    const t = step(`template "${input.title}"`, createTemplateIn(tx, tata, input, start))
     step(`approve "${input.title}"`, approveTemplateScoreIn(tx, id('starsi'), t.id, t.score, start))
-    return t
+    return t.id
   })
-  rollPeriods(tx, now, getPeriodDefaults(tx))
-  for (const t of made) makeWeekCopies(tx, now, { templateId: t.id, log: SEED_LOG })
-  const vacuum = made.find((t) => t.title === PLAN_CHORES[0]?.title)
-  const copy = tx
-    .select()
-    .from(taskTable)
-    .where(and(eq(taskTable.templateId, vacuum?.id ?? 0), eq(taskTable.planDayAt, toIsoUtc(today))))
-    .get()
-  if (!copy) throw new Error("Demo seed: no copy of today's vacuum")
-  step('Mladší holds the vacuum', reserveTask(tx, id('mladsi'), copy.id, now, true))
+  if (vacuum === undefined || table === undefined || flowers === undefined || bin === undefined)
+    throw new Error('Demo seed: plan chores missing')
+  rollPeriods(tx, runningFrom, getPeriodDefaults(tx))
+  for (const t of [vacuum, table, flowers, bin])
+    makeWeekCopies(tx, runningFrom, { templateId: t, log: SEED_LOG })
+  const settleAt = new Date(runningFrom.getTime() + 8 * HOUR)
+  const meeting = getMeeting(tx, settleAt, true)
+  if (!meeting.period) throw new Error('Demo seed: nothing to settle')
+  if (meeting.period.id !== first.id) throw new Error('Demo seed: the first week is not due')
+  const shown = meeting.takers.map((t) => ({ takerId: t.id, total: t.total }))
+  step('settle the first week', settlePeriod(tx, tata, first.id, shown, settleAt, true))
+  const copyOn = (templateId: number, day: Date) => {
+    const row = tx
+      .select()
+      .from(taskTable)
+      .where(and(eq(taskTable.templateId, templateId), eq(taskTable.planDayAt, toIsoUtc(day))))
+      .get()
+    if (!row) throw new Error(`Demo seed: no copy of template ${String(templateId)}`)
+    return row.id
+  }
+  // Six past days (0 = six days ago): who did what, done at 18:00 and approved at 19:00. Starší
+  // ends at 50, the lower level; Mladší at 16, below it.
+  const done: readonly (readonly [string, number, readonly number[]])[] = [
+    ['starsi', flowers, [0, 1, 2, 3, 4, 5]],
+    ['starsi', vacuum, [0, 1, 2, 3, 4]],
+    ['starsi', table, [5]],
+    ['mladsi', table, [0, 1, 2, 3, 4]],
+    ['mladsi', vacuum, [5]],
+  ]
+  for (let d = 0; d < 6; d++) {
+    const day = addPragueDays(runningFrom, d)
+    const evening = new Date(day.getTime() + 18 * HOUR)
+    const mine = done.filter(([, , days]) => days.includes(d))
+    const ids = mine.map(([by, t]) => {
+      const task = copyOn(t, day)
+      step(`day ${String(d)}: done`, completeTask(tx, id(by), task, evening, true))
+      return task
+    })
+    const approveAt = new Date(evening.getTime() + HOUR)
+    for (const task of ids)
+      step(`day ${String(d)}: approved`, approveTask(tx, tata, task, approveAt))
+  }
+  // The rest of the past days' copies expire, as the scheduler's expiry does.
+  expireOverdueInstances(tx, now, SEED_LOG, true)
 }
 
 /** The plan table's chores (#258): three every day (one with the long name), one twice a week. */

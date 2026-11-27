@@ -3,10 +3,11 @@ import { cs } from '../src/lib/strings'
 import { bottomBar, passwordLogin } from './helpers'
 import { PHONE } from './keyboard'
 
-// The week plan at Schůzka (#259) on the `planmeeting` seed: an ended week waits for its meeting
-// (any weekday, last-day rule on), and the running week has the plan table's chores. Táta settles
-// the ended week; step 3 then shows the plan table under the open tasks. Starší reserves and frees
-// a cell on his phone, and Obnovit shows it. Leaving and coming back the same day keeps the table.
+// The week plan at Schůzka (#259) on the `planmeeting` seed: the running week is on its last day
+// (any weekday, last-day rule on), with the plan table's chores. Táta settles it, a new week
+// starts with its copies, and step 3 shows the plan table under the open tasks. Starší reserves
+// and frees a cell on his phone, and Obnovit shows it. Leaving and coming back the same day keeps
+// the table.
 // One test: each step builds on the one before.
 
 test.use({ viewport: PHONE })
@@ -48,8 +49,9 @@ test('Táta settles, sees the plan, Obnovit shows Starší’s reserve and relea
   await page.getByRole('button', { name: m.confirm }).click()
   await page.getByRole('button', { name: m.confirmYes, exact: true }).click()
 
-  // Step 3: the running week goes on; the plan sits below the open tasks.
-  await expect(page.getByText(m.stillRunning)).toBeVisible()
+  // Step 3: a new week starts now; the plan sits below the open tasks.
+  await expect(page.getByText(new RegExp(`^${m.newWeek} `))).toBeVisible()
+  await expect(page.getByText(m.stillRunning)).toHaveCount(0)
   const section = planSection(page)
   await expect(section).toBeVisible()
   await expect(section.getByRole('button', { name: m.refresh })).toBeVisible()
@@ -93,7 +95,7 @@ test('Táta settles, sees the plan, Obnovit shows Starší’s reserve and relea
   await expect(tataCell).toHaveAttribute('aria-label', /: volné$/)
   await expect(refresh).toBeEnabled()
 
-  // Leave and come back the same day: step 3 says the week runs, and the table is there again.
+  // Leave and come back the same day: the new week runs, and the table is there again.
   await bottomBar(page).getByRole('link', { name: cs.nav.week }).click()
   await expect(page).toHaveURL(/\/tyden$/)
   await bottomBar(page).getByRole('link', { name: cs.nav.meeting }).click()
