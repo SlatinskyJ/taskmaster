@@ -738,6 +738,16 @@ export const cs = {
   },
   admin: {
     title: 'Správa',
+    /** A brother's week, opened from a Sporné card (#263). */
+    week: {
+      /** The screen title: whose week it is. */
+      title: (name: string) => `Týden: ${name}`,
+      /** The week not settled yet (Jakub 2026-11-27): no level. */
+      notSettled: 'Týden ještě není vyúčtovaný.',
+      /** Týden's own say "this week" and "zatím": wrong for a past week. */
+      happened: 'Co se v týdnu stalo',
+      noItems: 'V týdnu nic hotového.',
+    },
     people: 'Lidé',
     add: 'Přidat člověka',
     addTitle: 'Nový člověk',

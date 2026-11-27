@@ -38,6 +38,34 @@ describe('strategyFor', () => {
     expect(strategyFor(get('/robots.txt'), origin)).toBe('network')
     expect(strategyFor(get('/assetsX/a.js'), origin)).toBe('network')
   })
+
+  it('leaves a frame’s page load to the browser, so it says Sec-Fetch-Dest: iframe (#274)', () => {
+    expect(strategyFor({ ...get('/login', 'navigate'), destination: 'iframe' }, origin)).toBe(
+      'network',
+    )
+    expect(strategyFor({ ...get('/?tmFrame=x', 'navigate'), destination: 'iframe' }, origin)).toBe(
+      'network',
+    )
+  })
+
+  it.each(['frame', 'embed', 'object'])(
+    'leaves a nested %s page load to the browser too',
+    (dest) => {
+      expect(strategyFor({ ...get('/', 'navigate'), destination: dest }, origin)).toBe('network')
+    },
+  )
+
+  it('still serves top-level page loads, with or without a destination', () => {
+    expect(strategyFor({ ...get('/', 'navigate'), destination: 'document' }, origin)).toBe(
+      'navigation',
+    )
+    expect(strategyFor(get('/', 'navigate'), origin)).toBe('navigation')
+  })
+
+  it('leaves a frame’s load from another origin to the browser, as before', () => {
+    const other = { url: 'https://other.example/', method: 'GET', mode: 'navigate' }
+    expect(strategyFor({ ...other, destination: 'iframe' }, origin)).toBe('network')
+  })
 })
 
 describe('shell caches', () => {

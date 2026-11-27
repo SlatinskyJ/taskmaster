@@ -8,6 +8,7 @@ import { createSession, deleteSession, findSession } from '~/server/auth/session
 import { auditLog, featureFlags, sessions, users } from '~/server/db/schema'
 import type { UserRole } from '~/server/db/schema'
 import { family, must, T0 } from '~/server/tasks/testing'
+import { createGauge, DEMO_STREAMS_PER_IP, demoStreamSlot } from '~/server/demo/caps'
 import { createTemplate } from '~/server/templates/templates'
 import { createHub } from './hub'
 import type { Hub, LiveEvent } from './hub'
@@ -579,5 +580,93 @@ describe('heartbeat and the session', () => {
     await body.cancel()
     expect(s.hub.size()).toBe(0)
     expect(s.hasPing()).toBe(false)
+  })
+})
+
+// The public demo's per-IP cap (src/server/demo/caps.ts): the route passes a slot in a gauge
+// only on the demo. Each stream here gets its own session, so the hub's per-session limit never
+// ends one.
+describe('the demo stream cap', () => {
+  const IP_A = '203.0.113.20'
+  async function capped(limit = DEMO_STREAMS_PER_IP) {
+    const s = await setup()
+    const gauge = createGauge(limit)
+    const slot = demoStreamSlot({ TASKMASTER_ENV: 'demo' }, IP_A, gauge)
+    const open = (over: Partial<StreamDeps> = {}, req: Partial<StreamRequest> = {}) => {
+      const key = createSession(s.f.db, s.f.starsi, 'password', T0).token
+      return openStream(
+        request({ tokens: [sign(s, ['tasks'], 0, key)], ...req }),
+        s.deps({ sessionKey: key, streamSlot: slot, ...over }),
+      )
+    }
+    return { s, gauge, open }
+  }
+
+  it(`opens ${String(DEMO_STREAMS_PER_IP)} streams; the next gets 429 and no hub`, async () => {
+    const { s, open } = await capped()
+    const opened = Array.from({ length: DEMO_STREAMS_PER_IP }, () => open().status)
+    expect(opened.every((code) => code === 200)).toBe(true)
+    const calls = s.hubCalls()
+    expect(open().status).toBe(429)
+    expect(s.hubCalls()).toBe(calls)
+    expect(s.hub.size()).toBe(DEMO_STREAMS_PER_IP)
+  })
+
+  it('a request refused for its own reason (401, 400) takes no slot', async () => {
+    const { open } = await capped()
+    const bodies = Array.from({ length: DEMO_STREAMS_PER_IP }, () => reader(open()))
+    await bodies[0]?.cancel()
+    expect(open({ currentUser: null }).status).toBe(401)
+    expect(open({}, { tab: null }).status).toBe(400)
+    expect(open().status).toBe(200)
+    expect(open().status).toBe(429)
+  })
+
+  it('a stream that ends gives its slot back, once', async () => {
+    const { s, open } = await capped(2)
+    const first = reader(open())
+    expect(open().status).toBe(200)
+    await first.cancel()
+    await first.cancel()
+    expect(open().status).toBe(200)
+    // A second give-back for the first stream would let this one in.
+    expect(open().status).toBe(429)
+    // Ended by the heartbeat's session check this time: its slot comes back too.
+    s.setNow(new Date(T0.getTime() + 400 * 24 * 3_600_000))
+    s.ping()
+    s.setNow(T0)
+    expect(open().status).toBe(200)
+  })
+
+  it('a catch-up that throws gives the slot back', async () => {
+    const { s, open } = await capped(1)
+    const broken = (): Hub => ({
+      ...s.hub,
+      changesSince: () => {
+        throw new Error('db gone')
+      },
+    })
+    expect(() => open({ hub: broken })).toThrow('db gone')
+    expect(open().status).toBe(200)
+  })
+
+  it('the hub refusing attach (503) gives the slot back', async () => {
+    const { s, gauge, open } = await capped(1)
+    const hub: Hub = { ...s.hub, attach: () => null }
+    expect(open({ hub: () => hub }).status).toBe(503)
+    expect(gauge.open(IP_A)).toBe(true)
+  })
+
+  it('without a slot (preview, production) 20 streams from one IP open', async () => {
+    const s = await setup()
+    expect(demoStreamSlot({ TASKMASTER_ENV: 'preview' }, IP_A)).toBeUndefined()
+    const codes = Array.from({ length: 20 }, () => {
+      const key = createSession(s.f.db, s.f.starsi, 'password', T0).token
+      return openStream(
+        request({ tokens: [sign(s, ['tasks'], 0, key)] }),
+        s.deps({ sessionKey: key }),
+      ).status
+    })
+    expect(codes.every((code) => code === 200)).toBe(true)
   })
 })

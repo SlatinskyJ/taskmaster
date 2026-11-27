@@ -28,7 +28,9 @@ export const SHELL_FILES = [
  * - `cache`: a static shell file; serve from the shell cache, fetch and store on a miss.
  * - `navigation`: an HTML page; always from the network (it carries user data), with an
  *   offline notice when the network is down. Never stored.
- * - `network`: leave it to the browser; the worker does not touch it.
+ * - `network`: leave it to the browser; the worker does not touch it. Also a page load inside
+ *   a frame: the browser then sends `Sec-Fetch-Dest: iframe`, which the server needs to tell
+ *   a frame from the page (#274). A worker's refetch would say `empty`.
  */
 export type Strategy = 'cache' | 'navigation' | 'network'
 
@@ -36,7 +38,12 @@ export interface RequestLike {
   url: string
   method: string
   mode: string
+  /** `Request.destination`; missing (older engines, test fakes) counts as a top-level page. */
+  destination?: string
 }
+
+/** Destinations of a page load nested in another page (iframe, frameset, embed, object). */
+const NESTED_DESTINATIONS = new Set(['iframe', 'frame', 'embed', 'object'])
 
 /**
  * Allowlist: only GETs for hashed build assets (/assets/, content-hashed names, so a cached
@@ -47,6 +54,8 @@ export function strategyFor(request: RequestLike, origin: string): Strategy {
   if (request.method !== 'GET') return 'network'
   const url = new URL(request.url)
   if (url.origin !== origin) return 'network'
+  // Before the navigate check: a frame's page load has mode `navigate` too.
+  if (NESTED_DESTINATIONS.has(request.destination ?? '')) return 'network'
   if (request.mode === 'navigate') return 'navigation'
   const path = url.pathname
   if (path.startsWith('/api/') || path.startsWith('/_serverFn/')) return 'network'

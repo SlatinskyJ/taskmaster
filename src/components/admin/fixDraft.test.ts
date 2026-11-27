@@ -43,6 +43,7 @@ const entry = (over: Partial<AdminDisputeEntry>): AdminDisputeEntry => ({
   openedAt: '2026-11-22T10:00:00.000Z',
   value: { score: 22 },
   page: null,
+  weekPage: null,
   ...over,
 })
 const settlementEntry = entry({

@@ -10,6 +10,7 @@ import { pickClientIp } from './clientIp'
 import { login, logout } from './login'
 import { MAX_PASSWORD_LENGTH } from './password'
 import {
+  DEMO_ATTEMPTS_PER_IP,
   FAILURE_WINDOW_MS,
   limitKeys,
   MAX_FAILURES_PER_IP,
@@ -364,5 +365,97 @@ describe('audit failure rolls the change back (spec §5.10)', () => {
       logout(db, token, T0)
     }).toThrow('audit down')
     expect(resolveSession(db, token, T0)).not.toBeNull()
+  })
+})
+
+// The public demo (src/server/env/demo.ts): the demo family's names are shared by every visitor,
+// so one visitor's typos must not lock them for the next; instead each IP gets a cap on all
+// attempts. Production and previews keep today's limits.
+describe('login limits on the demo', () => {
+  const DEMO = { TASKMASTER_ENV: 'demo' }
+  const PREVIEW = { TASKMASTER_ENV: 'preview' }
+  const LEAKED = { TASKMASTER_ENV: 'demo', ADMIN_PASSWORD: 'x'.repeat(12) }
+  const on = (
+    env: NodeJS.ProcessEnv,
+    db: Db,
+    password: string,
+    now = T0,
+    username = 'admin',
+    ip = IP,
+  ) => login(db, { username, password, ip }, now, env)
+  /** One after another: a pending attempt counts as a failure until its password is checked. */
+  const inTurn = async (n: number, run: () => Promise<{ ok: boolean }>) => {
+    const out: boolean[] = []
+    for (let i = 0; i < n; i++) out.push((await run()).ok)
+    return out
+  }
+  const fromOtherIps = async (env: NodeJS.ProcessEnv, db: Db, username: string, n: number) => {
+    for (let i = 0; i < n; i++)
+      await on(env, db, 'nope', at(i * 1000), username, `10.9.0.${String(i)}`)
+  }
+
+  it('a demo name is never locked by its own failures', async () => {
+    const { db } = family()
+    await fromOtherIps(DEMO, db, 'admin', MAX_FAILURES_PER_USER + 1)
+    expect((await on(DEMO, db, PASSWORD, at(60_000), 'admin', '10.9.1.1')).ok).toBe(true)
+  })
+
+  it('another name still locks after its failures', async () => {
+    const { db } = family()
+    await fromOtherIps(DEMO, db, 'jakub', MAX_FAILURES_PER_USER)
+    expect(await on(DEMO, db, 'nope', at(60_000), 'jakub', '10.9.1.1')).toEqual({
+      ok: false,
+      error: 'rate_limited',
+    })
+  })
+
+  it(`the per-IP limit of ${String(MAX_FAILURES_PER_IP)} failures still applies`, async () => {
+    const { db } = family()
+    for (let i = 0; i < MAX_FAILURES_PER_IP; i++) await on(DEMO, db, 'nope')
+    expect(await on(DEMO, db, PASSWORD)).toEqual({ ok: false, error: 'rate_limited' })
+  })
+
+  it(`the ${String(DEMO_ATTEMPTS_PER_IP)}th attempt from one IP is let in, the next is not`, async () => {
+    const { db } = family()
+    const first = await inTurn(DEMO_ATTEMPTS_PER_IP - 1, () => on(DEMO, db, PASSWORD))
+    expect(first.every(Boolean)).toBe(true)
+    expect((await on(DEMO, db, PASSWORD, at(1000))).ok).toBe(true)
+    expect(await on(DEMO, db, PASSWORD, at(2000))).toEqual({ ok: false, error: 'rate_limited' })
+    // Another IP is not affected.
+    expect((await on(DEMO, db, PASSWORD, at(2000), 'admin', '198.51.100.9')).ok).toBe(true)
+  })
+
+  it('every address of one IPv6 /64 counts toward the same attempt cap', async () => {
+    const { db } = family()
+    const addr = (i: number) => `2001:db8:1:2::${i.toString(16)}`
+    for (let i = 0; i < DEMO_ATTEMPTS_PER_IP; i++)
+      expect((await on(DEMO, db, PASSWORD, T0, 'admin', addr(i + 1))).ok).toBe(true)
+    expect(await on(DEMO, db, PASSWORD, at(1000), 'admin', addr(999))).toEqual({
+      ok: false,
+      error: 'rate_limited',
+    })
+    expect((await on(DEMO, db, PASSWORD, at(1000), 'admin', '2001:db8:1:3::1')).ok).toBe(true)
+  })
+
+  it('an attempt exactly one window after the first counts the first one out', async () => {
+    const { db } = family()
+    expect((await on(DEMO, db, PASSWORD, T0)).ok).toBe(true)
+    await inTurn(DEMO_ATTEMPTS_PER_IP - 1, () => on(DEMO, db, PASSWORD, at(1000)))
+    expect((await on(DEMO, db, PASSWORD, at(FAILURE_WINDOW_MS - 1))).ok).toBe(false)
+    expect((await on(DEMO, db, PASSWORD, at(FAILURE_WINDOW_MS))).ok).toBe(true)
+  })
+
+  it.each([
+    ['a preview', PREVIEW],
+    ['a demo flag with ADMIN_PASSWORD', LEAKED],
+  ])("on %s: today's limits, no exemption and no attempt cap", async (_, env) => {
+    const { db } = family()
+    await fromOtherIps(env, db, 'admin', MAX_FAILURES_PER_USER + 1)
+    expect(await on(env, db, PASSWORD, at(60_000), 'admin', '10.9.1.1')).toEqual({
+      ok: false,
+      error: 'rate_limited',
+    })
+    const all = await inTurn(DEMO_ATTEMPTS_PER_IP + 1, () => on(env, db, PASSWORD, T0, 'tata'))
+    expect(all.every(Boolean)).toBe(true)
   })
 })
