@@ -25,7 +25,7 @@ function approvalBody(
 }
 
 function handOverBody(key: string, pr: PrFacts, reason: string): string {
-  return `${handoffMarker(key, pr.number, pr.labelEventId)}\nThe merge-me Action hands this PR over: ${reason}.\n\nRun skill merge-approved-prs for this PR.\n\n${FOOTER}`
+  return `${handoffMarker(key, pr.number, pr.labelEventId, 'final', 1, null)}\nThe merge-me Action hands this PR over: ${reason}.\n\nRun skill merge-approved-prs for this PR.\n\n${FOOTER}`
 }
 
 type Log = (line: string) => void

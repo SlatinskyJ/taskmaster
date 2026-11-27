@@ -2,6 +2,8 @@
 // Pure: the facts come from github.ts, so every decision is unit-tested.
 
 export type Ci = 'green' | 'pending' | 'red'
+/** What a handed-over PR may do next: ci = parked until a newer head is green; fix = back on the owner thread's re-arm request; final = only a new label. */
+export type HandoverKind = 'ci' | 'fix' | 'final'
 
 export interface PrFacts {
   number: number

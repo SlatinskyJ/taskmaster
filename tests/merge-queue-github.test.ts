@@ -6,6 +6,7 @@ import {
   handoffMarker,
   makeGh,
   requiredCi,
+  resumedMarker,
   type GhCheckRun,
   type GhCommit,
 } from '../scripts/merge-queue/github.ts'
@@ -18,6 +19,7 @@ const U2 = '2'.repeat(40)
 const M1 = 'd'.repeat(40)
 const M2 = 'e'.repeat(40)
 const OLD = 'f'.repeat(40)
+const H = '3'.repeat(40)
 const NOW = new Date('2026-11-26T12:00:00Z')
 
 function commit(sha: string, parents: string[], over: Partial<GhCommit['commit']> = {}): GhCommit {
@@ -31,6 +33,26 @@ function commit(sha: string, parents: string[], over: Partial<GhCommit['commit']
     },
   }
 }
+
+const hmacOf = (text: string) => createHmac('sha256', KEY).update(text).digest('hex')
+
+describe('markers', () => {
+  it('a hand-over marker carries its kind, count and red head, all signed', () => {
+    expect(handoffMarker(KEY, 9, 501, 'ci', 1, A)).toBe(
+      `<!-- merge-queue:handoff ci 1 ${A} ${hmacOf(`handoff:9:501:ci:1:${A}`)} -->`,
+    )
+  })
+  it('a hand-over marker without a red head writes -', () => {
+    expect(handoffMarker(KEY, 9, 501, 'fix', 2, null)).toBe(
+      `<!-- merge-queue:handoff fix 2 - ${hmacOf('handoff:9:501:fix:2:-')} -->`,
+    )
+  })
+  it('a resumed marker carries its count and the commit it re-armed on', () => {
+    expect(resumedMarker(KEY, 9, 501, 1, H)).toBe(
+      `<!-- merge-queue:resumed 1 ${H} ${hmacOf(`resumed:9:501:1:${H}`)} -->`,
+    )
+  })
+})
 
 describe('acceptedUpdate', () => {
   const main = new Set([M1])
@@ -430,7 +452,10 @@ describe('labelledPrs', () => {
 
   it('does not count a hand-over from before the latest label', async () => {
     const [pr] = await factsOf({
-      comments: [comment(handoffMarker(KEY, 9, LABEL_ID), '2026-11-26T09:00:00Z'), approvedOk()],
+      comments: [
+        comment(handoffMarker(KEY, 9, LABEL_ID, 'final', 1, null), '2026-11-26T09:00:00Z'),
+        approvedOk(),
+      ],
     })
     expect(pr).toMatchObject({ handedOver: false })
   })
@@ -461,7 +486,10 @@ describe('labelledPrs', () => {
 
   it('does not count a hand-over signed for an earlier label', async () => {
     const [pr] = await factsOf({
-      comments: [approvedOk(), comment(handoffMarker(KEY, 9, 400), '2026-11-26T10:30:00Z')],
+      comments: [
+        approvedOk(),
+        comment(handoffMarker(KEY, 9, 400, 'final', 1, null), '2026-11-26T10:30:00Z'),
+      ],
     })
     expect(pr).toMatchObject({ handedOver: false })
   })

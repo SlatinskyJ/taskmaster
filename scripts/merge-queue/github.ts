@@ -1,7 +1,7 @@
 // GitHub side of the merge-me Action (#253): reads the facts decide.ts needs, and does the
 // four writes (update, merge, comment, unlabel). REST and GraphQL over fetch; no dependency.
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import type { Ci, PrFacts } from './decide.ts'
+import type { Ci, HandoverKind, PrFacts } from './decide.ts'
 
 // The Action's token is a PAT, so its comments post as SlatinskyJ, like the agents do. A
 // marker counts only when its HMAC (key MERGE_MARKER_KEY, which only the workflow holds)
@@ -33,12 +33,37 @@ export function approvedMarker(
   const l = lower ? `${lower.pr}@${lower.sha}` : '-'
   return `<!-- merge-queue:approved ${sha} ${l} ${sign(key, `approved:${pr}:${labelEventId}:${sha}:${l}`)} -->`
 }
-export function handoffMarker(key: string, pr: number, labelEventId: number): string {
-  return `<!-- merge-queue:handoff ${sign(key, `handoff:${pr}:${labelEventId}`)} -->`
+/**
+ * A hand-over: its kind (what the PR may do next), its count n (re-arms so far + 1) and, for
+ * kind ci, the head the Action saw red (else -).
+ */
+export function handoffMarker(
+  key: string,
+  pr: number,
+  labelEventId: number,
+  kind: HandoverKind,
+  n: number,
+  redSha: string | null,
+): string {
+  const red = redSha ?? '-'
+  return `<!-- merge-queue:handoff ${kind} ${n} ${red} ${sign(key, `handoff:${pr}:${labelEventId}:${kind}:${n}:${red}`)} -->`
+}
+/** Re-arm n of this label: the PR is back in the queue, and later commits count from `sha`. */
+export function resumedMarker(
+  key: string,
+  pr: number,
+  labelEventId: number,
+  n: number,
+  sha: string,
+): string {
+  return `<!-- merge-queue:resumed ${n} ${sha} ${sign(key, `resumed:${pr}:${labelEventId}:${n}:${sha}`)} -->`
 }
 const APPROVED_RE =
   /<!-- merge-queue:approved ([0-9a-f]{40}) (\d+@[0-9a-f]{40}|-) ([0-9a-f]{64}) -->/
-const HANDOFF_RE = /<!-- merge-queue:handoff ([0-9a-f]{64}) -->/
+const HANDOFF_RE =
+  /<!-- merge-queue:handoff (ci|fix|final) (\d+) ([0-9a-f]{40}|-) ([0-9a-f]{64}) -->/
+/** Before #344: no kind and no count. Still verifies, as kind final. */
+const OLD_HANDOFF_RE = /<!-- merge-queue:handoff ([0-9a-f]{64}) -->/
 export const FOOTER = '---\n_Posted by the merge-me Action_'
 export const LABEL = 'merge-me'
 export const JAKUB = 'SlatinskyJ'
@@ -312,8 +337,11 @@ export function makeGh(
     let approvedSha: string | null = null
     let approvedLower: Lower | null = null
     for (const c of since) {
+      const o = OLD_HANDOFF_RE.exec(c.body ?? '')
+      if (o?.[1] && verify(markerKey, `handoff:${pr}:${label.id}`, o[1])) handedOver = true
       const h = HANDOFF_RE.exec(c.body ?? '')
-      if (h?.[1] && verify(markerKey, `handoff:${pr}:${label.id}`, h[1])) handedOver = true
+      if (h?.[4] && verify(markerKey, `handoff:${pr}:${label.id}:${h[1]}:${h[2]}:${h[3]}`, h[4]))
+        handedOver = true
       const a = APPROVED_RE.exec(c.body ?? '')
       if (
         a?.[1] &&
