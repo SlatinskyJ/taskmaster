@@ -129,7 +129,8 @@ core in `stream.ts`); a viewer frame adds `tmFrame`. `Last-Event-ID`, when sent,
   non-negative integer; 503 the hub is full; else 200 `text/event-stream`. A 400 for the topic
   count is logged (`[live] stream refused: <n> topics, limit 50, role <role>`, the server log;
   no ids, tokens or key): that screen gets no banner.
-- Body: the catch-up from the audit log (at most 100 changes; more become one
+- Body: `: open` at once (#309: the client knows the stream is open before any heartbeat),
+  then the catch-up from the audit log (at most 100 changes; more become one
   `event: overflow`, whose id is the newest one), then live events as
   `id: <id>\ndata: <LiveEvent JSON>\n\n`.
 - Heartbeat: a `: ping` comment every **25 s**, because production's Apache closes requests
