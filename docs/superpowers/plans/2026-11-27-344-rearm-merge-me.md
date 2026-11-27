@@ -38,16 +38,20 @@
 
 ### Kinds
 
-| Hand-over reason | Kind (while re-arms < 3) |
+The kind comes from a reason **code**, never from the display text (a reworded reason must not change the kind):
+
+| Reason code (display text) | Kind (while re-arms < 3) |
 | --- | --- |
-| `CI red` | `ci` |
-| `update with main has a conflict`, `merge refused (…)` | `fix` |
-| everything else (draft, fork, `needs-jakub`, new commits, lower PR bad, unresolved threads, not recorded) | `final` |
-| any reason once re-arms = 3 | `final` (reason gets ` (3 re-arms used, add merge-me again)`) |
+| `ci-red` (`CI red`) | `ci` |
+| `conflict` (`update with main has a conflict`), `merge-refused` (`merge refused (…)`) | `fix` |
+| every other code (draft, fork, `needs-jakub`, new commits, lower PR bad, unresolved threads, not recorded) | `final` |
+| any code once re-arms = 3 | `final` (display text gets ` (3 re-arms used, add merge-me again)`) |
 
 ### What a handed-over PR does next (decide.ts)
 
-Open hand-over = latest valid hand-over with `n > rearms`.
+Open hand-over = latest valid hand-over with `n > rearms`. An old-format hand-over has no `n`: it parses as `{ kind: 'final', n: Infinity, redSha: null }`, so it is always open (a PR handed over before this deploy stays handed over and gets no new comment).
+
+`rearms` = the **highest** `n` among valid `resumed` markers (0 if none), not their count, so a pasted copy of one changes nothing.
 
 - `final`: skipped, as today.
 - `ci` (parked): `entryCheck` on the strict facts (baseline → head via GitHub update merges only), ignoring `ci === 'red'`. Fails → skipped silently (owner already woken). Passes:
@@ -61,7 +65,9 @@ After `resume` the PR joins `passing` in the same pass, with `headIsApproved = t
 
 `headIsFixed`: every commit after the baseline up to the head is either an accepted GitHub update (as today) **or** a merge with exactly 2 parents, first parent = previous commit, second parent on `main` (a merge of `main`, conflict resolution included) **or** a non-merge commit whose subject starts `merge-approved-prs: `. The subject check guards against an agent's feature commit slipping in, not against forgery: the owner thread pushes as the same account Jakub's label trusts (same trust as skill section 3 today). Security judge: this is the trust widening to review.
 
-Baseline = `sha` of the latest valid `resumed` marker, else the approved SHA.
+Baseline = `sha` of the valid `resumed` marker with the highest `n`, else the approved SHA.
+
+A re-arm request counts only if posted after the comment of the open hand-over (so after a second hand-over, a request from before it is stale).
 
 ## Review Focus
 
@@ -99,15 +105,17 @@ Baseline = `sha` of the latest valid `resumed` marker, else the approved SHA.
 **Interfaces:**
 - `PrFacts` drops `handedOver`, gains:
   - `handover: { kind: HandoverKind; n: number; redSha: string | null } | null` (the open hand-over);
-  - `rearms: number` (valid `resumed` markers under this label);
+  - `rearms: number` (highest `n` of valid `resumed` markers under this label, 0 if none);
   - `rearmRequest: string | null` (sha named by the latest valid request after the open hand-over);
   - `headIsFixed: boolean`.
 - `headIsApproved` / `updatedByAction` are now measured from the baseline (Task 3).
 - `Action` hand-over becomes `{ kind: 'hand-over'; pr; reason; as: HandoverKind; n: number; redSha: string | null }`; new `{ kind: 'resume'; pr: number; n: number; sha: string }`.
-- `export const MAX_REARMS = 3`; `export function handoverKind(reason: string, rearms: number): HandoverKind`.
+- `export type ReasonCode = 'ci-red' | 'conflict' | 'merge-refused' | 'draft' | 'fork' | 'needs-jakub' | 'new-commits' | 'lower-bad' | 'threads' | 'not-recorded'`; `entryCheck` failures return `{ ok: false; code: ReasonCode; reason: string }`.
+- `export const MAX_REARMS = 3`; `export function handoverKind(code: ReasonCode, rearms: number): HandoverKind`.
 
 - [ ] **Step 1: failing tests** (`facts()` default gets `handover: null, rearms: 0, rearmRequest: null, headIsFixed: true`):
-  - `handoverKind('CI red', 0)` → `'ci'`; `('CI red', 2)` → `'ci'`; `('CI red', 3)` → `'final'`; `('update with main has a conflict', 0)` → `'fix'`; `('draft', 0)` → `'final'`.
+  - `handoverKind('ci-red', 0)` → `'ci'`; `('ci-red', 2)` → `'ci'`; `('ci-red', 3)` → `'final'`; `('conflict', 0)` → `'fix'`; `('conflict', 2)` → `'fix'`; `('conflict', 3)` → `'final'`; `('merge-refused', 3)` → `'final'`; `('draft', 0)` → `'final'`.
+  - `entryCheck(facts({ ci: 'red' }))` → `{ ok: false, code: 'ci-red', reason: 'CI red' }` (each existing entryCheck test also asserts its code).
   - red CI, no hand-over yet → `[{ kind: 'hand-over', pr: 9, reason: 'CI red', as: 'ci', n: 1, redSha: A }]`.
   - red CI with `rearms: 3` → hand-over `as: 'final'`, `n: 4`, reason `'CI red (3 re-arms used, add merge-me again)'`.
   - parked `ci` (`handover: {kind:'ci', n:1, redSha: A}`), head H ≠ A, CI green → first action `{ kind: 'resume', pr: 9, n: 1, sha: H }`, then `{ kind: 'merge', pr: 9, sha: H }`.
@@ -118,10 +126,17 @@ Baseline = `sha` of the latest valid `resumed` marker, else the approved SHA.
   - `fix` hand-over, `rearmRequest: H`, head H, `headIsApproved: false`, `headIsFixed: true`, CI pending → `resume` then `wait for CI`.
   - same with `rearmRequest: A` (stale) → `idle`; with `headIsFixed: false` → `idle`; with CI red → `idle`.
   - `final` hand-over with `rearmRequest` = head → `idle`.
+  - old-format hand-over (`handover: { kind: 'final', n: Infinity, redSha: null }`, `rearms: 0`) with red CI → `idle` (no new hand-over).
+  - parked `ci`, newer head H, CI green, `headIsApproved: false` (feature commits after baseline) → `idle` (no resume, no merge).
+  - parked `ci`, newer head H, CI `pending` → `wait`, no `resume`.
+  - parked `ci`, CI red, not behind, `updatedByAction: true`, plus clean PR 10 → PR 10 merges; PR 9 only `wait` (an updated parked PR never becomes the active one ahead of a non-parked PR).
+  - parked `ci`, CI red, `behind: true`, plus PR 10 behind → `update` on PR 10 only (non-parked first).
+  - `ci` hand-over (`redSha: A`) with `rearmRequest: A`, head A, CI green → `idle` (a request never re-arms the red head).
+  - `fix` hand-over with a valid request on head H, each of `needsJakubAfterLabel: true`, `draft: true`, `unresolvedThreads: 1` → `idle`.
 - [ ] **Step 2:** `pnpm test tests/merge-queue-decide.test.ts` → FAIL.
 - [ ] **Step 3:** implement per the Design section. Active PR choice: `landable.filter(not parked).find(updatedByAction) ?? that[0] ?? a parked landable PR that is behind`.
 - [ ] **Step 4:** tests PASS.
-- [ ] **Step 5:** commit `merge-queue: park red-CI PRs and re-arm them, cap 2 per label`.
+- [ ] **Step 5:** commit `merge-queue: park red-CI PRs and re-arm them, cap 3 per label`.
 
 ### Task 3: Facts from GitHub
 
@@ -136,13 +151,16 @@ Baseline = `sha` of the latest valid `resumed` marker, else the approved SHA.
 - [ ] **Step 1: failing tests** (via the existing `factsOf` / `world` helpers):
   - new-format `ci` hand-over after the label → `handover: { kind: 'ci', n: 1, redSha: A }`, `rearms: 0`.
   - old-format hand-over (built by hand: `` `<!-- merge-queue:handoff ${hmac(`handoff:9:${LABEL_ID}`)} -->` ``) → `handover.kind === 'final'`.
+  - old-format hand-over → `handover: { kind: 'final', n: Infinity, redSha: null }`.
   - hand-over n 1 then `resumedMarker(KEY,9,LABEL_ID,1,H)` → `handover: null`, `rearms: 1`, and the walk starts at H (head H → `headIsApproved: true`, `updatedByAction: false`).
+  - the same `resumed` marker pasted twice → `rearms: 1`.
+  - hand-over n 1, resumed n 1, hand-over n 2 → `handover: { n: 2, … }`, `rearms: 1`; a re-arm request posted between resumed 1 and hand-over 2 → `rearmRequest: null`; one posted after hand-over 2 → its sha.
   - a `resumed` marker with a bad HMAC or for an earlier label → ignored (`rearms: 0`).
   - `<!-- merge-queue:rearm H -->` by SlatinskyJ after the open hand-over → `rearmRequest: H`; by `somebody` → `null`; posted before the hand-over → `null`; two requests → the later one's sha.
-  - `headIsFixed`: commits after baseline = [merge of main by `Claude` (2 parents, second on main)] → `true`; plus a non-merge `merge-approved-prs: fix import` → `true`; plus a non-merge `Add feature` → `false`; a merge whose second parent is not on main → `false`.
+  - `headIsFixed`: commits after baseline = [merge of main by `Claude` (2 parents, second on main)] → `true`; plus a non-merge `merge-approved-prs: fix import` → `true`; plus a non-merge `Add feature` → `false`; a merge whose second parent is not on main → `false`; a merge whose first parent is not the previous commit → `false`; a 3-parent merge → `false`; a non-merge subject `fix: merge-approved-prs: x` (prefix not at the start) → `false`.
   - a handed-over PR with an open `ci`/`fix` hand-over still gets full facts (CI, threads, behind); a `final` one keeps the cheap path.
 - [ ] **Step 2:** `pnpm test tests/merge-queue-github.test.ts` → FAIL.
-- [ ] **Step 3:** implement. Read comments in order; keep the latest valid hand-over, count valid `resumed` markers, track the latest resumed sha as the baseline. Request regex `/<!-- merge-queue:rearm ([0-9a-f]{40}) -->/`, author `JAKUB`, `created_at` after the open hand-over's comment. Commit subjects: `commit.message` first line (add `message` to `GhCommit`).
+- [ ] **Step 3:** implement. Read comments in order; keep the latest valid hand-over, take the highest valid `resumed` `n` as `rearms` and its sha as the baseline. Request regex `/<!-- merge-queue:rearm ([0-9a-f]{40}) -->/`, author `JAKUB`, `created_at` after the open hand-over's comment. Commit subjects: `commit.message` first line (add `message` to `GhCommit`).
 - [ ] **Step 4:** tests PASS.
 - [ ] **Step 5:** commit `merge-queue: read hand-over kinds, resumes and re-arm requests`.
 
@@ -157,10 +175,10 @@ Baseline = `sha` of the latest valid `resumed` marker, else the approved SHA.
   - a `fix` hand-over text says: fix within skill `merge-approved-prs` section 3, push, then post `<!-- merge-queue:rearm <head sha> -->`.
   - a `final` hand-over text says it needs Jakub.
   - `resume` posts exactly one comment starting with `resumedMarker(KEY, 9, 501, 1, H)`, then merges H in the same run.
-  - an update conflict on a parked or normal PR hands over `fix` with the current `n`.
+  - an update conflict on a parked or normal PR hands over `fix` with `n = rearms + 1`; with `rearms: 3` it hands over `final` (the cap holds for conflicts too).
   - `step` returns `handedOver` only for new hand-overs (a resume is not one), so the run ends red only on a hand-over.
 - [ ] **Step 2:** `pnpm test tests/merge-queue-run.test.ts` → FAIL.
-- [ ] **Step 3:** implement (`handOverBody(key, pr, reason, as, n, redSha)`, `resume` case, update-conflict and refused-merge hand-overs use `handoverKind`).
+- [ ] **Step 3:** implement (`handOverBody(key, pr, reason, as, n, redSha)`, `resume` case, update-conflict and refused-merge hand-overs use `handoverKind('conflict' | 'merge-refused', facts.rearms)`).
 - [ ] **Step 4:** `pnpm test tests/merge-queue-*.test.ts`, `pnpm typecheck`, `pnpm lint` → PASS.
 - [ ] **Step 5:** commit `merge-queue: post resume and kind-specific hand-over texts`.
 
