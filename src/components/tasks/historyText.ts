@@ -4,7 +4,8 @@ import type { HistoryEntry } from '~/server/tasks/functions'
 
 // A task's history (#36, GTask "Historie") as chat bubbles (#248): the phrase of each entry, the
 // time shown on a tap, and the layout list. Framework-free, so the same text renders on the server
-// and in the browser.
+// and in the browser. The live change notice (src/server/live/text.ts) uses `historyText` too, so
+// a task's Historie and the notice share one wording: keep this file framework-free.
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
