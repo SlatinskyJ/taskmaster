@@ -187,8 +187,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exitCode = 1
   }
   // Wakes the coordinator through a Claude scheduled task (alert.ts); a failed alert only warns.
-  const alert = await alertHandback(fetch, process.env, handedOver)
-  if (alert.result === 'sent') console.log('merge-queue: hand-over alert sent')
+  const testAlert = process.env.HANDBACK_TEST_ALERT === 'true'
+  const alert = await alertHandback(fetch, process.env, handedOver, testAlert)
+  if (alert.result === 'sent')
+    console.log(`merge-queue: hand-over alert sent${testAlert ? ' (test)' : ''}`)
   else if (alert.result === 'failed')
     console.log(`::warning::merge-queue: hand-over alert failed (${alert.detail})`)
   else if (alert.result === 'bad-url')

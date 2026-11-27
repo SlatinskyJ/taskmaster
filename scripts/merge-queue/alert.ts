@@ -17,16 +17,22 @@ export function alertText(repo: string, prs: number[], runUrl: string): string {
   return `The merge-me Action handed over ${prs.map((n) => `#${n}`).join(', ')} (reason in each PR's hand-over comment). PRs: ${links} Run: ${runUrl}`
 }
 
+export function testText(runUrl: string): string {
+  return `TEST of the hand-back alert, started by hand: nothing was handed over, nothing to fix. Run: ${runUrl}`
+}
+
 export async function alertHandback(
   fetchFn: Fetch,
   env: NodeJS.ProcessEnv,
   prs: number[],
+  /** Jakub's manual check (workflow_dispatch input test_alert): fires once with a TEST text. */
+  test = false,
 ): Promise<AlertResult> {
   // A secret pasted with a trailing newline or space must still work (a newline in a header
   // makes fetch throw before it sends anything).
   const url = (env.HANDBACK_FIRE_URL ?? '').trim()
   const token = (env.HANDBACK_FIRE_TOKEN ?? '').trim()
-  if (prs.length === 0 || url === '' || token === '') return { result: 'skipped' }
+  if ((prs.length === 0 && !test) || url === '' || token === '') return { result: 'skipped' }
   if (!FIRE_URL_RE.test(url)) return { result: 'bad-url' }
   const repo = env.GITHUB_REPOSITORY ?? 'SlatinskyJ/taskmaster'
   const runUrl = `${env.GITHUB_SERVER_URL ?? 'https://github.com'}/${repo}/actions/runs/${env.GITHUB_RUN_ID ?? '?'}`
@@ -39,7 +45,9 @@ export async function alertHandback(
         'anthropic-version': '2023-06-01',
         'content-type': 'application/json',
       },
-      body: JSON.stringify({ text: alertText(repo, prs, runUrl) }),
+      body: JSON.stringify({
+        text: prs.length === 0 ? testText(runUrl) : alertText(repo, prs, runUrl),
+      }),
       // A hung endpoint must not hold the queue job until its 5-minute limit.
       signal: AbortSignal.timeout(FIRE_TIMEOUT_MS),
     })

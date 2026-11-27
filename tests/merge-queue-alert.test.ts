@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { alertHandback, alertText } from '../scripts/merge-queue/alert.ts'
+import { alertHandback, alertText, testText } from '../scripts/merge-queue/alert.ts'
 
 const URL_OK = 'https://api.anthropic.com/v1/claude_code/routines/trig_01AbC/fire'
 const ENV = {
@@ -116,6 +116,30 @@ describe('hand-over alert', () => {
   it('treats a secret of only whitespace as unset', async () => {
     const f = fakeFetch()
     expect(await alertHandback(f.fn, { ...ENV, HANDBACK_FIRE_TOKEN: ' \n' }, [7])).toEqual({
+      result: 'skipped',
+    })
+    expect(f.calls).toHaveLength(0)
+  })
+
+  it('fires a TEST alert by hand even with nothing handed over', async () => {
+    const f = fakeFetch()
+    expect(await alertHandback(f.fn, ENV, [], true)).toEqual({ result: 'sent' })
+    expect(JSON.parse(f.calls[0]?.init.body as string)).toEqual({
+      text: testText('https://github.com/SlatinskyJ/taskmaster/actions/runs/42'),
+    })
+    expect(testText('https://run')).toContain('TEST')
+  })
+
+  it('sends the real hand-over, not the TEST text, when a test run also hands PRs over', async () => {
+    const f = fakeFetch()
+    await alertHandback(f.fn, ENV, [7], true)
+    const sent = JSON.parse(f.calls[0]?.init.body as string) as { text: string }
+    expect(sent.text).toContain('#7')
+  })
+
+  it('keeps the TEST alert off without secrets', async () => {
+    const f = fakeFetch()
+    expect(await alertHandback(f.fn, { ...ENV, HANDBACK_FIRE_TOKEN: '' }, [], true)).toEqual({
       result: 'skipped',
     })
     expect(f.calls).toHaveLength(0)
