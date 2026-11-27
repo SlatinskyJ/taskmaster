@@ -13,6 +13,7 @@ import { Button, buttonVariants } from '~/components/ui/button'
 import { Card } from '~/components/ui/card'
 import { useEffectsSwitch } from '~/lib/effects'
 import { landingPath } from '~/lib/landing'
+import { liveSubs } from '~/lib/liveSubs'
 import { guardScreen } from '~/lib/screenGuard'
 import { keepFrameToken } from '~/lib/frame'
 import { cs } from '~/lib/strings'
@@ -32,12 +33,14 @@ export const Route = createFileRoute('/_app/profil')({
   },
   // Passkeys are listed with them off too, so old ones can still be removed.
   loader: async () => {
+    // Live subscriptions (#299): only one's own suggestions; passkeys are out of scope.
+    const live = liveSubs()
     const [enabled, passkeys, suggestions] = await Promise.all([
       getPasskeysEnabledFn(),
       listMyPasskeysFn(),
-      loadMine(() => listMySuggestionsFn()),
+      loadMine(() => listMySuggestionsFn().then(live.take)),
     ])
-    return { enabled, passkeys, suggestions }
+    return { enabled, passkeys, suggestions, live: live.all() }
   },
   component: Profile,
 })

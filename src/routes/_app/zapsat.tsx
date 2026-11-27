@@ -4,6 +4,7 @@ import { LogConfirm, LogTiles } from '~/components/instances/LogTiles'
 import type { LogTile } from '~/components/instances/LogTiles'
 import { Screen } from '~/components/shell/Screen'
 import type { LogWhen } from '~/domain'
+import { liveSubs } from '~/lib/liveSubs'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { listLoggableTemplatesFn } from '~/server/instances/functions'
@@ -14,7 +15,11 @@ export const Route = createFileRoute('/_app/zapsat')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/zapsat')
   },
-  loader: () => listLoggableTemplatesFn(),
+  loader: async () => {
+    const live = liveSubs()
+    const { tiles, choices } = live.take(await listLoggableTemplatesFn())
+    return { tiles, choices, live: live.all() }
+  },
   component: LogChore,
 })
 

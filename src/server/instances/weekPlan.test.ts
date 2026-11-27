@@ -15,7 +15,7 @@ import type { Family } from '~/server/tasks/testing'
 import { T0, family, must } from '~/server/tasks/testing'
 import { getMeeting, settlePeriod } from '~/server/settlement/meeting'
 import { approveTemplateScore, createTemplate } from '~/server/templates'
-import { weekPlanHandler } from './functions'
+import { weekPlanHandler, weekPlanRead } from './functions'
 import { createOnDemandInstance, selfLogInstance } from './instances'
 import { MON, MON_10, WED_NOON, copiesOf, prague, setWeekPlan, weekFamily } from './testing'
 import { makeWeekCopies } from './weekCopies'
@@ -407,5 +407,30 @@ describe('weekPlanHandler (#258)', () => {
     must(reserveTask(f.db, f.mladsi, f.day[1] ?? 0, MON_10, true))
     expect(weekPlanHandler(f.db, MON_10)).toEqual(getWeekPlan(f.db, MON_10))
     expect(weekPlanHandler.length).toBe(2)
+  })
+})
+
+describe('weekPlanRead topics (#299)', () => {
+  const viewer = (id: number, role: 'giver' | 'taker') => ({
+    id,
+    username: role,
+    displayName: role,
+    role,
+  })
+
+  it('one board for everyone: the week, its chores and their copies; off: none', () => {
+    const f = weekFamily()
+    for (const v of [viewer(f.tata, 'giver'), viewer(f.starsi, 'taker')]) {
+      setWeekPlan(f.db, true)
+      expect(weekPlanRead.topics(v, weekPlanRead.read(f.db, v, undefined, MON_10), f.db)).toEqual([
+        'week',
+        'templates',
+        'tasks',
+      ])
+      setWeekPlan(f.db, false)
+      const off = weekPlanRead.read(f.db, v, undefined, MON_10)
+      expect(off).toEqual({ error: 'feature_off' })
+      expect(weekPlanRead.topics(v, off, f.db)).toEqual([])
+    }
   })
 })

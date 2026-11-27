@@ -3,7 +3,11 @@ import { fail, ok } from '~/domain/result'
 import type { SettlementRow } from '~/server/db/schema'
 import type { Period } from '~/domain'
 import { settled } from './actions'
-import { parseSettle, viewerOf } from './functions'
+import { meetingRead, parseSettle, viewerOf, weekRead } from './functions'
+import { eq } from 'drizzle-orm'
+import { featureFlags } from '~/server/db/schema'
+import { family } from '~/server/tasks/testing'
+import { MEETING, week } from './testing'
 
 // Input checks and the response shape of the meeting server functions.
 
@@ -101,5 +105,76 @@ describe('viewerOf', () => {
       id: 3,
       role: 'taker',
     })
+  })
+})
+
+describe('topics (#299)', () => {
+  const as = (id: number, role: 'giver' | 'taker') => ({
+    id,
+    username: role,
+    displayName: role,
+    role,
+  })
+  const setDisputes = (f: ReturnType<typeof family>, enabled: boolean) =>
+    f.db.update(featureFlags).set({ enabled }).where(eq(featureFlags.key, 'disputes')).run()
+
+  it("a taker's week: week, points and disputes:about of himself only", () => {
+    const f = week()
+    setDisputes(f, true)
+    const starsi = as(f.starsi, 'taker')
+    const data = weekRead.read(f.db, starsi, undefined, MEETING)
+    const topics = weekRead.topics(starsi, data, f.db)
+    expect(topics).toEqual([
+      'week',
+      `points:${String(f.starsi)}`,
+      `disputes:about:${String(f.starsi)}`,
+    ])
+    for (const t of topics) expect(t.endsWith(`:${String(f.mladsi)}`)).toBe(false)
+  })
+
+  it("a giver's week: every boy's points and disputes:about, people", () => {
+    const f = week()
+    setDisputes(f, true)
+    const tata = as(f.tata, 'giver')
+    const data = weekRead.read(f.db, tata, undefined, MEETING)
+    expect([...weekRead.topics(tata, data, f.db)].sort()).toEqual(
+      [
+        'week',
+        'people',
+        `points:${String(f.starsi)}`,
+        `points:${String(f.mladsi)}`,
+        `disputes:about:${String(f.starsi)}`,
+        `disputes:about:${String(f.mladsi)}`,
+      ].sort(),
+    )
+  })
+
+  it('disputes off: no disputes:about on the week', () => {
+    const f = week()
+    setDisputes(f, false)
+    const tata = as(f.tata, 'giver')
+    const topics = weekRead.topics(tata, weekRead.read(f.db, tata, undefined, MEETING), f.db)
+    expect(topics.some((t) => t.startsWith('disputes'))).toBe(false)
+  })
+
+  it('meeting without a period: week and people only', () => {
+    const f = family()
+    const tata = as(f.tata, 'giver')
+    const data = meetingRead.read(f.db, tata, undefined, MEETING)
+    expect(data.period).toBeNull()
+    expect(meetingRead.topics(tata, data, f.db)).toEqual(['week', 'people'])
+  })
+
+  it("meeting with a week to settle: week, people and each settled taker's points", () => {
+    const f = week()
+    const tata = as(f.tata, 'giver')
+    const data = meetingRead.read(f.db, tata, undefined, MEETING)
+    expect(data.period).not.toBeNull()
+    expect(meetingRead.topics(tata, data, f.db)).toEqual([
+      'week',
+      'people',
+      `points:${String(f.starsi)}`,
+      `points:${String(f.mladsi)}`,
+    ])
   })
 })

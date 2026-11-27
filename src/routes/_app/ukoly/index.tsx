@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '~/components/ui/dialog'
+import { liveSubs } from '~/lib/liveSubs'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { completeTaskFn, listTasksFn, releaseTaskFn, type TaskView } from '~/server/tasks/functions'
@@ -32,7 +33,12 @@ export const Route = createFileRoute('/_app/ukoly/')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/ukoly')
   },
-  loader: async () => ({ list: await listTasksFn(), templates: await listTemplatesFn() }),
+  loader: async () => {
+    const live = liveSubs()
+    const list = live.take(await listTasksFn())
+    const templates = live.take(await listTemplatesFn())
+    return { list, templates, live: live.all() }
+  },
   component: Tasks,
 })
 

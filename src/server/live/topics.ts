@@ -31,8 +31,11 @@ export type Topic =
   | 'suggestions'
   | `suggestions:by:${number}`
 
-/** Most topics one stream may carry: twice the largest screen's count (design "Limits"). */
-export const TOPIC_LIMIT = 20
+/**
+ * Most topics one stream may carry (Jakub 2026-11-26, design "Connection and limits"); a test
+ * over every screen keeps each screen's union under it (./screens.test.ts).
+ */
+export const TOPIC_LIMIT = 50
 
 const FIXED = new Set<string>([
   'tasks',

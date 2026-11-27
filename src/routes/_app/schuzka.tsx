@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { MeetingScreen } from '~/components/meeting/MeetingScreen'
 import { Screen } from '~/components/shell/Screen'
+import { liveSubs } from '~/lib/liveSubs'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { getMeetingFn } from '~/server/settlement/functions'
@@ -11,7 +12,12 @@ export const Route = createFileRoute('/_app/schuzka')({
   beforeLoad: ({ context }) => {
     guardScreen(context.user.role, '/schuzka')
   },
-  loader: async () => ({ meeting: await getMeetingFn(), plan: await listPlanTasksFn() }),
+  loader: async () => {
+    const live = liveSubs()
+    const meeting = live.take(await getMeetingFn())
+    const plan = live.take(await listPlanTasksFn())
+    return { meeting, plan, live: live.all() }
+  },
   component: Meeting,
 })
 

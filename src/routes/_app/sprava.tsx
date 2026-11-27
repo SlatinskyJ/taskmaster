@@ -38,6 +38,7 @@ import {
 } from '~/components/ui/dialog'
 import { forgetFeatures } from '~/lib/featureCache'
 import type { FeatureKey } from '~/lib/features'
+import { liveSubs } from '~/lib/liveSubs'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { userErrorMessage } from '~/lib/userErrors'
@@ -72,17 +73,29 @@ export const Route = createFileRoute('/_app/sprava')({
     guardScreen(context.user.role, '/sprava')
   },
   loader: async () => {
+    // Live subscriptions (#299) as each call answers; a failed load takes none. Launch switches
+    // and passkeys are out of scope.
+    const live = liveSubs()
     const [people, passkeys, defaults, disputes, fixable, suggestions, switches] =
       await Promise.all([
-        listUsersFn(),
+        listUsersFn().then(live.take),
         listPasskeyCountsFn(),
-        getPeriodDefaultsFn(),
-        loadAdminDisputes(() => getAdminDisputesFn()),
-        loadFixable(() => getFixableFn()),
-        loadAdminSuggestions(() => getAdminSuggestionsFn()),
+        getPeriodDefaultsFn().then(live.take),
+        loadAdminDisputes(() => getAdminDisputesFn().then(live.take)),
+        loadFixable(() => getFixableFn().then(live.take)),
+        loadAdminSuggestions(() => getAdminSuggestionsFn().then(live.take)),
         loadSwitches(() => getFeaturesFn()),
       ])
-    return { people, passkeys, defaults, disputes, fixable, suggestions, switches }
+    return {
+      people,
+      passkeys,
+      defaults,
+      disputes,
+      fixable,
+      suggestions,
+      switches,
+      live: live.all(),
+    }
   },
   component: Sprava,
 })

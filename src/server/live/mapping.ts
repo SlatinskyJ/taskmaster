@@ -314,6 +314,18 @@ export function topicsOf(db: Db, row: AuditLogRow): Topic[] {
       break
     case 'user':
       out.add('people')
+      // Approvals count only active parties, live: a people change (the brother whose yes it
+      // held deactivated) can move a proposed chore onto or off a boy's list with no chore entry.
+      if (
+        db
+          .select({ id: templates.id })
+          .from(templates)
+          .where(eq(templates.status, 'proposed'))
+          .limit(1)
+          .get()
+      ) {
+        out.add('templates:proposed')
+      }
       break
     case 'settings':
       out.add('settings').add('week')

@@ -7,6 +7,10 @@ import { getDb } from '~/server/db'
 import type { TemplateRow, TemplateStatus } from '~/server/db/schema'
 import { STALE, seenOf, unseen } from '~/server/descriptions/seen'
 import { getFlags } from '~/server/features'
+import { idTopic } from '~/server/live/topics'
+import { liveRead } from '~/server/live/define'
+import { serveLive } from '~/server/live/read'
+import type { Topic } from '~/server/live/topics'
 import { hasDescription } from '~/server/descriptions/parse'
 import {
   parseNewTemplate,
@@ -97,12 +101,20 @@ export const approveTemplateScoreFn = createServerFn({ method: 'POST' })
     approveTemplateScoreHandler(getDb(), context.user.id, data, new Date()),
   )
 
+// Live topics (#299, src/server/live/README.md). `templates:proposed` only for whoever loads
+// every proposed chore the list holds: a giver always; a taker's waiting list holds every one
+// waiting for the takers (the README says why that is safe).
+
+export const templatesRead = liveRead({
+  read: (db, viewer): TemplateView[] => listTemplates(db, viewer.id, bidding(db)),
+  topics: (viewer): Topic[] =>
+    viewer.role === 'giver' ? ['templates', 'templates:proposed'] : ['templates'],
+})
+
 /** Templates for the Úkoly screen: every one for a giver, agreed ones for a taker. */
 export const listTemplatesFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
-  .handler(({ context }): TemplateView[] =>
-    listTemplates(getDb(), context.user.id, bidding(getDb())),
-  )
+  .handler(({ context }) => serveLive(templatesRead, context.user, undefined))
 
 // ── Score change (spec §5.1) and first-price bidding (#209) ──────────────────────────────
 // On an agreed template these change its score; on a proposed one (switch `choreBidding`, off →
@@ -228,21 +240,37 @@ export function templateDetailHandler(
   return getTemplateDetail(db, data.templateId, viewer.id, bidding(db), flags.openRows)
 }
 
+/** The chore page's topic; none when the page is null for this viewer. */
+export const templateDetailRead = liveRead({
+  read: (db, viewer, arg: { templateId: number }) => templateDetailHandler(db, viewer, arg),
+  topics: (_viewer, data): Topic[] => (data ? [idTopic('template', data.template.id)] : []),
+})
+
 export const getTemplateDetailFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker', 'admin')])
   .validator(parseTemplateId)
-  .handler(({ data, context }) => templateDetailHandler(getDb(), context.user, data))
+  .handler(({ data, context }) => serveLive(templateDetailRead, context.user, data))
+
+/** A giver's list holds proposed chores with bids only with `choreBidding` (#209). */
+export const pendingTemplatePriceChangesRead = liveRead({
+  read: (db, viewer): TemplateView[] => pendingTemplatePriceChanges(db, viewer.id, bidding(db)),
+  topics: (viewer, _data, db): Topic[] =>
+    viewer.role === 'giver' && getFlags(db).choreBidding
+      ? ['templates', 'templates:proposed']
+      : ['templates'],
+})
+
+export const pendingTemplateApprovalsRead = liveRead({
+  read: (db, viewer): TemplateView[] => pendingTemplateApprovals(db, viewer.id, bidding(db)),
+  topics: (): Topic[] => ['templates:proposed'],
+})
 
 /** "Čeká na tebe": agreed templates whose score change waits for this person's side. */
 export const listPendingTemplatePriceChangesFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
-  .handler(({ context }): TemplateView[] =>
-    pendingTemplatePriceChanges(getDb(), context.user.id, bidding(getDb())),
-  )
+  .handler(({ context }) => serveLive(pendingTemplatePriceChangesRead, context.user, undefined))
 
 /** "Čeká na tebe": proposed templates waiting for this person's approval. */
 export const listPendingTemplateApprovalsFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
-  .handler(({ context }): TemplateView[] =>
-    pendingTemplateApprovals(getDb(), context.user.id, bidding(getDb())),
-  )
+  .handler(({ context }) => serveLive(pendingTemplateApprovalsRead, context.user, undefined))

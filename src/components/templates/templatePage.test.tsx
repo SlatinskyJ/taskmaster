@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import { marker, withMarker } from '~/lib/liveSubs.testing'
 import { cs } from '~/lib/strings'
 import type { ThreadEntry } from '~/server/tasks/functions'
 import type { TemplateView } from '~/server/templates/functions'
@@ -71,7 +72,9 @@ vi.mock('~/components/tasks/useTaskAction', () => ({
 }))
 vi.mock('./priceCalls', () => ({ callPrice: vi.fn(), PRICE_CALLS: {} }))
 vi.mock('~/server/templates/functions', () => ({
-  getTemplateDetailFn: vi.fn(() => Promise.resolve({ template: page.template, thread: [] })),
+  getTemplateDetailFn: vi.fn(() =>
+    Promise.resolve(withMarker('getTemplateDetailFn', { template: page.template, thread: [] })),
+  ),
 }))
 vi.mock('~/server/descriptions/functions', () => ({
   changeDescriptionFn: vi.fn(),
@@ -188,7 +191,7 @@ describe('template page: Rozporovat (#46)', () => {
   type Loader = (a: {
     params: { templateId: string }
     context: { features: { disputes: boolean }; user: { role: string } }
-  }) => Promise<{ disputeMark: unknown }>
+  }) => Promise<{ disputeMark: unknown; live: unknown }>
   const load = (template: TemplateView, disputes: boolean, role = 'giver') => {
     page.template = template
     vi.mocked(getItemMarkFn).mockClear()
@@ -197,6 +200,12 @@ describe('template page: Rozporovat (#46)', () => {
       context: { features: { disputes }, user: { role } },
     })
   }
+
+  it("loader: returns the chore page's live subscription (#299), for every role", async () => {
+    for (const role of ['giver', 'taker', 'admin']) {
+      expect((await load(dishes, true, role)).live).toEqual([marker('getTemplateDetailFn')])
+    }
+  })
 
   it('loader, switch on: the admin reads no mark on an active chore (#222)', async () => {
     expect((await load(dishes, true, 'admin')).disputeMark).toBeNull()

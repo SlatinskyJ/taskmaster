@@ -13,6 +13,7 @@ import { TemplatePricePanel } from '~/components/templates/TemplatePricePanel'
 import { priceMeta, templateChip } from '~/components/templates/priceView'
 import { Card } from '~/components/ui/card'
 import { parseIdParam } from '~/lib/idParam'
+import { liveSubs } from '~/lib/liveSubs'
 import { guardDisputeReader } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
 import { templateDetail } from '~/lib/templateText'
@@ -33,7 +34,8 @@ export const Route = createFileRoute('/_app/sablona/$templateId')({
     // TanStack Router's notFound() is thrown by design; it is not an Error.
     // eslint-disable-next-line @typescript-eslint/only-throw-error
     if (templateId === null) throw notFound()
-    const detail = await getTemplateDetailFn({ data: { templateId } })
+    const live = liveSubs()
+    const detail = live.take(await getTemplateDetailFn({ data: { templateId } }))
     // eslint-disable-next-line @typescript-eslint/only-throw-error
     if (!detail) throw notFound()
     // Rozporovat (#46): the score's mark, only with the switch on and once active.
@@ -43,7 +45,7 @@ export const Route = createFileRoute('/_app/sablona/$templateId')({
       detail.template.status === 'active'
         ? await getItemMarkFn({ data: { kind: 'template_score', id: detail.template.id } })
         : null
-    return { ...detail, disputeMark: mark && 'error' in mark ? null : mark }
+    return { ...detail, disputeMark: mark && 'error' in mark ? null : mark, live: live.all() }
   },
   component: TemplatePage,
 })

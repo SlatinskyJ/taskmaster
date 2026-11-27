@@ -6,6 +6,10 @@ import { getDb } from '~/server/db'
 import { SETTLEMENT_LEVELS } from '~/server/db/schema'
 import type { Db } from '~/server/db'
 import { getFlags } from '~/server/features'
+import { idTopic } from '~/server/live/topics'
+import { liveRead } from '~/server/live/define'
+import { serveLive } from '~/server/live/read'
+import type { Topic } from '~/server/live/topics'
 import { int, record } from '~/server/periods/validators'
 import { dismissDisputeIn, disputeMarks, markKey, openDisputeIn } from './disputes'
 import type { DisputeMark, DisputeServerError, OpenDisputeError } from './disputes'
@@ -120,11 +124,26 @@ export const getItemMarkFn = createServerFn({ method: 'GET' })
     itemMarkHandler(getDb(), { id: context.user.id, role: context.user.role }, data),
   )
 
+/**
+ * A giver sees every dispute; a taker those he opened, those about him and those about nobody
+ * (a task's score). Switch off: nothing read, nothing subscribed.
+ */
+export const disputeListRead = liveRead({
+  read: (db, viewer) => disputeListHandler(db, { id: viewer.id, role: viewer.role }),
+  topics: (viewer, data): Topic[] => {
+    if ('error' in data) return []
+    if (viewer.role !== 'taker') return ['disputes']
+    return [
+      idTopic('disputes:by', viewer.id),
+      idTopic('disputes:about', viewer.id),
+      'disputes:about:none',
+    ]
+  },
+})
+
 export const getDisputeListFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('giver', 'taker')])
-  .handler(({ context }) =>
-    disputeListHandler(getDb(), { id: context.user.id, role: context.user.role }),
-  )
+  .handler(({ context }) => serveLive(disputeListRead, context.user, undefined))
 
 /** An item's value as the admin saw it: null, `{ score }`, `{ points }` or a settlement's. */
 export function parseSeenValue(data: unknown): DisputeValue | null {
@@ -180,6 +199,12 @@ export const dismissDisputeFn = createServerFn({ method: 'POST' })
   .validator(parseDismissDispute)
   .handler(({ data, context }) => dismissDisputeHandler(getDb(), context.user.id, data, new Date()))
 
+/** Every open dispute for Sporné; switch off: nothing read, nothing subscribed. */
+export const adminDisputesRead = liveRead({
+  read: (db) => adminDisputesHandler(db),
+  topics: (_viewer, data): Topic[] => ('error' in data ? [] : ['disputes']),
+})
+
 export const getAdminDisputesFn = createServerFn({ method: 'GET' })
   .middleware([requireRole('admin')])
-  .handler(() => adminDisputesHandler(getDb()))
+  .handler(({ context }) => serveLive(adminDisputesRead, context.user, undefined))

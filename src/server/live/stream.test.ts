@@ -1,17 +1,19 @@
 import { eq } from 'drizzle-orm'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ALL_FEATURES, NO_FEATURES } from '~/lib/features'
 import { withAudit } from '~/server/audit'
 import type { AuditEntry } from '~/server/audit'
 import { toCurrentUser } from '~/server/auth'
 import { createSession, deleteSession, findSession } from '~/server/auth/sessions'
 import { sessions, users } from '~/server/db/schema'
+import type { UserRole } from '~/server/db/schema'
 import { family, T0 } from '~/server/tasks/testing'
 import { createHub } from './hub'
 import type { Hub, LiveEvent } from './hub'
 import { CATCH_UP_LIMIT, HEARTBEAT_MS, openStream } from './stream'
 import type { StreamDeps, StreamRequest } from './stream'
 import { signSubscription } from './subscription'
+import { TOPIC_LIMIT } from './topics'
 import type { Topic } from './topics'
 
 // The stream endpoint (#299), without HTTP: status codes, catch-up, live events, heartbeat.
@@ -79,8 +81,13 @@ async function setup() {
 
 type S = Awaited<ReturnType<typeof setup>>
 
-const sign = (s: S, topics: Topic[], asOf = 0, key = s.starsiKey, userId = s.f.starsi) =>
-  signSubscription(key, userId, topics, asOf)
+const sign = (
+  s: S,
+  topics: Topic[],
+  asOf = 0,
+  key = s.starsiKey,
+  user: { id: number; role: UserRole } = { id: s.f.starsi, role: 'taker' },
+) => signSubscription(key, user, topics, asOf)
 
 const request = (over: Partial<StreamRequest> & { tokens: string[] }): StreamRequest => ({
   since: null,
@@ -164,10 +171,10 @@ describe('refusals', () => {
   it('token of another user → 401', async () => {
     const s = await setup()
     // Mladší's own token, replayed with Starší's session.
-    const token = sign(s, ['tasks'], 0, s.mladsiKey, s.f.mladsi)
+    const token = sign(s, ['tasks'], 0, s.mladsiKey, { id: s.f.mladsi, role: 'taker' })
     expect(openStream(request({ tokens: [token] }), s.deps()).status).toBe(401)
     // Signed with Starší's key but for Mladší.
-    const forged = sign(s, ['tasks'], 0, s.starsiKey, s.f.mladsi)
+    const forged = sign(s, ['tasks'], 0, s.starsiKey, { id: s.f.mladsi, role: 'taker' })
     expect(openStream(request({ tokens: [forged] }), s.deps()).status).toBe(401)
   })
 
@@ -193,22 +200,49 @@ describe('refusals', () => {
     expect(openStream(request({ tokens }), s.deps()).status).toBe(401)
   })
 
-  it('exactly 20 topics → 200; two tokens with 12 each, 20 distinct → 200; 21 distinct → 400', async () => {
+  it('401 for a token signed for another role of the same user', async () => {
+    const s = await setup()
+    const token = sign(s, ['tasks'], 0, s.starsiKey, { id: s.f.starsi, role: 'giver' })
+    expect(openStream(request({ tokens: [token] }), s.deps()).status).toBe(401)
+    expect(s.hubCalls()).toBe(0)
+  })
+
+  it('exactly 50 topics → 200; two tokens with 30 each, 50 distinct → 200; 51 distinct → 400', async () => {
     const s = await setup()
     const ids = (from: number, n: number) =>
       Array.from({ length: n }, (_, i) => `task:${String(from + i)}` as Topic)
-    const ok = openStream(request({ tokens: [sign(s, ids(1, 20))] }), s.deps())
+    expect(TOPIC_LIMIT).toBe(50)
+    const ok = openStream(request({ tokens: [sign(s, ids(1, 50))] }), s.deps())
     expect(ok.status).toBe(200)
     const two = openStream(
-      request({ tokens: [sign(s, ids(1, 12)), sign(s, ids(9, 12))] }),
+      request({ tokens: [sign(s, ids(1, 30)), sign(s, ids(21, 30))] }),
       s.deps(),
     )
     expect(two.status).toBe(200)
     const over = openStream(
-      request({ tokens: [sign(s, ids(1, 12)), sign(s, ids(10, 12))] }),
+      request({ tokens: [sign(s, ids(1, 30)), sign(s, ids(22, 30))] }),
       s.deps(),
     )
     expect(over.status).toBe(400)
+  })
+
+  it('a refused union is logged with its count and the role, no ids, tokens or key', async () => {
+    const s = await setup()
+    const ids = (from: number, n: number) =>
+      Array.from({ length: n }, (_, i) => `task:${String(from + i)}` as Topic)
+    const tokens = [sign(s, ids(1, 30)), sign(s, ids(22, 30))]
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    try {
+      expect(openStream(request({ tokens }), s.deps()).status).toBe(400)
+      expect(spy).toHaveBeenCalledTimes(1)
+      const line = spy.mock.calls.map((c) => c.map(String).join(' ')).join('\n')
+      expect(line).toMatch(/\[live\] stream refused: 51 topics, limit 50, role taker/)
+      expect(line).not.toContain(s.starsiKey)
+      for (const t of tokens) expect(line).not.toContain(t)
+      expect(line).not.toContain('task:')
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('a missing tab → 400', async () => {

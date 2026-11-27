@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import { marker, withMarker } from '~/lib/liveSubs.testing'
 import { getMeetingFn } from '~/server/settlement/functions'
 import { listPlanTasksFn } from '~/server/tasks/functions'
 import { cs } from '~/lib/strings'
@@ -24,11 +25,11 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
 }))
 vi.mock('~/server/settlement/functions', () => ({
-  getMeetingFn: vi.fn(() => Promise.resolve('meeting')),
+  getMeetingFn: vi.fn(() => Promise.resolve(withMarker('getMeetingFn', 'meeting'))),
   settlePeriodFn: vi.fn(),
 }))
 vi.mock('~/server/tasks/functions', () => ({
-  listPlanTasksFn: vi.fn(() => Promise.resolve('plan')),
+  listPlanTasksFn: vi.fn(() => Promise.resolve(withMarker('listPlanTasksFn', 'plan'))),
   approveTaskFn: vi.fn(),
   rejectTaskFn: vi.fn(),
 }))
@@ -38,7 +39,11 @@ const { Route } = await import('~/routes/_app/schuzka')
 describe('Schůzka page', () => {
   it('the loader asks for the meeting and the plan tasks', async () => {
     const loader = (Route as unknown as { loader: () => Promise<unknown> }).loader
-    expect(await loader()).toEqual({ meeting: 'meeting', plan: 'plan' })
+    expect(await loader()).toEqual({
+      meeting: 'meeting',
+      plan: 'plan',
+      live: [marker('getMeetingFn'), marker('listPlanTasksFn')],
+    })
     expect(getMeetingFn).toHaveBeenCalledTimes(1)
     expect(listPlanTasksFn).toHaveBeenCalledTimes(1)
   })
