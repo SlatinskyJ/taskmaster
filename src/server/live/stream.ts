@@ -74,7 +74,7 @@ export function openStream(req: StreamRequest, deps: StreamDeps): Response {
   const topics = new Set<Topic>()
   let asOf = Number.POSITIVE_INFINITY
   for (const sub of subs) {
-    if (sub?.userId !== user.id) return status(401)
+    if (sub?.userId !== user.id || sub.role !== user.role) return status(401)
     for (const t of sub.topics) topics.add(t)
     asOf = Math.min(asOf, sub.asOf)
   }
@@ -83,7 +83,13 @@ export function openStream(req: StreamRequest, deps: StreamDeps): Response {
   const lastEventId = idParam(req.lastEventId)
   const tab = req.tab
   if (since === null || lastEventId === null || !tab || tab.length > 64) return status(400)
-  if (topics.size > TOPIC_LIMIT) return status(400)
+  if (topics.size > TOPIC_LIMIT) {
+    // The screen's union, which only the stream sees: that screen gets no banner (README).
+    console.error(
+      `[live] stream refused: ${String(topics.size)} topics, limit ${String(TOPIC_LIMIT)}, role ${user.role}`,
+    )
+    return status(400)
+  }
 
   // Never older than the data the tokens were issued with.
   const start = Math.max(lastEventId ?? since ?? asOf, asOf)

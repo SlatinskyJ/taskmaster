@@ -13,6 +13,8 @@ import {
   parseDismissDispute,
   parseItemMarkRef,
   parseOpenDispute,
+  disputeListRead,
+  adminDisputesRead,
 } from './functions'
 
 // The dispute server functions (#46): thin wrappers over ./disputes.ts and ./list.ts behind the
@@ -319,5 +321,61 @@ describe('disputes about an adjustment (#48)', () => {
     expect(() =>
       parseDismissDispute({ id: 1, value: { points: 2, score: 2 }, note: 'x' }),
     ).toThrow()
+  })
+})
+
+describe('topics (#299)', () => {
+  const viewer = (id: number, role: 'giver' | 'taker') => ({
+    id,
+    username: role,
+    displayName: role,
+    role,
+  })
+
+  it('a giver: disputes; a taker: what he opened, what is about him, and about nobody', () => {
+    const f = withSwitch(true)
+    const tata = viewer(f.tata, 'giver')
+    const starsi = viewer(f.starsi, 'taker')
+    expect(
+      disputeListRead.topics(tata, disputeListRead.read(f.db, tata, undefined, MEETING), f.db),
+    ).toEqual(['disputes'])
+    expect(
+      disputeListRead.topics(starsi, disputeListRead.read(f.db, starsi, undefined, MEETING), f.db),
+    ).toEqual([
+      `disputes:by:${String(f.starsi)}`,
+      `disputes:about:${String(f.starsi)}`,
+      'disputes:about:none',
+    ])
+  })
+
+  it('disputes off: no topics on the dispute list', () => {
+    const f = withSwitch(false)
+    for (const v of [viewer(f.tata, 'giver'), viewer(f.starsi, 'taker')]) {
+      const data = disputeListRead.read(f.db, v, undefined, MEETING)
+      expect(data).toEqual({ error: 'feature_off' })
+      expect(disputeListRead.topics(v, data, f.db)).toEqual([])
+    }
+  })
+})
+
+describe('Sporné topics (#299)', () => {
+  const admin = (id: number) => ({
+    id,
+    username: 'admin',
+    displayName: 'Admin',
+    role: 'admin' as const,
+  })
+
+  it('on: disputes', () => {
+    const f = withSwitch(true)
+    const data = adminDisputesRead.read(f.db, admin(f.admin), undefined, MEETING)
+    expect(adminDisputesRead.topics(admin(f.admin), data, f.db)).toEqual(['disputes'])
+  })
+
+  it('disputes off: Sporné issues nothing', () => {
+    const f = withSwitch(false)
+    const data = adminDisputesRead.read(f.db, admin(f.admin), undefined, MEETING)
+    expect(data).toEqual({ error: 'feature_off' })
+    expect(adminDisputesRead.topics(admin(f.admin), data, f.db)).toEqual([])
   })
 })

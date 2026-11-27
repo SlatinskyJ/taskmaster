@@ -12,6 +12,7 @@ import {
   proposePeriodHandler,
   rejectProposalHandler,
   withdrawProposalHandler,
+  proposalsRead,
 } from './proposalFunctions'
 
 // The proposal server functions (#43): thin wrappers over ./proposals.ts behind the launch
@@ -129,5 +130,31 @@ describe('switch on', () => {
       ok: false,
       error: 'not_found',
     })
+  })
+})
+
+describe('topics (#299)', () => {
+  const viewer = (id: number, role: 'giver' | 'taker') => ({
+    id,
+    username: role,
+    displayName: role,
+    role,
+  })
+
+  it('on: proposals, for both roles', () => {
+    const f = on()
+    for (const v of [viewer(f.tata, 'giver'), viewer(f.starsi, 'taker')]) {
+      expect(proposalsRead.topics(v, proposalsRead.read(f.db, v, undefined, AT), f.db)).toEqual([
+        'proposals',
+      ])
+    }
+  })
+
+  it('proposals off: no topics', () => {
+    const f = switchedOff()
+    const v = viewer(f.tata, 'giver')
+    const data = proposalsRead.read(f.db, v, undefined, AT)
+    expect(data).toEqual({ error: 'feature_off' })
+    expect(proposalsRead.topics(v, data, f.db)).toEqual([])
   })
 })

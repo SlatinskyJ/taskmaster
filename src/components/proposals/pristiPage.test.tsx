@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { marker, withMarker } from '~/lib/liveSubs.testing'
 import { cs } from '~/lib/strings'
 import { getProposalsFn } from '~/server/periods/functions'
 import { proposalsView } from './fixtures'
@@ -24,7 +25,7 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: ReactNode }) => <a>{children}</a>,
 }))
 vi.mock('~/server/periods/functions', () => ({
-  getProposalsFn: vi.fn(() => Promise.resolve('view')),
+  getProposalsFn: vi.fn(() => Promise.resolve(withMarker('getProposalsFn', 'view'))),
   approveProposalFn: vi.fn(),
   rejectProposalFn: vi.fn(),
   withdrawProposalFn: vi.fn(),
@@ -78,8 +79,9 @@ describe('Příští týden route', () => {
         pristi.beforeLoad(context('giver', true))
       }),
     ).toBeUndefined()
-    expect(await pristi.loader()).toBe('view')
+    expect(await pristi.loader()).toEqual({ proposals: 'view', live: [marker('getProposalsFn')] })
     expect(getProposalsFn).toHaveBeenCalledTimes(1)
+    expect(await vychozi.loader()).toEqual({ proposals: 'view', live: [marker('getProposalsFn')] })
   })
 
   it('the admin goes to his landing page', () => {
@@ -93,7 +95,7 @@ describe('Příští týden route', () => {
   })
 
   it('renders the screen with its title and back button', () => {
-    page.data = proposalsView()
+    page.data = { proposals: proposalsView(), live: [] }
     const html = renderToStaticMarkup(<pristi.component />)
     expect(html).toContain(cs.proposals.title)
     expect(html).toContain(cs.proposals.thisWeek)

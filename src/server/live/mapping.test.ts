@@ -259,11 +259,26 @@ describe('periods, proposals, settings and people', () => {
     expect(of(f, row)).toEqual(['settings', 'week'])
   })
 
-  it.each(['user.created', 'user.updated'] as const)('%s fires people', (action) => {
-    const f = week()
-    const row = log(f, { action, entityType: 'user', entityId: f.starsi })
-    expect(of(f, row)).toEqual(['people'])
-  })
+  it.each(['user.created', 'user.updated'] as const)(
+    'user.created and user.updated fire people and templates:proposed while a template is proposed (%s)',
+    (action) => {
+      const f = week()
+      template(f, 'active')
+      template(f, 'proposed')
+      const row = log(f, { action, entityType: 'user', entityId: f.starsi })
+      expect(of(f, row)).toEqual(['people', 'templates:proposed'])
+    },
+  )
+
+  it.each(['user.created', 'user.updated'] as const)(
+    'without a proposed template they fire people only (%s)',
+    (action) => {
+      const f = week()
+      template(f, 'active')
+      const row = log(f, { action, entityType: 'user', entityId: f.starsi })
+      expect(of(f, row)).toEqual(['people'])
+    },
+  )
 })
 
 describe('settlement and points', () => {

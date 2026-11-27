@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
+import { marker } from '~/lib/liveSubs.testing'
 import { cs } from '~/lib/strings'
 import type { HistoryEntry, TaskView } from '~/server/tasks/functions'
 
@@ -81,9 +82,14 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 vi.mock('./useTaskAction', () => ({ useTaskAction: () => ({ busy: null, run: vi.fn() }) }))
 vi.mock('./bidCalls', () => ({ callBid: vi.fn(), BID_CALLS: {} }))
-vi.mock('~/server/tasks/functions', () => ({
-  getTaskDetailFn: vi.fn(() => Promise.resolve({ task: page.task, thread: [], history: [] })),
-}))
+vi.mock('~/server/tasks/functions', async () => {
+  const { withMarker } = await import('~/lib/liveSubs.testing')
+  return {
+    getTaskDetailFn: vi.fn(() =>
+      Promise.resolve(withMarker('getTaskDetailFn', { task: page.task, thread: [], history: [] })),
+    ),
+  }
+})
 vi.mock('~/server/descriptions/functions', () => ({
   changeDescriptionFn: vi.fn(),
   answerDescriptionFn: vi.fn(),
@@ -404,7 +410,7 @@ describe('task page: Rozporovat (#46)', () => {
   type Loader = (a: {
     params: { taskId: string }
     context: { features: { disputes: boolean }; user: { role: string } }
-  }) => Promise<{ disputeMarks: Record<string, unknown> }>
+  }) => Promise<{ disputeMarks: Record<string, unknown>; live: unknown }>
   const load = (task: TaskView, disputes: boolean, role = 'giver') => {
     page.task = task
     vi.mocked(getItemMarkFn).mockClear()
@@ -433,6 +439,12 @@ describe('task page: Rozporovat (#46)', () => {
   it('loader, switch on: the admin reads no mark, not even on a confirmed task (#222)', async () => {
     expect((await load(confirmed, true, 'admin')).disputeMarks).toEqual({})
     expect(getItemMarkFn).not.toHaveBeenCalled()
+  })
+
+  it("loader: returns the task page's live subscription (#299), for every role", async () => {
+    for (const role of ['giver', 'taker', 'admin']) {
+      expect((await load(confirmed, true, role)).live).toEqual([marker('getTaskDetailFn')])
+    }
   })
 
   it('loader: switch off or a proposed task reads nothing', async () => {
