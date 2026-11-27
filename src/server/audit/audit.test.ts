@@ -467,6 +467,25 @@ describe('changes (#299)', () => {
       ])
     })
 
+    it.each([
+      ['another entity', { entityId: 'b' }],
+      ['another time', { at: new Date('2026-11-16T17:00:01.000Z') }],
+    ] as const)(
+      'a freed first id taken by an entry of the same action on %s: no shared change',
+      async (_name, over) => {
+        rolledBack({})
+        inChangeScope(() => {
+          w(over)
+        })
+        w()
+        await nextRequest()
+        expect(changeIds()).toEqual([
+          [1, null],
+          [2, null],
+        ])
+      },
+    )
+
     it('outside a scope too: a freed first id taken by a request does not join its change', async () => {
       rolledBack({ action: 'task.created', entityType: 'task', entityId: 'a' })
       inChangeScope(() => {

@@ -104,11 +104,59 @@ describe('task steps', () => {
     )
   })
 
-  it('an unused instance.* step reads as its task.* step; week_rules_dropped falls back', () => {
+  it.each([
+    ['instance.reserved', 'rezervace'],
+    ['instance.released', 'uvolněno'],
+    ['instance.completed', 'hotovo'],
+    ['instance.approved', 'schváleno'],
+    ['instance.rejected', 'vráceno'],
+    ['instance.cancelled', 'zrušeno'],
+  ] as const)('the unused %s reads as its task.* step: "%s"', (action, phrase) => {
+    const f = week()
+    const row = entry(f, { by: f.mladsi, action, entityId: String(car(f)) })
+    expect(liveText(f.db, row, giver(f))).toBe(`Mladší · ${phrase} · Umýt auto`)
+  })
+
+  it('instance.created by a person, instance.self_logged', () => {
     const f = week()
     const task = String(car(f))
-    const released = entry(f, { by: f.mladsi, action: 'instance.released', entityId: task })
-    expect(liveText(f.db, released, giver(f))).toBe('Mladší · uvolněno · Umýt auto')
+    const created = entry(f, { action: 'instance.created', entityId: task, after: { score: 4 } })
+    expect(liveText(f.db, created, taker(f))).toBe('Táta · přidáno za 4 b · Umýt auto')
+    const logged = entry(f, {
+      by: f.mladsi,
+      action: 'instance.self_logged',
+      entityId: task,
+      after: { score: 3 },
+    })
+    expect(liveText(f.db, logged, giver(f))).toBe('Mladší · zapsáno za 3 b · Umýt auto')
+  })
+
+  it('task.agreed reserved to a user who is gone: no reservation in the phrase', () => {
+    const f = week()
+    const row = entry(f, {
+      action: 'task.agreed',
+      entityId: String(car(f)),
+      after: { score: 8, reservedBy: 9999 },
+    })
+    expect(liveText(f.db, row, taker(f))).toBe('Táta · domluveno za 8 b · Umýt auto')
+  })
+
+  it('a detail read failing with anything but ForbiddenError is not swallowed', () => {
+    const f = week()
+    const row = entry(f, { action: 'task.reserved', entityId: String(car(f)) })
+    const spy = vi.spyOn(taskFns, 'taskDetailHandler').mockImplementation(() => {
+      throw new Error('db down')
+    })
+    try {
+      expect(() => liveText(f.db, row, giver(f))).toThrow('db down')
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it('week_rules_dropped falls back', () => {
+    const f = week()
+    const task = String(car(f))
     const dropped = entry(f, { by: null, action: 'instance.week_rules_dropped', entityId: task })
     expect(liveText(f.db, dropped, giver(f))).toBe('Podle rozvrhu · změna')
   })
@@ -158,6 +206,17 @@ describe('chore steps', () => {
       after: { score: 5 },
     })
     expect(liveText(f.db, row, giver(f))).toBe('Mladší · chce 5 b · Vyndat myčku')
+  })
+
+  it('a scored chore step with no after.score: fallback', () => {
+    const f = week()
+    const row = entry(f, {
+      by: f.mladsi,
+      action: 'template.bid_placed',
+      entityType: 'template',
+      entityId: String(agreedTemplate(f)),
+    })
+    expect(liveText(f.db, row, giver(f))).toBe('Mladší · změna')
   })
 
   it('template.updated', () => {

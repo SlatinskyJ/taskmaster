@@ -365,6 +365,29 @@ describe('one change per request, origin per change (#304)', () => {
     ])
   })
 
+  it('the fallback failing too: the event says "Podle rozvrhu · změna"', async () => {
+    const f = await setup()
+    const hub = hubOf(f)
+    const s = stream(['tasks'])
+    hub.attach(s, 0)
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const live = vi.spyOn(text, 'liveText').mockImplementationOnce(() => {
+      throw new Error('text')
+    })
+    const fallback = vi.spyOn(text, 'fallbackText').mockImplementationOnce(() => {
+      throw new Error('fallback')
+    })
+    try {
+      change(f)
+      await settle()
+    } finally {
+      live.mockRestore()
+      fallback.mockRestore()
+      error.mockRestore()
+    }
+    expect(s.got.map((e) => e.text)).toEqual(['Podle rozvrhu · změna'])
+  })
+
   it('liveText throwing: logged, the event goes out with the fallback, the next change still delivered', async () => {
     const f = await setup()
     const hub = hubOf(f)

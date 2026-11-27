@@ -199,8 +199,7 @@ export function createHub(db: Db, opts: { originTab?: () => string | undefined }
         if (change.newest <= state.lastId) continue
         state.lastId = change.newest
         // Made from this tab: it already shows it.
-        const origin = from.get(change.key)
-        if (origin !== undefined && origin === stream.tab) continue
+        if (from.get(change.key) === stream.tab) continue
         const event = eventFor(db, change, stream.topics, viewer, cache)
         if (!event) continue
         try {

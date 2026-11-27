@@ -5,6 +5,7 @@ import type { AuditAction, AuditLogRow } from '~/server/audit'
 import { ForbiddenError } from '~/server/auth/guards'
 import type { Db } from '~/server/db'
 import { users } from '~/server/db/schema'
+import { json } from './mapping'
 import type { UserRole } from '~/server/db/schema'
 import { taskDetailHandler } from '~/server/tasks/functions'
 import type { HistoryEntry } from '~/server/tasks/functions'
@@ -122,25 +123,28 @@ export const PHRASED: Record<AuditAction, 'task' | 'template' | 'own' | 'none'> 
 
 type HistoryAction = HistoryEntry['action']
 
-/** The task step an entry reads as in Historie; null: none (a fallback). */
+/**
+ * The task step a `task`-phrased entry reads as in Historie; null: none (a fallback). The unused
+ * `instance.*` steps read as their `task.*` step.
+ */
 function taskAction(action: AuditAction): HistoryAction | null {
   switch (action) {
     case 'instance.reserved':
+      return 'task.reserved'
     case 'instance.released':
+      return 'task.released'
     case 'instance.completed':
+      return 'task.completed'
     case 'instance.approved':
+      return 'task.approved'
     case 'instance.rejected':
+      return 'task.rejected'
     case 'instance.cancelled':
-      return `task.${action.slice('instance.'.length)}` as HistoryAction
+      return 'task.cancelled'
     case 'instance.week_rules_dropped':
       return null
     default:
-      return action.startsWith('task.') ||
-        action === 'instance.created' ||
-        action === 'instance.self_logged' ||
-        action === 'instance.expired'
-        ? (action as HistoryAction)
-        : null
+      return action as HistoryAction
   }
 }
 
@@ -210,20 +214,7 @@ const OWN: Partial<Record<AuditAction, string>> = {
   'suggestion.dismissed': cs.live.suggestionDismissed,
 }
 
-function afterField(after: string | null, key: string): unknown {
-  if (after === null) return undefined
-  try {
-    const parsed: unknown = JSON.parse(after)
-    return typeof parsed === 'object' && parsed !== null
-      ? (parsed as Record<string, unknown>)[key]
-      : undefined
-  } catch {
-    return undefined
-  }
-}
-
-const safeInt = (v: unknown): number | null =>
-  typeof v === 'number' && Number.isSafeInteger(v) ? v : null
+const safeInt = (v: unknown): number | null => (Number.isSafeInteger(v) ? (v as number) : null)
 
 function displayName(db: Db, id: number): string | null {
   return (
@@ -232,7 +223,8 @@ function displayName(db: Db, id: number): string | null {
 }
 
 function actorWord(db: Db, row: AuditLogRow, viewer: Viewer): string {
-  if (row.actorKind !== 'user' || row.actorUserId === null) return cs.live.system
+  // Only a user actor has a user id (the log's own check).
+  if (row.actorUserId === null) return cs.live.system
   if (row.actorUserId === viewer.id) return cs.live.you
   return displayName(db, row.actorUserId) ?? cs.live.system
 }
@@ -250,7 +242,7 @@ function titleFor(
   if (cached !== undefined) return cached
   const id = Number(entityId)
   let title: string | null = null
-  if (Number.isSafeInteger(id) && id > 0) {
+  if (Number.isSafeInteger(id)) {
     try {
       title =
         kind === 'task'
@@ -271,18 +263,17 @@ function stepPhrase(
   action: HistoryAction,
   viewer: Viewer,
 ): string | null {
-  const score = safeInt(afterField(row.after, 'score'))
+  const after = json(row.after)
+  const score = safeInt(after.score)
   if (SCORED.has(action) && score === null) return null
-  const reserved = action === 'task.agreed' ? safeInt(afterField(row.after, 'reservedBy')) : null
+  const reserved = action === 'task.agreed' ? safeInt(after.reservedBy) : null
   const reservedName = reserved === null ? null : displayName(db, reserved)
   const entry: HistoryEntry = {
     id: row.id,
     at: row.at,
     action,
-    by:
-      row.actorUserId === null
-        ? null
-        : { id: row.actorUserId, name: displayName(db, row.actorUserId) ?? '' },
+    // The phrase only asks whether a person did it, never their name (the actor is said apart).
+    by: row.actorUserId === null ? null : { id: row.actorUserId, name: '' },
     score,
     reservedBy:
       reserved === null || reservedName === null ? null : { id: reserved, name: reservedName },

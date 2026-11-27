@@ -135,7 +135,8 @@ function idOf(entityId: string): number | null {
   return Number.isSafeInteger(n) && n > 0 ? n : null
 }
 
-function json(text: string | null): Record<string, unknown> {
+/** An entry's `before` / `after` as an object; `{}` for none or anything else. */
+export function json(text: string | null): Record<string, unknown> {
   if (text === null) return {}
   try {
     const v: unknown = JSON.parse(text)
