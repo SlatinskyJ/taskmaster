@@ -164,7 +164,8 @@ describe('template price page', () => {
     expect(html).toContain('Platí 3 b.')
     expect(html).toContain('Nová cena platí jen pro nově vzniklé úkoly.')
     expect(html).toContain('Historie ceny')
-    expect(html).toContain('Mladší chce')
+    // Historie ceny as chat bubbles (#289): theirs with a name above, mine with none.
+    expect(html).toMatch(/>Mladší<\/span><button[^>]*>chce 5 b</)
     expect(html).toContain('Přijmout 4')
     expect(html).toContain(`aria-label="${cs.tasks.less}"`)
   })
@@ -172,7 +173,7 @@ describe('template price page', () => {
   it('a parent gets the lowest bid to accept', () => {
     const html = render(TATA)
     expect(html).toContain('Přijmout 5 (Mladší)')
-    expect(html).toContain('Ty nabízíš')
+    expect(html).toMatch(/<li class="[^"]*items-start[^"]*"><button[^>]*>nabídka 4 b</)
   })
 
   it('no history yet: the empty line', () => {
@@ -220,6 +221,17 @@ describe('template page: Rozporovat (#46)', () => {
     await load(dishes, false)
     await load({ ...dishes, status: 'proposed' }, true)
     expect(getItemMarkFn).not.toHaveBeenCalled()
+  })
+
+  it('loader: a mark it reads reaches the page; a failed read gives no mark (#310)', async () => {
+    vi.mocked(getItemMarkFn).mockResolvedValueOnce({ status: 'open' })
+    expect((await load(dishes, true)).disputeMark).toEqual({ status: 'open' })
+    const closed = { status: 'dismissed', note: 'Platí, jak bylo.' } as const
+    vi.mocked(getItemMarkFn).mockResolvedValueOnce(closed)
+    expect((await load(dishes, true)).disputeMark).toEqual(closed)
+    // The switch went off on the server (an error result): no mark, so the page offers Rozporovat.
+    vi.mocked(getItemMarkFn).mockResolvedValueOnce({ error: 'feature_off' })
+    expect((await load(dishes, true)).disputeMark).toBeNull()
   })
 
   it('active, switch on: Rozporovat on the score; off: none', () => {
@@ -279,6 +291,37 @@ describe('a proposed chore’s page (#205)', () => {
     expect(html).not.toContain('Navržená cena')
     expect(html).toContain('Historie ceny')
   })
+
+  // The card's own Souhlasím (AgreeToChore): only for a proposed chore without bidding (#281).
+  const agrees = (html: string) =>
+    /<button[^>]*class="[^"]*w-full[^"]*"[^>]*>Souhlasím<\/button>/.test(html)
+
+  it('an active chore never gets the card’s Souhlasím, even with a name left in waitingFor', () => {
+    page.waitingFor = both
+    const html = render(STARSI)
+    page.waitingFor = []
+    expect(agrees(html)).toBe(false)
+    expect(agrees(render(STARSI, [], bins))).toBe(false)
+  })
+
+  it('with bidding the card has no Souhlasím of its own; the price panel holds it (#209)', () => {
+    const bidding: TemplateView = {
+      ...bins,
+      bidding: { offer: { score: 4, byName: 'Táta' }, bids: [], lowest: null, lastBids: [] },
+    }
+    page.waitingFor = both
+    const waited = render(STARSI, [], bidding)
+    page.waitingFor = []
+    const plain = render(STARSI, [], bidding)
+    const count = (html: string) => html.split('>Souhlasím<').length - 1
+    // Waited for or not, the same Souhlasím buttons: none is added on the card.
+    expect(count(waited)).toBe(count(plain))
+    // Without bidding, the card adds its one.
+    page.waitingFor = both
+    const card = render(STARSI, [], bins)
+    page.waitingFor = []
+    expect(agrees(card)).toBe(true)
+  })
 })
 
 describe('chore page: the admin reads it, never acts (#222)', () => {
@@ -318,7 +361,9 @@ describe('chore page: the admin reads it, never acts (#222)', () => {
   it.each(states)('%s, every switch on: no button and no action', (_, template, entries) => {
     const html = allOn(() => render(ADMIN, entries, template))
     expect(html).toContain('Vyluxovat celý obývák a chodbu')
-    expect(html).not.toContain('<button')
+    // Historie ceny's bubbles are buttons that only show their time (#289); nothing else is.
+    const history = /<section[^>]*aria-labelledby="history-label"[\s\S]*?<\/section>/
+    expect(html.replace(history, '')).not.toContain('<button')
     for (const label of [
       cs.disputes.action,
       cs.taskPrice.agree,

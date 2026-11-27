@@ -1,6 +1,6 @@
 import { parseIsoUtc, toPragueWallTime } from '~/domain/dates'
 import { cs } from '~/lib/strings'
-import type { HistoryEntry } from '~/server/tasks/functions'
+import type { HistoryEntry, ThreadEntry } from '~/server/tasks/functions'
 
 // A task's history (#36, GTask "Historie") as chat bubbles (#248): the phrase of each entry, the
 // time shown on a tap, and the layout list. Framework-free, so the same text renders on the server
@@ -149,40 +149,84 @@ export function historyItems(entries: readonly HistoryEntry[], meId: number): Hi
     }
     current.entries.push(e)
   }
+  const out = chat()
+  for (const group of groups.reverse()) {
+    if (group.round !== undefined) out.round(group.round)
+    for (const e of [...group.entries].reverse()) {
+      const line = {
+        id: e.id,
+        text: historyText(e, meId),
+        reason: historyReason(e),
+        time: historyTime(e.at),
+      }
+      if (e.by) out.bubble(line, e.by, meId)
+      else out.note(line)
+    }
+  }
+  return out.items
+}
+
+interface Line {
+  id: number
+  text: string
+  reason: string | null
+  time: string
+}
+
+/**
+ * Builds layout items fed newest first: a bubble joins the bubble above when the same person made
+ * both (a run); a round divider, a note or another person ends the run.
+ */
+function chat() {
   const items: HistoryItem[] = []
   // The bubble above, while the run can still go on, and whose it is.
   let last: { bubble: Bubble; byId: number } | null = null
-  for (const group of groups.reverse()) {
-    if (group.round !== undefined) {
-      items.push({ kind: 'round', key: `round-${String(group.round)}`, round: group.round })
+  return {
+    items,
+    round(round: number) {
+      items.push({ kind: 'round', key: `round-${String(round)}`, round })
       last = null
-    }
-    for (const e of [...group.entries].reverse()) {
-      const text = historyText(e, meId)
-      const reason = historyReason(e)
-      const time = historyTime(e.at)
-      if (!e.by) {
-        items.push({ kind: 'note', id: e.id, text, reason, time })
-        last = null
-        continue
-      }
-      const mine = e.by.id === meId
-      const joinAbove = last?.byId === e.by.id
+    },
+    note(line: Line) {
+      items.push({ kind: 'note', ...line })
+      last = null
+    },
+    bubble(line: Line, by: { id: number; name: string }, meId: number) {
+      const mine = by.id === meId
+      const joinAbove = last?.byId === by.id
       if (last && joinAbove) last.bubble.joinBelow = true
       const bubble: Bubble = {
         kind: 'bubble',
-        id: e.id,
+        ...line,
         side: mine ? 'mine' : 'theirs',
-        name: mine || joinAbove ? null : e.by.name,
-        text,
-        reason,
-        time,
+        name: mine || joinAbove ? null : by.name,
         joinAbove,
         joinBelow: false,
       }
       items.push(bubble)
-      last = { bubble, byId: e.by.id }
-    }
+      last = { bubble, byId: by.id }
+    },
   }
-  return items
+}
+
+const THREAD_STATE: Record<Exclude<ThreadEntry['state'], 'open'>, string> = {
+  replaced: cs.bids.replaced,
+  accepted: cs.bids.accepted,
+  closed: cs.bids.closed,
+}
+
+/**
+ * A chore's price history (#289, the /sablona "Historie ceny") in the same chat bubbles as a
+ * task's Historie (#248): every offer and bid newest first, in the Historie wording, with the
+ * row's state (změněno, přijato, uzavřeno) under its number. A thread row always has a person, so
+ * there are no notes, and no rounds.
+ */
+export function threadItems(entries: readonly ThreadEntry[], meId: number): HistoryItem[] {
+  const out = chat()
+  for (const e of [...entries].reverse()) {
+    const text = e.side === 'giver' ? cs.history.countered(e.score) : cs.history.bid(e.score)
+    const reason = e.state === 'open' ? null : THREAD_STATE[e.state]
+    out.bubble({ id: e.id, text, reason, time: historyTime(e.at) }, e.by, meId)
+  }
+  return out.items
 }

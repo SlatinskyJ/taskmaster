@@ -71,6 +71,18 @@ describe('demo seed (#62)', () => {
     )
   })
 
+  it('seeds the demo (TASKMASTER_ENV=demo), and refuses it with ADMIN_PASSWORD', () => {
+    const db = createTestDb()
+    expect(seedDemo(db, { TASKMASTER_ENV: 'demo', NODE_ENV: 'production' }, T0)).toMatchObject({
+      kind: 'seeded',
+      seed: 'demo',
+    })
+    const other = createTestDb()
+    const env = { TASKMASTER_ENV: 'demo', ADMIN_PASSWORD: 'correct horse battery' }
+    expect(seedDemo(other, env, T0)).toEqual({ kind: 'skipped', reason: 'admin_password_set' })
+    expect(other.select().from(users).all()).toHaveLength(0)
+  })
+
   it('all or nothing: a failure partway leaves nobody, and the next boot seeds everyone', () => {
     const db = createTestDb()
     db.run(

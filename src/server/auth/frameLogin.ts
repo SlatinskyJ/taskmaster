@@ -26,7 +26,7 @@ export async function frameLogin(
     return { ok: false, error: 'not_available' }
   }
   if (!DEMO_USERS.some((u) => u.username === username)) return { ok: false, error: 'unknown_user' }
-  const result = await login(db, { username, password: DEMO_PASSWORD, ip }, now)
+  const result = await login(db, { username, password: DEMO_PASSWORD, ip }, now, env)
   if (!result.ok) return result
   return { ok: true, token: result.value.token, user: result.value.user }
 }
