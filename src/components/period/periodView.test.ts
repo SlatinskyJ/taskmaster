@@ -25,6 +25,14 @@ describe('weekLabel', () => {
     expect(at(11, 30, 0, 30)).toBe('2026-11-29T23:30:00.000Z')
   })
 
+  it('a 00:00 cutoff ends the week on the day before', () => {
+    // Fri 27. 11. 00:00 → Fri 4. 12. 00:00: the last day is Thu 3. 12.
+    expect(weekLabel(at(11, 27), at(12, 4))).toBe('27. 11. – 3. 12.')
+    // Across a month end, and one minute later the cutoff day counts again.
+    expect(weekLabel(at(11, 24), at(12, 1))).toBe('24. 11. – 30. 11.')
+    expect(weekLabel(at(11, 24), at(12, 1, 0, 1))).toBe('24. 11. – 1. 12.')
+  })
+
   it('the October DST week', () => {
     expect(weekLabel(at(10, 18, 23, 59), at(10, 25, 23, 59))).toBe('18. 10. – 25. 10.')
   })
