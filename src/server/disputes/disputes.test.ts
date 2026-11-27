@@ -2,7 +2,9 @@ import { eq, sql } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import type { DisputeKind } from '~/domain'
 import { auditLog, disputes, pointAdjustments, settlements, tasks } from '~/server/db/schema'
-import { doneTask, MEETING, SAT, week } from '~/server/settlement/testing'
+import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
+import { listPeriods, rollPeriods } from '~/server/periods'
+import { adjustment, CUTOFF, doneTask, MEETING, plus, SAT, week } from '~/server/settlement/testing'
 import { agreedTemplate } from '~/server/templates/testing'
 import { rejectTask } from '~/server/tasks'
 import { rejectionsSince } from '~/server/tasks/rejections'
@@ -780,5 +782,74 @@ describe('the admin entry carries whose item it is (#48 screens)', () => {
     for (const e of listDisputes(f.db, { id: f.starsi, role: 'taker' })) {
       expect(e).not.toHaveProperty('takerId')
     }
+  })
+})
+
+describe("the admin entry names a settlement's or adjustment's week (#263)", () => {
+  const H = 3_600_000
+  const weekOf = (f: ReturnType<typeof setup>, kind: DisputeKind) =>
+    listOpenForAdmin(f.db)
+      .filter((e) => e.item.kind === kind)
+      .map((e) => e.weekPage)
+  /** P1 ends at its cutoff and P2 starts there. */
+  function p2(f: ReturnType<typeof setup>) {
+    rollPeriods(f.db, plus(CUTOFF, H), DEFAULT_PERIOD_DEFAULTS)
+    const p = listPeriods(f.db)[1]
+    if (!p) throw new Error('no P2')
+    return p
+  }
+
+  it('a settlement names its week', () => {
+    const f = setup()
+    const sid = settlement(f, f.mladsi)
+    must(openDisputeIn(f.db, f.mladsi, { kind: 'settlement', id: sid }, 'Málo.', AT))
+    expect(weekOf(f, 'settlement')).toEqual([{ periodId: f.p1.id, takerId: f.mladsi }])
+  })
+
+  it('an adjustment names the week it was made in: the running one, or a settled one', () => {
+    const f = setup()
+    const inP1 = adjustment(f, f.starsi, 2, plus(SAT, H))
+    settlement(f, f.starsi)
+    const next = p2(f)
+    const inP2 = adjustment(f, f.starsi, 3, plus(next.startsAt, H))
+    const now = plus(next.startsAt, 2 * H)
+    must(openDisputeIn(f.db, f.starsi, { kind: 'adjustment', id: inP1 }, 'a', now))
+    must(openDisputeIn(f.db, f.starsi, { kind: 'adjustment', id: inP2 }, 'b', plus(now, 1)))
+    expect(weekOf(f, 'adjustment')).toEqual([
+      { periodId: f.p1.id, takerId: f.starsi },
+      { periodId: next.id, takerId: f.starsi },
+    ])
+  })
+
+  it("an adjustment made exactly at a week's end names the next week", () => {
+    const f = setup()
+    const next = p2(f)
+    expect(next.startsAt.toISOString()).toBe(CUTOFF.toISOString())
+    const id = adjustment(f, f.starsi, 2, CUTOFF)
+    must(openDisputeIn(f.db, f.starsi, { kind: 'adjustment', id }, 'a', plus(CUTOFF, H)))
+    expect(weekOf(f, 'adjustment')).toEqual([{ periodId: next.id, takerId: f.starsi }])
+  })
+
+  it('an adjustment outside every period names none', () => {
+    const f = setup()
+    const id = adjustment(f, f.starsi, 2, plus(SAT, -H))
+    must(openDisputeIn(f.db, f.starsi, { kind: 'adjustment', id }, 'a', AT))
+    expect(weekOf(f, 'adjustment')).toEqual([null])
+  })
+
+  it('other kinds have none', () => {
+    const f = setup()
+    const rejected = rejection(f, f.mladsi)
+    const template = agreedTemplate(f)
+    must(openDisputeIn(f.db, f.starsi, { kind: 'task_score', id: f.confirmed }, 'Cena.', AT))
+    must(openDisputeIn(f.db, f.starsi, { kind: 'completion', id: f.confirmed }, 'Víc.', AT))
+    must(openDisputeIn(f.db, f.mladsi, { kind: 'rejection', id: rejected }, 'Bylo hotovo.', AT))
+    must(openDisputeIn(f.db, f.mladsi, { kind: 'template_score', id: template }, 'cena', AT))
+    expect(listOpenForAdmin(f.db).map((e) => [e.item.kind, e.weekPage])).toEqual([
+      ['task_score', null],
+      ['completion', null],
+      ['rejection', null],
+      ['template_score', null],
+    ])
   })
 })
