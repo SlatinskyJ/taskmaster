@@ -1,19 +1,43 @@
 import { useCallback, useSyncExternalStore } from 'react'
-import { THEME_STORAGE_KEY, parseThemePref, themeColorFor, type ThemePref } from './themeColor'
+import {
+  FORCED_META_ATTR,
+  THEME_STORAGE_KEY,
+  forcedThemeColor,
+  parseThemePref,
+  type ThemePref,
+} from './themeColor'
 
 // Light / dark / auto (UI doc §1, §7.4). `auto` follows the system; the others set
-// `data-theme` on <html>, which src/styles/theme.css reads, and the theme-color metas.
+// `data-theme` on <html>, which src/styles/theme.css reads, and force the theme-color.
 // Stored on this device; the profile screen (#31) decides whether it also follows the user.
 
 export {
+  FORCED_META_ATTR,
   THEME_COLORS,
   THEME_PREFS,
   THEME_STORAGE_KEY,
+  forcedThemeColor,
   parseThemePref,
   themeBootScript,
-  themeColorFor,
   type ThemePref,
 } from './themeColor'
+
+/** The forced theme-color meta (see themeBootScript): added, updated, or removed for `auto`. */
+function applyThemeColor(pref: ThemePref): void {
+  const color = forcedThemeColor(pref)
+  let meta = document.querySelector<HTMLMetaElement>(`meta[${FORCED_META_ATTR}]`)
+  if (color === undefined) {
+    meta?.remove()
+    return
+  }
+  if (!meta) {
+    meta = document.createElement('meta')
+    meta.name = 'theme-color'
+    meta.setAttribute(FORCED_META_ATTR, '')
+    document.head.prepend(meta)
+  }
+  meta.content = color
+}
 
 function readStored(): ThemePref {
   try {
@@ -27,9 +51,7 @@ export function applyThemePref(pref: ThemePref): void {
   const root = document.documentElement
   if (pref === 'auto') delete root.dataset.theme
   else root.dataset.theme = pref
-  for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
-    meta.content = themeColorFor(pref, meta.media)
-  }
+  applyThemeColor(pref)
   try {
     if (pref === 'auto') localStorage.removeItem(THEME_STORAGE_KEY)
     else localStorage.setItem(THEME_STORAGE_KEY, pref)

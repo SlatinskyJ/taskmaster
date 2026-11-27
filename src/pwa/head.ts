@@ -8,8 +8,8 @@ export { THEME_COLORS }
 
 /**
  * One theme-color per colour scheme. Rendered straight into <head> by the root route, because
- * the router's head() keeps only one meta per name. A forced theme sets both to its colour
- * (themeBootScript, applyThemePref in ~/lib/theme).
+ * the router's head() keeps only one meta per name. Never changed after render: a forced theme
+ * adds its own meta in front of these (themeBootScript, applyThemePref in ~/lib/theme).
  */
 export const themeColorMeta = [
   { name: 'theme-color', content: THEME_COLORS.light, media: '(prefers-color-scheme: light)' },

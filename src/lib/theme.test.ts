@@ -1,20 +1,51 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  FORCED_META_ATTR,
   THEME_COLORS,
   THEME_STORAGE_KEY,
   applyThemePref,
+  forcedThemeColor,
   parseThemePref,
   themeBootScript,
-  themeColorFor,
 } from './theme'
 
-// Node test env: stub the two browser globals theme.ts touches.
+// Node test env: stub the browser globals theme.ts touches, with a <head> that holds the
+// page's two theme-color metas (light, dark), as the root route renders them.
 let dataset: Record<string, string | undefined>
 let store: Map<string, string>
-let metas: { media: string; content: string }[]
-const LIGHT_MEDIA = '(prefers-color-scheme: light)'
-const DARK_MEDIA = '(prefers-color-scheme: dark)'
-const colors = () => metas.map((meta) => meta.content)
+
+class FakeMeta {
+  name = ''
+  content = ''
+  attrs = new Map<string, string>()
+  constructor(readonly head: FakeHead) {}
+  setAttribute(name: string, value: string) {
+    this.attrs.set(name, value)
+  }
+  remove() {
+    this.head.children = this.head.children.filter((child) => child !== this)
+  }
+}
+
+class FakeHead {
+  children: FakeMeta[] = []
+  prepend(meta: FakeMeta) {
+    this.children.unshift(meta)
+  }
+}
+
+let head: FakeHead
+const LIGHT = THEME_COLORS.light
+const DARK = THEME_COLORS.dark
+/** Theme-color contents in <head> order; the browser uses the first that matches. */
+const colors = () => head.children.map((meta) => meta.content)
+
+function pageMeta(content: string): FakeMeta {
+  const meta = new FakeMeta(head)
+  meta.name = 'theme-color'
+  meta.content = content
+  return meta
+}
 
 function fakeStorage(throws = false) {
   const fail = () => {
@@ -30,13 +61,19 @@ function fakeStorage(throws = false) {
 beforeEach(() => {
   dataset = {}
   store = new Map()
-  metas = [
-    { media: LIGHT_MEDIA, content: THEME_COLORS.light },
-    { media: DARK_MEDIA, content: THEME_COLORS.dark },
-  ]
+  head = new FakeHead()
+  head.children = [pageMeta(LIGHT), pageMeta(DARK)]
   vi.stubGlobal('document', {
     documentElement: { dataset },
-    querySelectorAll: (selector: string) => (selector === 'meta[name="theme-color"]' ? metas : []),
+    head,
+    createElement: (tag: string) => {
+      expect(tag).toBe('meta')
+      return new FakeMeta(head)
+    },
+    querySelector: (selector: string) => {
+      expect(selector).toBe(`meta[${FORCED_META_ATTR}]`)
+      return head.children.find((meta) => meta.attrs.has(FORCED_META_ATTR)) ?? null
+    },
   })
   vi.stubGlobal('localStorage', fakeStorage())
 })
@@ -63,16 +100,13 @@ describe('parseThemePref', () => {
   })
 })
 
-describe('themeColorFor', () => {
+describe('forcedThemeColor', () => {
   it.each([
-    ['light', LIGHT_MEDIA, '#FFF5EE'],
-    ['light', DARK_MEDIA, '#FFF5EE'],
-    ['dark', LIGHT_MEDIA, '#1D1524'],
-    ['dark', DARK_MEDIA, '#1D1524'],
-    ['auto', LIGHT_MEDIA, '#FFF5EE'],
-    ['auto', DARK_MEDIA, '#1D1524'],
-  ] as const)('%s on the %s meta is %s', (pref, media, color) => {
-    expect(themeColorFor(pref, media)).toBe(color)
+    ['light', '#FFF5EE'],
+    ['dark', '#1D1524'],
+    ['auto', undefined],
+  ] as const)('%s forces %s', (pref, color) => {
+    expect(forcedThemeColor(pref)).toBe(color)
   })
 })
 
@@ -83,17 +117,18 @@ describe('applyThemePref', () => {
     expect(store.get(THEME_STORAGE_KEY)).toBe('dark')
   })
 
-  it('forces dark: both theme-color metas take the dark page colour', () => {
+  it('forces dark: a dark theme-color goes first, the page’s two stay as they are', () => {
     applyThemePref('dark')
-    expect(colors()).toEqual(['#1D1524', '#1D1524'])
+    expect(colors()).toEqual([DARK, LIGHT, DARK])
+    expect(head.children[0]?.name).toBe('theme-color')
   })
 
-  it('forces light the same way', () => {
+  it('forces light the same way, reusing the forced meta', () => {
     applyThemePref('dark')
     applyThemePref('light')
     expect(dataset.theme).toBe('light')
     expect(store.get(THEME_STORAGE_KEY)).toBe('light')
-    expect(colors()).toEqual(['#FFF5EE', '#FFF5EE'])
+    expect(colors()).toEqual([LIGHT, LIGHT, DARK])
   })
 
   it('auto: removes the attribute and the stored choice, so the system decides', () => {
@@ -103,10 +138,12 @@ describe('applyThemePref', () => {
     expect(store.has(THEME_STORAGE_KEY)).toBe(false)
   })
 
-  it('back to auto, each meta follows its own colour scheme again', () => {
+  it('back to auto, the forced theme-color goes and the page’s two decide again', () => {
     applyThemePref('dark')
     applyThemePref('auto')
-    expect(colors()).toEqual(['#FFF5EE', '#1D1524'])
+    expect(colors()).toEqual([LIGHT, DARK])
+    applyThemePref('auto')
+    expect(colors()).toEqual([LIGHT, DARK])
   })
 
   it('still applies the theme when storage is blocked', () => {
@@ -115,7 +152,7 @@ describe('applyThemePref', () => {
       applyThemePref('dark')
     }).not.toThrow()
     expect(dataset.theme).toBe('dark')
-    expect(colors()).toEqual(['#1D1524', '#1D1524'])
+    expect(colors()).toEqual([DARK, LIGHT, DARK])
   })
 })
 
@@ -124,26 +161,30 @@ describe('themeBootScript', () => {
     store.set(THEME_STORAGE_KEY, stored)
     runBootScript()
     expect(dataset.theme).toBe(stored)
-    expect(colors()).toEqual([THEME_COLORS[stored], THEME_COLORS[stored]])
+    expect(colors()).toEqual([THEME_COLORS[stored], LIGHT, DARK])
   })
 
   it.each([undefined, 'auto', 'purple'])('leaves the system in charge for %s', (stored) => {
     if (stored) store.set(THEME_STORAGE_KEY, stored)
-    for (const meta of metas) meta.content = '#000000'
     runBootScript()
     expect(dataset.theme).toBeUndefined()
-    expect(colors()).toEqual(['#FFF5EE', '#1D1524'])
+    expect(colors()).toEqual([LIGHT, DARK])
   })
 
   it.each([undefined, 'light', 'dark', 'auto', 'purple'])(
-    'agrees with themeColorFor for a stored %s',
+    'agrees with applyThemePref for a stored %s',
     (stored) => {
       if (stored) store.set(THEME_STORAGE_KEY, stored)
-      for (const meta of metas) meta.content = '#000000'
       runBootScript()
-      for (const meta of metas) {
-        expect(meta.content).toBe(themeColorFor(parseThemePref(stored ?? null), meta.media))
-      }
+      const booted = colors()
+      head.children = [pageMeta(LIGHT), pageMeta(DARK)]
+      applyThemePref(parseThemePref(stored ?? null))
+      expect(booted).toEqual(colors())
+      // and applyThemePref then finds the boot script's meta instead of adding a second one
+      head.children = []
+      runBootScript()
+      applyThemePref(parseThemePref(stored ?? null))
+      expect(colors()).toEqual(booted.slice(0, booted.length - 2))
     },
   )
 
@@ -151,10 +192,11 @@ describe('themeBootScript', () => {
     vi.stubGlobal('localStorage', fakeStorage(true))
     expect(runBootScript).not.toThrow()
     expect(dataset.theme).toBeUndefined()
-    expect(colors()).toEqual(['#FFF5EE', '#1D1524'])
+    expect(colors()).toEqual([LIGHT, DARK])
   })
 
-  it('agrees with applyThemePref on the storage key', () => {
+  it('agrees with applyThemePref on the storage key and the forced meta’s mark', () => {
     expect(themeBootScript).toContain(`'${THEME_STORAGE_KEY}'`)
+    expect(themeBootScript).toContain(`'${FORCED_META_ATTR}'`)
   })
 })

@@ -52,19 +52,19 @@ describe('offlinePage', () => {
     expect(html).toContain('a &amp; b')
   })
 
-  it('carries the in-app theme script after both theme-color metas, and no other script', () => {
+  it('carries the in-app theme script in <head>, no other script, and both theme-colors', () => {
     const html = offlinePage('Taskmaster', text)
     expect(html.match(/<script/g)).toHaveLength(1)
     const script = html.indexOf(`<script>${themeBootScript}</script>`)
     expect(script).toBeGreaterThan(-1)
-    for (const meta of [
+    // Before first paint: the script runs in <head>, where it puts a forced theme-color first.
+    expect(script).toBeLessThan(html.indexOf('</head>'))
+    expect(html).toContain(
       `<meta name="theme-color" content="${THEME_COLORS.light}" media="(prefers-color-scheme: light)">`,
+    )
+    expect(html).toContain(
       `<meta name="theme-color" content="${THEME_COLORS.dark}" media="(prefers-color-scheme: dark)">`,
-    ]) {
-      const at = html.indexOf(meta)
-      expect(at).toBeGreaterThan(-1)
-      expect(at).toBeLessThan(script)
-    }
+    )
   })
 
   it('applies a forced theme by data-theme, and keeps following the phone otherwise', () => {

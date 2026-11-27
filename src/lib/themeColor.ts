@@ -14,19 +14,21 @@ export function parseThemePref(value: unknown): ThemePref {
 /** Page background (UI doc §2.1 `bg`), used for the browser and status bar colour. */
 export const THEME_COLORS = { light: '#FFF5EE', dark: '#1D1524' } as const
 
-/**
- * The colour of one theme-color meta: a forced theme sets every meta to its page colour;
- * `auto` gives each meta the colour of the scheme its `media` names.
- */
-export function themeColorFor(pref: ThemePref, media: string): string {
-  if (pref !== 'auto') return THEME_COLORS[pref]
-  return media.includes('dark') ? THEME_COLORS.dark : THEME_COLORS.light
+/** Marks the one theme-color meta that a forced theme adds. */
+export const FORCED_META_ATTR = 'data-tm-forced'
+
+/** The browser colour of a forced theme; `auto` forces none (the page's two metas decide). */
+export function forcedThemeColor(pref: ThemePref): string | undefined {
+  return pref === 'auto' ? undefined : THEME_COLORS[pref]
 }
 
 /**
  * Runs inline in <head> before first paint, so a forced theme never flashes the other one:
- * sets `data-theme` and the theme-color metas (the same rule as themeColorFor), so it must
- * come after those metas. Keep it tiny and dependency-free: it is serialised into the HTML as
- * a string, in the app and in the offline page.
+ * sets `data-theme`, and adds a theme-color meta with no media as the first one in <head>.
+ * The browser uses the first theme-color that matches, so it wins over the page's
+ * light and dark metas, which stay as the server rendered them: React matches those by their
+ * content when it hydrates, and would add new ones if a script changed them (#124).
+ * Keep it tiny and dependency-free: it is serialised into the HTML as a string, in the app and
+ * in the offline page.
  */
-export const themeBootScript = `try{var t=localStorage.getItem('${THEME_STORAGE_KEY}'),f=t==='light'||t==='dark',c={light:'${THEME_COLORS.light}',dark:'${THEME_COLORS.dark}'};if(f)document.documentElement.dataset.theme=t;document.querySelectorAll('meta[name="theme-color"]').forEach(function(m){m.content=c[f?t:m.media.indexOf('dark')>=0?'dark':'light']})}catch(e){}`
+export const themeBootScript = `try{var t=localStorage.getItem('${THEME_STORAGE_KEY}');if(t==='light'||t==='dark'){document.documentElement.dataset.theme=t;var m=document.createElement('meta');m.name='theme-color';m.content=t==='dark'?'${THEME_COLORS.dark}':'${THEME_COLORS.light}';m.setAttribute('${FORCED_META_ATTR}','');document.head.prepend(m)}}catch(e){}`
