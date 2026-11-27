@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { PUBLIC_SERVER_FNS } from '~/server/auth/guards'
+import { DEMO_LOCKED_FNS } from '~/server/demo/lock'
 
 // Every server function is reachable by anyone on the internet, so each one must say who may
 // call it (#28). This scans the source: a server function either has a guard middleware
@@ -110,6 +111,8 @@ interface ServerFn {
   file: string
   /** `public`, `any`, a comma-separated role list, or `unguarded`. */
   access: string
+  /** Where `demoLock` sits in the middleware list: `none`, `after-guard`, or `before-guard`. */
+  demoLock: 'none' | 'after-guard' | 'before-guard'
 }
 
 function serverFns(): ServerFn[] {
@@ -137,7 +140,14 @@ function serverFns(): ServerFn[] {
           : middleware
             ? (roles ?? 'any')
             : 'unguarded'
-      found.push({ name, file: rel, access })
+      const lockAt = /\bdemoLock\b/.exec(list)?.index
+      const demoLock =
+        lockAt === undefined
+          ? 'none'
+          : middleware && middleware.index < lockAt
+            ? 'after-guard'
+            : 'before-guard'
+      found.push({ name, file: rel, access, demoLock })
     }
     // A server function not declared as `export const X = createServerFn(` can't be checked.
     if (seen !== all)
@@ -145,6 +155,7 @@ function serverFns(): ServerFn[] {
         name: '(not `export const X = createServerFn(`)',
         file: rel,
         access: 'unguarded',
+        demoLock: 'none',
       })
   }
   return found
@@ -167,5 +178,14 @@ describe('server function guards (#28)', () => {
       fns.filter((f) => f.access !== 'public').map((f) => [f.name, f.access]),
     )
     expect(guarded).toEqual(EXPECTED_ROLES)
+  })
+
+  // The public demo's lock (src/server/demo/lock.ts): after the role guard, so an anonymous
+  // caller still gets 401, and on exactly the listed functions, so the list can't drift.
+  it('demo-locked functions use demoLock after their guard, and no other function does', () => {
+    const locked = fns.filter((f) => f.demoLock !== 'none')
+    expect(Object.fromEntries(locked.map((f) => [f.name, f.demoLock]))).toEqual(
+      Object.fromEntries(DEMO_LOCKED_FNS.map((name) => [name, 'after-guard'])),
+    )
   })
 })
