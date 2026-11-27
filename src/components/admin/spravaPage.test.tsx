@@ -143,6 +143,7 @@ describe('Správa: Sporné (#47)', () => {
     openedAt: '2026-11-22T10:00:00.000Z',
     value: { score: 8 },
     page: null,
+    weekPage: null,
   }
   const render = (
     disputes: unknown,

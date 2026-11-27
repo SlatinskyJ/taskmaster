@@ -24,3 +24,13 @@ export function guardDisputeReader(
   if (role === 'admin' && disputesOn) return
   guardScreen(role, path)
 }
+
+/**
+ * A brother's week for the admin (#263, from a Sporné card): the admin only, as `guardScreen`
+ * says; with the `disputes` switch off (Sporné hidden) back to Správa.
+ */
+export function guardAdminWeek(role: Role, disputesOn: boolean): void {
+  guardScreen(role, '/sprava/tyden/$periodId/$takerId')
+  // eslint-disable-next-line @typescript-eslint/only-throw-error -- the router's redirect
+  if (!disputesOn) throw redirect({ to: '/sprava' })
+}

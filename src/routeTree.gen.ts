@@ -29,6 +29,7 @@ import { Route as AppTydenVychoziRouteImport } from './routes/_app/tyden/vychozi
 import { Route as AppUkolTaskIdRouteImport } from './routes/_app/ukol/$taskId'
 import { Route as AppUkolyIndexRouteImport } from './routes/_app/ukoly/index'
 import { Route as AppUkolyNovyRouteImport } from './routes/_app/ukoly/novy'
+import { Route as AppSpravaTydenPeriodIdTakerIdRouteImport } from './routes/_app/sprava_/tyden/$periodId/$takerId'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -129,6 +130,12 @@ const AppUkolyNovyRoute = AppUkolyNovyRouteImport.update({
   path: '/ukoly/novy',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSpravaTydenPeriodIdTakerIdRoute =
+  AppSpravaTydenPeriodIdTakerIdRouteImport.update({
+    id: '/sprava_/tyden/$periodId/$takerId',
+    path: '/sprava/tyden/$periodId/$takerId',
+    getParentRoute: () => AppRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -150,6 +157,7 @@ export interface FileRoutesByFullPath {
   '/ukoly/novy': typeof AppUkolyNovyRoute
   '/tyden/': typeof AppTydenIndexRoute
   '/ukoly/': typeof AppUkolyIndexRoute
+  '/sprava/tyden/$periodId/$takerId': typeof AppSpravaTydenPeriodIdTakerIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -171,6 +179,7 @@ export interface FileRoutesByTo {
   '/ukoly/novy': typeof AppUkolyNovyRoute
   '/tyden': typeof AppTydenIndexRoute
   '/ukoly': typeof AppUkolyIndexRoute
+  '/sprava/tyden/$periodId/$takerId': typeof AppSpravaTydenPeriodIdTakerIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -194,6 +203,7 @@ export interface FileRoutesById {
   '/_app/ukoly/novy': typeof AppUkolyNovyRoute
   '/_app/tyden/': typeof AppTydenIndexRoute
   '/_app/ukoly/': typeof AppUkolyIndexRoute
+  '/_app/sprava_/tyden/$periodId/$takerId': typeof AppSpravaTydenPeriodIdTakerIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -217,6 +227,7 @@ export interface FileRouteTypes {
     | '/ukoly/novy'
     | '/tyden/'
     | '/ukoly/'
+    | '/sprava/tyden/$periodId/$takerId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -238,6 +249,7 @@ export interface FileRouteTypes {
     | '/ukoly/novy'
     | '/tyden'
     | '/ukoly'
+    | '/sprava/tyden/$periodId/$takerId'
   id:
     | '__root__'
     | '/_app'
@@ -260,6 +272,7 @@ export interface FileRouteTypes {
     | '/_app/ukoly/novy'
     | '/_app/tyden/'
     | '/_app/ukoly/'
+    | '/_app/sprava_/tyden/$periodId/$takerId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -413,6 +426,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppUkolyNovyRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/sprava_/tyden/$periodId/$takerId': {
+      id: '/_app/sprava_/tyden/$periodId/$takerId'
+      path: '/sprava/tyden/$periodId/$takerId'
+      fullPath: '/sprava/tyden/$periodId/$takerId'
+      preLoaderRoute: typeof AppSpravaTydenPeriodIdTakerIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -431,6 +451,7 @@ interface AppRouteChildren {
   AppUkolyNovyRoute: typeof AppUkolyNovyRoute
   AppTydenIndexRoute: typeof AppTydenIndexRoute
   AppUkolyIndexRoute: typeof AppUkolyIndexRoute
+  AppSpravaTydenPeriodIdTakerIdRoute: typeof AppSpravaTydenPeriodIdTakerIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -448,6 +469,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppUkolyNovyRoute: AppUkolyNovyRoute,
   AppTydenIndexRoute: AppTydenIndexRoute,
   AppUkolyIndexRoute: AppUkolyIndexRoute,
+  AppSpravaTydenPeriodIdTakerIdRoute: AppSpravaTydenPeriodIdTakerIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

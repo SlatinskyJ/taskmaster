@@ -271,6 +271,7 @@ describe('admin handlers (#47)', () => {
         value: { score: 22 },
         takerId: f.starsi,
         page: { kind: 'task', id: f.confirmed },
+        weekPage: null,
       },
     ])
   })

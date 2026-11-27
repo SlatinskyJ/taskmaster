@@ -1,6 +1,7 @@
 import { definePlugin } from 'nitro'
 import { databasePath, getDb } from '~/server/db'
 import { describeDemo, seedDemo } from '~/server/demo'
+import { assertDemoProxy } from '~/server/env/demo'
 import { describePasskeys, passkeyConfig } from '~/server/passkeys/config'
 import { getPeriodDefaults } from '~/server/periods'
 import { startScheduler, schedulerJobs } from '~/server/scheduler'
@@ -8,7 +9,7 @@ import { bootstrapAdmin, describeBootstrap } from '~/server/users'
 
 // Boot: open the database and apply pending migrations before the first request is served.
 // A failed migration throws here, so the server never runs on a half-migrated schema.
-// Then, in a preview (TASKMASTER_ENV=preview), fill an empty database with demo data (#62);
+// Then, in a preview or the public demo (TASKMASTER_ENV=preview or demo), fill an empty database with demo data (#62);
 // otherwise create the first admin from ADMIN_PASSWORD if there is none yet (spec §6). Demo
 // first: it brings its own admin, so the bootstrap then has nothing to do or warn about.
 // Last, once every config check has passed, start the scheduler (#39, src/server/scheduler):
@@ -16,6 +17,8 @@ import { bootstrapAdmin, describeBootstrap } from '~/server/users'
 // instances), then it ticks every 15 minutes. A failing job is logged and retried next tick, never
 // thrown. Nitro's `close` hook stops it, so a dev reload leaves no second loop.
 export default definePlugin((nitroApp) => {
+  // The public demo's per-IP caps need the visitor's IP: without TRUST_PROXY=1 it won't boot.
+  assertDemoProxy(process.env)
   const db = getDb()
   console.info(`[db] ready at ${databasePath()}`)
   const demo = describeDemo(seedDemo(db))

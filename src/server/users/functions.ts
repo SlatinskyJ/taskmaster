@@ -2,6 +2,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { requireRole, requireUser } from '~/server/auth/guards'
 import { clientIp, sessionToken } from '~/server/auth/http'
 import { getDb } from '~/server/db'
+import { demoLock } from '~/server/demo/lock'
 import { liveRead } from '~/server/live/define'
 import { serveLive } from '~/server/live/read'
 import {
@@ -40,25 +41,25 @@ export const listUsersFn = createServerFn({ method: 'GET' })
 
 /** Adds a person with a starting password the admin passes on. */
 export const createUserFn = createServerFn({ method: 'POST' })
-  .middleware([requireRole('admin')])
+  .middleware([requireRole('admin'), demoLock])
   .validator(parseNewPerson)
   .handler(({ data, context }) => createUserAction(getDb(), context.user.id, data))
 
 /** Renames and/or changes the role of `data.userId`. */
 export const updateUserFn = createServerFn({ method: 'POST' })
-  .middleware([requireRole('admin')])
+  .middleware([requireRole('admin'), demoLock])
   .validator(parsePersonEdit)
   .handler(({ data, context }) => updateUserAction(getDb(), context.user.id, data))
 
 /** Sets a new password for `data.userId`; their sessions end. */
 export const resetPasswordFn = createServerFn({ method: 'POST' })
-  .middleware([requireRole('admin')])
+  .middleware([requireRole('admin'), demoLock])
   .validator(parseReset)
   .handler(({ data, context }) => resetPasswordAction(getDb(), context.user.id, data))
 
 /** Profil → Změnit heslo (#210): the signed-in user's own password. */
 export const changePasswordFn = createServerFn({ method: 'POST' })
-  .middleware([requireUser])
+  .middleware([requireUser, demoLock])
   .validator(parseChangePassword)
   .handler(({ data, context }) =>
     changePasswordAction(getDb(), context.user.id, sessionToken() ?? '', data, clientIp()),

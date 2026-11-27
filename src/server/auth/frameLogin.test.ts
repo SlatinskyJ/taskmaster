@@ -4,10 +4,13 @@ import type { Db } from '~/server/db'
 import { auditLog } from '~/server/db/schema'
 import { seedDemo } from '~/server/demo'
 import { frameLogin } from './frameLogin'
+import { login } from './login'
+import { MAX_FAILURES_PER_USER } from './rateLimit'
 import { resolveSession } from './sessions'
 
 const PROD = { NODE_ENV: 'production' }
 const PREVIEW = { NODE_ENV: 'production', TASKMASTER_ENV: 'preview' }
+const DEMO = { NODE_ENV: 'production', TASKMASTER_ENV: 'demo' }
 const T0 = new Date('2026-11-26T10:00:00.000Z')
 const IP = '10.0.0.2'
 
@@ -55,6 +58,34 @@ describe('frameLogin', () => {
     if (!result.ok) throw new Error(result.error)
     expect(result.user.username).toBe('starsi')
     expect(resolveSession(db, result.token, T0)?.user.username).toBe('starsi')
+  })
+
+  it('logs a demo user in on the demo (TASKMASTER_ENV=demo), a production build', async () => {
+    const result = await frameLogin(demoDb(), DEMO, 'tata', IP, T0)
+    if (!result.ok) throw new Error(result.error)
+    expect(result.user.username).toBe('tata')
+  })
+
+  it('passes its env to the login: on the demo a typo-locked demo name still gets in', async () => {
+    const db = demoDb()
+    for (let i = 0; i < MAX_FAILURES_PER_USER; i++)
+      await login(
+        db,
+        { username: 'tata', password: 'nope', ip: `10.0.3.${String(i)}` },
+        T0,
+        PREVIEW,
+      )
+    expect(await frameLogin(db, PREVIEW, 'tata', IP, T0)).toEqual({
+      ok: false,
+      error: 'rate_limited',
+    })
+    expect((await frameLogin(db, DEMO, 'tata', IP, T0)).ok).toBe(true)
+  })
+
+  it('refuses on the demo when ADMIN_PASSWORD is set', async () => {
+    expect(
+      await frameLogin(UNTOUCHABLE, { ...DEMO, ADMIN_PASSWORD: 'x'.repeat(12) }, 'tata', IP, T0),
+    ).toEqual({ ok: false, error: 'not_available' })
   })
 
   it('two logins of the same user are two sessions', async () => {

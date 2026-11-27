@@ -218,6 +218,66 @@ describe('TakerBoard Moje row (Domů)', () => {
   })
 })
 
+describe("TakerBoard Moje: the other brother's tasks stay out (#170)", () => {
+  // The slice of the board under Moje, up to Volné.
+  const mineSection = (html: string) => {
+    const start = html.indexOf('aria-labelledby="mine-label"')
+    return start < 0 ? '' : html.slice(start, html.indexOf('aria-labelledby="free-label"'))
+  }
+  const hisReserved = view({
+    id: 11,
+    title: 'Jeho rezervovaný',
+    reservedBy: { id: 4, name: 'Mladší' },
+  })
+  const hisDone = view({
+    id: 12,
+    title: 'Jeho hotový',
+    status: 'done_unconfirmed',
+    reservedBy: null,
+    completedBy: { id: 4, name: 'Mladší' },
+    earnerId: 4,
+  })
+  const myConfirmed = view({
+    id: 13,
+    title: 'Můj potvrzený',
+    status: 'confirmed',
+    reservedBy: null,
+    completedBy: { id: 3, name: 'Starší' },
+    earnerId: 3,
+  })
+  const myDone = view({
+    id: 14,
+    title: 'Můj čekající',
+    status: 'done_unconfirmed',
+    reservedBy: null,
+    completedBy: { id: 3, name: 'Starší' },
+    earnerId: 3,
+  })
+
+  it('a task the other brother reserved or did is not under Moje, nor one of mine already confirmed', () => {
+    const html = renderToStaticMarkup(
+      <TakerBoard items={[hisReserved, hisDone, myConfirmed, myDone]} me={3} />,
+    )
+    const mine = mineSection(html)
+    expect(mine).toContain('Můj čekající')
+    expect(mine).not.toContain('Jeho rezervovaný')
+    expect(mine).not.toContain('Jeho hotový')
+    expect(mine).not.toContain('Můj potvrzený')
+  })
+
+  it('with only the other brother’s tasks there is no Moje at all', () => {
+    const html = renderToStaticMarkup(<TakerBoard items={[hisReserved, hisDone]} me={3} />)
+    expect(html).not.toContain('mine-label')
+    expect(html).not.toContain(cs.work.mine)
+    // For him the same tasks are his.
+    const his = mineSection(
+      renderToStaticMarkup(<TakerBoard items={[hisReserved, hisDone]} me={4} />),
+    )
+    expect(his).toContain('Jeho rezervovaný')
+    expect(his).toContain('Jeho hotový')
+  })
+})
+
 describe("TakerBoard: a later day's copy (#257)", () => {
   // Thursday 1 January 2099 in Prague: always a later day.
   const later = view({
