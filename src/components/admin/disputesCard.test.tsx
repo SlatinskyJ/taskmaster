@@ -143,6 +143,50 @@ describe('a Sporné card opens its item (#222)', () => {
     })
     expect(html).toContain('<a href="/sablona/4"')
   })
+
+  it('a settlement with its week: the link goes to that week, named for the item (#263)', () => {
+    const e: AdminDisputeEntry = {
+      ...entry,
+      item: { kind: 'settlement', id: 11 },
+      title: '',
+      week: { startsAt: '2026-11-21T19:00:00.000Z', endsAt: '2026-11-29T19:00:00.000Z' },
+      takerName: 'Mladší',
+      takerId: 2,
+      value: { level: 'lower', deducted: 50 },
+      weekPage: { periodId: 4, takerId: 2 },
+    }
+    const html = card(e)
+    expect(html.match(/<a /g)).toHaveLength(1)
+    expect(html).toContain('<a href="/sprava/tyden/4/2"')
+    const l = adminDisputeLines(e)
+    expect(html).toContain(`aria-label="${t.openFor(cs.disputes.what.settlement, l.name)}"`)
+    expect(html).toMatch(/<li[^>]*class="[^"]*\brelative\b/)
+    expect(html).toMatch(/<div class="[^"]*\brelative z-10\b[^"]*"><button[^>]*>Ponechat/)
+  })
+
+  it('an adjustment with its week: the link goes to that week (#263)', () => {
+    const e: AdminDisputeEntry = {
+      ...entry,
+      item: { kind: 'adjustment', id: 12 },
+      title: 'Pomoc s nákupem.',
+      takerName: 'Starší',
+      takerId: 3,
+      value: { points: 5 },
+      weekPage: { periodId: 5, takerId: 3 },
+    }
+    const html = card(e)
+    expect(html.match(/<a /g)).toHaveLength(1)
+    expect(html).toContain('<a href="/sprava/tyden/5/3"')
+    expect(html).toContain(
+      `aria-label="${t.openFor(cs.disputes.what.adjustment, adminDisputeLines(e).name)}"`,
+    )
+  })
+
+  it('neither a page nor a week: no link', () => {
+    expect(
+      card({ ...entry, item: { kind: 'adjustment', id: 12 }, value: { points: 5 } }),
+    ).not.toContain('<a ')
+  })
 })
 
 describe('dismissInput', () => {
