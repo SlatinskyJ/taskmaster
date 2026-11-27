@@ -61,6 +61,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'disputes', spec: 'disputes.spec.ts', seed: 'disputes' },
   // Its own server: it writes fixes for good.
   { name: 'corrections', spec: 'corrections.spec.ts', seed: 'corrections' },
+  // A brother's week for the admin from Sporné (#263). Read-only.
+  { name: 'admin-week', spec: 'admin-week.spec.ts', seed: 'corrections' },
   // Forms with the simulated phone keyboard open (e2e/keyboard.ts). Read-only: dialogs are
   // opened, never sent. `tasks` has a task Táta gave, for Zrušit úkol?.
   { name: 'keyboard', spec: 'keyboard.spec.ts', seed: 'tasks' },
@@ -114,6 +116,8 @@ export const SUITES: readonly Suite[] = [
   { name: 'install', spec: 'install.spec.ts', seed: 'family' },
   // Launch switches in Správa (#296). Its own server: it flips switches for good.
   { name: 'switches', spec: 'switches.spec.ts', seed: 'launch' },
+  // Správa, Nový člověk (#286). Its own server: it adds a person for good.
+  { name: 'people', spec: 'people.spec.ts', seed: 'family' },
 ]
 
 /** Passkeys on (localhost) for the `on` suite only, at its own port. */

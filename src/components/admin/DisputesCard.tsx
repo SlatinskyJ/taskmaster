@@ -37,6 +37,19 @@ export function dismissInput(entry: AdminDisputeEntry, note: string): DismissDis
   return { id: entry.id, value: entry.value, note }
 }
 
+/** Where tapping a card goes: the item's page (#222), else the brother's week (#263). */
+function cardLink(e: AdminDisputeEntry) {
+  const { page, weekPage } = e
+  if (page?.kind === 'task') return { to: '/ukol/$taskId', params: { taskId: String(page.id) } }
+  if (page) return { to: '/sablona/$templateId', params: { templateId: String(page.id) } }
+  if (weekPage)
+    return {
+      to: '/sprava/tyden/$periodId/$takerId',
+      params: { periodId: String(weekPage.periodId), takerId: String(weekPage.takerId) },
+    }
+  return null
+}
+
 export function DisputesCard({
   data,
   onKeep,
@@ -69,23 +82,21 @@ export function DisputesCard({
         <ul className="grid gap-2">
           {data.map((e) => {
             const l = adminDisputeLines(e)
-            const page = e.page
+            const link = cardLink(e)
             return (
               <li
                 key={e.id}
                 data-admin-dispute={e.id}
                 className={cn(
                   'grid min-w-0 gap-1 rounded-card border-l-4 border-l-state-disputed bg-surface py-2.5 pr-2.5 pl-3 shadow-sticker',
-                  page && 'relative',
+                  link && 'relative',
                 )}
               >
                 <span className="text-meta font-bold break-words text-muted">{l.what}</span>
                 <span className="text-row font-bold break-words">
-                  {page ? (
+                  {link ? (
                     <Link
-                      {...(page.kind === 'task'
-                        ? { to: '/ukol/$taskId', params: { taskId: String(page.id) } }
-                        : { to: '/sablona/$templateId', params: { templateId: String(page.id) } })}
+                      {...link}
                       aria-label={t.openFor(cs.disputes.what[e.item.kind], l.name)}
                       className={STRETCHED}
                     >
@@ -99,7 +110,7 @@ export function DisputesCard({
                 <blockquote className="rounded-button bg-track/40 px-3 py-2 break-words">
                   {l.reason}
                 </blockquote>
-                <div className={cn('flex flex-wrap justify-end gap-2', page && 'relative z-10')}>
+                <div className={cn('flex flex-wrap justify-end gap-2', link && 'relative z-10')}>
                   <Button
                     type="button"
                     variant="ghost"
