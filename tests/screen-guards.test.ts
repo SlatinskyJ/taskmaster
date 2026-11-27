@@ -4,8 +4,9 @@ import { describe, expect, it } from 'vitest'
 import { APP_PATHS } from '~/lib/nav'
 
 // Every screen behind login (src/routes/_app/) gates itself with `guardScreen(role, '<its own
-// path>')` (or `guardDisputeReader`, which ends in it, #222), and every path in `APP_PATHS` has a
-// screen. A copied route with the wrong path, or a
+// path>')` (or `guardDisputeReader`, which ends in it, #222; or `guardAdminWeek`, which calls it
+// with the admin week's path, #263), and every path in `APP_PATHS` has a screen. A folder named
+// `x_` is the router's un-nested `x` (not inside x.tsx's screen): its path is `/x`. A copied route with the wrong path, or a
 // new screen without a gate, fails here. The role matrix itself is tested in src/lib/nav.test.ts.
 
 const DIR = join(import.meta.dirname, '..', 'src', 'routes', '_app')
@@ -13,7 +14,8 @@ const DIR = join(import.meta.dirname, '..', 'src', 'routes', '_app')
 function routeFiles(dir: string, prefix = ''): { file: string; path: string }[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const name = entry.name
-    if (entry.isDirectory()) return routeFiles(join(dir, name), `${prefix}/${name}`)
+    if (entry.isDirectory())
+      return routeFiles(join(dir, name), `${prefix}/${name.replace(/_$/, '')}`)
     if (!name.endsWith('.tsx') || name.endsWith('.test.tsx')) return []
     const stem = name.replace(/\.tsx$/, '')
     const path = stem === 'index' ? prefix || '/' : `${prefix}/${stem}`
@@ -31,8 +33,13 @@ describe('screen gates', () => {
       ...text.matchAll(
         /guardDisputeReader\(\s*context\.user\.role,\s*'([^']*)',\s*context\.features\.disputes\s*\)/g,
       ),
-    ]
-    expect(calls.map((m) => m[1])).toEqual([path])
+    ].map((m) => m[1])
+    const adminWeek = [
+      ...text.matchAll(
+        /guardAdminWeek\(\s*context\.user\.role,\s*context\.features\.disputes\s*\)/g,
+      ),
+    ].map(() => '/sprava/tyden/$periodId/$takerId')
+    expect([...calls, ...adminWeek]).toEqual([path])
   })
 
   it('every app path has a screen, and every screen is an app path', () => {

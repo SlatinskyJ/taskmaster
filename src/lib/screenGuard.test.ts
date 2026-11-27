@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { ROLES } from '~/domain/parties'
 import { landingPath } from './landing'
 import { APP_PATHS, canSee } from './nav'
-import { guardDisputeReader, guardScreen } from './screenGuard'
+import { guardAdminWeek, guardDisputeReader, guardScreen } from './screenGuard'
 
 function outcome(run: () => void): string {
   try {
@@ -52,5 +52,21 @@ describe('guardDisputeReader (#222)', () => {
         ).toBe('pass')
       }
     }
+  })
+})
+
+describe('guardAdminWeek (#263)', () => {
+  const run = (role: (typeof ROLES)[number], on: boolean) =>
+    outcome(() => {
+      guardAdminWeek(role, on)
+    })
+  it('the admin passes while disputes is on, else goes to Správa', () => {
+    expect(run('admin', true)).toBe('pass')
+    expect(run('admin', false)).toBe('redirect /sprava')
+  })
+  it('a brother or a parent goes to his landing page', () => {
+    expect(run('taker', true)).toBe('redirect /')
+    expect(run('giver', true)).toBe('redirect /')
+    expect(run('taker', false)).toBe('redirect /')
   })
 })

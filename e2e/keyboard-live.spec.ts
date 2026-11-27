@@ -157,6 +157,10 @@ test.describe('the stream', () => {
     const stream = await scriptStream(page)
     await login(page)
     await page.goto('/ukoly')
+    // Queue the change only once Úkoly has asked for its stream: a request Domů made before
+    // leaving could take it otherwise (#321).
+    const seen = stream.urls.length
+    await expect.poll(() => stream.urls.length).toBeGreaterThan(seen)
     stream.now(frame({ id: 5 }))
     await expect(banner(page)).toBeVisible()
     await page.getByRole('link', { name: cs.tasks.new }).click()

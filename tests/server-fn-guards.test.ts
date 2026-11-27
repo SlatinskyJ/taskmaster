@@ -19,6 +19,7 @@ const EXPECTED_ROLES: Record<string, string> = {
   adjustPointsFn: 'admin',
   correctSettlementFn: 'admin',
   getFixableFn: 'admin',
+  getAdminWeekFn: 'admin',
   listUsersFn: 'admin',
   getPeriodDefaultsFn: 'admin',
   savePeriodDefaultsFn: 'admin',

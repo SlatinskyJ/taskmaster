@@ -82,6 +82,7 @@ describe('canSee', () => {
     '/klic': 'taker giver admin',
     '/ukol/$taskId': 'taker giver',
     '/sablona/$templateId': 'taker giver',
+    '/sprava/tyden/$periodId/$takerId': 'admin',
   }
 
   it.each(APP_PATHS)('%s is visible to exactly its roles', (path) => {
