@@ -3,13 +3,21 @@
 // No retry loops: the next event (label, CI done, push to main) runs it again.
 import { pathToFileURL } from 'node:url'
 import { alertHandback } from './alert.ts'
-import { nextActions, type PrFacts } from './decide.ts'
+import {
+  MAX_REARMS,
+  handOver as handOverAction,
+  nextActions,
+  type HandOver,
+  type HandoverKind,
+  type PrFacts,
+} from './decide.ts'
 import {
   FOOTER,
   LABEL,
   approvedMarker,
   handoffMarker,
   makeGh,
+  resumedMarker,
   type Gh,
   type Lower,
 } from './github.ts'
@@ -24,8 +32,25 @@ function approvalBody(
   return `${approvedMarker(key, pr, labelEventId, sha, lower)}\nThe merge-me Action recorded \`merge-me\` on commit ${sha}. It lands this PR on that commit only, after updating it with \`main\` if needed.\n\n${FOOTER}`
 }
 
-function handOverBody(key: string, pr: PrFacts, reason: string): string {
-  return `${handoffMarker(key, pr.number, pr.labelEventId, 'final', 1, null)}\nThe merge-me Action hands this PR over: ${reason}.\n\nRun skill merge-approved-prs for this PR.\n\n${FOOTER}`
+const NEXT: Record<HandoverKind, string> = {
+  ci: `The Action takes this PR back into the queue by itself once a newer head is green, at most ${MAX_REARMS} times under this label. If the red test is one this PR adds or changes, the owner thread adds \`needs-jakub\` instead.`,
+  fix: 'Fix it within skill merge-approved-prs section 3, push, then post a comment `<!-- merge-queue:rearm <head sha> -->` (the full SHA of the pushed head): the Action then takes this PR back into the queue.',
+  final: 'This needs Jakub: the Action takes this PR back only when he adds `merge-me` again.',
+}
+
+function handOverBody(
+  key: string,
+  pr: PrFacts,
+  reason: string,
+  as: HandoverKind,
+  n: number,
+  redSha: string | null,
+): string {
+  return `${handoffMarker(key, pr.number, pr.labelEventId, as, n, redSha)}\nThe merge-me Action hands this PR over: ${reason}.\n\n${NEXT[as]}\n\nRun skill merge-approved-prs for this PR.\n\n${FOOTER}`
+}
+
+function resumedBody(key: string, pr: PrFacts, n: number, sha: string): string {
+  return `${resumedMarker(key, pr.number, pr.labelEventId, n, sha)}\nThe merge-me Action takes this PR back into the queue on commit ${sha} (re-arm ${n} of ${MAX_REARMS} under this label).\n\n${FOOTER}`
 }
 
 type Log = (line: string) => void
@@ -93,10 +118,10 @@ async function pass(
     if (!f) throw new Error(`no facts for #${pr}`)
     return f
   }
-  const handOver = async (pr: number, reason: string) => {
-    await gh.comment(pr, handOverBody(markerKey, factsOf(pr), reason))
-    log(`merge-queue: #${pr} handed over: ${reason}`)
-    handedOver.push(pr)
+  const handOver = async (a: HandOver) => {
+    await gh.comment(a.pr, handOverBody(markerKey, factsOf(a.pr), a.reason, a.as, a.n, a.redSha))
+    log(`merge-queue: #${a.pr} handed over (${a.as} ${a.n}): ${a.reason}`)
+    handedOver.push(a.pr)
   }
   const actions = nextActions(prs)
   const unstacking = mayUnstack && actions.some((a) => a.kind === 'unstack')
@@ -111,11 +136,21 @@ async function pass(
         )
         break
       case 'hand-over':
-        await handOver(action.pr, action.reason)
+        await handOver(action)
         break
+      case 'resume': {
+        const f = factsOf(action.pr)
+        await gh.comment(action.pr, resumedBody(markerKey, f, action.n, action.sha))
+        // Its next problem is a new hand-over counted from this re-arm.
+        byNumber.set(action.pr, { ...f, handover: null, rearms: action.n })
+        log(`merge-queue: #${action.pr} re-armed (${action.n}) on ${action.sha}`)
+        break
+      }
       case 'update': {
         if ((await gh.updateBranch(action.pr, factsOf(action.pr).headSha)) === 'conflict') {
-          await handOver(action.pr, 'update with main has a conflict')
+          await handOver(
+            handOverAction(factsOf(action.pr), 'conflict', 'update with main has a conflict'),
+          )
         } else log(`merge-queue: #${action.pr} updated with main`)
         break
       }
@@ -124,7 +159,13 @@ async function pass(
           await gh.removeLabel(action.pr, LABEL)
           log(`merge-queue: #${action.pr} merged on ${action.sha}`)
         } else
-          await handOver(action.pr, 'merge refused (the head moved, or the ruleset blocked it)')
+          await handOver(
+            handOverAction(
+              factsOf(action.pr),
+              'merge-refused',
+              'merge refused (the head moved, or the ruleset blocked it)',
+            ),
+          )
         break
       case 'wait':
         log(`merge-queue: #${action.pr} waiting for ${action.for}`)

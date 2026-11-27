@@ -97,8 +97,10 @@ export function handoverKind(code: ReasonCode, rearms: number): HandoverKind {
   return 'final'
 }
 
+export type HandOver = Extract<Action, { kind: 'hand-over' }>
+
 /** The hand-over of `pr` for this reason: kind, count and red head. */
-export function handOver(pr: PrFacts, code: ReasonCode, reason: string): Action {
+export function handOver(pr: PrFacts, code: ReasonCode, reason: string): HandOver {
   const as = handoverKind(code, pr.rearms)
   return {
     kind: 'hand-over',
