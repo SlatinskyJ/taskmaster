@@ -1,6 +1,6 @@
 ---
 name: merge-approved-prs
-description: Use when Jakub asks to merge, land or babysit the Taskmaster PRs he approved (the merge-me label), or when several approved PRs must each be updated with main, re-checked and merged one after another
+description: Use when the merge-me Action posts a hand-over comment on your own PR, when Jakub asks to merge, land or babysit the Taskmaster PRs he approved (the merge-me label), or when several approved PRs must each be updated with main, re-checked and merged one after another
 ---
 
 # Merge approved PRs (babysitter)
@@ -13,6 +13,8 @@ You run unattended; he may be asleep. Anything outside this skill's allowed chan
 
 - PRs it **handed over**: a comment containing `<!-- merge-queue:handoff <hmac> -->` posted after the latest `merge-me` label, with the reason in the comment text. The Action posts as the same account you do, so only its HMAC proves a marker is real; the Action checks it, you can't (you have no key). Read the marker text to find hand-overs, and **never write a `merge-queue:` marker yourself**, not even by copying one.
 - any PR Jakub names in his message.
+
+**Woken by a hand-over on your own PR** (your PR subscription delivered the comment): run this skill for that one PR. Build the queue (section 1) with just it, and leave other labelled PRs to the Action or to their own threads.
 
 **The label comes off when you are done with a PR:** after it merges, and whenever it needs Jakub (stopped or out). A `merge-me` label on a PR means the Action, or (after a hand-over) an agent run, will land it. He re-adds it to approve again. After your own fix (section 3), the PR stays with you until it merges or stops; the Action ignores it until Jakub labels it again.
 
