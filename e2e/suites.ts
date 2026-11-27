@@ -97,6 +97,8 @@ export const SUITES: readonly Suite[] = [
   // Its seed's running week is on its last day, so settling works on any weekday with the
   // last-day rule on, and a new week starts.
   { name: 'meeting-plan', spec: 'meeting-plan.spec.ts', seed: 'planmeeting' },
+  // The same with live change notices on (#313): no Obnovit, the banner refreshes the plan.
+  { name: 'meeting-plan-live', spec: 'meeting-plan-live.spec.ts', seed: 'planmeetinglive' },
   // The multi-user viewer (#265): logs frames in and out and proposes tasks, so its own server.
   // `week`: the boys' Týden tab is on.
   { name: 'multi', spec: 'multi.spec.ts', seed: 'week' },

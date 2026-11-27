@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { MeetingScreen } from '~/components/meeting/MeetingScreen'
 import { Screen } from '~/components/shell/Screen'
+import { offersLiveRefresh } from '~/lib/liveBanner'
 import { liveSubs } from '~/lib/liveSubs'
 import { guardScreen } from '~/lib/screenGuard'
 import { cs } from '~/lib/strings'
@@ -28,7 +29,7 @@ export const Route = createFileRoute('/_app/schuzka')({
 
 function Meeting() {
   const { user, features } = Route.useRouteContext()
-  const { meeting, plan, weekPlan } = Route.useLoaderData()
+  const { meeting, plan, weekPlan, live } = Route.useLoaderData()
   return (
     <MeetingScreen
       meeting={meeting}
@@ -36,6 +37,7 @@ function Meeting() {
       otherLevels={features.periodProposals}
       weekPlan={weekPlan}
       viewerId={user.id}
+      liveRefresh={offersLiveRefresh(features, live)}
       frame={(body, wide) => (
         <Screen title={cs.nav.meeting} user={user} wide={wide}>
           {body}
