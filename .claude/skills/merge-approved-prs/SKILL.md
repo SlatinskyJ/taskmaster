@@ -11,12 +11,24 @@ You run unattended; he may be asleep. Anything outside this skill's allowed chan
 
 **The merge-me Action lands most PRs without you.** `.github/workflows/merge-queue.yml` lands every labelled PR that needs nothing but an update with `main` and green CI, on the commit Jakub labelled. That includes stacks: a stacked PR waits until every open PR of its stack is labelled, then the Action unstacks them and lands them bottom-up. You run only for:
 
-- PRs it **handed over**: a comment containing `<!-- merge-queue:handoff <hmac> -->` posted after the latest `merge-me` label, with the reason in the comment text. The Action posts as the same account you do, so only its HMAC proves a marker is real; the Action checks it, you can't (you have no key). Read the marker text to find hand-overs, and **never write a `merge-queue:` marker yourself**, not even by copying one.
+- PRs it **handed over**: a comment containing `<!-- merge-queue:handoff <kind> <n> <red sha or -> <hmac> -->` (before #344: `<!-- merge-queue:handoff <hmac> -->`, which counts as kind `final`) posted after the latest `merge-me` label, with the reason and what happens next in the comment text. The Action posts as the same account you do, so only its HMAC proves a marker is real; the Action checks it, you can't (you have no key). Read the marker text to find hand-overs, and **never write a `merge-queue:` marker yourself**, not even by copying one. The one exception is the re-arm request `<!-- merge-queue:rearm <head sha> -->` below, which is yours to write.
 - any PR Jakub names in his message.
 
-**Woken by a hand-over on your own PR** (your PR subscription delivered the comment): run this skill for that one PR. Build the queue (section 1) with just it, and leave other labelled PRs to the Action or to their own threads.
+**Woken by a hand-over on your own PR** (your PR subscription delivered the comment): run this skill for that one PR, and leave other labelled PRs to the Action or to their own threads. What you do depends on the hand-over's kind (the first word after `merge-queue:handoff`):
 
-**The label comes off when you are done with a PR:** after it merges, and whenever it needs Jakub (stopped or out). A `merge-me` label on a PR means the Action, or (after a hand-over) an agent run, will land it. He re-adds it to approve again. After your own fix (section 3), the PR stays with you until it merges or stops; the Action ignores it until Jakub labels it again.
+- **`ci`** (CI red): read the failed job log.
+  - A failure in a test file the PR adds or changes: stop the PR (section 4). Its `needs-jakub` also blocks the Action's own re-arm.
+  - A flake in a test neither the PR nor `main` changed: re-run the failed jobs once (section 2 step 7). The Action never re-arms the red head itself, so a green re-run stays with you: land the PR as in section 2. Red again: stop the PR.
+  - A break from `main` that section 3 lets you fix: fix it (section 3), push, then post the re-arm request (below).
+  - A failure only `main` can fix (it is red there too): do nothing. Once a newer head is green (say after the fix lands on `main` and the Action updates the PR), the Action takes the PR back by itself.
+- **`fix`** (update conflict or refused merge): fix it within section 3 (with the judge round its table asks for), push, then post the re-arm request. Anything section 3 does not allow: stop the PR (section 4).
+- **`final`** (anything else, or the re-arm cap is used up): build the queue (section 1) with just this PR and go on as for any handed-over PR; whatever needs Jakub stops it (section 4).
+
+**The re-arm request** is your "ready" (Jakub 2026-11-26): one PR comment, right after your push, holding exactly `<!-- merge-queue:rearm <full head SHA you pushed> -->` and one line on what you did. The Action counts it only from SlatinskyJ, only after the latest hand-over, and only while it names the PR's current head, every commit after the label (or the last re-arm) is a merge of `main` or a `merge-approved-prs: ` commit, CI is not red, and nothing else blocks (draft, `needs-jakub`, unresolved threads). The CI run of your push picks it up when it finishes; if CI had already finished, the next queue event (any CI run or push to `main`) does. Push nothing extra just to wake it. Never post a request for a head you did not fix, or for the red head itself.
+
+**Re-arms are capped:** at most 3 per `merge-me` label. The Action records each one with a `merge-queue:resumed` comment and then lands the PR like any other. A 4th hand-over is `final`, and its text says so; then only Jakub's new label puts the PR back.
+
+**The label comes off when you are done with a PR:** after it merges, and whenever it needs Jakub (stopped or out). A `merge-me` label on a PR means the Action, or (after a hand-over) an agent run, will land it. He re-adds it to approve again. After a `final` hand-over, the PR stays with you until it merges or stops; the Action ignores it until Jakub labels it again.
 
 ## Rules
 

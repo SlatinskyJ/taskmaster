@@ -4,6 +4,9 @@ name: merge-queue
 # Job record: a label run writes Jakub's signed approval, in its own lane per PR, so labelling
 # many PRs at once never drops one. Job queue: one step per run (update with main, merge, or
 # hand over to an agent) in a single lane; the next event runs the next step. Logic and tests: scripts/merge-queue/.
+# A hand-over has a kind: ci (red CI: the Action re-arms the PR itself once a newer head is
+# green), fix (the owner thread re-arms it with a re-arm request after an allowed fix) or final
+# (needs Jakub). At most 3 re-arms per merge-me label; a re-arm happens on the next event below.
 #
 # Never checks out or runs PR code: every trigger below runs the default branch's workflow,
 # and the checkout is pinned to main.
