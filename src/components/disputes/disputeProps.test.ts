@@ -159,6 +159,7 @@ describe('adminDisputeLines (#47)', () => {
     openedAt: '2026-11-22T23:30:00.000Z',
     takerId: null,
     page: null,
+    weekPage: null,
   }
 
   it('a task score: what, title and points; opened by and the Prague date', () => {
