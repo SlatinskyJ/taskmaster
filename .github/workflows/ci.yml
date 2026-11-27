@@ -27,6 +27,10 @@ jobs:
   # *.md under docs/ or .claude/, root *.md, .github/*.md (all Prettier-ignored; ESLint and tsc
   # skip .md). Any other file, including .ts under docs/ or .claude/, and every push to main, runs
   # all. Fail closed: if the file list can't be read, everything runs.
+  # Tooling-only PRs (#349) also skip `build` and `image`, which check the app: output `app` is
+  # false when every file is docs or tooling (scripts/, the tests of those scripts, .claude/,
+  # most of .github/workflows/). typecheck, lint, format, migrations and test still run.
+  # The file rules live in scripts/ci/changes.ts (tests/ci-changes.test.ts).
   changes:
     name: changes
     runs-on: ubuntu-24.04
@@ -35,7 +39,19 @@ jobs:
       pull-requests: read
     outputs:
       code: ${{ steps.detect.outputs.code }}
+      app: ${{ steps.detect.outputs.app }}
     steps:
+      # The classifier only (scripts/ci/changes.ts, no dependencies), so no pnpm install.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            /scripts/ci/
+            /.nvmrc
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
       - name: Detect code changes
         id: detect
         env:
@@ -43,22 +59,20 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
         run: |
           if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
-            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "code=true" >> "$GITHUB_OUTPUT"; echo "app=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
           # New and old names, so a file moved out of a code path counts as a code change.
           files=$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" --paginate \
             --jq '.[] | .filename, (.previous_filename // empty)') || {
             echo "Could not list files: running everything."
-            echo "code=true" >> "$GITHUB_OUTPUT"; exit 0
+            echo "code=true" >> "$GITHUB_OUTPUT"; echo "app=true" >> "$GITHUB_OUTPUT"; exit 0
           }
           echo "$files"
-          code=$(grep -Ev '^((docs|\.claude)/.*\.md|[^/]+\.md|\.github/[^/]+\.md)$' <<<"$files" || true)
-          if [ -z "$files" ] || [ -n "$code" ]; then
-            echo "code=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No code changed: skipping checks."
-            echo "code=false" >> "$GITHUB_OUTPUT"
-          fi
+          node scripts/ci/changes.ts <<<"$files" > scope || {
+            echo "Classifier failed: running everything."
+            printf 'code=true\napp=true\n' > scope
+          }
+          cat scope >> "$GITHUB_OUTPUT"
 
   typecheck:
     name: typecheck
@@ -131,7 +145,8 @@ jobs:
 
   build:
     name: build
-    needs: [typecheck, lint, format]
+    needs: [changes, typecheck, lint, format]
+    if: needs.changes.outputs.app != 'false'
     runs-on: ubuntu-24.04
     steps:
       - *checkout
@@ -199,8 +214,8 @@ jobs:
 
   # Multi-arch image (spec §11, #50). Each arch builds natively and smoke-runs the container,
   # including the image's own HEALTHCHECK. Read-only token; nothing is pushed here.
-  # On docs-only PRs the job still starts, so the matrix expands and `image (amd64)` /
-  # `image (arm64)` report as passed, but every step is skipped. A job-level skip would report
+  # On docs-only and tooling-only PRs the job still starts, so the matrix expands and
+  # `image (amd64)` / `image (arm64)` report as passed, but every step is skipped. A job-level skip would report
   # one unexpanded `image (${{ matrix.arch }})` check instead, which would hang if these two
   # are ever made required. Every step in this job must carry `if: env.CODE != 'false'`.
   image:
@@ -208,7 +223,7 @@ jobs:
     needs: [changes, typecheck, lint, format, migrations, test, build]
     if: ${{ !cancelled() && !failure() }}
     env:
-      CODE: ${{ needs.changes.outputs.code }}
+      CODE: ${{ needs.changes.outputs.app }}
     strategy:
       matrix: &arches
         include:
@@ -361,7 +376,7 @@ jobs:
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       contains(github.event.pull_request.labels.*.name, 'preview') &&
-      needs.changes.outputs.code != 'false' &&
+      needs.changes.outputs.app != 'false' &&
       needs.image.result == 'success'
     needs: [changes, image]
     permissions:
