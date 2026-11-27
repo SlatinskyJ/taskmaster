@@ -365,7 +365,7 @@ describe('one change per request, origin per change (#304)', () => {
     ])
   })
 
-  it('the fallback failing too: the event says "Podle rozvrhu · změna"', async () => {
+  it('the fallback failing too: the event says "Automaticky · změna"', async () => {
     const f = await setup()
     const hub = hubOf(f)
     const s = stream(['tasks'])
@@ -385,7 +385,7 @@ describe('one change per request, origin per change (#304)', () => {
       fallback.mockRestore()
       error.mockRestore()
     }
-    expect(s.got.map((e) => e.text)).toEqual(['Podle rozvrhu · změna'])
+    expect(s.got.map((e) => e.text)).toEqual(['Automaticky · změna'])
   })
 
   it('liveText throwing: logged, the event goes out with the fallback, the next change still delivered', async () => {

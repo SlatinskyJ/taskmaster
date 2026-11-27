@@ -92,7 +92,7 @@ describe('task steps', () => {
     const f = week()
     const task = String(car(f))
     const expired = entry(f, { by: null, action: 'instance.expired', entityId: task })
-    expect(liveText(f.db, expired, giver(f))).toBe('Podle rozvrhu · prošlo · Umýt auto')
+    expect(liveText(f.db, expired, giver(f))).toBe('Automaticky · prošlo · Umýt auto')
     const created = entry(f, {
       by: null,
       action: 'instance.created',
@@ -100,7 +100,7 @@ describe('task steps', () => {
       after: { score: 4 },
     })
     expect(liveText(f.db, created, taker(f))).toBe(
-      'Podle rozvrhu · přidáno podle rozvrhu za 4 b · Umýt auto',
+      'Automaticky · přidáno podle rozvrhu za 4 b · Umýt auto',
     )
   })
 
@@ -158,7 +158,7 @@ describe('task steps', () => {
     const f = week()
     const task = String(car(f))
     const dropped = entry(f, { by: null, action: 'instance.week_rules_dropped', entityId: task })
-    expect(liveText(f.db, dropped, giver(f))).toBe('Podle rozvrhu · změna')
+    expect(liveText(f.db, dropped, giver(f))).toBe('Automaticky · změna')
   })
 
   it('a scored action with no after.score: fallback', () => {
@@ -190,7 +190,7 @@ describe('task steps', () => {
   it('an actor whose user row is gone reads as the system', () => {
     const f = week()
     const row = entry(f, { by: 9999, action: 'task.reserved', entityId: String(car(f)) })
-    expect(liveText(f.db, row, giver(f))).toBe('Podle rozvrhu · rezervace · Umýt auto')
+    expect(liveText(f.db, row, giver(f))).toBe('Automaticky · rezervace · Umýt auto')
   })
 })
 
@@ -388,8 +388,8 @@ describe('other actions', () => {
     ['dispute.dismissed', 'dispute', 'spor uzavřen beze změny'],
     ['suggestion.created', 'suggestion', 'nový návrh na zlepšení'],
     ['suggestion.sent', 'suggestion', 'návrh poslán na GitHub'],
-    ['suggestion.done', 'suggestion', 'návrh hotový'],
-    ['suggestion.dismissed', 'suggestion', 'návrh zamítnutý'],
+    ['suggestion.done', 'suggestion', 'návrh vyřízen'],
+    ['suggestion.dismissed', 'suggestion', 'návrh zamítnut'],
   ]
 
   it('the table covers every own-phrased action but user.*', () => {
@@ -419,7 +419,7 @@ describe('other actions', () => {
   it("a 'none' action falls back (it never reaches a stream)", () => {
     const f = week()
     const row = entry(f, { action: 'feature.switched', entityType: 'feature', by: null })
-    expect(liveText(f.db, row, giver(f))).toBe('Podle rozvrhu · změna')
+    expect(liveText(f.db, row, giver(f))).toBe('Automaticky · změna')
   })
 
   it("PHRASED has a row for every AUDIT_ACTIONS entry and agrees with MAPPED on 'none'", () => {

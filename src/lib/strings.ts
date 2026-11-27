@@ -475,11 +475,12 @@ export const cs = {
   /**
    * A live change notice's sentence (#299): "<who> · <phrase>[ · <title>]". Task and chore steps
    * reuse `history`; these are the rest. The viewer's own other tab or phone is `you`, the
-   * scheduler `system`.
+   * automatic steps (the scheduler, an approval carried over, an agreement after a people change)
+   * `system`.
    */
   live: {
     you: 'Ty',
-    system: 'Podle rozvrhu',
+    system: 'Automaticky',
     sep: ' · ',
     userCreated: 'nový účet',
     userUpdated: 'úprava účtu',
@@ -510,8 +511,8 @@ export const cs = {
     disputeDismissed: 'spor uzavřen beze změny',
     suggestionCreated: 'nový návrh na zlepšení',
     suggestionSent: 'návrh poslán na GitHub',
-    suggestionDone: 'návrh hotový',
-    suggestionDismissed: 'návrh zamítnutý',
+    suggestionDone: 'návrh vyřízen',
+    suggestionDismissed: 'návrh zamítnut',
   },
   home: {
     greeting: 'Ahoj',
