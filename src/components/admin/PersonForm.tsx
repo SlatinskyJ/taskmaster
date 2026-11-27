@@ -13,7 +13,12 @@ import {
 import { cs } from '~/lib/strings'
 import { MAX_DISPLAY_NAME, MAX_PASSWORD_LENGTH, MIN_USER_PASSWORD } from '~/lib/userLimits'
 import type { PersonSummary } from '~/server/users/functions'
-import { nextPersonField, personEnterKeyHint, type PersonField } from './personFields'
+import {
+  nextPersonField,
+  PERSON_FIELDS,
+  personEnterKeyHint,
+  type PersonField,
+} from './personFields'
 
 // The add / edit form inside PersonDrawer (UI doc §5: forms go in the bottom sheet). The
 // fields and Uložit scroll in one body, Uložit after the last field (#159, Jakub 2026-11-26):
@@ -66,6 +71,7 @@ export function PersonForm({ mode, person, isSelf = false, onSubmit, onReset }: 
     setError(null)
   }
   const id = mode === 'add' ? 'person-add' : 'person-edit'
+  const shows = (field: PersonField) => PERSON_FIELDS[mode].includes(field)
   // A refusal shows at the end of the scroll body, maybe under the keyboard (#159): bring it up.
   const alertRef = useRef<HTMLParagraphElement>(null)
   const nameRef = useRef<HTMLInputElement>(null)
@@ -125,7 +131,7 @@ export function PersonForm({ mode, person, isSelf = false, onSubmit, onReset }: 
             className="font-bold"
           />
         </label>
-        {mode === 'add' && (
+        {shows('username') && (
           <label className="grid gap-1.5">
             <span className={sectionLabelClass}>{cs.admin.username}</span>
             <Input
@@ -174,7 +180,7 @@ export function PersonForm({ mode, person, isSelf = false, onSubmit, onReset }: 
             </Select>
           </div>
         )}
-        {mode === 'add' && (
+        {shows('password') && (
           <label className="grid gap-1.5">
             <span className={sectionLabelClass}>{cs.admin.password}</span>
             <Input

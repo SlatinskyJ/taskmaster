@@ -4,7 +4,8 @@
 
 export type PersonField = 'displayName' | 'username' | 'password'
 
-const FIELDS: Record<'add' | 'edit', readonly PersonField[]> = {
+/** The text fields each sheet shows, in order: the form renders exactly these. */
+export const PERSON_FIELDS: Record<'add' | 'edit', readonly PersonField[]> = {
   add: ['displayName', 'username', 'password'],
   // Editing changes the name only; username and password have their own ways.
   edit: ['displayName'],
@@ -12,7 +13,7 @@ const FIELDS: Record<'add' | 'edit', readonly PersonField[]> = {
 
 /** The field Return moves to, or null when Return saves. */
 export function nextPersonField(mode: 'add' | 'edit', field: PersonField): PersonField | null {
-  const fields = FIELDS[mode]
+  const fields = PERSON_FIELDS[mode]
   return fields[fields.indexOf(field) + 1] ?? null
 }
 

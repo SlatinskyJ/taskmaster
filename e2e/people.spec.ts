@@ -12,16 +12,26 @@ test('the admin adds a person from Správa with the Return key', async ({ page }
   const sheet = page.getByRole('dialog', { name: cs.admin.addTitle })
   const field = (name: string) => sheet.getByRole('textbox', { name: new RegExp(`^${name}`) })
 
-  // Return on name and login moves on; it sends nothing yet.
-  await field(cs.admin.displayName).fill('Babička')
-  await field(cs.admin.displayName).press('Enter')
+  // Typed key by key, as on a phone: Return on name and login moves on and sends nothing.
+  const name = field(cs.admin.displayName)
+  await name.pressSequentially('Babička')
+  await expect(name).toHaveValue('Babička')
+  await expect(name).toBeFocused()
+  await name.press('Enter')
   await expect(field(cs.admin.username)).toBeFocused()
-  await field(cs.admin.username).fill('babicka')
+  await field(cs.admin.username).pressSequentially('babicka')
   await field(cs.admin.username).press('Enter')
   await expect(field(cs.admin.password)).toBeFocused()
+  await field(cs.admin.password).pressSequentially('babicka123')
+  // Every field is filled now, yet Return on the name still only moves on: the sheet stays.
+  await name.focus()
+  await name.press('Enter')
+  await expect(field(cs.admin.username)).toBeFocused()
+  // A save would answer within this time and close the sheet with Přidáno.
+  await page.waitForTimeout(1500)
   await expect(sheet).toBeVisible()
+  await expect(page.getByText(cs.admin.added, { exact: true })).toHaveCount(0)
   // Return on the password saves.
-  await field(cs.admin.password).fill('babicka123')
   await field(cs.admin.password).press('Enter')
 
   await expect(page.getByText(cs.admin.added, { exact: true })).toBeVisible()
