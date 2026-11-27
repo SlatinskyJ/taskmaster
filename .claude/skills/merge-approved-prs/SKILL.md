@@ -18,7 +18,7 @@ You run unattended; he may be asleep. Anything outside this skill's allowed chan
 
 - **`ci`** (CI red): read the failed job log.
   - A failure in a test file the PR adds or changes: stop the PR (section 4). Its `needs-jakub` also blocks the Action's own re-arm.
-  - A flake in a test neither the PR nor `main` changed: re-run the failed jobs once (section 2 step 7). The Action never re-arms the red head itself, so a green re-run stays with you: land the PR as in section 2. Red again: stop the PR.
+  - A flake in a test neither the PR nor `main` changed: don't re-run it (a green re-run of the red head never re-arms, and you can't merge). Open a `follow-up` issue for the flaky test. The Action re-arms the PR by itself once a newer head is green: if the PR is behind `main`, make that head now with `gh api -X PUT repos/SlatinskyJ/taskmaster/pulls/<n>/update-branch` (GitHub's own update merge counts); otherwise the Action updates it the next time `main` moves.
   - A break from `main` that section 3 lets you fix: fix it (section 3), push, then post the re-arm request (below).
   - A failure only `main` can fix (it is red there too): do nothing. Once a newer head is green (say after the fix lands on `main` and the Action updates the PR), the Action takes the PR back by itself.
 - **`fix`** (update conflict or refused merge): fix it within section 3 (with the judge round its table asks for), push, then post the re-arm request. Anything section 3 does not allow: stop the PR (section 4).
