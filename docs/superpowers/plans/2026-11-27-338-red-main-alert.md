@@ -8,6 +8,8 @@
 
 **Architecture:** A new workflow `.github/workflows/red-main.yml` runs on `workflow_run: CI completed`, gated to `event == 'push'` and `head_branch == 'main'`. It checks out `main`, with no PR code, and runs `node scripts/red-main/run.ts`. That script has one pure decision function, plus a thin REST layer over `fetch` with no dependency, the same shape as `scripts/merge-queue/`.
 
+**Size:** about 170 lines, not counting tests: decide.ts about 60, github.ts about 70, run.ts about 15, the workflow about 25, and 1 CLAUDE.md line. One PR.
+
 **Tech Stack:** Node 22 type-stripped TS (like `scripts/merge-queue/*.ts`), vitest, GitHub REST.
 
 ## Global Constraints
@@ -60,6 +62,7 @@
   - `ignores cancelled, skipped, neutral, action_required and stale` (it.each)
   - `counts timed_out and startup_failure as red`
   - `does nothing when a newer main run already completed`
+  - `a completed run with the same run_number (this run itself) is not newer`. This is the boundary case: Task 2 passes `newerCompleted` from `run_number > own`, so the test lives in Task 2. Here the test is just `newerCompleted=false` → acts.
   - `ignores an open issue with the marker from another author, and one from the bot without it`
   - `the open body lists every failed job and links the run and the commit`
 
@@ -85,6 +88,7 @@
   - `openAlerts()` → `GET /repos/{repo}/issues?state=open&creator=github-actions[bot]&per_page=100` (creator URL-encoded; drop entries that have `pull_request`)
   - `apply(action)`: `open` → `POST /issues` with `{ title, body, labels: ['bug'], assignees: ['SlatinskyJ'] }`. `comment` → `POST /issues/{n}/comments`. `close` → a comment, then `PATCH /issues/{n}` with `{ state: 'closed', state_reason: 'completed' }`.
   - A non-2xx response throws `Error('GitHub <METHOD> <path>: HTTP <status>')`, with no headers and no body.
+- No `GH_TOKEN` or `RUN_ID`: `main` throws `Error('red-main: GH_TOKEN missing')` / `'RUN_ID missing'` before any fetch.
 - Env: `GH_TOKEN`, `GITHUB_REPOSITORY`, `RUN_ID` (the CI run id, from `github.event.workflow_run.id`).
 
 - [ ] **Step 1:** Write failing tests with a fake `fetch` that routes by method and path:
@@ -93,6 +97,8 @@
   - `a newer completed run means no writes at all`
   - `an HTTP 403 throws with method, path and status, and the token is not in the message`
   - `the creator query is URL-encoded`
+  - `newerCompleted is false when the list holds only this run (equal run_number) and true for run_number + 1` (the boundary)
+  - `running the script file itself (spawn `node scripts/red-main/run.ts` with no GH_TOKEN) exits non-zero with "GH_TOKEN missing"` (the real entry point, once)
 - [ ] **Step 2:** `pnpm vitest run tests/red-main-run.test.ts` fails.
 - [ ] **Step 3:** Implement `github.ts` and `run.ts`. Guard the script entry the same way `scripts/merge-queue/run.ts` does.
 - [ ] **Step 4:** The tests pass. `pnpm typecheck` and `pnpm lint` are clean.
