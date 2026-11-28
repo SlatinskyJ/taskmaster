@@ -1182,7 +1182,7 @@ export const cs = {
       small: 'Malý telefon · 360×740',
       tablet: 'Tablet · 820×1180 (70\u00a0%)',
     },
-    users: { admin: 'Admin', tata: 'Táta', starsi: 'Starší', mladsi: 'Mladší' },
+    users: { admin: 'Admin', tata: 'Táta', starsi: 'Anička', mladsi: 'Béďa' },
   },
 } as const
 

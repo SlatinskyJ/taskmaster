@@ -3,8 +3,8 @@ import { cs } from '../src/lib/strings'
 import { passwordLogin } from './helpers'
 
 // Approve done work from the task page and Úkoly (#206), on the `approve` seed: the `home` tasks
-// with the approveAnywhere switch on. Task 6 is "Vytřít podlahu v kuchyni" (done by Starší,
-// waiting), task 3 "Vyluxovat celý obývák a chodbu" (reserved by Starší); suites.test.ts pins the
+// with the approveAnywhere switch on. Task 6 is "Vytřít podlahu v kuchyni" (done by Anička,
+// waiting), task 3 "Vyluxovat celý obývák a chodbu" (reserved by Anička); suites.test.ts pins the
 // ids. Rows link to their page only with #205, so the pages are opened by URL.
 
 test.use({ viewport: { width: 360, height: 800 } })

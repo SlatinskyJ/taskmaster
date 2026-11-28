@@ -3,8 +3,8 @@ import { cs } from '../src/lib/strings'
 import { logout, passwordLogin } from './helpers'
 
 // Reopened bidding (#212) on the `rebid` seed: "Zamést chodník před domem" free at 6, never
-// reopened; "Vynést staré věci na půdu" agreed at 12 after Starší's bid 14 (an earlier round),
-// now in a round with Mladší's bid 15. Switches `reopenBidding` and `bidRefusals` on.
+// reopened; "Vynést staré věci na půdu" agreed at 12 after Anička's bid 14 (an earlier round),
+// now in a round with Béďa's bid 15. Switches `reopenBidding` and `bidRefusals` on.
 const FREE = 'Zamést chodník před domem'
 const ROUND = 'Vynést staré věci na půdu'
 
@@ -22,7 +22,7 @@ const thread = (page: Page) => page.getByRole('region', { name: cs.bids.thread }
 const threadRow = (page: Page, text: RegExp) =>
   thread(page).getByRole('listitem').filter({ hasText: text })
 
-test('Starší reopens a free task and Táta accepts his bid', async ({ page }) => {
+test('Anička reopens a free task and Táta accepts her bid', async ({ page }) => {
   await openTask(page, 'starsi', FREE)
   await page.getByRole('button', { name: cs.rebid.reopen, exact: true }).click()
   await expect(page.getByText(cs.rebid.toast.reopened, { exact: true })).toBeVisible()
@@ -38,9 +38,9 @@ test('Starší reopens a free task and Táta accepts his bid', async ({ page }) 
   await logout(page)
 
   await openTask(page, 'tata', FREE)
-  await page.getByRole('button', { name: cs.bids.acceptBid(8, 'Starší'), exact: true }).click()
+  await page.getByRole('button', { name: cs.bids.acceptBid(8, 'Anička'), exact: true }).click()
   await expect(page.getByText(cs.bids.toast.agreed, { exact: true })).toBeVisible()
-  await expect(page.getByText(`${cs.work.reservedBy} Starší`)).toBeVisible()
+  await expect(page.getByText(`${cs.work.reservedBy} Anička`, { exact: true })).toBeVisible()
 })
 
 test("a brother's Domů shows the round", async ({ page }) => {

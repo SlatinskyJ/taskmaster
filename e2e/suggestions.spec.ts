@@ -3,8 +3,8 @@ import type { Page } from '@playwright/test'
 import { cs } from '../src/lib/strings'
 import { passwordLogin } from './helpers'
 
-// Suggestions (#247) on the `suggestions` seed: Starší's "Tmavý režim…" and Mladší's "Zvuk…"
-// are new, Táta's is done, one of Starší's dismissed (src/server/demo/pieces.ts). Serial: each
+// Suggestions (#247) on the `suggestions` seed: Anička's "Tmavý režim…" and Béďa's "Zvuk…"
+// are new, Táta's is done, one of Anička's dismissed (src/server/demo/pieces.ts). Serial: each
 // test writes for good and the admin's test counts what the first one sent. The e2e servers
 // have no GitHub token, so Poslat na GitHub stops at its preview.
 test.describe.configure({ mode: 'serial' })
@@ -29,7 +29,7 @@ const openSheet = async (page: Page) => {
   return page.getByRole('dialog', { name: t.sheetTitle })
 }
 
-test('Mladší suggests from Profil; Moje návrhy lists it first, as Nový', async ({ page }) => {
+test('Béďa suggests from Profil; Moje návrhy lists it first, as Nový', async ({ page }) => {
   await profileAs(page, 'mladsi')
   const sheet = await openSheet(page)
   const title = sheet.getByLabel(t.titleLabel, { exact: true })
@@ -76,7 +76,7 @@ test('the admin closes two on Správa and opens the send preview of the third', 
   await expect(page).toHaveURL(/\/sprava$/)
   const label = page.locator('#admin-suggestions-label')
   await expect(label).toHaveText('Návrhy · 3 nové')
-  await expect(row(page, SOUND)).toContainText('Mladší')
+  await expect(row(page, SOUND)).toContainText('Béďa')
 
   await row(page, SOUND).getByRole('button', { name: t.done }).click()
   const confirm = page.getByRole('dialog', { name: t.confirmDone })
@@ -100,7 +100,7 @@ test('the admin closes two on Správa and opens the send preview of the third', 
   await expect(preview.getByLabel(t.issueBodyLabel, { exact: true })).toHaveValue(
     /Večer mě to světlo oslňuje\./,
   )
-  await expect(preview).not.toContainText('Starší')
+  await expect(preview).not.toContainText('Anička')
   await expect(preview).toContainText(t.publicNote)
   await expect(preview).toContainText(t.noToken)
   await expect(preview.getByRole('button', { name: t.sendIssue })).toBeDisabled()

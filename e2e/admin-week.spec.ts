@@ -3,12 +3,12 @@ import type { Browser, Page, Request } from '@playwright/test'
 import { cs } from '../src/lib/strings'
 import { passwordLogin } from './helpers'
 
-// A brother's week for the admin (#263) on the `corrections` seed: Mladší disputes his past
-// week (corrected to Bez kapesného) and Starší the +5 the admin gave him this week. Read-only.
+// A kid's week for the admin (#263) on the `corrections` seed: Béďa disputes his past
+// week (corrected to Bez kapesného) and Anička the +5 the admin gave her this week. Read-only.
 
 const t = cs.admin.disputes
 /** The seed's texts (src/server/demo/pieces.ts). */
-const ADJUSTMENT_REASON = 'Pomohl s velkým nákupem navíc a odnesl tašky až nahoru.'
+const ADJUSTMENT_REASON = 'Pomohla s velkým nákupem navíc a odnesla tašky až nahoru.'
 const CORRECTION_REASON = 'Kapesné za minulý týden nedostal, body se mu vrací.'
 const WEEK_URL = /\/sprava\/tyden\/\d+\/\d+$/
 
@@ -26,12 +26,12 @@ function cardLink(page: Page, what: string, name: string) {
     .getByRole('link', { name: new RegExp(`^${t.openFor(what, '')}`) })
 }
 
-/** The admin week's server-function call, sent while the admin opens Mladší's week. */
+/** The admin week's server-function call, sent while the admin opens Béďa's week. */
 async function openSettlementWeek(page: Page): Promise<Request> {
   const sent = page.waitForRequest(
     (r) => r.url().includes('/_serverFn/') && r.method() === 'GET' && r.url().includes('takerId'),
   )
-  await cardLink(page, cs.disputes.what.settlement, 'Mladší').click()
+  await cardLink(page, cs.disputes.what.settlement, 'Béďa').click()
   await expect(page).toHaveURL(WEEK_URL)
   return sent
 }
@@ -39,7 +39,7 @@ async function openSettlementWeek(page: Page): Promise<Request> {
 test('the admin opens a disputed settlement: its level, correction and tasks', async ({ page }) => {
   await asAdmin(page)
   await openSettlementWeek(page)
-  await expect(page.getByRole('heading', { name: cs.admin.week.title('Mladší') })).toBeVisible()
+  await expect(page.getByRole('heading', { name: cs.admin.week.title('Béďa') })).toBeVisible()
   const main = page.locator('main')
   await expect(main.getByText(cs.meeting.level.none, { exact: true })).toBeVisible()
   await expect(main.getByText(CORRECTION_REASON)).toBeVisible()
@@ -57,7 +57,7 @@ test('the admin opens a disputed adjustment: the week it counts in', async ({ pa
   await asAdmin(page)
   await cardLink(page, cs.disputes.what.adjustment, ADJUSTMENT_REASON).click()
   await expect(page).toHaveURL(WEEK_URL)
-  await expect(page.getByRole('heading', { name: cs.admin.week.title('Starší') })).toBeVisible()
+  await expect(page.getByRole('heading', { name: cs.admin.week.title('Anička') })).toBeVisible()
   const row = page.locator('main [data-slot="task-row"]').filter({ hasText: ADJUSTMENT_REASON })
   await expect(row).toContainText(cs.week.adjustment)
   await expect(row).toContainText('+5')
@@ -103,7 +103,7 @@ test('the server function refuses a brother and a parent', async ({ page, browse
   for (const username of ['starsi', 'tata']) {
     const res = await replayAs(browser, sent, username)
     expect(res.ok, username).toBe(false)
-    expect(res.body, username).not.toContain('Mladší')
+    expect(res.body, username).not.toContain('Béďa')
     expect(res.body, username).not.toContain('totalBefore')
   }
 })

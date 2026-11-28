@@ -31,7 +31,7 @@ async function workerInControl(page: Page) {
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null)
 }
 
-async function frameLogin(page: Page, username = 'starsi', heading = hello('Starší')) {
+async function frameLogin(page: Page, username = 'starsi', heading = hello('Anička')) {
   const frame = await addFrame(page)
   await frame.getByLabel(cs.login.username).fill(username)
   await frame.getByLabel(cs.login.password).fill(PASSWORD)
@@ -112,7 +112,7 @@ test('logging in inside a frame logs in that frame only', async ({ page }) => {
       ),
     )
     .toMatch(/\/\?tmFrame=[A-Za-z0-9_-]{43}$/)
-  await expect(frame.getByRole('heading', { name: hello('Starší') })).toBeVisible()
+  await expect(frame.getByRole('heading', { name: hello('Anička') })).toBeVisible()
 })
 
 /** Logs a frame in, then points it at `/` with no `tmFrame`. */
@@ -158,7 +158,7 @@ test('a logged-in frame that opens /login lands on its landing page, logged in',
   const frame = await frameLogin(page)
   const loads = countFrameLoads(page)
   await openInFrame(page, '/login')
-  await expect(frame.getByRole('heading', { name: hello('Starší') })).toBeVisible()
+  await expect(frame.getByRole('heading', { name: hello('Anička') })).toBeVisible()
   await expect.poll(() => frameHref(page)).toMatch(/\/\?tmFrame=[A-Za-z0-9_-]{43}$/)
   await page.waitForTimeout(1000)
   expect(loads()).toBeLessThanOrEqual(3)
@@ -171,7 +171,7 @@ test('a logged-in frame redirected from /login keeps its token', async ({ page }
   const loads = countFrameLoads(page)
   await openInFrame(page, `/login?tmFrame=${token}`)
   await expect.poll(() => frameHref(page)).toMatch(/\/\?tmFrame=[A-Za-z0-9_-]{43}$/)
-  await expect(frame.getByRole('heading', { name: hello('Starší') })).toBeVisible()
+  await expect(frame.getByRole('heading', { name: hello('Anička') })).toBeVisible()
   await page.waitForTimeout(1000)
   // One load: the server's redirect kept the token, so the client had nothing to re-enter.
   expect(loads()).toBe(1)

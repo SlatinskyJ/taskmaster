@@ -3,7 +3,7 @@ import { cs } from '../src/lib/strings'
 import { passwordLogin } from './helpers'
 
 // The live change banner (#299) through the real stream, in three browsers: Táta (A) on a task
-// page with Zrušit úkol? open, Starší (B) changing that task, and Starší again on a second phone
+// page with Zrušit úkol? open, Anička (B) changing that task, and Anička again on a second phone
 // (C). The `demo` seed has the liveChanges switch on. One test: it changes the suite's data.
 
 const FREE = 'Umýt okna v obýváku i v ložnici'
@@ -66,7 +66,7 @@ test('the banner shows other people’s changes, refreshes in place and counts',
     await expect(b.getByRole('button', { name: cs.work.release, exact: true })).toBeVisible()
     await expect(banner(c)).toHaveText(reserved(cs.live.you))
     // The reason still has focus: the banner shows anyway (Jakub 2026-11-27, Q2).
-    await expect(banner(a)).toHaveText(reserved('Starší'))
+    await expect(banner(a)).toHaveText(reserved('Anička'))
     await expect(reason).toBeFocused()
     await expect(reason).toHaveValue('Napůl napsaný důvod')
     await expect(banner(b)).toHaveCount(0)
@@ -92,7 +92,7 @@ test('the banner shows other people’s changes, refreshes in place and counts',
     await expect(reason).toHaveValue('Napůl napsaný důvod')
     await a.keyboard.press('Escape')
     await expect(dialog).toHaveCount(0)
-    await expect(a.getByText(`${cs.work.reservedBy} Starší`)).toBeVisible()
+    await expect(a.getByText(`${cs.work.reservedBy} Anička`)).toBeVisible()
     expect(await a.evaluate(() => performance.getEntriesByType('navigation').length)).toBe(loads)
     expect(await a.evaluate(() => (window as unknown as { __marker?: string }).__marker)).toBe(
       'kept',
@@ -133,6 +133,6 @@ test('the banner shows other people’s changes, refreshes in place and counts',
     await expect(banner(a)).toHaveCount(0)
     await open
     await b.getByRole('button', { name: cs.work.release, exact: true }).click()
-    await expect(banner(a)).toHaveText(released('Starší'))
+    await expect(banner(a)).toHaveText(released('Anička'))
   })
 })

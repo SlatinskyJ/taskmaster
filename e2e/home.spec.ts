@@ -2,8 +2,8 @@ import { expect, test, type Page } from '@playwright/test'
 import { cs } from '../src/lib/strings'
 import { passwordLogin } from './helpers'
 
-// Taker Domů (#40) and parent Domů and Úkoly (#41) on the `home` seed (#183: Starší 40 + 12,
-// Mladší 55), through the built server: the points card comes from getPointsFn and the real database, and Hotovo on an open task needs no reservation.
+// Taker Domů (#40) and parent Domů and Úkoly (#41) on the `home` seed (#183: Anička 40 + 12,
+// Béďa 55), through the built server: the points card comes from getPointsFn and the real database, and Hotovo on an open task needs no reservation.
 
 test.use({ viewport: { width: 360, height: 800 } })
 // One seeded database for the whole file: the parent's test continues from the boys' tests.
@@ -44,8 +44,8 @@ test('a parent sees both boys’ points, approves the last completion and sees �
   await expect(bars).toHaveCount(2)
   await expect(bars.nth(0)).toHaveAttribute('aria-label', /^40 bodů potvrzeno, 17 čeká/)
   await expect(bars.nth(1)).toHaveAttribute('aria-label', /^55 bodů potvrzeno, 0 čeká/)
-  const waitingOnBoys = page.getByRole('region', { name: /Čeká na kluky/ })
-  await expect(waitingOnBoys.getByText('Uklidit sklep')).toBeVisible()
+  const waitingOnTakers = page.getByRole('region', { name: /Čeká na děti/ })
+  await expect(waitingOnTakers.getByText('Uklidit sklep')).toBeVisible()
 
   const approve = (title: string) =>
     page

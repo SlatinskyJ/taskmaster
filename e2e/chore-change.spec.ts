@@ -3,7 +3,7 @@ import { cs } from '../src/lib/strings'
 import { logout, passwordLogin } from './helpers'
 
 // Saying no on an agreed chore's price change (#232) on the `chorechange` seed, at 360 px:
-// "Umýt koupelnu" runs at 8; Starší bids 10 and Mladší 11, no parents' offer. `bidRefusals` is on.
+// "Umýt koupelnu" runs at 8; Anička bids 10 and Béďa 11, no parents' offer. `bidRefusals` is on.
 
 test.use({ viewport: { width: 360, height: 800 } })
 
@@ -14,7 +14,7 @@ const threadRow = (page: Page, text: RegExp) =>
     .getByRole('listitem')
     .filter({ hasText: text })
 
-test('Starší says Nechci and may not send 10 again; no turn-down until Táta offers, then his 9 stays', async ({
+test('Anička says Nechci and may not send 10 again; no turn-down until Táta offers, then her 9 stays', async ({
   page,
 }) => {
   await passwordLogin(page, 'starsi')

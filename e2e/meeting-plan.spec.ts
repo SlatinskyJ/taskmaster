@@ -5,8 +5,8 @@ import { PHONE } from './keyboard'
 
 // The week plan at Schůzka (#259) on the `planmeeting` seed: the running week is on its last day
 // (any weekday, last-day rule on), with the plan table's chores. Táta settles it, a new week
-// starts with its copies, and step 3 shows the plan table under the open tasks. Starší reserves
-// and frees a cell on his phone, and Obnovit shows it. Leaving and coming back the same day keeps
+// starts with its copies, and step 3 shows the plan table under the open tasks. Anička reserves
+// and frees a cell on her phone, and Obnovit shows it. Leaving and coming back the same day keeps
 // the table.
 // One test: each step builds on the one before.
 
@@ -32,7 +32,7 @@ function countPlanRequests(page: Page): { count: number } {
   return seen
 }
 
-test('Táta settles, sees the plan, Obnovit shows Starší’s reserve and release, and the table stays the same day', async ({
+test('Táta settles, sees the plan, Obnovit shows Anička’s reserve and release, and the table stays the same day', async ({
   page,
   browser,
 }) => {
@@ -67,7 +67,7 @@ test('Táta settles, sees the plan, Obnovit shows Starší’s reserve and relea
   const tataCell = section.locator(`button[data-day="${day ?? ''}"][aria-label^="${TABLE}, "]`)
   await expect(tataCell).toHaveAttribute('aria-label', /: volné$/)
 
-  // Starší reserves that day on his own phone.
+  // Anička reserves that day on her own phone.
   const other = await browser.newContext({ viewport: PHONE, locale: 'cs-CZ' })
   const brother = await other.newPage()
   await passwordLogin(brother, 'starsi')
@@ -82,10 +82,10 @@ test('Táta settles, sees the plan, Obnovit shows Starší’s reserve and relea
   await expect(tataCell).toHaveAttribute('aria-label', /: volné$/)
   const refresh = section.getByRole('button', { name: m.refresh })
   await refresh.click()
-  await expect(tataCell).toHaveAttribute('aria-label', /: rezervováno, Starší$/)
+  await expect(tataCell).toHaveAttribute('aria-label', /: rezervováno, Anička$/)
   await expect(refresh).toBeEnabled()
 
-  // Starší frees it; a second Obnovit shows that.
+  // Anička frees it; a second Obnovit shows that.
   await his.click()
   const sheet = brother.getByRole('dialog')
   await sheet.getByRole('button', { name: cs.work.release, exact: true }).click()

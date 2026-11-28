@@ -3,7 +3,7 @@ import { cs } from '../src/lib/strings'
 import { logout, passwordLogin } from './helpers'
 
 // Bidding on a proposed chore (#209) on the `chores` seed, at 360 px: Táta proposed
-// "Vynést kompost" at 10 with no bids and "Zalít kytky" at 4, where Starší bids 6 and Mladší 7.
+// "Vynést kompost" at 10 with no bids and "Zalít kytky" at 4, where Anička bids 6 and Béďa 7.
 // The `choreBidding` switch is on.
 
 test.use({ viewport: { width: 360, height: 800 } })
@@ -26,7 +26,7 @@ const threadRow = (page: Page, text: RegExp) =>
     .getByRole('listitem')
     .filter({ hasText: text })
 
-test('Mladší bids 11 on Vynést kompost, Táta accepts it and the chore runs at 11', async ({
+test('Béďa bids 11 on Vynést kompost, Táta accepts it and the chore runs at 11', async ({
   page,
 }) => {
   await passwordLogin(page, 'mladsi')
@@ -46,7 +46,7 @@ test('Mladší bids 11 on Vynést kompost, Táta accepts it and the chore runs a
 
   await openFromHome(page, 'tata', 'Vynést kompost')
   await page
-    .getByRole('button', { name: cs.templatePrice.acceptBid(11, 'Mladší'), exact: true })
+    .getByRole('button', { name: cs.templatePrice.acceptBid(11, 'Béďa'), exact: true })
     .click()
   await expect(page.getByText(cs.bids.toast.agreed, { exact: true })).toBeVisible()
   await expect(page.getByText(cs.templatePrice.now(11))).toBeVisible()
@@ -55,7 +55,7 @@ test('Mladší bids 11 on Vynést kompost, Táta accepts it and the chore runs a
   }
 })
 
-test('Starší says Nechci on Zalít kytky, then Táta turns the bids down', async ({ page }) => {
+test('Anička says Nechci on Zalít kytky, then Táta turns the bids down', async ({ page }) => {
   await openFromHome(page, 'starsi', 'Zalít kytky')
   await page.getByRole('button', { name: cs.bids.withdraw, exact: true }).click()
   await expect(page.getByText(cs.bids.toast.withdrawn, { exact: true })).toBeVisible()
@@ -88,21 +88,21 @@ test("Táta's counter at a bid is refused once a brother agreed the chore meanwh
   await expect(mladsi.getByText(cs.bids.toast.sent, { exact: true })).toBeVisible()
   await expect(mladsi.getByText(`${cs.bids.yourBid} 6`)).toBeVisible()
 
-  // Táta's page shows Mladší's bid 6; he steps to it but does not tap yet.
+  // Táta's page shows Béďa's bid 6; he steps to it but does not tap yet.
   await openFromHome(tata, 'tata', 'Zalít kytky')
-  await expect(threadRow(tata, /chce 6(?!\d)/).filter({ hasText: 'Mladší' })).toHaveCount(1)
+  await expect(threadRow(tata, /chce 6(?!\d)/).filter({ hasText: 'Béďa' })).toHaveCount(1)
   const offer = tata.getByRole('region', { name: cs.bids.newOffer })
   for (let i = 0; i < 2; i++) {
     await offer.getByRole('button', { name: cs.tasks.more, exact: true }).click()
   }
   // The counter under the stepper, at exactly the bid (not the yes button above it).
   const send = offer.getByRole('button', {
-    name: cs.templatePrice.acceptBid(6, 'Mladší'),
+    name: cs.templatePrice.acceptBid(6, 'Béďa'),
     exact: true,
   })
   await expect(send).toBeVisible()
 
-  // Meanwhile Starší agrees at the offer on his Domů: the chore runs at 4.
+  // Meanwhile Anička agrees at the offer on her Domů: the chore runs at 4.
   await passwordLogin(starsi, 'starsi')
   await expect(starsi).toHaveURL(/\/$/)
   await row(starsi, 'Zalít kytky').getByRole('button', { name: cs.tasks.approve }).click()

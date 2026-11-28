@@ -4,7 +4,7 @@ import { logout, passwordLogin } from './helpers'
 
 // Descriptions (#207) through the real routes and server functions, on the `descriptions` seed
 // (src/server/demo/suites.test.ts pins the ids): task 1 "Uklidit kolárnu" proposed with a text,
-// task 2 "Odnést krabice do sklepa" open with Táta's new text waiting for Mladší.
+// task 2 "Odnést krabice do sklepa" open with Táta's new text waiting for Béďa.
 
 test.use({ viewport: { width: 360, height: 800 } })
 // One database for the whole file: each test continues from the one before.
@@ -25,7 +25,7 @@ const block = (page: Page) => page.locator('[data-slot="description"]')
 const toast = (page: Page, text: string) =>
   page.locator('[data-sonner-toast]').getByText(text, { exact: true }).last()
 
-test('Táta gives a task with a text; Starší reads it before he agrees', async ({ page }) => {
+test('Táta gives a task with a text; Anička reads it before she agrees', async ({ page }) => {
   await login(page, 'tata')
   await page.goto('/ukoly/novy')
   await page.getByLabel(cs.tasks.title).fill(LONG)
@@ -51,7 +51,7 @@ test('Táta gives a task with a text; Starší reads it before he agrees', async
   await expect(page.getByRole('button', { name: cs.tasks.approve, exact: true })).toHaveCount(0)
 })
 
-test('Mladší OKs Táta’s new text from Domů; the text changes and the history says so', async ({
+test('Béďa OKs Táta’s new text from Domů; the text changes and the history says so', async ({
   page,
 }) => {
   await login(page, 'mladsi')
@@ -72,7 +72,7 @@ test('Mladší OKs Táta’s new text from Domů; the text changes and the histo
   await expect(history(page)).toContainText(cs.history.descriptionApproved)
 })
 
-test('Táta edits the open task and takes it back; then Mladší says no to the next', async ({
+test('Táta edits the open task and takes it back; then Béďa says no to the next', async ({
   page,
 }) => {
   await login(page, 'tata')
@@ -107,7 +107,7 @@ test('Táta edits the open task and takes it back; then Mladší says no to the 
   await expect(history(page)).toContainText(cs.history.descriptionDeclined)
 })
 
-test('a text changed while Starší reads: his Souhlasím says look again', async ({
+test('a text changed while Anička reads: her Souhlasím says look again', async ({
   page,
   browser,
 }) => {

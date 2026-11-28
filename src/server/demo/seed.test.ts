@@ -13,9 +13,10 @@ import {
 import { createTestDb } from '~/server/db/testing'
 import { bootstrapAdmin } from '~/server/users'
 import { ALL_FEATURES, NO_FEATURES } from '~/lib/features'
+import { cs } from '~/lib/strings'
 import type { Features } from '~/lib/features'
 import { getFlags } from '~/server/features'
-import { DEMO_PASSWORD, describeDemo, seedDemo } from './seed'
+import { DEMO_PASSWORD, DEMO_USERS, describeDemo, seedDemo } from './seed'
 import { SEEDS } from './seeds'
 import type { SeedName } from './seeds'
 
@@ -31,6 +32,32 @@ describe('demo seed (#62)', () => {
       const r = await login(db, { username, password: DEMO_PASSWORD, ip: '127.0.0.1' }, T0)
       expect(r.ok).toBe(true)
     }
+  })
+
+  // #353 (Jakub 2026-11-28): the demo kids are Anička (starsi) and Béďa (mladsi).
+  it('seeds the demo family under its display names', () => {
+    const db = createTestDb()
+    seedDemo(db, PREVIEW, T0)
+    const rows = db
+      .select({ username: users.username, displayName: users.displayName })
+      .from(users)
+      .orderBy(asc(users.id))
+      .all()
+      .map((u) => [u.username, u.displayName])
+    expect(rows).toEqual([
+      ['admin', 'Admin'],
+      ['tata', 'Táta'],
+      ['starsi', 'Anička'],
+      ['mladsi', 'Béďa'],
+    ])
+  })
+
+  it('the /dev/multi labels match the seeded names', () => {
+    for (const u of DEMO_USERS) {
+      const key = u.username as keyof typeof cs.devMulti.users
+      expect(cs.devMulti.users[key], u.username).toBe(u.displayName)
+    }
+    expect(Object.keys(cs.devMulti.users)).toEqual(DEMO_USERS.map((u) => u.username))
   })
 
   it('refuses without the preview flag (production, dev, anything else)', () => {
