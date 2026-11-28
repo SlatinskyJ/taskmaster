@@ -6,6 +6,7 @@ import {
   handoffMarker,
   makeGh,
   requiredCi,
+  resumedMarker,
   type GhCheckRun,
   type GhCommit,
 } from '../scripts/merge-queue/github.ts'
@@ -18,6 +19,7 @@ const U2 = '2'.repeat(40)
 const M1 = 'd'.repeat(40)
 const M2 = 'e'.repeat(40)
 const OLD = 'f'.repeat(40)
+const H = '3'.repeat(40)
 const NOW = new Date('2026-11-26T12:00:00Z')
 
 function commit(sha: string, parents: string[], over: Partial<GhCommit['commit']> = {}): GhCommit {
@@ -25,12 +27,33 @@ function commit(sha: string, parents: string[], over: Partial<GhCommit['commit']
     sha,
     parents: parents.map((p) => ({ sha: p })),
     commit: {
+      message: "Merge branch 'main' into 9-x",
       committer: { name: 'GitHub', email: 'noreply@github.com' },
       verification: { verified: true },
       ...over,
     },
   }
 }
+
+const hmacOf = (text: string) => createHmac('sha256', KEY).update(text).digest('hex')
+
+describe('markers', () => {
+  it('a hand-over marker carries its kind, count and red head, all signed', () => {
+    expect(handoffMarker(KEY, 9, 501, 'ci', 1, A)).toBe(
+      `<!-- merge-queue:handoff ci 1 ${A} ${hmacOf(`handoff:9:501:ci:1:${A}`)} -->`,
+    )
+  })
+  it('a hand-over marker without a red head writes -', () => {
+    expect(handoffMarker(KEY, 9, 501, 'fix', 2, null)).toBe(
+      `<!-- merge-queue:handoff fix 2 - ${hmacOf('handoff:9:501:fix:2:-')} -->`,
+    )
+  })
+  it('a resumed marker carries its count and the commit it re-armed on', () => {
+    expect(resumedMarker(KEY, 9, 501, 1, H)).toBe(
+      `<!-- merge-queue:resumed 1 ${H} ${hmacOf(`resumed:9:501:1:${H}`)} -->`,
+    )
+  })
+})
 
 describe('acceptedUpdate', () => {
   const main = new Set([M1])
@@ -335,7 +358,10 @@ describe('labelledPrs', () => {
         stack: null,
         lower: 'none',
         behind: false,
-        handedOver: false,
+        handover: null,
+        rearms: 0,
+        rearmRequest: null,
+        headIsFixed: true,
       },
     ])
   })
@@ -430,9 +456,12 @@ describe('labelledPrs', () => {
 
   it('does not count a hand-over from before the latest label', async () => {
     const [pr] = await factsOf({
-      comments: [comment(handoffMarker(KEY, 9, LABEL_ID), '2026-11-26T09:00:00Z'), approvedOk()],
+      comments: [
+        comment(handoffMarker(KEY, 9, LABEL_ID, 'final', 1, null), '2026-11-26T09:00:00Z'),
+        approvedOk(),
+      ],
     })
-    expect(pr).toMatchObject({ handedOver: false })
+    expect(pr).toMatchObject({ handover: null })
   })
 
   it('counts a hand-over with a valid HMAC after the latest label', async () => {
@@ -445,7 +474,7 @@ describe('labelledPrs', () => {
         ),
       ],
     })
-    expect(pr).toMatchObject({ handedOver: true })
+    expect(pr).toMatchObject({ handover: { kind: 'final', n: Infinity, redSha: null } })
   })
 
   it('does not count a hand-over with a wrong or missing HMAC', async () => {
@@ -456,14 +485,17 @@ describe('labelledPrs', () => {
         comment('<!-- merge-queue:handoff -->', '2026-11-26T10:31:00Z'),
       ],
     })
-    expect(pr).toMatchObject({ handedOver: false })
+    expect(pr).toMatchObject({ handover: null })
   })
 
   it('does not count a hand-over signed for an earlier label', async () => {
     const [pr] = await factsOf({
-      comments: [approvedOk(), comment(handoffMarker(KEY, 9, 400), '2026-11-26T10:30:00Z')],
+      comments: [
+        approvedOk(),
+        comment(handoffMarker(KEY, 9, 400, 'final', 1, null), '2026-11-26T10:30:00Z'),
+      ],
     })
-    expect(pr).toMatchObject({ handedOver: false })
+    expect(pr).toMatchObject({ handover: null })
   })
 
   it('reports a needs-jakub label added after merge-me and still on', async () => {
@@ -535,6 +567,185 @@ describe('labelledPrs', () => {
       stack: { number: 3, openPrs: [9, 10] },
       behind: true,
     })
+  })
+})
+
+describe('labelledPrs: hand-overs and re-arms', () => {
+  const at = (min: number) => `2026-11-26T10:${String(min).padStart(2, '0')}:00Z`
+  const by = (login: string, body: string, min: number) => ({
+    user: { login },
+    body,
+    created_at: at(min),
+  })
+  const handoff = (kind: 'ci' | 'fix' | 'final', n: number, red: string | null, min: number) =>
+    comment(handoffMarker(KEY, 9, LABEL_ID, kind, n, red), at(min))
+  const resumed = (n: number, sha: string, min: number, labelId = LABEL_ID) =>
+    comment(resumedMarker(KEY, 9, labelId, n, sha), at(min))
+  const request = (sha: string, min: number, login = 'SlatinskyJ') =>
+    by(login, `<!-- merge-queue:rearm ${sha} -->\nMerged main, fixed the import.`, min)
+  const jakubCommit = (sha: string, parent: string, message = 'Add feature') =>
+    commit(sha, [parent], { committer: { name: 'Jakub', email: 'j@x' }, message })
+
+  it('reads a new-format ci hand-over after the label', async () => {
+    const [pr] = await factsOf({ comments: [approvedOk(), handoff('ci', 1, A, 30)] })
+    expect(pr).toMatchObject({ handover: { kind: 'ci', n: 1, redSha: A }, rearms: 0 })
+  })
+
+  it('does not count a new-format hand-over whose fields were changed', async () => {
+    const forged = handoffMarker(KEY, 9, LABEL_ID, 'final', 1, null).replace('final', 'fix')
+    const [pr] = await factsOf({ comments: [approvedOk(), comment(forged, at(30))] })
+    expect(pr).toMatchObject({ handover: null })
+  })
+
+  it('a resumed marker closes the hand-over and moves the baseline to its commit', async () => {
+    const [pr] = await factsOf({
+      head: H,
+      commits: [...BASE_COMMITS, jakubCommit(H, A)],
+      comments: [approvedOk(), handoff('ci', 1, A, 30), resumed(1, H, 40)],
+    })
+    expect(pr).toMatchObject({
+      handover: null,
+      rearms: 1,
+      headIsApproved: true,
+      updatedByAction: false,
+    })
+  })
+
+  it('without the resumed marker the same commit is new code', async () => {
+    const [pr] = await factsOf({
+      head: H,
+      commits: [...BASE_COMMITS, jakubCommit(H, A)],
+      comments: [approvedOk()],
+    })
+    expect(pr).toMatchObject({ headIsApproved: false })
+  })
+
+  it('a pasted copy of a resumed marker changes nothing', async () => {
+    const [pr] = await factsOf({
+      head: H,
+      commits: [...BASE_COMMITS, jakubCommit(H, A)],
+      comments: [approvedOk(), handoff('ci', 1, A, 30), resumed(1, H, 40), resumed(1, H, 41)],
+    })
+    expect(pr).toMatchObject({ rearms: 1 })
+  })
+
+  it('a replayed older hand-over marker does not close the newer open hand-over', async () => {
+    const older = handoffMarker(KEY, 9, LABEL_ID, 'ci', 1, A)
+    const [pr] = await factsOf({
+      comments: [
+        approvedOk(),
+        handoff('ci', 1, A, 30),
+        resumed(1, H, 40),
+        handoff('final', 2, null, 50),
+        by('SlatinskyJ', older, 55),
+      ],
+    })
+    expect(pr).toMatchObject({ handover: { kind: 'final', n: 2, redSha: null }, rearms: 1 })
+  })
+
+  it('ignores signed markers posted by anyone other than SlatinskyJ', async () => {
+    const [pr] = await factsOf({
+      comments: [
+        approvedOk(),
+        handoff('ci', 1, A, 30),
+        by('stranger', resumedMarker(KEY, 9, LABEL_ID, 1, H), 40),
+      ],
+    })
+    expect(pr).toMatchObject({ handover: { kind: 'ci', n: 1, redSha: A }, rearms: 0 })
+    const [noHandover] = await factsOf({
+      comments: [
+        approvedOk(),
+        by('stranger', handoffMarker(KEY, 9, LABEL_ID, 'final', 1, null), 30),
+      ],
+    })
+    expect(noHandover).toMatchObject({ handover: null })
+  })
+
+  it('a second hand-over is open; a request from before it is stale, one after it counts', async () => {
+    const base = [approvedOk(), handoff('fix', 1, null, 30), resumed(1, A, 40)]
+    const [before] = await factsOf({
+      comments: [...base, request(A, 45), handoff('fix', 2, null, 50)],
+    })
+    expect(before).toMatchObject({
+      handover: { kind: 'fix', n: 2, redSha: null },
+      rearms: 1,
+      rearmRequest: null,
+    })
+    const [after] = await factsOf({
+      comments: [...base, handoff('fix', 2, null, 50), request(A, 55)],
+    })
+    expect(after).toMatchObject({ rearmRequest: A })
+  })
+
+  it('ignores a resumed marker with a bad HMAC or for an earlier label', async () => {
+    const bad = comment(`<!-- merge-queue:resumed 1 ${A} ${'0'.repeat(64)} -->`, at(40))
+    const [pr] = await factsOf({
+      comments: [approvedOk(), handoff('ci', 1, A, 30), bad, resumed(1, A, 41, 400)],
+    })
+    expect(pr).toMatchObject({ handover: { kind: 'ci', n: 1 }, rearms: 0 })
+  })
+
+  it('takes a re-arm request only from SlatinskyJ, after the open hand-over, the latest one', async () => {
+    const ho = [approvedOk(), handoff('fix', 1, null, 30)]
+    expect((await factsOf({ comments: [...ho, request(A, 35)] }))[0]?.rearmRequest).toBe(A)
+    expect(
+      (await factsOf({ comments: [...ho, request(A, 35, 'somebody')] }))[0]?.rearmRequest,
+    ).toBeNull()
+    expect(
+      (await factsOf({ comments: [approvedOk(), request(A, 20), handoff('fix', 1, null, 30)] }))[0]
+        ?.rearmRequest,
+    ).toBeNull()
+    expect(
+      (await factsOf({ comments: [...ho, request(B, 35), request(A, 36)] }))[0]?.rearmRequest,
+    ).toBe(A)
+  })
+
+  describe('headIsFixed', () => {
+    const fixHo = [approvedOk(), handoff('fix', 1, null, 30)]
+    const ourMerge = (sha: string, parents: string[]) =>
+      commit(sha, parents, {
+        committer: { name: 'Claude', email: 'noreply@anthropic.com' },
+        verification: { verified: false },
+        message: 'merge-approved-prs: merge main, keep both imports',
+      })
+    async function fixed(commits: GhCommit[]) {
+      const head = commits.at(-1)?.sha ?? A
+      const [pr] = await factsOf({ head, commits: [...BASE_COMMITS, ...commits], comments: fixHo })
+      return pr?.headIsFixed
+    }
+
+    it('accepts an agent merge of main (conflict resolved)', async () => {
+      expect(await fixed([ourMerge(U1, [A, M1])])).toBe(true)
+    })
+    it('accepts a merge-approved-prs fix commit after it', async () => {
+      expect(
+        await fixed([ourMerge(U1, [A, M1]), jakubCommit(U2, U1, 'merge-approved-prs: fix import')]),
+      ).toBe(true)
+    })
+    it('rejects any other commit', async () => {
+      expect(await fixed([ourMerge(U1, [A, M1]), jakubCommit(U2, U1)])).toBe(false)
+    })
+    it('rejects the prefix anywhere but at the start of the subject', async () => {
+      expect(await fixed([jakubCommit(U1, A, 'fix: merge-approved-prs: x')])).toBe(false)
+    })
+    it('rejects a merge whose second parent is not on main', async () => {
+      expect(await fixed([ourMerge(U1, [A, B])])).toBe(false)
+    })
+    it('rejects a merge whose first parent is not the previous commit', async () => {
+      expect(await fixed([ourMerge(U1, [OLD, M1])])).toBe(false)
+    })
+    it('rejects a merge with three parents', async () => {
+      expect(await fixed([ourMerge(U1, [A, M1, M2])])).toBe(false)
+    })
+  })
+
+  it('reads full facts for an open ci or fix hand-over, not for a final one', async () => {
+    const [ci] = await factsOf({ comments: [approvedOk(), handoff('ci', 1, A, 30)] })
+    expect(ci).toMatchObject({ ci: 'green', headIsApproved: true })
+    const [fix] = await factsOf({ comments: [approvedOk(), handoff('fix', 1, null, 30)] })
+    expect(fix).toMatchObject({ ci: 'green', headIsApproved: true })
+    const [fin] = await factsOf({ comments: [approvedOk(), handoff('final', 1, null, 30)] })
+    expect(fin).toMatchObject({ ci: 'pending', headIsApproved: false })
   })
 })
 

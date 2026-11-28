@@ -463,3 +463,54 @@ describe('cancel (spec §5.6 [call])', () => {
     expect(row(f.db, id)).toMatchObject({ status: 'reserved', reservedBy: f.starsi })
   })
 })
+
+describe('an unknown user id (#198)', () => {
+  // A user id that is no person (e.g. a deleted account's stale session) is refused before the
+  // step runs, for every lifecycle action, in a state where a real person's step would succeed.
+  const NOBODY = 9999
+  const reserved = (f: Family) => {
+    const id = openTask(f)
+    must(reserveTask(f.db, f.starsi, id, T1, false))
+    return id
+  }
+  const pending = (f: Family) => {
+    const id = openTask(f)
+    must(completeTask(f.db, f.starsi, id, T1, false))
+    return id
+  }
+  const cases: {
+    action: string
+    /** Brings a fresh task to the state the action applies to. */
+    setup: (f: Family) => number
+    run: (f: Family, id: number) => unknown
+  }[] = [
+    {
+      action: 'reserve',
+      setup: (f) => openTask(f),
+      run: (f, id) => reserveTask(f.db, NOBODY, id, T2, false),
+    },
+    { action: 'release', setup: reserved, run: (f, id) => releaseTask(f.db, NOBODY, id, T2) },
+    {
+      action: 'complete',
+      setup: (f) => openTask(f),
+      run: (f, id) => completeTask(f.db, NOBODY, id, T2, false),
+    },
+    { action: 'approve', setup: pending, run: (f, id) => approveTask(f.db, NOBODY, id, T2) },
+    { action: 'reject', setup: pending, run: (f, id) => rejectTask(f.db, NOBODY, id, 'Ne.', T2) },
+    {
+      action: 'cancel',
+      setup: (f) => openTask(f),
+      run: (f, id) => cancelTask(f.db, NOBODY, id, 'Ne.', T2),
+    },
+  ]
+
+  it.each(cases)('$action: not_allowed, nothing written', ({ setup, run }) => {
+    const f = family()
+    const id = setup(f)
+    const audit = f.db.select().from(auditLog).all()
+    const before = row(f.db, id)
+    expect(run(f, id)).toEqual({ ok: false, error: 'not_allowed' })
+    expect(f.db.select().from(auditLog).all()).toEqual(audit)
+    expect(row(f.db, id)).toEqual(before)
+  })
+})

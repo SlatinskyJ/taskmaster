@@ -26,11 +26,14 @@ jobs:
       (github.event_name == 'workflow_dispatch' && github.actor == 'SlatinskyJ' && inputs.test)
     runs-on: ubuntu-24.04
     timeout-minutes: 3
+    # The SMTP secrets live in the `alerts` environment, which Jakub limits to `main`, so a
+    # workflow on any other branch can't read them.
+    environment: alerts
     # Reads runs and jobs only; writes nothing to GitHub.
     permissions:
       actions: read
     steps:
-      # Until Jakub adds the secrets the workflow stays green and does nothing.
+      # Until Jakub adds the secrets to the `alerts` environment the workflow stays green and does nothing.
       - name: Check secrets
         id: guard
         env:
