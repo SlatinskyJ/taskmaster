@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '~/components/ui/dialog'
 import { Input } from '~/components/ui/input'
+import { demoLockedMessage } from '~/lib/demo'
 import { cs } from '~/lib/strings'
 import { MAX_PASSWORD_LENGTH, MIN_USER_PASSWORD } from '~/lib/userLimits'
 import { plainTextField } from './PersonForm'
@@ -38,8 +39,8 @@ export function ResetPasswordDialog({ name, open, onOpenChange, onSubmit }: Prop
       const message = await onSubmit(password)
       setError(message)
       if (message === null) setPassword('')
-    } catch {
-      setError(cs.login.failed)
+    } catch (e) {
+      setError(demoLockedMessage(e) ?? cs.login.failed)
     } finally {
       setBusy(false)
     }

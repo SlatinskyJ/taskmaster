@@ -15,7 +15,8 @@ import { bootstrapAdmin } from '~/server/users'
 import { ALL_FEATURES, NO_FEATURES } from '~/lib/features'
 import type { Features } from '~/lib/features'
 import { getFlags } from '~/server/features'
-import { DEMO_PASSWORD, describeDemo, seedDemo } from './seed'
+import { DEMO_LOGINS, DEMO_PASSWORD } from '~/lib/demoAccounts'
+import { DEMO_USERS, describeDemo, seedDemo } from './seed'
 import { SEEDS } from './seeds'
 import type { SeedName } from './seeds'
 
@@ -24,6 +25,10 @@ const PREVIEW = { TASKMASTER_ENV: 'preview', NODE_ENV: 'production' }
 
 // The guards, picking a seed by name (#183) and what holds for every seed.
 describe('demo seed (#62)', () => {
+  it('seeds the accounts the login page offers, in its order', () => {
+    expect(DEMO_USERS.map((u) => u.username)).toEqual([...DEMO_LOGINS])
+  })
+
   it('demo login works for every role', async () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)

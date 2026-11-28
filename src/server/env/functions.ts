@@ -1,4 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
+import { isDemo } from './demo'
 import { devPagesAllowed } from './devPages'
 
 // Server functions screens may import (see the ESLint rule for src/routes). Public on purpose:
@@ -7,3 +8,5 @@ import { devPagesAllowed } from './devPages'
 export const getDevPagesAllowed = createServerFn({ method: 'GET' }).handler(() =>
   devPagesAllowed(process.env),
 )
+
+export const getIsDemoFn = createServerFn({ method: 'GET' }).handler(() => isDemo(process.env))

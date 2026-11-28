@@ -9,7 +9,10 @@ import { isDemo } from '~/server/env/demo'
 // role guard, so an anonymous caller still gets the usual 401. tests/server-fn-guards.test.ts
 // pins the list below against the code. Outside the demo it does nothing.
 
-/** The server functions that refuse on the demo. */
+/**
+ * The server functions that refuse on the demo. Their screens show the controls disabled on the
+ * demo (src/routes/_app/sprava.tsx, ProfilePassword): keep both in step.
+ */
 export const DEMO_LOCKED_FNS: readonly string[] = [
   'createUserFn',
   'updateUserFn',

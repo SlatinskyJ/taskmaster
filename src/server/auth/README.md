@@ -59,6 +59,10 @@ as on a preview, plus:
 - **Live streams**: at most `DEMO_STREAMS_PER_IP` open per IP (`src/server/demo/caps.ts`, in
   memory); the next gets 429.
 - It needs `TRUST_PROXY=1` (the caps must see the visitor): without it the server won't boot.
+- **Screens**: they learn they are on the demo from the public `getIsDemoFn`
+  (`src/server/env/functions.ts`, read once per page in the root route): the demo marker, the
+  `noindex` meta, one-tap logins (the normal `loginFn` with `DEMO_PASSWORD`), the locked controls
+  shown disabled.
 
 ## Viewer frames (dev, previews and the demo)
 

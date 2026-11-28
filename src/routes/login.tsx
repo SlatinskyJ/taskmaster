@@ -1,9 +1,11 @@
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
+import { DemoAccounts } from '~/components/auth/DemoAccounts'
 import { PasskeyLoginButton } from '~/components/auth/PasskeyLoginButton'
 import { sectionLabelClass } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
 import { Input } from '~/components/ui/input'
+import { DEMO_PASSWORD, type DemoLogin } from '~/lib/demoAccounts'
 import { safeRedirect } from '~/lib/redirect'
 import { cs } from '~/lib/strings'
 import { cn } from '~/lib/utils'
@@ -54,7 +56,10 @@ function Login() {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  /** The demo account whose one-tap login is running (#328). */
+  const [busyLogin, setBusyLogin] = useState<DemoLogin | null>(null)
   const { passkeys } = Route.useLoaderData()
+  const { demo } = Route.useRouteContext()
   // Decided after mount: the server render has no WebAuthn to ask.
   const [canPasskey, setCanPasskey] = useState(false)
   const [passkeyBusy, setPasskeyBusy] = useState(false)
@@ -123,18 +128,14 @@ function Login() {
     }
   }
 
-  async function submit(form: FormData) {
-    const field = (name: string) => {
-      const value = form.get(name)
-      return typeof value === 'string' ? value : ''
-    }
+  /** A password login, from the form or a demo button (`from`). */
+  async function logIn(username: string, password: string, from: DemoLogin | null) {
     setBusy(true)
+    setBusyLogin(from)
     setError(null)
     setPasskeyError(null)
     try {
-      const result = await loginFn({
-        data: { username: field('username'), password: field('password') },
-      })
+      const result = await loginFn({ data: { username, password } })
       if (!result.ok) {
         setError(result.error === 'rate_limited' ? cs.login.rateLimited : cs.login.invalid)
         return
@@ -146,7 +147,16 @@ function Login() {
       setError(cs.login.failed)
     } finally {
       setBusy(false)
+      setBusyLogin(null)
     }
+  }
+
+  function submit(form: FormData) {
+    const field = (name: string) => {
+      const value = form.get(name)
+      return typeof value === 'string' ? value : ''
+    }
+    return logIn(field('username'), field('password'), null)
   }
 
   return (
@@ -221,6 +231,13 @@ function Login() {
           {cs.login.submit}
         </Button>
       </form>
+      {demo && (
+        <DemoAccounts
+          busy={busyLogin}
+          disabled={busy}
+          onPick={(login) => void logIn(login, DEMO_PASSWORD, login)}
+        />
+      )}
       <p className="mt-auto text-center text-meta font-bold text-muted">{cs.login.help}</p>
     </main>
   )
