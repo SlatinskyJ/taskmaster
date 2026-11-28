@@ -253,3 +253,17 @@ describe('tm-demo commands', () => {
     expect(r.calls).toEqual([])
   })
 })
+
+describe('tm-demo reset timer', () => {
+  it('the timer resets nightly at 03:00 Prague', () => {
+    const lines = (f: string) => readFileSync(resolve('deploy/demo', f), 'utf8').split('\n')
+    const timer = lines('tm-demo-reset.timer')
+    const service = lines('tm-demo-reset.service')
+    expect(timer).toContain('OnCalendar=*-*-* 03:00:00 Europe/Prague')
+    expect(timer).toContain('Persistent=false')
+    expect(timer).toContain('Unit=tm-demo-reset.service')
+    expect(service).toContain('ExecStart=/usr/local/bin/tm-demo reset')
+    expect(service).toContain('User=deploy')
+    expect(service).toContain('Type=oneshot')
+  })
+})

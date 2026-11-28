@@ -1,0 +1,12 @@
+# Nightly demo reset at 03:00 Prague time. A missed run is not made up later (Persistent=false),
+# so a reset never lands in the middle of someone's visit after the host was down.
+[Unit]
+Description=Taskmaster demo: nightly data reset at 03:00 Prague
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 Europe/Prague
+Persistent=false
+Unit=tm-demo-reset.service
+
+[Install]
+WantedBy=timers.target
