@@ -4,6 +4,9 @@
 
 import type { FeatureKey } from './features'
 
+/** The demo family's names on buttons (the demo login page, the /dev/multi viewer). */
+const demoUsers = { admin: 'Admin', tata: 'Táta', starsi: 'Anička', mladsi: 'Béďa' } as const
+
 export const cs = {
   /** Short weekday names, Sunday first (dates.ts `Weekday`). */
   weekdays: ['ne', 'po', 'út', 'st', 'čt', 'pá', 'so'],
@@ -1182,7 +1185,17 @@ export const cs = {
       small: 'Malý telefon · 360×740',
       tablet: 'Tablet · 820×1180 (70\u00a0%)',
     },
-    users: { admin: 'Admin', tata: 'Táta', starsi: 'Anička', mladsi: 'Béďa' },
+    users: demoUsers,
+  },
+  /** The public demo (TASKMASTER_ENV=demo, #328): marker, one-tap logins, locked controls. */
+  demo: {
+    marker: 'Demo · každou noc se vše smaže',
+    tryAs: 'Vyzkoušej bez hesla jako',
+    users: demoUsers,
+    multi: 'Více zařízení',
+    multiHint: 'Víc lidí vedle sebe, jako telefony na stole',
+    lockedNote: 'V demu zamčeno, ať to vydrží i dalším návštěvníkům.',
+    lockedError: 'V demu tohle nejde. Zamčeno, ať to vydrží i dalším.',
   },
 } as const
 

@@ -52,7 +52,7 @@ const THEME_LABELS: Record<ThemePref, string> = {
 }
 
 function Profile() {
-  const { user, features } = Route.useRouteContext()
+  const { user, features, demo } = Route.useRouteContext()
   const router = useRouter()
   const [theme, setTheme] = useThemePref()
   const [effects, setEffects] = useEffectsSwitch()
@@ -134,7 +134,7 @@ function Profile() {
 
         <ProfilePasskeys enabled={enabled} items={passkeys} />
 
-        <ProfilePassword enabled={features.passwordChange} username={user.username} />
+        <ProfilePassword enabled={features.passwordChange} username={user.username} locked={demo} />
 
         <ProfileSuggestions
           enabled={features.suggestions}

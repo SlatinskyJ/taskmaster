@@ -86,7 +86,8 @@ incus exec <container> -- su -s /bin/bash deploy -c '/usr/local/bin/tm-prod depl
 ## Updating the controller script
 
 It is copied in by hand (above), so a change to `deploy/prod/tm-prod` needs a fresh
-`incus file push` after it merges. CI never changes the host.
+`incus file push` after it merges, to the production host **and** the demo host, which runs it
+under `tm-demo` ([demo-host.md](demo-host.md)). CI never changes either host.
 
 ## Recovery
 

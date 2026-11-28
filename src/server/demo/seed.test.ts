@@ -16,7 +16,8 @@ import { ALL_FEATURES, NO_FEATURES } from '~/lib/features'
 import { cs } from '~/lib/strings'
 import type { Features } from '~/lib/features'
 import { getFlags } from '~/server/features'
-import { DEMO_PASSWORD, DEMO_USERS, describeDemo, seedDemo } from './seed'
+import { DEMO_LOGINS, DEMO_PASSWORD } from '~/lib/demoAccounts'
+import { DEMO_USERS, describeDemo, seedDemo } from './seed'
 import { SEEDS } from './seeds'
 import type { SeedName } from './seeds'
 
@@ -25,6 +26,10 @@ const PREVIEW = { TASKMASTER_ENV: 'preview', NODE_ENV: 'production' }
 
 // The guards, picking a seed by name (#183) and what holds for every seed.
 describe('demo seed (#62)', () => {
+  it('seeds the accounts the login page offers, in its order', () => {
+    expect(DEMO_USERS.map((u) => u.username)).toEqual([...DEMO_LOGINS])
+  })
+
   it('demo login works for every role', async () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
@@ -52,12 +57,14 @@ describe('demo seed (#62)', () => {
     ])
   })
 
-  it('the /dev/multi labels match the seeded names', () => {
-    for (const u of DEMO_USERS) {
-      const key = u.username as keyof typeof cs.devMulti.users
-      expect(cs.devMulti.users[key], u.username).toBe(u.displayName)
+  it('the demo buttons and /dev/multi labels match the seeded names', () => {
+    for (const labels of [cs.demo.users, cs.devMulti.users]) {
+      for (const u of DEMO_USERS) {
+        const key = u.username as keyof typeof labels
+        expect(labels[key], u.username).toBe(u.displayName)
+      }
+      expect(Object.keys(labels)).toEqual(DEMO_USERS.map((u) => u.username))
     }
-    expect(Object.keys(cs.devMulti.users)).toEqual(DEMO_USERS.map((u) => u.username))
   })
 
   it('refuses without the preview flag (production, dev, anything else)', () => {

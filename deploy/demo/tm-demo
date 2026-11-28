@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# Taskmaster demo deploy controller. Installed on the public demo host only, as the login shell
+# of the `deploy` user, next to deploy/prod/tm-prod (which does the real deploy work there).
+# The production host never gets this script, so nothing there can wipe the data.
+#
+#   deploy <sha7>      handed to tm-prod unchanged (pull, back up, restart, roll back)
+#   status             handed to tm-prod unchanged (running image and its health)
+#   version            prints short hashes of this script and of tm-prod, to spot drift
+#   reset              throws the demo data away: removes the app and its data volume, starts
+#                      the same image again (it migrates and seeds the empty DB on boot) and
+#                      waits for healthy. Run nightly by tm-demo-reset.timer.
+#
+# Contract with the `deploy demo` job in .github/workflows/ci.yml and the timer (change together):
+#   deploy, status     exit code and stdout exactly as tm-prod's
+#   reset ok           exit 0, stdout `reset: done`
+#   reset failed       exit 1; the app's log stays on the host (stderr names the file), because
+#                      CI and timer logs may be read elsewhere
+#   anything else      exit 1, nothing run
+#
+# No host names live here.
+set -euo pipefail
+
+APP_DIR="${TM_APP_DIR:-/opt/taskmaster}"
+TM_PROD="${TM_PROD:-/usr/local/bin/tm-prod}"
+SERVICE=taskmaster
+# The named volume Compose created for /data (project `taskmaster`, volume `tm-data`).
+DATA_VOLUME="${TM_DATA_VOLUME:-taskmaster_tm-data}"
+LOG_DIR="${HOME}/logs"
+HEALTH_WAIT="${TM_HEALTH_WAIT:-90}"
+LOCK_WAIT="${TM_LOCK_WAIT:-300}"
+
+# Same helpers as tm-prod: writes never fail the script once SIGPIPE is ignored (see reset).
+say() { echo "$*" >&2 || true; }
+die() { say "error: $*"; exit 1; }
+warn() { say "WARNING: $*"; }
+
+# Login-shell mode: sshd / Tailscale SSH call us as `tm-demo -c "<command>"`.
+if [[ "${1:-}" == "-c" ]]; then
+  read -r -a args <<<"${2:-}"
+  set -- "${args[@]}"
+fi
+
+compose() { (cd "$APP_DIR" && docker compose "$@"); }
+
+# Whole-line match, so `health: unhealthy` never counts.
+wait_healthy() {
+  for _ in $(seq 1 "$HEALTH_WAIT"); do
+    "$TM_PROD" status 2>/dev/null | grep -qx 'health: healthy' && return 0
+    sleep 1
+  done
+  return 1
+}
+
+reset() {
+  local err log
+  # A dropped SSH session must not stop a reset half-way.
+  trap '' HUP PIPE
+  compose rm -s -f "$SERVICE" >&2 || warn "compose rm failed"
+  if ! err=$(docker volume rm "$DATA_VOLUME" 2>&1 >/dev/null); then
+    if grep -qi 'no such volume' <<<"$err"; then
+      warn "no volume ${DATA_VOLUME}: starting on an empty one"
+    else
+      say "$err"
+      compose up -d --no-deps "$SERVICE" >&2 || warn "compose up failed"
+      die "reset failed: could not remove the data volume; app restarted on the old data"
+    fi
+  fi
+  # Compose creates the volume again; compose.override.yaml keeps the deployed image.
+  compose up -d --no-deps "$SERVICE" >&2 || warn "compose up failed"
+  if wait_healthy; then
+    echo "reset: done" || true
+    return 0
+  fi
+  mkdir -p "$LOG_DIR"
+  log="${LOG_DIR}/reset-$(date -u +%Y%m%dT%H%M%SZ).log"
+  docker logs --tail 200 "$(compose ps -q "$SERVICE")" > "$log" 2>&1 || true
+  die "reset: the app did not become healthy; app log kept on the host in ${log}"
+}
+
+# The same lock file `deploy` takes in tm-prod (keep in step with lock() in deploy/prod/tm-prod),
+# so a reset and a deploy never overlap: one waits for the other.
+lock() {
+  exec 9>"${HOME}/.tm-prod.lock"
+  flock -w "$LOCK_WAIT" 9 || die "a deploy has held the lock for ${LOCK_WAIT}s"
+}
+
+cmd="${1:-}"; shift || true
+case "$cmd" in
+  # Not locked here: tm-prod locks deploy itself, and holding the lock too would deadlock.
+  deploy) exec "$TM_PROD" deploy "$@" ;;
+  status)
+    [[ $# -eq 0 ]] || die "usage: status"
+    exec "$TM_PROD" status ;;
+  version)
+    [[ $# -eq 0 ]] || die "usage: version"
+    echo "tm-demo $(sha256sum "$(readlink -f "${BASH_SOURCE[0]}")" | cut -c1-12) tm-prod $("$TM_PROD" version)" ;;
+  reset)
+    [[ $# -eq 0 ]] || die "usage: reset"
+    lock; reset ;;
+  *) die "unknown command '${cmd}'. Allowed: deploy, status, version, reset" ;;
+esac

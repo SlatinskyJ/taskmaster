@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Button } from '~/components/ui/button'
-import type { DemoLogin, SizeKey } from '~/lib/multiLayout'
+import type { DemoLogin } from '~/lib/demoAccounts'
+import type { SizeKey } from '~/lib/multiLayout'
 import { cs } from '~/lib/strings'
 import { SizeSelect, UserSelect } from './DeviceFrame'
 

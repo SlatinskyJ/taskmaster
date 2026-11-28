@@ -9,8 +9,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '~/components/ui/select'
-import { DEMO_LOGINS, SIZES, safePath } from '~/lib/multiLayout'
-import type { DemoLogin, Device, SizeKey } from '~/lib/multiLayout'
+import { DEMO_LOGINS, type DemoLogin } from '~/lib/demoAccounts'
+import { SIZES, safePath } from '~/lib/multiLayout'
+import type { Device, SizeKey } from '~/lib/multiLayout'
 import type { FrameStatus } from '~/lib/multiLogin'
 import { cs } from '~/lib/strings'
 import { cn } from '~/lib/utils'

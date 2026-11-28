@@ -1,4 +1,5 @@
 import { hashSync } from '@node-rs/argon2'
+import { DEMO_PASSWORD } from '~/lib/demoAccounts'
 import type { Db } from '~/server/db'
 import { users } from '~/server/db/schema'
 import { setSwitchesIn } from '~/server/features'
@@ -25,12 +26,6 @@ import type { SeedName } from './seeds'
 // Unset, previews and dev get `demo`, which has every piece and every switch on, so a preview
 // shows features production still hides. Each e2e suite names its own seed in e2e/suites.ts.
 // Everything runs in one transaction, through the real actions.
-
-/**
- * Known on purpose: previews are tailnet-only and the public demo is for anyone; neither holds
- * real data, and the demo locks password changes (./lock.ts). Never used in production.
- */
-export const DEMO_PASSWORD = 'demo1234'
 
 export const DEMO_USERS: readonly NewUser[] = [
   { username: 'admin', displayName: 'Admin', role: 'admin' },
