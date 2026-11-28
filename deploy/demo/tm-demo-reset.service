@@ -1,0 +1,11 @@
+# Throws the public demo's data away and starts it on a fresh seed (deploy/demo/tm-demo reset).
+# Installed on the demo host only, by hand (runbook docs/runbooks/demo-host.md).
+[Unit]
+Description=Taskmaster demo: nightly data reset
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=deploy
+ExecStart=/usr/local/bin/tm-demo reset
