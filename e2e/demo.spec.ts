@@ -63,7 +63,7 @@ test('the admin cannot flip a launch switch', async ({ page }) => {
   await expect(zapsat).toHaveAttribute('aria-checked', 'true')
 })
 
-test('Starší cannot change his password; the old one still logs in', async ({ page }) => {
+test('Anička cannot change her password; the old one still logs in', async ({ page }) => {
   await login(page, 'starsi')
   await page.goto('/profil')
   const row = page.getByRole('button', { name: cs.profile.passwordRow })
@@ -214,10 +214,10 @@ test('a failed one-tap login can be tried again', async ({ page }) => {
   expect(failed).toBe(true)
 })
 
-test('/dev/multi loads and a frame logs in as Mladší', async ({ page }) => {
+test('/dev/multi loads and a frame logs in as Béďa', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1200 })
   await page.goto('/dev/multi')
   await expect(page.locator('[data-device]')).toHaveCount(3)
   const mladsi = page.locator('[data-device]').nth(2).frameLocator('iframe')
-  await expect(mladsi.getByRole('heading', { name: `${cs.home.greeting}, Mladší!` })).toBeVisible()
+  await expect(mladsi.getByRole('heading', { name: `${cs.home.greeting}, Béďa!` })).toBeVisible()
 })

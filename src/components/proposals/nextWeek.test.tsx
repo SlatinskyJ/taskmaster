@@ -231,7 +231,7 @@ describe('Příští týden', () => {
   it('the note names the rule, the deadline and the default week', () => {
     const html = render()
     expect(html).toContain(t.note('ne 29. 11. 23:59', '7 dní', 50, 100))
-    expect(t.note('x', 'y', 1, 2)).toContain('všichni kluci a jeden rodič do x')
+    expect(t.note('x', 'y', 1, 2)).toContain('všechny děti a jeden rodič do x')
   })
 
   it('a second giver after one giver approved sees Nesouhlasím and no Souhlasím', () => {

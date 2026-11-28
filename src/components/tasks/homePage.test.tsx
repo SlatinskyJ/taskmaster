@@ -537,7 +537,7 @@ describe('Giver Domů (GHome, #41)', () => {
     ],
     tasks: [
       task({ id: 4, title: 'Uklidit sklep', waitingFor: boys }),
-      // Waits for Táta himself: "Čeká na tebe" has it, so "Čeká na kluky" must not.
+      // Waits for Táta himself: "Čeká na tebe" has it, so "Čeká na děti" must not.
       task({ id: 5, title: 'Taky pro Tátu', waitingFor: [...boys, { id: 2, name: 'Táta' }] }),
     ],
     points: {
@@ -549,21 +549,21 @@ describe('Giver Domů (GHome, #41)', () => {
     },
   }
 
-  it('shows, in order: Čeká na tebe, the boys’ points, Ke schválení, Vyjednávání, Čeká na kluky', () => {
+  it('shows, in order: Čeká na tebe, the boys’ points, Ke schválení, Vyjednávání, Čeká na děti', () => {
     const html = render(tata, [], full)
     const at = (s: string) => html.indexOf(s)
     for (const s of [
       cs.home.waiting,
-      'Kluci tento týden',
+      'Děti tento týden',
       cs.work.toApprove,
       cs.bids.toAnswer,
-      'Čeká na kluky',
+      'Čeká na děti',
     ])
       expect(at(s), s).toBeGreaterThan(-1)
-    expect(at(cs.home.waiting)).toBeLessThan(at('Kluci tento týden'))
-    expect(at('Kluci tento týden')).toBeLessThan(at(cs.work.toApprove))
+    expect(at(cs.home.waiting)).toBeLessThan(at('Děti tento týden'))
+    expect(at('Děti tento týden')).toBeLessThan(at(cs.work.toApprove))
     expect(at(cs.work.toApprove)).toBeLessThan(at(cs.bids.toAnswer))
-    expect(at(cs.bids.toAnswer)).toBeLessThan(at('Čeká na kluky'))
+    expect(at(cs.bids.toAnswer)).toBeLessThan(at('Čeká na děti'))
     expect(html).toContain('Čeká se na: Starší nebo Mladší')
     expect(html).toContain(`${cs.home.waitingOnTakers} (1)`)
     expect(html).not.toContain('Taky pro Tátu')
@@ -578,15 +578,15 @@ describe('Giver Domů (GHome, #41)', () => {
       features.approveAnywhere = false
     })
 
-    it('Ke schválení comes first, once, then Čeká na tebe, the boys’ points, Vyjednávání, Čeká na kluky', () => {
+    it('Ke schválení comes first, once, then Čeká na tebe, the boys’ points, Vyjednávání, Čeká na děti', () => {
       const html = render(tata, [], full)
       const at = (s: string) => html.indexOf(s)
       const order = [
         cs.work.toApprove,
         cs.home.waiting,
-        'Kluci tento týden',
+        'Děti tento týden',
         cs.bids.toAnswer,
-        'Čeká na kluky',
+        'Čeká na děti',
       ]
       for (const s of order) expect(at(s), s).toBeGreaterThan(-1)
       for (let i = 1; i < order.length; i++)
@@ -613,13 +613,13 @@ describe('Giver Domů (GHome, #41)', () => {
     expect(html.split('data-slot="points-bar"')).toHaveLength(2)
   })
 
-  it('a brother sees neither the boys’ card nor Čeká na kluky, only his own bar', () => {
+  it('a brother sees neither the boys’ card nor Čeká na děti, only his own bar', () => {
     const html = render({ id: 4, role: 'taker', displayName: 'Starší' }, [], {
       points: full.points,
       tasks: full.tasks,
     })
-    expect(html).not.toContain('Kluci tento týden')
-    expect(html).not.toContain('Čeká na kluky')
+    expect(html).not.toContain('Děti tento týden')
+    expect(html).not.toContain('Čeká na děti')
     expect(html.split('data-slot="points-bar"')).toHaveLength(2)
   })
 })
@@ -751,7 +751,7 @@ describe('switch openRows (#205): every row opens its page', () => {
     features.openRows = false
   })
 
-  it('a parent: Čeká na tebe, Ke schválení, Vyjednávání and Čeká na kluky rows', () => {
+  it('a parent: Čeká na tebe, Ke schválení, Vyjednávání and Čeká na děti rows', () => {
     const html = render(tata, [], giver)
     linked(html, '/ukol/1', 'Čeká na Tátu')
     linked(html, '/ukol/2', 'Hotový úkol')

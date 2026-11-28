@@ -17,7 +17,7 @@ describe('DemoAccounts', () => {
     const html = render()
     expect(html).toContain(cs.demo.tryAs)
     const found = buttons(html)
-    expect(found.map((m) => m[1])).toEqual(['Admin', 'Táta', 'Starší', 'Mladší'])
+    expect(found.map((m) => m[1])).toEqual(['Admin', 'Táta', 'Anička', 'Béďa'])
     for (const [tag] of found) expect(tag).toContain('min-h-tap')
   })
 

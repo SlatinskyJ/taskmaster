@@ -7,7 +7,7 @@ import { logout, PASSWORD, passwordLogin } from './helpers'
 
 const NEW = 'noveheslo1'
 
-test('Starší changes the password; the other device is logged out, this one stays', async ({
+test('Anička changes the password; the other device is logged out, this one stays', async ({
   browser,
 }) => {
   const a = await (await browser.newContext()).newPage()

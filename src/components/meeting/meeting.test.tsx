@@ -232,7 +232,7 @@ describe('step 3: Plánovat', () => {
     ]
     const { html } = render(week(), done, plan)
     expect(html).toMatch(/href="\/ukol\/21".*Umýt auto.*Mladší chce 20.*Odpovědět/s)
-    expect(html).toMatch(/href="\/ukol\/22".*Vynést koš.*Rezervoval Starší/s)
+    expect(html).toMatch(/href="\/ukol\/22".*Vynést koš.*Rezervace: Starší/s)
     expect(html.match(/Odpovědět/g)).toHaveLength(1)
     expect(html).not.toContain('data-taker')
     expect(html).toMatch(/href="\/ukoly\/novy">\+ Nový úkol/)

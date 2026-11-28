@@ -4,7 +4,7 @@ import { passwordLogin } from './helpers'
 
 // Rows open their page (#205), on the `rows` seed: the negotiation, points, templates and
 // instances pieces with the openRows switch on. suites.test.ts pins the ids: task 9 "Umýt okna v
-// obýváku i v ložnici" (open), task 3 "Vyluxovat celý obývák a chodbu" (reserved by Starší),
+// obýváku i v ložnici" (open), task 3 "Vyluxovat celý obývák a chodbu" (reserved by Anička),
 // task 12 a copy of chore 3, chore 1 "Vynést koše" (proposed by Táta).
 
 test.use({ viewport: { width: 360, height: 800 } })
@@ -53,7 +53,7 @@ test('a brother opens the proposed chore, agrees, and ← goes back to Domů', a
   await expect(page.getByRole('heading', { name: BINS })).toBeVisible()
   await expect(page.getByText(cs.state.proposed, { exact: true })).toBeVisible()
   await expect(page.getByText(cs.templatePrice.proposed(4))).toBeVisible()
-  await expect(page.getByText('Čeká se na: tebe nebo Mladší')).toBeVisible()
+  await expect(page.getByText('Čeká se na: tebe nebo Béďa')).toBeVisible()
   await page.getByRole('button', { name: cs.tasks.approve, exact: true }).click()
   await expect(page.getByText(cs.templatePrice.now(4))).toBeVisible()
   await expect(page.getByText(cs.state.proposed, { exact: true })).toHaveCount(0)

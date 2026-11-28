@@ -84,7 +84,7 @@ describe('the demo seed (previews)', () => {
       // #356's past week: three approved chores.
       ...user(...done, 'task.approved', ...done, 'task.approved', ...done, 'task.approved'),
       // The running week's plan copies, then its five past days (Thursday's table cancelled,
-      // Starší's bed from yesterday waiting); then this week's rejected chore.
+      // Anička's bed from yesterday waiting); then this week's rejected chore.
       ...Array<string[]>(26).fill(['instance.created', 'system']),
       ...days(3),
       ...days(4),
@@ -105,7 +105,7 @@ describe('the demo seed (previews)', () => {
       // #356's one-time work: two approved, two waiting, one agreed for Volné.
       ...user(...done, 'task.approved', ...done, 'task.approved', ...done, ...done),
       ...user('task.created', 'task.score_approved', 'task.agreed'),
-      // #38: Mladší's and Starší's Zapsat, Starší's rejected, then Táta's "+ Teď" on the bag.
+      // #38: Béďa's and Anička's Zapsat, Anička's rejected, then Táta's "+ Teď" on the bag.
       ...user('instance.self_logged', 'instance.self_logged', 'task.rejected', 'instance.created'),
       // #207: two tasks with a text; the open one gets Táta's new text, waiting.
       ...user('task.created', 'task.created', 'task.score_approved', 'task.agreed'),
@@ -129,17 +129,17 @@ describe('the demo seed (previews)', () => {
       ['Odnést krabice do sklepa', 'open'], // #207
       ['Shrabat listí na zahradě', 'open'], // #36 price change
       ['Uklidit garáž', 'confirmed'], // #356 past week
-      ['Uklidit hračky', 'done_unconfirmed'], // #356, Starší
+      ['Uklidit hračky', 'done_unconfirmed'], // #356, Anička
       ['Uklidit kolárnu', 'proposed'], // #207
       ['Uklidit sklep', 'proposed'], // #34
       ['Umýt auto', 'proposed'], // #34
-      ['Umýt nádobí', 'confirmed'], // #356, Mladší
+      ['Umýt nádobí', 'confirmed'], // #356, Béďa
       ['Umýt okna v kuchyni', 'cancelled'], // #36
       ['Umýt okna v obýváku i v ložnici', 'open'], // #356, for Volné
       ['Vyluxovat celý obývák a chodbu', 'reserved'], // #150
-      ['Vyndat myčku', 'done_unconfirmed'], // #38 Zapsat, Mladší
-      ['Vyndat myčku', 'rejected'], // #38 Zapsat, Starší
-      ['Vynést papír', 'done_unconfirmed'], // #356, Mladší
+      ['Vyndat myčku', 'done_unconfirmed'], // #38 Zapsat, Béďa
+      ['Vyndat myčku', 'rejected'], // #38 Zapsat, Anička
+      ['Vynést papír', 'done_unconfirmed'], // #356, Béďa
       ['Vynést sklo a plasty do kontejneru', 'reserved'], // #45, rejected
       ['Vynést staré věci na půdu', 'open'], // #212, in a round
       ['Vysát auto', 'confirmed'], // #356, disputed (#46)
@@ -149,7 +149,7 @@ describe('the demo seed (previews)', () => {
     ])
   })
 
-  it('seeds a task in negotiation, a plain offer and one reserved to Starší, through the real actions', () => {
+  it('seeds a task in negotiation, a plain offer and one reserved to Anička, through the real actions', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     // The offers; #44's done chores are checked in their own test below.
@@ -167,20 +167,20 @@ describe('the demo seed (previews)', () => {
         'proposed',
         18,
         [
-          ['Mladší', 22],
-          ['Starší', 25],
+          ['Béďa', 22],
+          ['Anička', 25],
         ],
       ],
-      // Rejected (#45), so back to Mladší's reservation.
+      // Rejected (#45), so back to Béďa's reservation.
       ['Vynést sklo a plasty do kontejneru', 'reserved', 4, []],
     ])
-    expect(all.find((t) => t.title.startsWith('Vyluxovat'))?.reservedBy?.name).toBe('Starší')
+    expect(all.find((t) => t.title.startsWith('Vyluxovat'))?.reservedBy?.name).toBe('Anička')
     // #36: Táta's new price 12 waits for the brothers; the cancelled task keeps its reason.
     expect(
       listTasks(db).find((t) => t.title === 'Shrabat listí na zahradě')?.scoreChange,
     ).toMatchObject({
       score: 12,
-      waitingFor: [{ name: 'Starší' }, { name: 'Mladší' }],
+      waitingFor: [{ name: 'Anička' }, { name: 'Béďa' }],
     })
     const cancelled = db
       .select()
@@ -192,13 +192,13 @@ describe('the demo seed (previews)', () => {
     expect(cancelled).toEqual(['Večeříme u babičky.', 'Udělá to firma.'])
   })
 
-  it('gives the brothers different outcomes (#356): Starší below spodní even with all approved, Mladší between', () => {
+  it('gives the brothers different outcomes (#356): Anička below spodní even with all approved, Béďa between', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
-    // Starší: 5 carried + 5 by hand + 8 car + 18 plan; Mladší: 50 given back + 8 dishes + 21 plan.
+    // Anička: 5 carried + 5 by hand + 8 car + 18 plan; Béďa: 50 given back + 8 dishes + 21 plan.
     expect(takerPoints(db, T0).takers.map((t) => [t.name, t.confirmed, t.pending])).toEqual([
-      ['Starší', 36, 8],
-      ['Mladší', 79, 6],
+      ['Anička', 36, 8],
+      ['Béďa', 79, 6],
     ])
     const open = listTasks(db).filter((t) => t.status === 'open' && !weekCopy(t))
     expect(open.map((t) => [t.title, t.score])).toEqual([
@@ -324,10 +324,10 @@ describe('the demo seed (previews)', () => {
       .all()
       .map((r) => [name(r.userId), r.side, r.score, r.closedAs])
     expect(rows).toEqual([
-      // #356: "Ustlat postel", Mladší bids 5, Starší 4, Táta takes the lowest.
+      // #356: "Ustlat postel", Béďa bids 5, Anička 4, Táta takes the lowest.
       ['mladsi', 'taker', 5, 'closed'],
       ['starsi', 'taker', 4, 'accepted'],
-      // #138: the dishwasher, Mladší bids 5, Táta offers 4.
+      // #138: the dishwasher, Béďa bids 5, Táta offers 4.
       ['mladsi', 'taker', 5, null],
       ['tata', 'giver', 4, null],
       // #209: the bids on "Zalít kytky".
@@ -350,22 +350,22 @@ describe('the demo seed (previews)', () => {
     expect(db.select().from(auditLog).all()).toHaveLength(0)
   })
 
-  it('demo seed gives a meeting with 5 pending items, Starší below spodní and Mladší between (#356)', () => {
+  it('demo seed gives a meeting with 5 pending items, Anička below spodní and Béďa between (#356)', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     const meeting = getMeeting(db, new Date(T0.getTime() + 120_000), true)
     if (!meeting.period) throw new Error('no meeting')
     expect(meeting.period.running).toBe(true)
     expect(meeting.pending.map((t) => [t.title, t.score, t.completedBy?.name])).toEqual([
-      ['Ustlat postel', 3, 'Starší'], // yesterday's copy
-      ['Prostřít stůl k večeři', 2, 'Starší'], // today's copy
-      ['Uklidit hračky', 3, 'Starší'],
-      ['Vynést papír', 3, 'Mladší'],
-      ['Vyndat myčku', 3, 'Mladší'], // #38 Zapsat
+      ['Ustlat postel', 3, 'Anička'], // yesterday's copy
+      ['Prostřít stůl k večeři', 2, 'Anička'], // today's copy
+      ['Uklidit hračky', 3, 'Anička'],
+      ['Vynést papír', 3, 'Béďa'],
+      ['Vyndat myčku', 3, 'Béďa'], // #38 Zapsat
     ])
     expect(meeting.takers.map((t) => [t.name, t.total, t.level])).toEqual([
-      ['Starší', 36, 'none'],
-      ['Mladší', 79, 'lower'],
+      ['Anička', 36, 'none'],
+      ['Béďa', 79, 'lower'],
     ])
   })
 
@@ -398,7 +398,7 @@ describe('the demo seed (previews)', () => {
         r.reason,
       ]),
     ).toEqual([
-      // #38: Starší's Zapsat, rejected without a reason.
+      // #38: Anička's Zapsat, rejected without a reason.
       ['Vyndat myčku', 3, 'starsi', null],
       [
         'Vynést sklo a plasty do kontejneru',
@@ -459,7 +459,7 @@ describe('the demo seed (previews)', () => {
 })
 
 describe('the demo seed: proposals (#43)', () => {
-  it('a pending next week (waits for Mladší) and a pending default week (waits for both)', () => {
+  it('a pending next week (waits for Béďa) and a pending default week (waits for both)', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     const name = (uid: number) => db.select().from(users).where(eq(users.id, uid)).get()?.username
@@ -473,7 +473,7 @@ describe('the demo seed: proposals (#43)', () => {
 
 describe('the demo seed: disputes (#46)', () => {
   it.each(['demo', 'disputes'])(
-    '%s: Starší disputes "Vysát auto"; Mladší\'s settlement dispute is dismissed',
+    '%s: Anička disputes "Vysát auto"; Béďa\'s settlement dispute is dismissed',
     (seed) => {
       const db = createTestDb()
       seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: seed }, T0)
@@ -524,7 +524,7 @@ describe('the demo seed: disputes (#46)', () => {
 
 describe('the demo seed: corrections (#48)', () => {
   it.each(['demo', 'corrections'])(
-    "%s: a manual +5 for Starší he disputes; Mladší's past week corrected to none, he disputes it",
+    "%s: a manual +5 for Anička she disputes; Béďa's past week corrected to none, he disputes it",
     (seed) => {
       const db = createTestDb()
       seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: seed }, T0)
@@ -573,7 +573,7 @@ describe('the demo seed: corrections (#48)', () => {
 })
 
 describe('the demo seed: a chore in dispute (#222)', () => {
-  it.each(['demo', 'disputes'])('%s: Mladší disputes the agreed "Vyndat myčku", open', (seed) => {
+  it.each(['demo', 'disputes'])('%s: Béďa disputes the agreed "Vyndat myčku", open', (seed) => {
     const db = createTestDb()
     seedDemo(db, { ...PREVIEW, TASKMASTER_SEED: seed }, T0)
     const rows = db.select().from(disputes).where(eq(disputes.itemKind, 'template_score')).all()
@@ -605,7 +605,7 @@ describe('the demo seed: descriptions (#207)', () => {
     expect(boxes?.task).toMatchObject({ status: 'open', description: 'Všechny krabice z chodby.' })
     expect(boxes?.descriptionChange).toMatchObject({
       description: 'Všechny krabice z chodby.\nPrázdné složit a dát k popelnicím.',
-      waitingForNames: ['Starší', 'Mladší'],
+      waitingForNames: ['Anička', 'Béďa'],
     })
     const dust = db
       .select()
@@ -663,18 +663,18 @@ describe('the demo week (#356)', () => {
       plan.rows
         .find((r) => r.title === title)
         ?.cells.map((c) => c.map((x) => (x.person ? `${x.status} ${x.person.name}` : x.status)))
-    const ok = 'confirmed Starší'
+    const ok = 'confirmed Anička'
     expect(cells('Nakrmit kočku')).toEqual([
-      ...Array<string[]>(5).fill(['confirmed Mladší']),
+      ...Array<string[]>(5).fill(['confirmed Béďa']),
       ['open'],
     ])
     expect(cells('Vyluxovat pokoj')).toEqual([
       ['expired'],
-      ['confirmed Mladší'],
+      ['confirmed Béďa'],
       ['expired'],
       ['expired'],
       ['expired'],
-      ['reserved Mladší'],
+      ['reserved Béďa'],
     ])
     expect(cells('Prostřít stůl k večeři')).toEqual([
       [ok],
@@ -682,15 +682,15 @@ describe('the demo week (#356)', () => {
       [ok],
       ['cancelled'],
       ['expired'],
-      ['done_unconfirmed Starší'],
+      ['done_unconfirmed Anička'],
     ])
     expect(cells('Ustlat postel')).toEqual([
       [ok],
       [ok],
       [ok],
       [ok],
-      ['done_unconfirmed Starší'],
-      ['reserved Starší'],
+      ['done_unconfirmed Anička'],
+      ['reserved Anička'],
     ])
     // Tuesday 17. 11. 18:00 is still ahead; Friday 13. 11. expired.
     expect(cells('Vynést koš na plasty')).toEqual([[], ['expired'], [], [], [], ['open']])

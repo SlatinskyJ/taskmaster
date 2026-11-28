@@ -4,8 +4,8 @@ import { passwordLogin } from './helpers'
 import { PHONE } from './keyboard'
 
 // The plan table on Týden (#258) on the `plantable` seed: the week started yesterday at 00:00,
-// four chores with a copy for every scheduled day. Today Mladší holds "Vyluxovat celý obývák a
-// chodbu", Starší's "Zalít kytky na balkoně" waits for approval and "Prostřít stůl k večeři" is
+// four chores with a copy for every scheduled day. Today Béďa holds "Vyluxovat celý obývák a
+// chodbu", Anička's "Zalít kytky na balkoně" waits for approval and "Prostřít stůl k večeři" is
 // free. Cells are found by today's column (`data-today`) and the chore's name in their label,
 // never by a weekday. The tests run in order: each leaves the table as the next one expects.
 
@@ -39,7 +39,7 @@ async function releaseOwn(page: Page, title: string) {
   await expect(cell).toHaveAttribute('aria-label', /: volné, rezervovat$/)
 }
 
-test('Starší, portrait: Týden card → table; a tap reserves a free cell, a second tap offers Uvolnit, Uvolnit frees it', async ({
+test('Anička, portrait: Týden card → table; a tap reserves a free cell, a second tap offers Uvolnit, Uvolnit frees it', async ({
   page,
 }) => {
   await passwordLogin(page, 'starsi')
@@ -59,10 +59,10 @@ test('Starší, portrait: Týden card → table; a tap reserves a free cell, a s
   await releaseOwn(page, TABLE)
 })
 
-test("Starší: Mladší's reserved cell opens its task page", async ({ page }) => {
+test("Anička: Béďa's reserved cell opens its task page", async ({ page }) => {
   await openPlan(page, 'starsi')
   const cell = today(page, VACUUM)
-  await expect(cell).toHaveAttribute('aria-label', /: rezervováno, Mladší$/)
+  await expect(cell).toHaveAttribute('aria-label', /: rezervováno, Béďa$/)
   await cell.click()
   await expect(page).toHaveURL(/\/ukol\/\d+$/)
 })
@@ -80,10 +80,10 @@ test('a stale free cell says someone was faster and shows his avatar', async ({
   await today(brother, TABLE).click()
   await expect(today(brother, TABLE)).toHaveAttribute('aria-label', /: rezervováno tebou, uvolnit$/)
 
-  // Starší's table has not reloaded: the cell still says free.
+  // Anička's table has not reloaded: the cell still says free.
   await today(page, TABLE).click()
   await expect(page.getByText(cs.tasks.errors.reservedByOther)).toBeVisible()
-  await expect(today(page, TABLE)).toHaveAttribute('aria-label', /: rezervováno, Mladší$/)
+  await expect(today(page, TABLE)).toHaveAttribute('aria-label', /: rezervováno, Béďa$/)
 
   await releaseOwn(brother, TABLE)
   await other.close()
@@ -165,7 +165,7 @@ test('Táta: a free cell opens its page; + Teď makes a second copy, the count o
   await expect(sheet.getByRole('button', { name: cs.work.reserve })).toHaveCount(0)
 })
 
-test('Starší: the list reserves and releases the extra copy', async ({ page }) => {
+test('Anička: the list reserves and releases the extra copy', async ({ page }) => {
   await openPlan(page, 'starsi')
   await today(page, TABLE).click()
   const sheet = page.getByRole('dialog')

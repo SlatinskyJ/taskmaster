@@ -30,8 +30,8 @@ import type { SeedName } from './seeds'
 export const DEMO_USERS: readonly NewUser[] = [
   { username: 'admin', displayName: 'Admin', role: 'admin' },
   { username: 'tata', displayName: 'Táta', role: 'giver' },
-  { username: 'starsi', displayName: 'Starší', role: 'taker' },
-  { username: 'mladsi', displayName: 'Mladší', role: 'taker' },
+  { username: 'starsi', displayName: 'Anička', role: 'taker' },
+  { username: 'mladsi', displayName: 'Béďa', role: 'taker' },
 ]
 
 export type DemoOutcome =

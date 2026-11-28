@@ -306,7 +306,7 @@ describe('taskView', () => {
       detailMeta(reserved, MLADSI),
       detailMeta(reserved, STARSI),
       detailMeta(view({ status: 'open', offeredByName: null }), STARSI),
-    ]).toEqual(['Je to tvoje', 'Rezervoval Mladší', null])
+    ]).toEqual(['Je to tvoje', 'Rezervace: Mladší', null])
   })
   it('thread times are Prague wall clock: Saturday 23:30 UTC is Sunday 00:30', () => {
     expect(threadTime('2026-11-21T09:12:00.000Z')).toBe('so 10:12')
@@ -408,7 +408,7 @@ describe('price change (#36)', () => {
   })
 })
 
-describe('waitingOnTakers (GHome "Čeká na kluky", #41)', () => {
+describe('waitingOnTakers (GHome "Čeká na děti", #41)', () => {
   const TATA = { id: 2, role: 'giver' } as const
   const boys = [
     { id: 3, name: 'Starší' },

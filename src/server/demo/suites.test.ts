@@ -46,11 +46,11 @@ describe('e2e seeds (#183)', () => {
   })
 
   for (const seed of ['home', 'launch', 'approve'] as const) {
-    it(`${seed}: Starší 40 + 12, Mladší 55 + 0, and a task in each state Domů and Úkoly show`, () => {
+    it(`${seed}: Anička 40 + 12, Béďa 55 + 0, and a task in each state Domů and Úkoly show`, () => {
       const db = seeded(seed)
       expect(takerPoints(db, T0).takers.map((t) => [t.name, t.confirmed, t.pending])).toEqual([
-        ['Starší', 40, 12],
-        ['Mladší', 55, 0],
+        ['Anička', 40, 12],
+        ['Béďa', 55, 0],
       ])
       expect(byState(db)).toEqual({
         proposed: ['Uklidit sklep', 'Umýt auto'],
@@ -118,7 +118,7 @@ describe('e2e seeds (#183)', () => {
     ])
     expect(all[0]?.scoreChange).toMatchObject({
       score: 12,
-      waitingFor: [{ name: 'Starší' }, { name: 'Mladší' }],
+      waitingFor: [{ name: 'Anička' }, { name: 'Béďa' }],
     })
   })
 
@@ -138,12 +138,12 @@ describe('e2e seeds (#183)', () => {
     const meeting = getMeeting(db, new Date(T0.getTime() + 120_000), false)
     if (!meeting.period) throw new Error('no meeting')
     expect(meeting.takers.map((t) => [t.name, t.total])).toEqual([
-      ['Starší', 120],
-      ['Mladší', 47],
+      ['Anička', 120],
+      ['Béďa', 47],
     ])
     expect(meeting.pending.map((t) => [t.title, t.score, t.completedBy?.name])).toEqual([
-      ['Zalít kytky', 2, 'Starší'],
-      ['Vynést tříděný', 3, 'Mladší'],
+      ['Zalít kytky', 2, 'Anička'],
+      ['Vynést tříděný', 3, 'Béďa'],
     ])
     const current = listPeriods(db)[1]
     if (!current) throw new Error('no current week')
@@ -152,7 +152,7 @@ describe('e2e seeds (#183)', () => {
     ])
   })
 
-  it('proposals: Starší’s next week (60/120) waits for Mladší; Táta’s 14-day default week for both boys', () => {
+  it('proposals: Anička’s next week (60/120) waits for Béďa; Táta’s 14-day default week for both kids', () => {
     const db = seeded('proposals')
     const id = (u: string) => db.select().from(users).where(eq(users.username, u)).get()?.id
     const v = proposalsView(db, new Date(T0.getTime() + 120_000))
@@ -171,7 +171,7 @@ describe('e2e seeds (#183)', () => {
     })
   })
 
-  it('chores: Vynést kompost at 10 with no bids, Zalít kytky at 4 with Starší 6 and Mladší 7', () => {
+  it('chores: Vynést kompost at 10 with no bids, Zalít kytky at 4 with Anička 6 and Béďa 7', () => {
     const db = seeded('chores')
     expect(listTasks(db)).toHaveLength(0)
     const tata = db.select().from(users).where(eq(users.username, 'tata')).get()?.id ?? 0
@@ -183,27 +183,27 @@ describe('e2e seeds (#183)', () => {
     ])
     expect(views[1]?.bidding?.bids).toEqual([])
     expect(views[0]?.bidding?.bids.map((b) => [b.name, b.score])).toEqual([
-      ['Starší', 6],
-      ['Mladší', 7],
+      ['Anička', 6],
+      ['Béďa', 7],
     ])
   })
 
-  it('chorechange: Umýt koupelnu agreed at 8, Starší bids 10 and Mladší 11, no offer', () => {
+  it('chorechange: Umýt koupelnu agreed at 8, Anička bids 10 and Béďa 11, no offer', () => {
     const db = seeded('chorechange')
     const tata = db.select().from(users).where(eq(users.username, 'tata')).get()?.id ?? 0
     const views = listTemplates(db, tata, { choreBidding: false, bidRefusals: true })
     expect(views.map((t) => [t.title, t.status, t.score])).toEqual([['Umýt koupelnu', 'active', 8]])
     expect(views[0]?.change?.offer).toBeNull()
     expect(views[0]?.change?.bids.map((b) => [b.name, b.score])).toEqual([
-      ['Starší', 10],
-      ['Mladší', 11],
+      ['Anička', 10],
+      ['Béďa', 11],
     ])
   })
   it.each([
     ['Wed 2. 12.', 12, 2, [12, 1], 6],
     ['Mon 30. 11.', 11, 30, [11, 29], 8],
   ])(
-    "plantable (#258) at %s 10:00: yesterday's column, today Mladší holds the long chore, Starší's flowers wait, the table is free",
+    "plantable (#258) at %s 10:00: yesterday's column, today Béďa holds the long chore, Anička's flowers wait, the table is free",
     (_name, month, d, yesterday, columns) => {
       const now = fromPragueWallTime({ year: 2026, month, day: d, hour: 10, minute: 0 })
       const db = createTestDb()
@@ -228,16 +228,16 @@ describe('e2e seeds (#183)', () => {
       expect([cell(0, 0), cell(1, 0), cell(3, 0)]).toEqual([
         [['open', null]],
         [['expired', null]],
-        [['confirmed', 'Starší']],
+        [['confirmed', 'Anička']],
       ])
       // Today.
       expect([cell(0, at), cell(1, at), cell(3, at)]).toEqual([
         [['open', null]],
-        [['reserved', 'Mladší']],
-        [['done_unconfirmed', 'Starší']],
+        [['reserved', 'Béďa']],
+        [['done_unconfirmed', 'Anička']],
       ])
-      // Tomorrow's vacuum is Starší's.
-      expect(cell(1, at + 1)).toEqual([['reserved', 'Starší']])
+      // Tomorrow's vacuum is Anička's.
+      expect(cell(1, at + 1)).toEqual([['reserved', 'Anička']])
       expect(getFlags(db)).toEqual({ ...NO_FEATURES, recurring: true, week: true, weekPlan: true })
       const log = db
         .select({ at: auditLog.at })
@@ -297,7 +297,7 @@ describe('e2e seeds (#183)', () => {
         weekPlan: true,
         settleLastDay: true,
       })
-      // Today's meeting settles the running week: nothing pending, Starší at the lower level.
+      // Today's meeting settles the running week: nothing pending, Anička at the lower level.
       const meeting = getMeeting(db, now, true)
       expect(meeting.period?.id).toBe(running?.id)
       expect(meeting.period?.running).toBe(true)
@@ -305,8 +305,8 @@ describe('e2e seeds (#183)', () => {
       if (!meeting.period) throw new Error('nothing to settle')
       expect(meeting.pending).toEqual([])
       expect(meeting.takers.map((t) => [t.name, t.total, t.level])).toEqual([
-        ['Starší', 50, 'lower'],
-        ['Mladší', 16, 'none'],
+        ['Anička', 50, 'lower'],
+        ['Béďa', 16, 'none'],
       ])
       // Today's copies are open in the running week; the past days' everyday chores are done.
       const before = getWeekPlan(db, now)

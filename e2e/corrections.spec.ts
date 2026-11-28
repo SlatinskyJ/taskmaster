@@ -3,14 +3,14 @@ import type { Page } from '@playwright/test'
 import { cs } from '../src/lib/strings'
 import { logout, passwordLogin } from './helpers'
 
-// Opravy bodů (#48) on the `corrections` seed: the admin gave Starší +5 (he disputed it) and
-// corrected Mladší's past week to Bez kapesného. Serial: each test writes a fix for good and
+// Opravy bodů (#48) on the `corrections` seed: the admin gave Anička +5 (she disputed it) and
+// corrected Béďa's past week to Bez kapesného. Serial: each test writes a fix for good and
 // the last one disputes the −2 the second one gives.
 test.describe.configure({ mode: 'serial' })
 
 const t = cs.admin.fix
-/** The seed's +5 for Starší (src/server/demo/pieces.ts, ADJUSTMENT_REASON). */
-const ADJUSTMENT_REASON = 'Pomohl s velkým nákupem navíc a odnesl tašky až nahoru.'
+/** The seed's +5 for Anička (src/server/demo/pieces.ts, ADJUSTMENT_REASON). */
+const ADJUSTMENT_REASON = 'Pomohla s velkým nákupem navíc a odnesla tašky až nahoru.'
 const row = (page: Page, text: string) =>
   page.locator('[data-slot="task-row"]').filter({ hasText: text })
 
@@ -26,7 +26,7 @@ async function switchTo(page: Page, username: string) {
   await page.goto('/tyden')
 }
 
-test('Opravit on Starší’s disputed +5: Přidat 5, the row goes, he reads the answer', async ({
+test('Opravit on Anička’s disputed +5: Přidat 5, the row goes, she reads the answer', async ({
   page,
 }) => {
   const reason = 'Máš pravdu, nákup byl velký. Přidávám 5.'
@@ -38,13 +38,13 @@ test('Opravit on Starší’s disputed +5: Přidat 5, the row goes, he reads the
     })
     .click()
   const sheet = page.getByRole('dialog')
-  await expect(sheet.getByRole('button', { name: 'Starší', exact: true })).toHaveAttribute(
+  await expect(sheet.getByRole('button', { name: 'Anička', exact: true })).toHaveAttribute(
     'aria-pressed',
     'true',
   )
   await sheet.getByLabel(t.points).fill('5')
   await sheet.getByLabel(t.reason).fill(reason)
-  await sheet.getByRole('button', { name: t.sendAdd(5, 'Starší') }).click()
+  await sheet.getByRole('button', { name: t.sendAdd(5, 'Anička') }).click()
   await expect(page.getByText(t.done)).toBeVisible()
   await expect(disputed).toHaveCount(0)
 
@@ -55,15 +55,15 @@ test('Opravit on Starší’s disputed +5: Přidat 5, the row goes, he reads the
   ).toContainText(cs.disputes.fixed(reason))
 })
 
-test('Upravit body: Ubrat 2 for Mladší; his Týden shows the −2 row', async ({ page }) => {
+test('Upravit body: Ubrat 2 for Béďa; his Týden shows the −2 row', async ({ page }) => {
   await asAdmin(page)
   await page.getByRole('button', { name: t.adjust }).click()
   const sheet = page.getByRole('dialog')
-  await sheet.getByRole('button', { name: 'Mladší', exact: true }).click()
+  await sheet.getByRole('button', { name: 'Béďa', exact: true }).click()
   await sheet.getByRole('button', { name: t.remove }).click()
   await sheet.getByLabel(t.points).fill('2')
   await sheet.getByLabel(t.reason).fill('Rozbil hrnek.')
-  await sheet.getByRole('button', { name: t.sendRemove(2, 'Mladší') }).click()
+  await sheet.getByRole('button', { name: t.sendRemove(2, 'Béďa') }).click()
   await expect(page.getByText(t.done)).toBeVisible()
 
   await switchTo(page, 'mladsi')
@@ -72,14 +72,14 @@ test('Upravit body: Ubrat 2 for Mladší; his Týden shows the −2 row', async 
   await expect(minus).toContainText('−2 b.')
 })
 
-test('Opravit týden: Starší’s past week to Spodní hranice; his Historie shows it', async ({
+test('Opravit týden: Anička’s past week to Spodní hranice; her Historie shows it', async ({
   page,
 }) => {
   const reason = 'Úkol z pondělí se počítal dvakrát.'
   await asAdmin(page)
   await page.getByRole('button', { name: t.correct }).click()
   const sheet = page.getByRole('dialog')
-  await sheet.getByRole('button', { name: 'Starší', exact: true }).click()
+  await sheet.getByRole('button', { name: 'Anička', exact: true }).click()
   await sheet
     .getByRole('button', { name: new RegExp(cs.week.total) })
     .first()
@@ -87,7 +87,7 @@ test('Opravit týden: Starší’s past week to Spodní hranice; his Historie sh
   const lower = cs.meeting.level.lower
   await sheet.getByRole('button', { name: lower, exact: true }).click()
   await sheet.getByLabel(t.reason).fill(reason)
-  await sheet.getByRole('button', { name: t.sendCorrect(lower, 'Starší') }).click()
+  await sheet.getByRole('button', { name: t.sendCorrect(lower, 'Anička') }).click()
   await expect(page.getByText(t.done)).toBeVisible()
 
   await switchTo(page, 'starsi')
@@ -100,7 +100,7 @@ test('Opravit týden: Starší’s past week to Spodní hranice; his Historie sh
   await expect(record).toContainText(reason)
 })
 
-test('Mladší disputes his −2; Sporné lists it for the admin', async ({ page }) => {
+test('Béďa disputes his −2; Sporné lists it for the admin', async ({ page }) => {
   await passwordLogin(page, 'mladsi')
   await expect(page).toHaveURL(/\/$/)
   await page.goto('/tyden')
