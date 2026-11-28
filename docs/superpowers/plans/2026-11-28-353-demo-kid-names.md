@@ -68,7 +68,8 @@
 
 ```ts
 // Jakub 2026-11-28 (#353): takers can be girls; no Czech line assumes boys.
-const BOY_ONLY = [/\bkluk/i, /\bkluc/i, /\bkluků\b/i, /\bRezervoval\b/, /\bUdělal\b/, /\bsám od sebe\b/, /\bby šel\b/]
+// No \b after a Czech letter: JS \b knows ASCII letters only.
+const BOY_ONLY = [/\bkluk/i, /\bkluc/i, /\brezervoval(?![a-zěščřžýáíéůú])/i, /\budělal(?![a-zěščřžýáíéůú])/i, /sám od sebe/i, /by šel(?![a-zěščřžýáíéůú])/i]
 
 it('no Czech string assumes the takers are boys', () => {
   const found = allStrings(cs).filter((s) => BOY_ONLY.some((re) => re.test(s)))
@@ -76,7 +77,7 @@ it('no Czech string assumes the takers are boys', () => {
 })
 ```
 
-`allStrings(value): string[]` walks `cs` recursively: strings as they are, arrays element-wise, and each function called with sample arguments (numbers `1`, strings `'x'`, booleans `true`; use `fn.length` and pass `1` for every parameter, then `'x'` — whichever returns a string). Keep it in the test file.
+`allStrings(value): string[]` walks `cs` recursively: strings as they are, arrays element-wise, and each function called with sample arguments (numbers `1`, strings `'x'`, booleans `true`; use `fn.length` and pass `1` for every parameter, then `'x'` — whichever returns a string; for a function with a boolean or plural branch, also call it with `false` and with `2` and `5` so each branch's text is checked). A function that throws on every sample, or returns no string, **fails the test** (it is listed by its key path) instead of being skipped. Keep the walker in the test file.
 
 - [ ] **Step 2:** `pnpm test src/lib/strings.neutral.test.ts` → FAIL listing the old lines.
 - [ ] **Step 3:** Change the 16 values to the "New" column, word for word.
@@ -94,7 +95,7 @@ it('no Czech string assumes the takers are boys', () => {
 - Modify: `CLAUDE.md` demo-data line: "`admin`, `tata`, `starsi` (Anička), `mladsi` (Béďa)"
 - Modify: every e2e spec that looks for `Starší` / `Mladší` / old wording on screen (`git grep -nE "Starší|Mladší|kluky|Rezervoval|Udělal" -- e2e`)
 
-- [ ] **Step 1:** In `seed.test.ts`, assert the seeded users' display names: `[['admin','Admin'],['tata','Táta'],['starsi','Anička'],['mladsi','Béďa']]`. Run → FAIL.
+- [ ] **Step 1:** In `seed.test.ts`, assert the seeded users' display names: `[['admin','Admin'],['tata','Táta'],['starsi','Anička'],['mladsi','Béďa']]`, and that for every `DEMO_USERS` entry the button label `cs.demo.users[username]` (and, if the branch still has it separately, `cs.dev.users[username]`) equals its `displayName`, so the labels and the seed can't drift apart. Run → FAIL.
 - [ ] **Step 2:** Change `DEMO_USERS` and the labels. Run → PASS.
 - [ ] **Step 3:** Update e2e text: `Starší` → `Anička`, `Mladší` → `Béďa`, `Čeká na kluky` → `Čeká na děti`, and any `Rezervoval` / `Udělal` meta text to the new form. Logins (`starsi`, `mladsi`) stay. Keep `keyboard-live.spec.ts`'s long task title as it is ("pokoj kluků" is a task title, not app copy).
 - [ ] **Step 4:** Run the e2e suites that changed (`pnpm exec playwright test <files> --trace off`) → PASS.
