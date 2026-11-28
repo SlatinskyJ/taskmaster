@@ -7,6 +7,9 @@ import {
   choreChange,
   corrections,
   choreDispute,
+  demoThisWeek,
+  demoToday,
+  demoWeek,
   descriptions,
   disputes,
   instances,
@@ -109,29 +112,30 @@ export const SEEDS = {
   },
   /** Suggestions on Profil and Správa (#247): two new, one done, one dismissed. */
   suggestions: { pieces: [suggestions], features: ['suggestions'] },
-  /** Previews and dev: everything. */
+  /**
+   * Previews, dev and the public demo: everything (#356). Its own week (`demoWeek`): the running
+   * week ends at tomorrow 00:00, so Schůzka can approve and settle all day, and its plan has
+   * past days. Its own one-time work (`demoThisWeek`), so the points differ and no task shares a
+   * chore's name. No old-rule everyday chores: the week plan shows the chores.
+   */
   demo: {
     pieces: [
-      pastWeekScheduled,
+      demoWeek,
       negotiation,
       priceChange,
       rebidding,
       cancelled,
-      points,
+      demoThisWeek,
       templates,
       choreBidding,
       choreChange,
-      thisWeek,
       disputes,
       corrections,
       choreDispute,
       instances,
       proposals,
-      bootTick,
-      // Last, so the other pieces keep their ids (e2e opens pages by id).
       descriptions,
-      weekChores,
-      planTable,
+      demoToday,
       suggestions,
     ],
     features: FEATURE_KEYS,

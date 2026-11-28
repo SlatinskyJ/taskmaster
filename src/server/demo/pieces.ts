@@ -41,7 +41,11 @@ import {
 } from '~/server/tasks'
 import { approveTemplateScoreIn, createTemplateIn } from '~/server/templates/templates'
 import type { NewTemplate } from '~/server/templates/templates'
-import { bidOnTemplateIn, counterOnTemplateIn } from '~/server/templates/scoreChange'
+import {
+  acceptLowestBidOnTemplateIn,
+  bidOnTemplateIn,
+  counterOnTemplateIn,
+} from '~/server/templates/scoreChange'
 
 // The demo seed's pieces (#183): one per feature's sample data, each through the real actions
 // in the seed's one transaction. A seed (./seeds.ts) is a list of them; previews get `demo`,
@@ -311,12 +315,20 @@ export const pastWeekScheduled: Piece = (ctx) => {
   pastWeekWith(ctx, [schedule])
 }
 
+interface PastWeekOpts {
+  chores?: typeof PAST_WEEK
+  /** When Táta settles: default an hour before the cutoff or an hour ago, whichever is first. */
+  settleAt?: Date
+  /** Runs right after the settlement, before the rejection. */
+  after?: readonly Piece[]
+}
+
 /** `during` runs after the past week's chores and before Táta settles it. */
-function pastWeekWith(ctx: SeedContext, during: readonly Piece[]): void {
+function pastWeekWith(ctx: SeedContext, during: readonly Piece[], opts: PastWeekOpts = {}): void {
   const { tx, id, start, now } = ctx
   const tata = id('tata')
   rollPeriods(tx, start, getPeriodDefaults(tx))
-  PAST_WEEK.forEach((chore, i) => {
+  ;(opts.chores ?? PAST_WEEK).forEach((chore, i) => {
     const at = new Date(start.getTime() + (i + 1) * HOUR)
     const task = doChore(ctx, chore.by, chore.title, chore.score, at)
     step(`approve "${chore.title}"`, approveTask(tx, tata, task, at))
@@ -324,13 +336,15 @@ function pastWeekWith(ctx: SeedContext, during: readonly Piece[]): void {
   for (const piece of during) piece(ctx)
   const week = listPeriods(tx)[0]
   if (!week) throw new Error('Demo seed: no past week')
-  const settleAt = new Date(Math.min(week.cutoffAt.getTime() - HOUR, now.getTime() - HOUR))
+  const settleAt =
+    opts.settleAt ?? new Date(Math.min(week.cutoffAt.getTime() - HOUR, now.getTime() - HOUR))
   // Off: this builds history mid-week (the past week settled early, as before #211). The seed's
   // switches are set after its pieces, and 0027 writes `settleLastDay` on.
   const meeting = getMeeting(tx, settleAt, false)
   if (!meeting.period) throw new Error('Demo seed: nothing to settle')
   const shown = meeting.takers.map((t) => ({ takerId: t.id, total: t.total }))
   step('settle', settlePeriod(tx, tata, week.id, shown, settleAt, false))
+  for (const piece of opts.after ?? []) piece(ctx)
   const rejectAt = new Date(now.getTime() - HOUR / 2)
   const glass = doChore(ctx, 'mladsi', 'Vynést sklo a plasty do kontejneru', 4, rejectAt)
   step(
@@ -359,7 +373,11 @@ const THIS_WEEK: readonly { by: string; title: string; score: number; approved: 
 
 /** This week's chores (#44), so the meeting has something to approve and to settle. */
 export const thisWeek: Piece = (ctx) => {
-  for (const chore of THIS_WEEK) {
+  thisWeekWith(ctx, THIS_WEEK)
+}
+
+function thisWeekWith(ctx: SeedContext, chores: typeof THIS_WEEK): void {
+  for (const chore of chores) {
     const task = doChore(ctx, chore.by, chore.title, chore.score, ctx.now)
     if (chore.approved) {
       step(`approve "${chore.title}"`, approveTask(ctx.tx, ctx.id('tata'), task, ctx.now))
@@ -832,4 +850,138 @@ export const suggestions: Piece = ({ tx, id, now }) => {
   const bins = suggest('starsi', 'Víc bodů za vynesení koše')
   step('done', closeSuggestionIn(tx, id('admin'), meeting.id, 'done', now))
   step('dismiss', closeSuggestionIn(tx, id('admin'), bins.id, 'dismiss', now))
+}
+
+// ── The public demo (#356): `demo` only, so a presenter shows every feature on any day ──
+
+/** The demo's past week: Starší 105 → horní, 100 off, 5 carried; Mladší 50 → spodní, 0. */
+const DEMO_PAST_WEEK: typeof PAST_WEEK = [
+  { by: 'starsi', title: 'Vytřít podlahu', score: 60 },
+  { by: 'starsi', title: 'Uklidit garáž', score: 45 },
+  { by: 'mladsi', title: 'Vyčistit kočičí záchod', score: 50 },
+]
+
+const daily = (title: string, score: number): NewTemplate => ({
+  title,
+  score,
+  approvalRequired: true,
+  schedule: { days: [0, 1, 2, 3, 4, 5, 6], time: null },
+  deadline: null,
+})
+
+/** The demo's week plan: four chores every day, the plastics bin twice a week. */
+export const DEMO_CHORES: readonly NewTemplate[] = [
+  daily('Nakrmit kočku', 3),
+  daily('Vyluxovat pokoj', 6),
+  daily('Prostřít stůl k večeři', 2),
+  daily('Ustlat postel', 3),
+  {
+    title: 'Vynést koš na plasty',
+    score: 4,
+    approvalRequired: true,
+    schedule: { days: [2, 5], time: { hour: 18, minute: 0 } },
+    deadline: { dayOffset: 1, due: { hour: 7, minute: 0 }, graceMinutes: 60 },
+  },
+]
+
+/** The running week's past days (0 = its first): who did which chore (index above), at 18:00. */
+const DEMO_DONE: readonly (readonly [string, number, readonly number[]])[] = [
+  ['mladsi', 0, [0, 1, 2, 3, 4]],
+  ['mladsi', 1, [1]],
+  ['starsi', 2, [0, 1, 2]],
+  ['starsi', 3, [0, 1, 2, 3, 4]],
+]
+
+function demoCopy(tx: Tx, templateId: number | undefined, day: Date): number {
+  const row = tx
+    .select({ id: taskTable.id })
+    .from(taskTable)
+    .where(and(eq(taskTable.templateId, templateId ?? 0), eq(taskTable.planDayAt, toIsoUtc(day))))
+    .get()
+  if (!row) throw new Error(`Demo seed: no copy of chore ${String(templateId)}`)
+  return row.id
+}
+
+/**
+ * The demo's weeks: a short settled past week (from `start`), then the running week from five
+ * days ago 00:00 to tomorrow 00:00, so today is its last day and Táta can approve and settle at
+ * Schůzka all day (`settleLastDay`); after midnight it waits for its meeting. The demo's chores
+ * are agreed at its start, so its plan has past days: done and approved, Starší's bed from
+ * yesterday waiting, the fourth day's table cancelled, the rest expire in `demoToday`. "Ustlat
+ * postel" had its price changed 3 → 4 on the first day. Must come first in a seed.
+ */
+export const demoWeek: Piece = (ctx) => {
+  const { tx, now } = ctx
+  const tomorrow = addPragueDays(startOfPragueDay(now), 1)
+  const from = addPragueDays(tomorrow, -6)
+  const cutoff = { weekday: toPragueWallTime(tomorrow).weekday, hour: 0, minute: 0 }
+  const weekly = { ...getPeriodDefaults(tx), lengthDays: 7, cutoff }
+  const defaults = () => {
+    writePeriodDefaults(tx, { kind: 'system' }, weekly, from)
+  }
+  const plan = (c: SeedContext) => {
+    demoPlan(c, from)
+  }
+  pastWeekWith(ctx, [defaults], { chores: DEMO_PAST_WEEK, settleAt: from, after: [plan] })
+  if (currentPeriod(tx, now)?.cutoffAt.getTime() !== tomorrow.getTime())
+    throw new Error('Demo seed: the running week does not end tomorrow')
+}
+
+function demoPlan({ tx, id }: SeedContext, from: Date): void {
+  const tata = id('tata')
+  const ids = DEMO_CHORES.map((input) => {
+    const t = step(`template "${input.title}"`, createTemplateIn(tx, tata, input, from))
+    step(`approve "${input.title}"`, approveTemplateScoreIn(tx, id('starsi'), t.id, t.score, from))
+    makeWeekCopies(tx, from, { templateId: t.id, log: SEED_LOG })
+    return t.id
+  })
+  const [, , table, bed = 0] = ids
+  const hour = (day: Date, h: number) => new Date(day.getTime() + h * HOUR)
+  step('bid 5 on the bed', bidOnTemplateIn(tx, id('mladsi'), bed, 5, hour(from, 8)))
+  step('bid 4 on the bed', bidOnTemplateIn(tx, id('starsi'), bed, 4, hour(from, 9)))
+  step('take 4 on the bed', acceptLowestBidOnTemplateIn(tx, tata, bed, 4, hour(from, 12)))
+  for (let d = 0; d < 5; d++) {
+    const day = addPragueDays(from, d)
+    if (d === 3) {
+      const why = 'Večeříme u babičky.'
+      step('cancel the table', cancelTask(tx, tata, demoCopy(tx, table, day), why, hour(day, 12)))
+    }
+    const done = DEMO_DONE.filter(([, , days]) => days.includes(d)).map(([by, chore]) => {
+      const task = demoCopy(tx, ids[chore], day)
+      step(`day ${String(d)}: done`, completeTask(tx, id(by), task, hour(day, 18), true))
+      return [by, task] as const
+    })
+    for (const [by, task] of done) {
+      if (d === 4 && by === 'starsi') continue
+      step(`day ${String(d)}: approved`, approveTask(tx, tata, task, hour(day, 19)))
+    }
+  }
+}
+
+/** Done this week in the demo: few points, so Starší stays below spodní and Mladší between. */
+const DEMO_THIS_WEEK: typeof THIS_WEEK = [
+  { by: 'starsi', title: 'Vysát auto', score: 8, approved: true },
+  { by: 'mladsi', title: 'Umýt nádobí', score: 8, approved: true },
+  { by: 'starsi', title: 'Uklidit hračky', score: 3, approved: false },
+  { by: 'mladsi', title: 'Vynést papír', score: 3, approved: false },
+]
+
+/** The demo's one-time work this week, and an agreed task for Volné. */
+export const demoThisWeek: Piece = (ctx) => {
+  thisWeekWith(ctx, DEMO_THIS_WEEK)
+  const windows = offer(ctx, 'Umýt okna v obýváku i v ložnici', 5)
+  step('agree "Umýt okna"', approveTaskOffer(ctx.tx, ctx.id('starsi'), windows.id, 5, ctx.now))
+}
+
+/** Today in the demo plan: Mladší holds the vacuum, Starší the bed and set the table; past days' leftovers expire. */
+export const demoToday: Piece = ({ tx, id, now }) => {
+  const today = startOfPragueDay(now)
+  const [, vacuum, table, bed] = DEMO_CHORES.map(
+    (c) => tx.select().from(templateTable).where(eq(templateTable.title, c.title)).get()?.id,
+  )
+  const copy = (t: number | undefined) => demoCopy(tx, t, today)
+  step('Mladší holds the vacuum', reserveTask(tx, id('mladsi'), copy(vacuum), now, true))
+  step('Starší holds the bed', reserveTask(tx, id('starsi'), copy(bed), now, true))
+  step('Starší set the table', completeTask(tx, id('starsi'), copy(table), now, true))
+  expireOverdueInstances(tx, now, SEED_LOG, true)
 }

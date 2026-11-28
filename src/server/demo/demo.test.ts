@@ -16,15 +16,20 @@ import {
 import { createTestDb } from '~/server/db/testing'
 import { takerPoints } from '~/server/points'
 import { getTaskDetail, listTasks } from '~/server/tasks'
-import { DEFAULT_PERIOD_DEFAULTS } from '~/domain'
-import { fromPragueWallTime } from '~/domain/dates'
-import { listPeriods, proposalsView, rollPeriods } from '~/server/periods'
+import { addPragueDays, fromPragueWallTime, startOfPragueDay } from '~/domain/dates'
+import { listPeriods, proposalsView } from '~/server/periods'
 import { rejectionsSince } from '~/server/tasks/rejections'
 import { getMeeting } from '~/server/settlement/meeting'
 import { ALL_FEATURES } from '~/lib/features'
 import { getFlags } from '~/server/features'
 import { getWeekPlan } from '~/server/instances/weekPlan'
-import { CHORE_DISPUTE_REASON, CORRECTION_REASON, PLAN_CHORES, WEEK_CHORES } from './pieces'
+import {
+  CHORE_DISPUTE_REASON,
+  CORRECTION_REASON,
+  DEMO_CHORES,
+  PLAN_CHORES,
+  WEEK_CHORES,
+} from './pieces'
 import { DEMO_PASSWORD } from '~/lib/demoAccounts'
 import { seedDemo } from './seed'
 
@@ -32,7 +37,7 @@ const T0 = new Date('2026-11-17T10:00:00.000Z')
 const PREVIEW = { TASKMASTER_ENV: 'preview', NODE_ENV: 'production' }
 
 /** A copy of the week plan's chores (#257) or the plan table's (#258), checked in their own tests below. */
-const WEEK_TITLES = new Set([...WEEK_CHORES, ...PLAN_CHORES].map((c) => c.title))
+const WEEK_TITLES = new Set([...WEEK_CHORES, ...PLAN_CHORES, ...DEMO_CHORES].map((c) => c.title))
 const weekCopy = (t: { origin: string; title: string }) =>
   t.origin === 'scheduled' && WEEK_TITLES.has(t.title)
 
@@ -70,84 +75,44 @@ describe('the demo seed (previews)', () => {
       'task.reserved',
       'task.completed',
     ]
+    const user = (...actions: string[]) => actions.map((action) => [action, 'user'])
+    const days = (n: number, approved = n) => [
+      ...Array<string[]>(n).fill(['task.completed', 'user']),
+      ...Array<string[]>(approved).fill(['task.approved', 'user']),
+    ]
     expect(taskLog.map((r) => [r.action, r.actorKind])).toEqual([
-      // #45's past week: three approved chores, then this week's rejected one.
-      ...[
-        ...[...done, 'task.approved'],
-        ...[...done, 'task.approved'],
-        ...[...done, 'task.approved'],
-      ].map((action) => [action, 'user']),
-      // #39: a scheduler tick in the past week makes the water and the fish.
-      ['instance.created', 'system'],
-      ['instance.created', 'system'],
-      ...[...done, 'task.rejected'].map((action) => [action, 'user']),
-      ['task.created', 'user'],
-      ['task.bid_placed', 'user'],
-      ['task.bid_placed', 'user'],
-      ['task.created', 'user'],
-      ['task.created', 'user'],
-      ['task.bid_placed', 'user'],
-      ['task.score_approved', 'user'],
-      ['task.agreed', 'user'],
-      ['task.created', 'user'],
-      ['task.score_approved', 'user'],
-      ['task.agreed', 'user'],
-      ['task.score_change_proposed', 'user'],
-      // #212: the attic agreed after Starší's bid, reopened, Mladší bids; the terrace agreed.
-      ['task.created', 'user'],
-      ['task.bid_placed', 'user'],
-      ['task.score_approved', 'user'],
-      ['task.agreed', 'user'],
-      ['task.bidding_reopened', 'user'],
-      ['task.bid_placed', 'user'],
-      ['task.created', 'user'],
-      ['task.score_approved', 'user'],
-      ['task.agreed', 'user'],
-      ['task.created', 'user'],
-      ['task.score_approved', 'user'],
-      ['task.agreed', 'user'],
+      // #356's past week: three approved chores.
+      ...user(...done, 'task.approved', ...done, 'task.approved', ...done, 'task.approved'),
+      // The running week's plan copies, then its five past days (Thursday's table cancelled,
+      // Starší's bed from yesterday waiting); then this week's rejected chore.
+      ...Array<string[]>(26).fill(['instance.created', 'system']),
+      ...days(3),
+      ...days(4),
+      ...days(3),
       ['task.cancelled', 'user'],
-      // #40: five tasks done (four of them approved), one left open, each agreed on one yes.
-      ...[true, true, false, true, true].flatMap((approved) => [
-        ['task.created', 'user'],
-        ['task.score_approved', 'user'],
-        ['task.agreed', 'user'],
-        ['task.completed', 'user'],
-        ...(approved ? [['task.approved', 'user']] : []),
-      ]),
-      ['task.created', 'user'],
-      ['task.score_approved', 'user'],
-      ['task.agreed', 'user'],
-      // #44's week: six approved chores, then one pending completion per boy.
-      ...[...Array<boolean>(6).fill(true), false, false].flatMap((approved) =>
-        [
-          'task.created',
-          'task.score_approved',
-          'task.agreed',
-          'task.reserved',
-          'task.completed',
-          ...(approved ? ['task.approved'] : []),
-        ].map((action) => [action, 'user']),
-      ),
+      ...days(2),
+      ...days(2, 1),
+      ...user(...done, 'task.rejected'),
+      // #34, #150, #36, #212, #36's cancelled task.
+      ...user('task.created', 'task.bid_placed', 'task.bid_placed'),
+      ...user('task.created', 'task.created', 'task.bid_placed', 'task.score_approved'),
+      ...user('task.agreed', 'task.created', 'task.score_approved', 'task.agreed'),
+      ...user('task.score_change_proposed'),
+      ...user('task.created', 'task.bid_placed', 'task.score_approved', 'task.agreed'),
+      ...user('task.bidding_reopened', 'task.bid_placed'),
+      ...user('task.created', 'task.score_approved', 'task.agreed'),
+      ...user('task.created', 'task.score_approved', 'task.agreed', 'task.cancelled'),
+      // #356's one-time work: two approved, two waiting, one agreed for Volné.
+      ...user(...done, 'task.approved', ...done, 'task.approved', ...done, ...done),
+      ...user('task.created', 'task.score_approved', 'task.agreed'),
       // #38: Mladší's and Starší's Zapsat, Starší's rejected, then Táta's "+ Teď" on the bag.
-      ['instance.self_logged', 'user'],
-      ['instance.self_logged', 'user'],
-      ['task.rejected', 'user'],
-      ['instance.created', 'user'],
-      // #39: the boot tick expires that fish and makes today's; the water is still open.
-      ['instance.expired', 'system'],
-      ['instance.created', 'system'],
+      ...user('instance.self_logged', 'instance.self_logged', 'task.rejected', 'instance.created'),
       // #207: two tasks with a text; the open one gets Táta's new text, waiting.
-      ['task.created', 'user'],
-      ['task.created', 'user'],
-      ['task.score_approved', 'user'],
-      ['task.agreed', 'user'],
-      ['task.description_change_proposed', 'user'],
-      // #257: the week plan's copies, made by the system (counted in their own test).
-      ...Array<string[]>(7).fill(['instance.created', 'system']),
-      // #258: the plan table's copies (system), then Starší holds tomorrow's vacuum.
-      ...Array<string[]>(17).fill(['instance.created', 'system']),
-      ['task.reserved', 'user'],
+      ...user('task.created', 'task.created', 'task.score_approved', 'task.agreed'),
+      ...user('task.description_change_proposed'),
+      // #356's today: two held, the table set; the past days' leftovers expire.
+      ...user('task.reserved', 'task.reserved', 'task.completed'),
+      ...Array<string[]>(6).fill(['instance.expired', 'system']),
     ])
   })
 
@@ -161,38 +126,26 @@ describe('the demo seed (previews)', () => {
         .sort(),
     ).toEqual([
       ['Nachystat tašku do školy', 'open'], // #38 + Teď
-      ['Nakrmit kočku', 'confirmed'], // #45 past week
-      ['Nakrmit rybičky', 'expired'], // #39 tick in the past week
-      ['Nakrmit rybičky', 'open'], // #39 boot tick
       ['Odnést krabice do sklepa', 'open'], // #207
-      ['Posekat trávu', 'confirmed'], // #44 week
-      ['Pověsit prádlo', 'confirmed'], // #40
       ['Shrabat listí na zahradě', 'open'], // #36 price change
-      ['Uklidit garáž', 'confirmed'], // #45
+      ['Uklidit garáž', 'confirmed'], // #356 past week
+      ['Uklidit hračky', 'done_unconfirmed'], // #356, Starší
       ['Uklidit kolárnu', 'proposed'], // #207
-      ['Uklidit koupelnu', 'confirmed'], // #44
-      ['Uklidit pokoj po návštěvě', 'confirmed'], // #44, Mladší
-      ['Uklidit pokoj', 'confirmed'], // #40, Starší
       ['Uklidit sklep', 'proposed'], // #34
       ['Umýt auto', 'proposed'], // #34
-      ['Umýt nádobí', 'confirmed'], // #40
+      ['Umýt nádobí', 'confirmed'], // #356, Mladší
       ['Umýt okna v kuchyni', 'cancelled'], // #36
-      ['Umýt okna v obýváku i v ložnici', 'open'], // #40
+      ['Umýt okna v obýváku i v ložnici', 'open'], // #356, for Volné
       ['Vyluxovat celý obývák a chodbu', 'reserved'], // #150
-      ['Vyměnit kočce vodu', 'open'], // #39
       ['Vyndat myčku', 'done_unconfirmed'], // #38 Zapsat, Mladší
       ['Vyndat myčku', 'rejected'], // #38 Zapsat, Starší
-      ['Vynést papír', 'confirmed'], // #44
+      ['Vynést papír', 'done_unconfirmed'], // #356, Mladší
       ['Vynést sklo a plasty do kontejneru', 'reserved'], // #45, rejected
       ['Vynést staré věci na půdu', 'open'], // #212, in a round
-      ['Vynést tříděný odpad', 'confirmed'], // #40
-      ['Vynést tříděný', 'done_unconfirmed'], // #44
-      ['Vysát auto', 'confirmed'], // #44
-      ['Vytřít podlahu v kuchyni', 'done_unconfirmed'], // #40
-      ['Vytřít podlahu', 'confirmed'], // #45
-      ['Zalít kytky', 'done_unconfirmed'], // #44
+      ['Vysát auto', 'confirmed'], // #356, disputed (#46)
+      ['Vytřít podlahu', 'confirmed'], // #356 past week
+      ['Vyčistit kočičí záchod', 'confirmed'], // #356 past week
       ['Zamést chodník před domem', 'open'], // #212
-      ['Zamést terasu', 'confirmed'], // #44
     ])
   })
 
@@ -229,28 +182,32 @@ describe('the demo seed (previews)', () => {
       score: 12,
       waitingFor: [{ name: 'Starší' }, { name: 'Mladší' }],
     })
-    const cancelled = db.select().from(auditLog).where(eq(auditLog.action, 'task.cancelled')).get()
-    expect(cancelled?.reason).toBe('Udělá to firma.')
+    const cancelled = db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.action, 'task.cancelled'))
+      .all()
+      .map((e) => e.reason)
+    // #356's cancelled plan copy, then #36's task.
+    expect(cancelled).toEqual(['Večeříme u babičky.', 'Udělá to firma.'])
   })
 
-  it('gives both brothers points (#40 + #44 week, minus #45 settlement): confirmed and waiting, plus an open task', () => {
+  it('gives the brothers different outcomes (#356): Starší below spodní even with all approved, Mladší between', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
-    // Last week's settlement took 100 from Starší and 50 from Mladší (#172): the meeting's totals.
+    // Starší: 5 carried + 5 by hand + 8 car + 18 plan; Mladší: 50 given back + 8 dishes + 21 plan.
     expect(takerPoints(db, T0).takers.map((t) => [t.name, t.confirmed, t.pending])).toEqual([
-      ['Starší', 165, 14],
-      ['Mladší', 152, 6],
+      ['Starší', 36, 8],
+      ['Mladší', 79, 6],
     ])
     const open = listTasks(db).filter((t) => t.status === 'open' && !weekCopy(t))
     expect(open.map((t) => [t.title, t.score])).toEqual([
       ['Odnést krabice do sklepa', 8], // #207, a new text waiting
-      ['Nakrmit rybičky', 1], // #39 boot tick
       ['Nachystat tašku do školy', 2], // #38 + Teď
-      ['Umýt okna v obýváku i v ložnici', 5],
+      ['Umýt okna v obýváku i v ložnici', 5], // #356, for Volné
       ['Zamést chodník před domem', 6], // #212, never reopened
       ['Vynést staré věci na půdu', 12], // #212, in a round
       ['Shrabat listí na zahradě', 10],
-      ['Vyměnit kočce vodu', 1], // #39
     ])
   })
 
@@ -269,9 +226,17 @@ describe('the demo seed (previews)', () => {
     expect(getFlags(db)).toEqual({ ...ALL_FEATURES, week: false })
   })
 
-  it('adds fifteen templates (#37, #38, #39, #209, #232, #207, #257, #258): three waiting for agreement, twelve agreed', () => {
+  it('adds twelve templates (#356, #37, #38, #209, #232, #207): three waiting for agreement, nine agreed', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
+    const plan = (title: string, score: number) => ({
+      title,
+      status: 'active',
+      score,
+      days: 127,
+      time: null,
+      due: null,
+    })
     expect(
       db
         .select({
@@ -285,22 +250,18 @@ describe('the demo seed (previews)', () => {
         .from(templates)
         .all(),
     ).toEqual([
-      // #39's everyday templates, made in the past week.
+      // #356's week plan, agreed at the running week's start; the bed's price went 3 → 4.
+      plan('Nakrmit kočku', 3),
+      plan('Vyluxovat pokoj', 6),
+      plan('Prostřít stůl k večeři', 2),
+      plan('Ustlat postel', 4),
       {
-        title: 'Vyměnit kočce vodu',
+        title: 'Vynést koš na plasty',
         status: 'active',
-        score: 1,
-        days: 127,
-        time: '07:00',
-        due: null,
-      },
-      {
-        title: 'Nakrmit rybičky',
-        status: 'active',
-        score: 1,
-        days: 127,
+        score: 4,
+        days: (1 << 2) | (1 << 5),
         time: '18:00',
-        due: '18:00',
+        due: '07:00',
       },
       {
         title: 'Vynést koše',
@@ -326,49 +287,6 @@ describe('the demo seed (previews)', () => {
       { title: 'Umýt koupelnu', status: 'active', score: 8, days: 0, time: null, due: null },
       // #207's agreed chore with a text.
       { title: 'Utřít prach v pokoji', status: 'active', score: 4, days: 0, time: null, due: null },
-      // #257's week-plan chores.
-      { title: 'Nakrmit kočku', status: 'active', score: 3, days: 127, time: null, due: null },
-      {
-        title: 'Vynést tříděný odpad',
-        status: 'active',
-        score: 4,
-        days: (1 << 2) | (1 << 5),
-        time: '18:00',
-        due: '07:00',
-      },
-      // #258's plan-table chores.
-      {
-        title: 'Vyluxovat celý obývák a chodbu',
-        status: 'active',
-        score: 6,
-        days: 127,
-        time: null,
-        due: null,
-      },
-      {
-        title: 'Prostřít stůl k večeři',
-        status: 'active',
-        score: 2,
-        days: 127,
-        time: null,
-        due: null,
-      },
-      {
-        title: 'Zalít kytky na balkoně',
-        status: 'active',
-        score: 3,
-        days: 127,
-        time: null,
-        due: null,
-      },
-      {
-        title: 'Vynést koš na plasty',
-        status: 'active',
-        score: 4,
-        days: (1 << 2) | (1 << 5),
-        time: '18:00',
-        due: '07:00',
-      },
     ])
     const actions = db
       .select({ action: auditLog.action })
@@ -376,37 +294,27 @@ describe('the demo seed (previews)', () => {
       .where(eq(auditLog.entityType, 'template'))
       .all()
       .map((r) => r.action)
+    const agreed = ['template.created', 'template.score_approved', 'template.agreed']
     expect(actions).toEqual([
-      // By template (the entity index, ids as text: 1, 10, 11, 12, …, 15, 2, …): #39's water,
-      // #257's cat and sorted waste, #258's four chores, #39's fish, the bins, the dishwasher,
-      // then the school bag.
-      ...['template.created', 'template.score_approved', 'template.agreed'],
-      ...['template.created', 'template.score_approved', 'template.agreed'],
-      ...['template.created', 'template.score_approved', 'template.agreed'],
-      ...Array.from({ length: 4 }, () => [
-        'template.created',
-        'template.score_approved',
-        'template.agreed',
-      ]).flat(),
-      ...['template.created', 'template.score_approved', 'template.agreed'],
-      'template.created',
-      'template.created',
-      'template.score_approved',
-      'template.agreed',
-      'template.bid_placed',
-      'template.score_countered',
-      'template.created',
-      'template.score_approved',
-      'template.agreed',
-      'template.created',
+      // By template (the entity index, ids as text: 1, 10, 11, 12, 2, …): the cat, #209's two,
+      // #232's bath, #207's dust, the vacuum, the table, the bed with its finished price change,
+      // the plastics bin, #37's bins, the dishwasher, then the school bag.
+      ...agreed,
       ...['template.created', 'template.bid_placed', 'template.bid_placed'],
-      ...['template.created', 'template.score_approved', 'template.agreed'],
-      ...['template.bid_placed', 'template.bid_placed'],
-      ...['template.created', 'template.score_approved', 'template.agreed'],
+      ...[...agreed, 'template.bid_placed', 'template.bid_placed'],
+      ...agreed,
+      ...agreed,
+      ...agreed,
+      ...[...agreed, 'template.bid_placed', 'template.bid_placed', 'template.score_changed'],
+      ...agreed,
+      'template.created',
+      ...[...agreed, 'template.bid_placed', 'template.score_countered'],
+      ...agreed,
+      'template.created',
     ])
   })
 
-  it('leaves a score change in flight on the dishwasher (#138): Mladší bids 5, Táta offers 4', () => {
+  it('leaves a score change in flight on the dishwasher (#138) and a finished one on the bed (#356)', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     const name = (id: number) => db.select().from(users).where(eq(users.id, id)).get()?.username
@@ -416,6 +324,10 @@ describe('the demo seed (previews)', () => {
       .all()
       .map((r) => [name(r.userId), r.side, r.score, r.closedAs])
     expect(rows).toEqual([
+      // #356: "Ustlat postel", Mladší bids 5, Starší 4, Táta takes the lowest.
+      ['mladsi', 'taker', 5, 'closed'],
+      ['starsi', 'taker', 4, 'accepted'],
+      // #138: the dishwasher, Mladší bids 5, Táta offers 4.
       ['mladsi', 'taker', 5, null],
       ['tata', 'giver', 4, null],
       // #209: the bids on "Zalít kytky".
@@ -425,13 +337,6 @@ describe('the demo seed (previews)', () => {
       ['starsi', 'taker', 10, null],
       ['mladsi', 'taker', 11, null],
     ])
-    expect(
-      db
-        .select()
-        .from(templates)
-        .all()
-        .map((t) => t.score),
-    ).toEqual([1, 1, 4, 3, 2, 10, 4, 8, 4, 3, 4, 6, 2, 3, 4])
   })
 
   it('all or nothing: a failing template leaves no people either', () => {
@@ -445,32 +350,34 @@ describe('the demo seed (previews)', () => {
     expect(db.select().from(auditLog).all()).toHaveLength(0)
   })
 
-  it('demo seed gives a meeting with 4 pending items and totals 165 / 152 (#40 + #44, #45 carry 8, #48 fixes)', () => {
+  it('demo seed gives a meeting with 5 pending items, Starší below spodní and Mladší between (#356)', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
-    // The roller starts the week at boot, right after the seed.
-    rollPeriods(db, new Date(T0.getTime() + 60_000), DEFAULT_PERIOD_DEFAULTS)
-    const meeting = getMeeting(db, new Date(T0.getTime() + 120_000), false)
+    const meeting = getMeeting(db, new Date(T0.getTime() + 120_000), true)
     if (!meeting.period) throw new Error('no meeting')
+    expect(meeting.period.running).toBe(true)
     expect(meeting.pending.map((t) => [t.title, t.score, t.completedBy?.name])).toEqual([
-      ['Vytřít podlahu v kuchyni', 12, 'Starší'],
-      ['Zalít kytky', 2, 'Starší'],
-      ['Vynést tříděný', 3, 'Mladší'],
+      ['Ustlat postel', 3, 'Starší'], // yesterday's copy
+      ['Prostřít stůl k večeři', 2, 'Starší'], // today's copy
+      ['Uklidit hračky', 3, 'Starší'],
+      ['Vynést papír', 3, 'Mladší'],
       ['Vyndat myčku', 3, 'Mladší'], // #38 Zapsat
     ])
-    expect(meeting.takers.map((t) => [t.name, t.total])).toEqual([
-      ['Starší', 165],
-      ['Mladší', 152],
+    expect(meeting.takers.map((t) => [t.name, t.total, t.level])).toEqual([
+      ['Starší', 36, 'none'],
+      ['Mladší', 79, 'lower'],
     ])
   })
 
-  it('a settled past week (#45): records, the current week from the settle, one rejection', () => {
+  it('a settled past week (#45): records, the running week from five days ago to tomorrow 00:00, one rejection', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     const [past, current] = listPeriods(db)
     if (!past || !current) throw new Error('no weeks')
+    const day = (d: number) =>
+      fromPragueWallTime({ year: 2026, month: 11, day: d, hour: 0, minute: 0 })
     expect(past.startsAt).toEqual(new Date(T0.getTime() - 7 * 86_400_000))
-    expect(current.startsAt).toEqual(past.endedAt)
+    expect([past.endedAt, current.startsAt, current.cutoffAt]).toEqual([day(12), day(12), day(18)])
     expect(listPeriods(db)).toHaveLength(2)
     const name = (id: number) => db.select().from(users).where(eq(users.id, id)).get()?.username
     expect(
@@ -480,7 +387,7 @@ describe('the demo seed (previews)', () => {
         .all()
         .map((r) => [r.periodId, name(r.takerId), r.totalBefore, r.level, r.deducted, r.carryOver]),
     ).toEqual([
-      [past.id, 'starsi', 108, 'upper', 100, 8],
+      [past.id, 'starsi', 105, 'upper', 100, 5],
       [past.id, 'mladsi', 50, 'lower', 50, 0],
     ])
     expect(
@@ -506,9 +413,7 @@ describe('the demo seed (previews)', () => {
   const NOWS = [16, 17, 18, 19, 20, 21, 22].flatMap((day) =>
     [8, 20].map((hour) => fromPragueWallTime({ year: 2026, month: 11, day, hour, minute: 0 })),
   )
-  it.each(
-    NOWS.flatMap((now) => (['demo', 'scheduler'] as const).map((seed) => [seed, now] as const)),
-  )(
+  it.each(NOWS.map((now) => ['scheduler', now] as const))(
     "scheduled rows (#39), seed %s at %s: water open, today's fish open, an expired fish",
     (seed, now) => {
       const db = createTestDb()
@@ -715,24 +620,6 @@ describe('the demo seed: descriptions (#207)', () => {
 })
 
 describe('the week plan (#257)', () => {
-  it('demo at T0 (Tuesday 11:00): the two chores are agreed now, their copies start with the next slot and each has its Prague day', () => {
-    const db = createTestDb()
-    seedDemo(db, PREVIEW, T0)
-    const day = (d: number) =>
-      fromPragueWallTime({ year: 2026, month: 11, day: d, hour: 0, minute: 0 }).toISOString()
-    const copies = db
-      .select()
-      .from(tasks)
-      .orderBy(asc(tasks.id))
-      .all()
-      .filter((t) => weekCopy(t) && WEEK_CHORES.some((c) => c.title === t.title))
-    expect(copies.map((r) => [r.title, r.planDayAt, r.status, r.weekRules])).toEqual([
-      ...[18, 19, 20, 21, 22].map((d) => ['Nakrmit kočku', day(d), 'open', true]),
-      ['Vynést tříděný odpad', day(17), 'open', true],
-      ['Vynést tříděný odpad', day(20), 'open', true],
-    ])
-  })
-
   it.each([8, 23])(
     "the weekplan seed at %i:00: a week from today 00:00, today's cat copy open, the log in time order",
     (hour) => {
@@ -765,24 +652,91 @@ describe('the week plan (#257)', () => {
   )
 })
 
-describe('the plan table (#258)', () => {
-  it("demo at T0: the plan table has the four #258 chores, agreed now, so today has none of their copies; Starší holds tomorrow's vacuum", () => {
+describe('the demo week (#356)', () => {
+  it('at T0 (Tuesday 11:00) the plan table has five past days and today in every state', () => {
     const db = createTestDb()
     seedDemo(db, PREVIEW, T0)
     const plan = getWeekPlan(db, T0)
-    const titles = new Set(PLAN_CHORES.map((c) => c.title))
-    const rows = plan.rows.filter((r) => titles.has(r.title))
-    expect(rows.map((r) => r.title)).toEqual([
-      'Prostřít stůl k večeři',
-      'Vyluxovat celý obývák a chodbu',
-      'Vynést koš na plasty',
-      'Zalít kytky na balkoně',
+    expect(plan.days).toHaveLength(6)
+    expect(plan.today).toBe(plan.days[5])
+    const cells = (title: string) =>
+      plan.rows
+        .find((r) => r.title === title)
+        ?.cells.map((c) => c.map((x) => (x.person ? `${x.status} ${x.person.name}` : x.status)))
+    const ok = 'confirmed Starší'
+    expect(cells('Nakrmit kočku')).toEqual([
+      ...Array<string[]>(5).fill(['confirmed Mladší']),
+      ['open'],
     ])
-    const at = plan.days.indexOf(plan.today)
-    // Tuesday 17. 11.: the bins' 18:00 slot is still ahead, the every-day chores start tomorrow.
-    expect(rows.map((r) => r.cells[at]?.map((c) => c.status))).toEqual([[], [], ['open'], []])
-    expect(rows[1]?.cells[at + 1]?.map((c) => [c.status, c.person?.name])).toEqual([
-      ['reserved', 'Starší'],
+    expect(cells('Vyluxovat pokoj')).toEqual([
+      ['expired'],
+      ['confirmed Mladší'],
+      ['expired'],
+      ['expired'],
+      ['expired'],
+      ['reserved Mladší'],
     ])
+    expect(cells('Prostřít stůl k večeři')).toEqual([
+      [ok],
+      [ok],
+      [ok],
+      ['cancelled'],
+      ['expired'],
+      ['done_unconfirmed Starší'],
+    ])
+    expect(cells('Ustlat postel')).toEqual([
+      [ok],
+      [ok],
+      [ok],
+      [ok],
+      ['done_unconfirmed Starší'],
+      ['reserved Starší'],
+    ])
+    // Tuesday 17. 11. 18:00 is still ahead; Friday 13. 11. expired.
+    expect(cells('Vynést koš na plasty')).toEqual([[], ['expired'], [], [], [], ['open']])
+    const cancelled = db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, 'task.cancelled'), eq(auditLog.actorKind, 'user')))
+      .all()
+      .map((e) => e.reason)
+    expect(cancelled).toEqual(['Večeříme u babičky.', 'Udělá to firma.'])
   })
+
+  // The demo resets at 03:00 and redeploys at any hour: every weekday and hour gives a running
+  // week that ends at tomorrow 00:00, settles at Schůzka until then and waits for it after.
+  const DEMO_NOWS = [23, 24, 25, 26, 27, 28, 29].flatMap((day) =>
+    [
+      [0, 5],
+      [3, 0],
+      [12, 0],
+      [23, 55],
+    ].map(([hour = 0, minute = 0]) =>
+      fromPragueWallTime({ year: 2026, month: 11, day, hour, minute }),
+    ),
+  )
+  it.each(DEMO_NOWS)(
+    'at %s: Schůzka can approve and settle until tomorrow 00:00 and after',
+    (now) => {
+      const db = createTestDb()
+      seedDemo(db, PREVIEW, now)
+      const tomorrow = addPragueDays(startOfPragueDay(now), 1)
+      expect(listPeriods(db).map((p) => p.cutoffAt.getTime())).toContain(tomorrow.getTime())
+      const before = getMeeting(db, new Date(now.getTime() + 60_000), true)
+      expect(before.period?.running).toBe(true)
+      if (before.period) expect(before.pending.length).toBeGreaterThan(0)
+      const after = getMeeting(db, new Date(tomorrow.getTime() + 30 * 60_000), true)
+      expect(after.period?.running).toBe(false)
+      // No old-rule everyday rows: every scheduled task is a week copy of the demo's chores.
+      const scheduled = db.select().from(tasks).where(eq(tasks.origin, 'scheduled')).all()
+      expect(scheduled.every((t) => t.planDayAt !== null && WEEK_TITLES.has(t.title))).toBe(true)
+      const at = db
+        .select({ at: auditLog.at })
+        .from(auditLog)
+        .orderBy(asc(auditLog.id))
+        .all()
+        .map((r) => r.at)
+      expect(at).toEqual([...at].sort())
+    },
+  )
 })
