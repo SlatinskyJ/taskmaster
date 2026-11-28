@@ -70,3 +70,32 @@ describe('PersonForm (Správa, #134)', () => {
     expect(html.slice(save)).toMatch(/^[^]*<\/div><\/form>$/)
   })
 })
+
+// The public demo (#328): people are locked; the sheet still opens, every control in it is
+// disabled through one fieldset, with the lock note at its top.
+describe('PersonForm locked on the demo', () => {
+  for (const mode of ['edit', 'add'] as const) {
+    it(`${mode}: one disabled fieldset with the lock note`, () => {
+      const html = renderToStaticMarkup(
+        <PersonForm
+          mode={mode}
+          person={mode === 'edit' ? TATA : undefined}
+          locked
+          onSubmit={noop}
+          onReset={() => undefined}
+        />,
+      )
+      expect(html).toContain('<fieldset disabled=""')
+      expect(html).toContain(cs.demo.lockedNote)
+      expect(html.indexOf(cs.demo.lockedNote)).toBeLessThan(html.indexOf('name="displayName"'))
+    })
+  }
+
+  it('unlocked: no disabled fieldset, no note', () => {
+    const html = renderToStaticMarkup(
+      <PersonForm mode="edit" person={TATA} onSubmit={noop} onReset={() => undefined} />,
+    )
+    expect(html).not.toContain('<fieldset disabled')
+    expect(html).not.toContain(cs.demo.lockedNote)
+  })
+})

@@ -5,8 +5,8 @@ import { EmptyState } from '~/components/EmptyState'
 import { AddDevice } from '~/components/dev/AddDevice'
 import { DeviceFrame, type OpenFrame } from '~/components/dev/DeviceFrame'
 import { Button } from '~/components/ui/button'
+import type { DemoLogin } from '~/lib/demoAccounts'
 import {
-  type DemoLogin,
   type Device,
   type SizeKey,
   frameSrc,

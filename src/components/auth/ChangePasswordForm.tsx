@@ -4,6 +4,7 @@ import { sectionLabelClass } from '~/components/shell/SectionLabel'
 import { Button } from '~/components/ui/button'
 import { DrawerFooter } from '~/components/ui/drawer'
 import { Input } from '~/components/ui/input'
+import { demoLockedMessage } from '~/lib/demo'
 import { cs } from '~/lib/strings'
 import { MAX_PASSWORD_LENGTH, MIN_USER_PASSWORD } from '~/lib/userLimits'
 import type { ChangePasswordResult } from '~/server/users/functions'
@@ -64,8 +65,8 @@ export function ChangePasswordForm({ username, onSubmit, onDone }: Props) {
         setValues(EMPTY_PASSWORD_FORM)
         onDone(outcome.toast)
       } else setError(outcome.error)
-    } catch {
-      setError(cs.login.failed)
+    } catch (e) {
+      setError(demoLockedMessage(e) ?? cs.login.failed)
     } finally {
       setBusy(false)
     }

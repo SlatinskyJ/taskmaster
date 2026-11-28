@@ -1,5 +1,7 @@
 import { HeadContent, Scripts, createRootRoute, useRouter } from '@tanstack/react-router'
 import { useEffect, type ReactNode } from 'react'
+import { DemoMarker } from '~/components/shell/DemoMarker'
+import { demoHeadMeta, loadIsDemo } from '~/lib/demo'
 import { guardedReentryUrl } from '~/lib/frame'
 import { trackVisualViewport } from '~/lib/visualViewport'
 import { Toaster } from '~/components/ui/sonner'
@@ -10,12 +12,15 @@ import { registerServiceWorker } from '~/pwa/register'
 import appCss from '~/styles/app.css?url'
 
 export const Route = createRootRoute({
-  head: () => ({
+  // Every route reads `context.demo`: the public demo's marker, login buttons and locks (#328).
+  beforeLoad: async () => ({ demo: await loadIsDemo() }),
+  head: ({ match }) => ({
     meta: [
       { charSet: 'utf-8' },
       { name: 'viewport', content: 'width=device-width, initial-scale=1' },
       { title: 'Taskmaster' },
       ...pwaMeta,
+      ...demoHeadMeta(match.context.demo),
     ],
     links: [{ rel: 'stylesheet', href: appCss }, ...pwaLinks],
   }),
@@ -24,6 +29,7 @@ export const Route = createRootRoute({
 
 function RootDocument({ children }: { children: ReactNode }) {
   const router = useRouter()
+  const demo = Route.useRouteContext({ select: (c) => c.demo })
   useEffect(() => {
     registerServiceWorker(router)
   }, [router])
@@ -47,6 +53,7 @@ function RootDocument({ children }: { children: ReactNode }) {
         ))}
       </head>
       <body>
+        <DemoMarker demo={demo} />
         {children}
         <Toaster />
         <Scripts />

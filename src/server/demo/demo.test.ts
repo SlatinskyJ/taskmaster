@@ -25,7 +25,8 @@ import { ALL_FEATURES } from '~/lib/features'
 import { getFlags } from '~/server/features'
 import { getWeekPlan } from '~/server/instances/weekPlan'
 import { CHORE_DISPUTE_REASON, CORRECTION_REASON, PLAN_CHORES, WEEK_CHORES } from './pieces'
-import { DEMO_PASSWORD, seedDemo } from './seed'
+import { DEMO_PASSWORD } from '~/lib/demoAccounts'
+import { seedDemo } from './seed'
 
 const T0 = new Date('2026-11-17T10:00:00.000Z')
 const PREVIEW = { TASKMASTER_ENV: 'preview', NODE_ENV: 'production' }
