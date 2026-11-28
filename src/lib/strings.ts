@@ -113,7 +113,7 @@ export const cs = {
     quickPick: 'Rychlá volba',
     approvalRequired: 'Po dokončení schvaluji já',
     propose: 'Navrhnout',
-    proposeHint: 'Úkol bude volný, až cenu schválí jeden z kluků.',
+    proposeHint: 'Úkol bude volný, až cenu schválí jedno z dětí.',
     created: 'Úkol navržen',
     /** Followed by the giver's name: "Nabízí Táta". */
     offeredBy: 'Nabízí',
@@ -138,7 +138,7 @@ export const cs = {
   },
   /** Zapsat (#38, UI doc §7.1 TLog): a brother logs a chore he did unprompted. */
   log: {
-    intro: 'Udělal jsi něco sám od sebe? Zapiš to.',
+    intro: 'Máš hotové něco, co nikdo nezadal? Zapiš to.',
     tileLabel: (title: string, n: number) => `${title}, ${String(n)} b.`,
     points: (n: number) => `${String(n)} b.`,
     confirmTitle: 'Zapsat úkol?',
@@ -223,7 +223,7 @@ export const cs = {
     dueTime: 'v',
     grace: 'Zapsat jde ještě',
     hours: (n: number) => `${String(n).replace('.', ',')} h`,
-    proposeHint: 'Začne platit, až cenu schválí jeden z kluků.',
+    proposeHint: 'Začne platit, až cenu schválí jedno z dětí.',
     created: 'Opakovaný úkol navržen',
     /** Chip of an agreed template. */
     activeChip: 'Platí',
@@ -363,10 +363,10 @@ export const cs = {
     reject: 'Zamítnout',
     rejectReason: 'Proč? (nepovinné)',
     back: 'Zpět',
-    /** Followed by a name: "Rezervoval Starší". */
-    reservedBy: 'Rezervoval',
-    /** Followed by a name: "Udělal Starší". */
-    doneBy: 'Udělal',
+    /** Followed by a name: "Rezervace: Anička". */
+    reservedBy: 'Rezervace:',
+    /** Followed by a name: "Hotovo: Anička". */
+    doneBy: 'Hotovo:',
     toast: {
       reserved: 'Rezervováno',
       released: 'Uvolněno',
@@ -383,7 +383,7 @@ export const cs = {
     needs: (name: string) => `Stačí souhlas: ${name}`,
     /** The giver side, as a taker on a reserved task sees it. */
     parent: 'rodič',
-    needsOpen: 'Platí, až souhlasí rodič i jeden z kluků',
+    needsOpen: 'Platí, až souhlasí rodič i jedno z dětí',
     drawerText: (score: number) =>
       `Nová cena platí, až ji potvrdí druhá strana. Do té doby zůstává ${String(score)} b.`,
     send: (score: number) => `Navrhnout ${String(score)} b`,
@@ -530,7 +530,7 @@ export const cs = {
     /** A parent's Domů with nothing to answer (UI doc §8). */
     giverEmpty: 'Teď na tebe nic nečeká.',
     /** GHome: offers still waiting for a brother's yes (#41). */
-    waitingOnTakers: 'Čeká na kluky',
+    waitingOnTakers: 'Čeká na děti',
   },
   meeting: {
     /** The weekly meeting (spec §5.9, UI doc §7.3), giver only. Title is `cs.nav.meeting`. */
@@ -567,7 +567,7 @@ export const cs = {
     newTask: '+ Nový úkol',
     /** The week plan under the open tasks on the settlement's day (#259); title `cs.plan.title`. */
     refresh: 'Obnovit',
-    planHint: 'Kluci si dny rezervují v Týdnu na svých telefonech. Pak klepni na Obnovit.',
+    planHint: 'Děti si dny rezervují v Týdnu na svých telefonech. Pak klepni na Obnovit.',
     refreshFailed: 'Plán se nepodařilo načíst. Zkus to znovu.',
     end: 'Ukončit schůzku',
     nothing: 'Teď není co vyúčtovat',
@@ -669,9 +669,9 @@ export const cs = {
     save: 'Uložit',
     saving: 'Ukládám…',
     newField: 'Popis (nepovinné)',
-    newHint: 'Napiš, co přesně znamená hotovo. Kluci to uvidí, než souhlasí.',
+    newHint: 'Napiš, co přesně znamená hotovo. Děti to uvidí, než souhlasí.',
     resetWarn: 'Kdo už souhlasil, bude muset souhlasit znovu.',
-    waitWarn: 'Kluci nový popis nejdřív odsouhlasí.',
+    waitWarn: 'Děti nový popis nejdřív odsouhlasí.',
     waitingTitle: 'Nový popis čeká na souhlas',
     waitingRemove: 'Návrh: popis odebrat',
     /** What a waiting change changes (Jakub 2026-11-26): the hint and screen-reader words. */
@@ -687,7 +687,7 @@ export const cs = {
     readAndAgree: 'Přečíst a souhlasit',
     toast: {
       applied: 'Popis uložen.',
-      waiting: 'Popis čeká na souhlas kluků.',
+      waiting: 'Popis čeká na souhlas dětí.',
       withdrawn: 'Návrh popisu vzat zpět.',
       agreed: 'Nový popis platí.',
       declined: 'Zůstává starý popis.',
@@ -857,7 +857,7 @@ export const cs = {
       retry: 'Zkusit znovu',
       errors: {
         week_waiting: 'Týden čeká na schůzku. Body teď jde jen přidat.',
-        would_go_negative: 'Tolik bodů nemá. Celkem by šel pod nulu.',
+        would_go_negative: 'Tolik bodů nemá. Celkem by to bylo pod nulou.',
         no_change: 'Týden už tuhle úroveň má.',
         reason_required: 'Napiš důvod.',
       },
@@ -907,7 +907,7 @@ export const cs = {
         passwordChange: { name: 'Změna hesla', hint: 'Vlastní změna hesla na Profilu' },
         bidRefusals: {
           name: 'Nechci a odmítnutí',
-          hint: '„Nechci“ u kluků a odmítnutí rodičem',
+          hint: '„Nechci“ od dětí a odmítnutí rodičem',
         },
         approveAnywhere: {
           name: 'Schvalovat odkudkoli',
@@ -1010,7 +1010,7 @@ export const cs = {
       `spodní hranice ${String(lower)} · horní ${String(upper)}`,
     weekdayTime: (weekday: string, time: string) => `${weekday} ${time}`,
     note: (deadline: string, length: string, lower: number, upper: number) =>
-      `Změna platí, jen když souhlasí všichni kluci a jeden rodič do ${deadline}. Jinak bude příští týden ${length}, spodní hranice ${String(lower)}, horní ${String(upper)}.`,
+      `Změna platí, jen když souhlasí všechny děti a jeden rodič do ${deadline}. Jinak bude příští týden ${length}, spodní hranice ${String(lower)}, horní ${String(upper)}.`,
     approve: 'Souhlasím',
     reject: 'Nesouhlasím',
     withdraw: 'Stáhnout návrh',
@@ -1028,7 +1028,7 @@ export const cs = {
     nowLine: (length: string, end: string, lower: number, upper: number) =>
       `Nyní: ${length} · konec ${end} · spodní hranice ${String(lower)}, horní ${String(upper)}`,
     defaultsHint:
-      'Pošle se jako návrh. Začne platit, až souhlasí všichni kluci a jeden rodič. Běžící týden se nemění.',
+      'Pošle se jako návrh. Začne platit, až souhlasí všechny děti a jeden rodič. Běžící týden se nemění.',
     sent: 'Návrh odeslán',
     done: { approve: 'Souhlas odeslán', reject: 'Návrh skončil', withdraw: 'Návrh stažen' },
     confirm: {
@@ -1151,7 +1151,7 @@ export const cs = {
     missingUpper: (n: number) => `Do horní hranice chybí ${formatPoints(n)}.`,
     upperDone: 'Horní hranice splněna!',
     /** GHome: every taker's points this week (#41). */
-    takersTitle: 'Kluci tento týden',
+    takersTitle: 'Děti tento týden',
   },
   /** Effects, UI doc §4. */
   effects: {

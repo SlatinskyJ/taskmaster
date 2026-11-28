@@ -107,7 +107,7 @@ describe('Nový úkol', () => {
     const html = show(NewRoute)
     expect(html).toMatch(/<textarea[^>]*name="description"[^>]*maxLength="1000"/i)
     expect(html).toContain('Popis (nepovinné)')
-    expect(html).toContain('Kluci to uvidí, než souhlasí.')
+    expect(html).toContain('Děti to uvidí, než souhlasí.')
   })
 
   it('offers Jednorázový and Opakovaný when recurring is on', () => {

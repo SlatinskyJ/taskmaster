@@ -8,7 +8,7 @@ import { cs } from '~/lib/strings'
 import type { TaskView } from '~/server/tasks/functions'
 
 /**
- * "Čeká na kluky" on a parent's Domů (#41 "approvals waiting", mockup GHome): offers a brother
+ * "Čeká na děti" on a parent's Domů (#41 "approvals waiting", mockup GHome): offers a brother
  * still has to say yes to, with who it waits for. Renders nothing when there are none.
  */
 export function WaitingOnTakers({

@@ -98,7 +98,7 @@ describe('answerDescription', () => {
 describe('descriptionToast', () => {
   it.each([
     ['applied', 'Popis uložen.'],
-    ['waiting', 'Popis čeká na souhlas kluků.'],
+    ['waiting', 'Popis čeká na souhlas dětí.'],
     ['withdrawn', 'Návrh popisu vzat zpět.'],
     ['agreed', 'Nový popis platí.'],
     ['declined', 'Zůstává starý popis.'],

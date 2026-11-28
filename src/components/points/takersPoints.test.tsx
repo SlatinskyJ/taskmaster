@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { PointsOverview } from '~/server/points/functions'
 import { TakersPoints } from './TakersPoints'
 
-// The giver's "Kluci tento týden" card (#41). PointsBar records its props; the card must pass
+// The giver's "Děti tento týden" card (#41). PointsBar records its props; the card must pass
 // each taker's own numbers and the period's levels, quiet (no celebrations on a giver's screen).
 const bars = vi.hoisted(() => ({ props: [] as Record<string, unknown>[] }))
 vi.mock('./PointsBar', () => ({
@@ -29,7 +29,7 @@ describe('TakersPoints (GHome, spec §5.7)', () => {
         ])}
       />,
     )
-    expect(html).toContain('Kluci tento týden')
+    expect(html).toContain('Děti tento týden')
     expect(html.indexOf('Starší')).toBeLessThan(html.indexOf('Mladší'))
     expect(bars.props).toEqual([
       { confirmed: 40, pending: 12, lower: 40, upper: 90, celebrate: false, subject: '3' },
