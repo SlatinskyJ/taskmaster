@@ -37,7 +37,7 @@ container limits live in private notes, never in the repo.
 "grants": [{"src": ["tag:tm-cd-demo"], "dst": ["tag:tm-demo"], "ip": ["tcp:22"]}],
 "ssh": [{"action": "accept", "src": ["tag:tm-cd-demo"], "dst": ["tag:tm-demo"], "users": ["deploy"]}],
 "tests": [
-  {"src": "tag:tm-cd-demo", "accept": ["tag:tm-demo:22"], "deny": ["tag:tm-prod:22", "tag:tm-preview:22"]},
+  {"src": "tag:tm-cd-demo", "accept": ["tag:tm-demo:22"], "deny": ["tag:tm-demo:3000", "tag:tm-prod:22", "tag:tm-preview:22"]},
   {"src": "tag:tm-cd-prod", "deny": ["tag:tm-demo:22"]},
 ],
 ```
