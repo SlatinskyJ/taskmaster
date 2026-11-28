@@ -366,6 +366,39 @@ jobs:
           : "${GITHUB_SHA:?}"
           tailscale ssh "deploy@${PROD_HOST}" "deploy ${GITHUB_SHA::7}" < /dev/null
 
+  # main only, after production took the same image: roll it out to the public demo (runbook
+  # docs/runbooks/demo-host.md). Same shape as deploy-prod, but its own tag (tag:tm-cd-demo),
+  # OAuth client and `demo` environment (admits only `main`), and its login shell is
+  # deploy/demo/tm-demo. It needs deploy-prod, so the demo never runs a build production
+  # rejected, and production never waits on it. Runs only when the DEMO_HOST repository variable
+  # is set, so no host name lives in this repo. Not a required check.
+  deploy-demo:
+    name: deploy demo
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEMO_HOST != ''
+    needs: [deploy-prod]
+    runs-on: ubuntu-24.04
+    environment: demo
+    timeout-minutes: 10
+    # One demo deploy at a time; a newer main waits for the running one instead of cutting it off.
+    concurrency:
+      group: demo-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    env:
+      DEMO_HOST: ${{ vars.DEMO_HOST }}
+    steps:
+      - uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4.4.0
+        with:
+          oauth-client-id: ${{ secrets.TS_DEMO_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_DEMO_OAUTH_SECRET }}
+          tags: tag:tm-cd-demo
+          ping: ${{ env.DEMO_HOST }}
+      - name: Deploy on the demo host
+        run: |
+          : "${GITHUB_SHA:?}"
+          tailscale ssh "deploy@${DEMO_HOST}" "deploy ${GITHUB_SHA::7}" < /dev/null
+
   # Per-PR preview on the preview host (#63, runbook docs/runbooks/preview-host.md). Opt-in:
   # only PRs with the `preview` label get one; adding the label later is handled by
   # preview.yml, removing it tears the preview down there too. Same-repo PRs only: fork PRs
