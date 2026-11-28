@@ -92,7 +92,7 @@ describe('TaskRow chip and meta line', () => {
         name="Vyluxovat celý obývák a chodbu"
         state="pending"
         points={5}
-        meta="Udělal Mladší"
+        meta="Hotovo: Mladší"
       />,
     )
     const line = /<div[^>]*data-slot="task-status"[^>]*>/.exec(html)?.[0] ?? ''

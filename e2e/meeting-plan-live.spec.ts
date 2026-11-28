@@ -4,7 +4,7 @@ import { passwordLogin } from './helpers'
 import { PHONE } from './keyboard'
 
 // The week plan at Schůzka with live change notices on (#313), `planmeetinglive` seed: Táta
-// settles, the plan shows without Obnovit and its hint, Starší reserves a cell on his phone, and
+// settles, the plan shows without Obnovit and its hint, Anička reserves a cell on her phone, and
 // the live change banner's refresh shows it in Táta's table.
 // One test: each step builds on the one before.
 
@@ -41,7 +41,7 @@ test('with live notices on, Schůzka has no Obnovit and the banner refreshes the
   expect(day).not.toBeNull()
   const tataCell = section.locator(`button[data-day="${day ?? ''}"][aria-label^="${TABLE}, "]`)
 
-  // Starší reserves that day on his own phone.
+  // Anička reserves that day on her own phone.
   const other = await browser.newContext({ viewport: PHONE, locale: 'cs-CZ' })
   const brother = await other.newPage()
   await passwordLogin(brother, 'starsi')
@@ -56,6 +56,6 @@ test('with live notices on, Schůzka has no Obnovit and the banner refreshes the
   await expect(banner(page)).toBeVisible({ timeout: 15_000 })
   await expect(tataCell).toHaveAttribute('aria-label', /: volné$/)
   await banner(page).getByRole('button', { name: cs.live.banner.refresh }).click()
-  await expect(tataCell).toHaveAttribute('aria-label', /: rezervováno, Starší$/)
+  await expect(tataCell).toHaveAttribute('aria-label', /: rezervováno, Anička$/)
   await expect(section.getByRole('button', { name: m.refresh })).toHaveCount(0)
 })

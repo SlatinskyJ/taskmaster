@@ -130,7 +130,7 @@ test("a change reaches another login's stream with its sentence", async ({ page,
   const event = (await page.evaluate(
     () => (window as unknown as { liveEvent: Promise<unknown> }).liveEvent,
   )) as Record<string, unknown> | null
-  expect(event).toMatchObject({ action: 'task.reserved', text: `Starší · rezervace · ${FREE}` })
+  expect(event).toMatchObject({ action: 'task.reserved', text: `Anička · rezervace · ${FREE}` })
   expect(event).not.toHaveProperty('before')
   expect(event).not.toHaveProperty('after')
 })

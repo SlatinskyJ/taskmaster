@@ -17,7 +17,7 @@ must not slow production down, and it must not let anyone use the domain for phi
 - **Demo data.** On an empty database the demo seed runs as on previews (seed `demo`: every
   piece, every launch switch on), with the known demo password. All four accounts are public.
 - **Login page lists the accounts** (Jakub: option A). Under the normal form, four buttons log
-  in with one tap: Admin, Táta, Starší, Mladší. A link "Více zařízení" opens `/dev/multi`.
+  in with one tap: Admin, Táta, Anička, Béďa. A link "Více zařízení" opens `/dev/multi`.
 - **Dev pages on.** `/dev/multi` and `/dev/ui` work as on previews, frame login included.
 - **Demo marker, always visible.** Every screen, the login page included, shows that this is the
   demo (for example a thin strip "Demo" at the top of the app shell). Never shown outside demo.

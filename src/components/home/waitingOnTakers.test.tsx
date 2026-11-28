@@ -5,7 +5,7 @@ import { cs } from '~/lib/strings'
 import type { TaskView } from '~/server/tasks/functions'
 import { WaitingOnTakers } from './WaitingOnTakers'
 
-// "Čeká na kluky" on a parent's Domů (#41). A plain <a> with the real path stands in for Link.
+// "Čeká na děti" on a parent's Domů (#41). A plain <a> with the real path stands in for Link.
 vi.mock('@tanstack/react-router', () => ({
   Link: ({
     to,

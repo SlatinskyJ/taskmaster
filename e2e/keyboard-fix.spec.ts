@@ -26,7 +26,7 @@ test.describe('Správa, the fix sheet (#48)', () => {
   test('Upravit body: Body and Důvod stay visible', async ({ page }) => {
     await page.getByRole('button', { name: t.adjust }).click()
     const sheet = page.getByRole('dialog')
-    await sheet.getByRole('button', { name: 'Starší', exact: true }).click()
+    await sheet.getByRole('button', { name: 'Anička', exact: true }).click()
     for (const label of [t.points, t.reason]) {
       const field = sheet.getByLabel(label)
       await openKeyboard(page, field)
@@ -66,7 +66,7 @@ test.describe('Správa, the fix sheet (#48)', () => {
   test('Opravit týden: Důvod stays visible under the week and level pills', async ({ page }) => {
     await page.getByRole('button', { name: t.correct }).click()
     const sheet = page.getByRole('dialog')
-    await sheet.getByRole('button', { name: 'Starší', exact: true }).click()
+    await sheet.getByRole('button', { name: 'Anička', exact: true }).click()
     await sheet
       .getByRole('button', { name: new RegExp(cs.week.total) })
       .first()

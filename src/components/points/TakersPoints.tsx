@@ -6,7 +6,7 @@ import type { PointsOverview } from '~/server/points/functions'
 import { PointsBar } from './PointsBar'
 
 /**
- * "Kluci tento týden" on a parent's Domů (mockup GHome, spec §5.7: givers see every taker):
+ * "Děti tento týden" on a parent's Domů (mockup GHome, spec §5.7: givers see every taker):
  * each brother's confirmed and pending points against the levels. Quiet bars: the level
  * celebrations belong to the brother's own screen. Renders nothing without takers.
  */

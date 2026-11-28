@@ -2,8 +2,8 @@ import { expect, test, type Page } from '@playwright/test'
 import { cs } from '../src/lib/strings'
 import { passwordLogin } from './helpers'
 
-// Recurring chores made by a person (#38) on the demo data, at 360 px: Starší logs a chore on
-// Zapsat and his pending points go up; Táta's "+ Teď" adds an open copy to Úkoly and he approves
+// Recurring chores made by a person (#38) on the demo data, at 360 px: Anička logs a chore on
+// Zapsat and her pending points go up; Táta's "+ Teď" adds an open copy to Úkoly and he approves
 // the log; with the copy on the board, Zapsat shows the tile as taken (Jakub 2026-11-22).
 
 test.use({ viewport: { width: 360, height: 800 } })
@@ -50,7 +50,7 @@ test('Zapsat, + Teď, approve, then the tile is taken', async ({ page }) => {
   const mine = page
     .getByRole('listitem')
     .filter({ hasText: 'Vyndat myčku' })
-    .filter({ hasText: 'Starší' })
+    .filter({ hasText: 'Anička' })
   await mine.getByRole('button', { name: cs.work.approve }).click()
   await expect(page.locator('[data-slot="points-bar"]').nth(0)).toHaveAttribute(
     'aria-label',
@@ -89,7 +89,7 @@ test('a price change offers no Nechci or turn-down with bidRefusals off (#232)',
   page,
 }) => {
   // The `recurring` seed has the switch off; "Vyndat myčku" (the second template, /sablona/2) has
-  // a change in flight: Mladší bids 5, Táta offers 4.
+  // a change in flight: Béďa bids 5, Táta offers 4.
   await passwordLogin(page, 'tata')
   await expect(page).toHaveURL(/\/$/)
   await page.goto('/sablona/2')

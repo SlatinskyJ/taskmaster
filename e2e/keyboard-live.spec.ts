@@ -24,7 +24,7 @@ interface Frame {
   text?: string
 }
 
-const frame = ({ id, change = id, text = `Starší · změna ${String(id)}` }: Frame) =>
+const frame = ({ id, change = id, text = `Anička · změna ${String(id)}` }: Frame) =>
   `id: ${String(id)}\ndata: ${JSON.stringify({
     id,
     change,
@@ -89,8 +89,8 @@ test.describe('on a phone, with the keyboard', () => {
     await openKeyboard(page, field)
     await field.pressSequentially('Napůl napsaný')
     // The tab's next reconnect (every answer ends) brings the change.
-    stream.now(frame({ id: 5, text: `Starší · rezervace · ${FREE}` }))
-    await expect(banner(page)).toHaveText(`Starší · rezervace · ${FREE}`)
+    stream.now(frame({ id: 5, text: `Anička · rezervace · ${FREE}` }))
+    await expect(banner(page)).toHaveText(`Anička · rezervace · ${FREE}`)
     await expect(field).toBeFocused()
     await expect(field).toHaveValue('Napůl napsaný')
     await page.screenshot({ path: 'test-results/banner-keyboard.png', animations: 'disabled' })
@@ -111,7 +111,7 @@ test.describe('on a phone, with the keyboard', () => {
     await sheet.getByRole('button', { name: cs.tasks.more, exact: true }).tap()
     await expect(sheet.getByRole('button', { name: cs.taskPrice.send(10) })).toBeVisible()
     stream.now(frame({ id: 5 }))
-    await expect(banner(page)).toHaveText('Starší · změna 5')
+    await expect(banner(page)).toHaveText('Anička · změna 5')
     await banner(page).getByRole('button', { name: cs.live.banner.refresh }).tap()
     await expect(banner(page)).toHaveCount(0)
     await expect(sheet).toBeVisible()
@@ -151,10 +151,10 @@ test.describe('the stream', () => {
     }
     await login(page)
     await expect.poll(() => stream.urls.length).toBeGreaterThanOrEqual(1)
-    await nextConnection(frame({ id: 5, text: 'Starší · jedna' }))
-    await expect(banner(page)).toHaveText('Starší · jedna')
-    await nextConnection(frame({ id: 5, text: 'Starší · jedna' }))
-    await expect(banner(page)).toHaveText('Starší · jedna')
+    await nextConnection(frame({ id: 5, text: 'Anička · jedna' }))
+    await expect(banner(page)).toHaveText('Anička · jedna')
+    await nextConnection(frame({ id: 5, text: 'Anička · jedna' }))
+    await expect(banner(page)).toHaveText('Anička · jedna')
     await nextConnection(frame({ id: 6, change: 4 }) + frame({ id: 7, change: 5 }))
     expect(stream.urls.length).toBeGreaterThanOrEqual(3)
     await expect(banner(page)).toHaveText(cs.live.banner.many(2))
@@ -191,8 +191,8 @@ test.describe('at 360 px', () => {
   )
 
   for (const [name, text] of [
-    ['the giver sentence', `Táta · domluveno za 8 b · rezervace: Starší · ${VACUUM}`],
-    ['an 80-letter title', `Táta · domluveno za 8 b · rezervace: Starší · ${LONG_TITLE}`],
+    ['the giver sentence', `Táta · domluveno za 8 b · rezervace: Anička · ${VACUUM}`],
+    ['an 80-letter title', `Táta · domluveno za 8 b · rezervace: Anička · ${LONG_TITLE}`],
   ] as const) {
     test(`${name}: wraps whole inside the screen, both buttons 44 px`, async ({ page }) => {
       expect(LONG_TITLE).toHaveLength(TASK_TITLE_MAX)

@@ -2,8 +2,8 @@ import { expect, test, type Page } from '@playwright/test'
 import { cs } from '../src/lib/strings'
 import { logout, passwordLogin } from './helpers'
 
-// Saying no in bidding (#208) on the `bids` seed: "Umýt auto", Táta offers 18, Starší bids 25,
-// Mladší 22, the `bidRefusals` switch on.
+// Saying no in bidding (#208) on the `bids` seed: "Umýt auto", Táta offers 18, Anička bids 25,
+// Béďa 22, the `bidRefusals` switch on.
 const TASK = 'Umýt auto'
 
 /** Logs in and opens the task page from Domů's row link. */
@@ -19,8 +19,8 @@ async function openTask(page: Page, who: 'starsi' | 'mladsi' | 'tata') {
 const threadRow = (page: Page, text: RegExp) =>
   page.getByRole('region', { name: cs.bids.thread }).getByRole('listitem').filter({ hasText: text })
 
-test("Mladší's Nechci, then Táta turns the bidding down", async ({ page }) => {
-  // (a) Mladší says no: only his 22 closes; Starší's 25 stays open.
+test("Béďa's Nechci, then Táta turns the bidding down", async ({ page }) => {
+  // (a) Béďa says no: only his 22 closes; Anička's 25 stays open.
   await openTask(page, 'mladsi')
   await page.getByRole('button', { name: cs.bids.withdraw, exact: true }).click()
   await expect(page.getByText(cs.bids.toast.withdrawn, { exact: true })).toBeVisible()

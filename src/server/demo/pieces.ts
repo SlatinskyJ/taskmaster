@@ -74,9 +74,9 @@ const offer = (ctx: SeedContext, title: string, score: number) =>
   )
 
 /**
- * #34 and #150: "Umýt auto" in negotiation (Táta offers 18, Starší bids 25, Mladší 22),
- * "Uklidit sklep", a plain offer of 10 with no bids, and a task reserved to Starší through a
- * bidder's yes ("Beru za 8"), so his Domů row and the task page show Hotovo and Uvolnit. A long
+ * #34 and #150: "Umýt auto" in negotiation (Táta offers 18, Anička bids 25, Béďa 22),
+ * "Uklidit sklep", a plain offer of 10 with no bids, and a task reserved to Anička through a
+ * bidder's yes ("Beru za 8"), so her Domů row and the task page show Hotovo and Uvolnit. A long
  * name, as the 360 px screens are checked with one.
  */
 export const negotiation: Piece = (ctx) => {
@@ -91,8 +91,8 @@ export const negotiation: Piece = (ctx) => {
 }
 
 /**
- * #212: "Vynést staré věci na půdu", agreed at 12 by Mladší's yes after Starší bid 14 (that row
- * is an earlier round, hidden on screen), now in a round Starší reopened, with Mladší's bid 15.
+ * #212: "Vynést staré věci na půdu", agreed at 12 by Béďa's yes after Anička bid 14 (that row
+ * is an earlier round, hidden on screen), now in a round Anička reopened, with Béďa's bid 15.
  * "Zamést chodník před domem", free at 6, never reopened: the reopen button.
  */
 export const rebidding: Piece = (ctx) => {
@@ -161,7 +161,7 @@ export const cancelled: Piece = (ctx) => {
 
 /**
  * Points for both brothers (#40), so Domů's bar shows both cases. On its own this piece gives
- * Starší 40 confirmed + 12 pending (below spodní 50) and Mladší 55 confirmed (past it). Plus an
+ * Anička 40 confirmed + 12 pending (below spodní 50) and Béďa 55 confirmed (past it). Plus an
  * open task with a long name for the Volné row with Rezervovat + Hotovo.
  */
 export const points: Piece = (ctx) => {
@@ -189,7 +189,7 @@ export const points: Piece = (ctx) => {
 
 /**
  * Three templates (#37): the bins wait for a boy's yes, the dishwasher is agreed, with a score
- * change in flight (#138): Mladší bids 5, Táta offers 4; the school bag is agreed with a
+ * change in flight (#138): Béďa bids 5, Táta offers 4; the school bag is agreed with a
  * deadline (#38).
  */
 const DEMO_TEMPLATES: readonly NewTemplate[] = [
@@ -226,7 +226,7 @@ export const templates: Piece = ({ tx, id, now }) => {
 
 /**
  * #209: two chores Táta proposed, open for bids with `choreBidding` on. "Vynést kompost" at 10 with
- * no bids, "Zalít kytky" at 4 with Starší's bid 6 and Mladší's bid 7.
+ * no bids, "Zalít kytky" at 4 with Anička's bid 6 and Béďa's bid 7.
  */
 export const choreBidding: Piece = ({ tx, id, now }) => {
   const on = { choreBidding: true, bidRefusals: false }
@@ -252,7 +252,7 @@ export const choreBidding: Piece = ({ tx, id, now }) => {
 
 /**
  * #232: "Umýt koupelnu", agreed at 8, with a price change of two bids and no parents' offer:
- * Starší 10, Mladší 11. Nechci and the turn-down on it need `bidRefusals`.
+ * Anička 10, Béďa 11. Nechci and the turn-down on it need `bidRefusals`.
  */
 export const choreChange: Piece = ({ tx, id, now }) => {
   const input = { title: 'Umýt koupelnu', score: 8, approvalRequired: true }
@@ -285,7 +285,7 @@ function doChore(ctx: SeedContext, by: string, title: string, score: number, at:
   return made.id
 }
 
-/** Last week (#45), settled: Starší 108 → horní, 100 off, 8 carried; Mladší 50 → spodní, 0. */
+/** Last week (#45), settled: Anička 108 → horní, 100 off, 8 carried; Béďa 50 → spodní, 0. */
 const PAST_WEEK: readonly { by: string; title: string; score: number }[] = [
   { by: 'starsi', title: 'Vytřít podlahu', score: 60 },
   { by: 'starsi', title: 'Uklidit garáž', score: 48 },
@@ -296,7 +296,7 @@ const PAST_WEEK: readonly { by: string; title: string; score: number }[] = [
  * The settled past week (#45), so Týden → Historie has a record: the first period starts at
  * `start` (a week ago), three chores are done in it, and Táta settles it an hour before its
  * cutoff or an hour ago, whichever is first. That starts this week. Then Táta rejects one of
- * Mladší's chores in this week, so Týden shows a rejection. Must come first in a seed: it
+ * Béďa's chores in this week, so Týden shows a rejection. Must come first in a seed: it
  * writes at `start`, and the audit log reads in time order.
  */
 export const pastWeek: Piece = (ctx) => {
@@ -370,8 +370,8 @@ export const thisWeek: Piece = (ctx) => {
 const DISMISS_NOTE = 'Body sedí, zkontroloval jsem to s tátou.'
 
 /**
- * Disputes (#46, #47), after `thisWeek` and a past week: Starší disputes his confirmed "Vysát
- * auto" (open, so Týden shows Sporné and Správa lists it); Mladší disputes his past-week
+ * Disputes (#46, #47), after `thisWeek` and a past week: Anička disputes her confirmed "Vysát
+ * auto" (open, so Týden shows Sporné and Správa lists it); Béďa disputes his past-week
  * settlement and the admin keeps it as it was, with a note (the admin's own dismiss).
  */
 export const disputes: Piece = ({ tx, id, now }) => {
@@ -387,7 +387,7 @@ export const disputes: Piece = ({ tx, id, now }) => {
       tx,
       id('starsi'),
       { kind: 'completion', id: car.id },
-      'Vysával jsem i kufr, to je víc práce.',
+      'Vysávala jsem i kufr, to je víc práce.',
       now,
     ),
   )
@@ -396,7 +396,7 @@ export const disputes: Piece = ({ tx, id, now }) => {
     .from(settlements)
     .where(eq(settlements.takerId, id('mladsi')))
     .get()
-  if (!record) throw new Error('Demo seed: no settlement for Mladší')
+  if (!record) throw new Error('Demo seed: no settlement for Béďa')
   const opened = step(
     'dispute the settlement',
     openDisputeIn(
@@ -409,7 +409,7 @@ export const disputes: Piece = ({ tx, id, now }) => {
   )
   const kept = loadTarget(tx, { kind: 'settlement', id: record.id })?.value ?? null
   step(
-    'keep Mladší’s settlement',
+    'keep Béďa’s settlement',
     dismissDisputeIn(tx, id('admin'), opened.id, kept, DISMISS_NOTE, now),
   )
 }
@@ -417,7 +417,7 @@ export const disputes: Piece = ({ tx, id, now }) => {
 export const CHORE_DISPUTE_REASON = 'Myčka je plná každý den, 3 body jsou málo.'
 
 /**
- * A chore's score in dispute (#222), after `templates` and `disputes`: Mladší disputes the agreed
+ * A chore's score in dispute (#222), after `templates` and `disputes`: Béďa disputes the agreed
  * "Vyndat myčku", so Sporné on Správa has a chore card that opens the chore's page.
  */
 export const choreDispute: Piece = ({ tx, id, now }) => {
@@ -439,19 +439,19 @@ export const choreDispute: Piece = ({ tx, id, now }) => {
   )
 }
 
-export const ADJUSTMENT_REASON = 'Pomohl s velkým nákupem navíc a odnesl tašky až nahoru.'
+export const ADJUSTMENT_REASON = 'Pomohla s velkým nákupem navíc a odnesla tašky až nahoru.'
 export const CORRECTION_REASON = 'Kapesné za minulý týden nedostal, body se mu vrací.'
 
 /**
- * Corrections and adjustments (#48), after `disputes`: the admin adds 5 points to Starší by hand
- * and corrects Mladší's past week to Bez kapesného (a correction down gives points back, so it
- * can never go below zero); Mladší disputes the corrected week and Starší his adjustment, so
+ * Corrections and adjustments (#48), after `disputes`: the admin adds 5 points to Anička by hand
+ * and corrects Béďa's past week to Bez kapesného (a correction down gives points back, so it
+ * can never go below zero); Béďa disputes the corrected week and Anička her adjustment, so
  * Sporné shows Opravit on both kinds.
  */
 export const corrections: Piece = ({ tx, id, now }) => {
   const admin = id('admin')
   const plus = step(
-    'adjust Starší +5',
+    'adjust Anička +5',
     adjustPointsIn(
       tx,
       admin,
@@ -465,9 +465,9 @@ export const corrections: Piece = ({ tx, id, now }) => {
     .from(settlements)
     .where(eq(settlements.takerId, id('mladsi')))
     .get()
-  if (!record) throw new Error('Demo seed: no settlement for Mladší')
+  if (!record) throw new Error('Demo seed: no settlement for Béďa')
   step(
-    'correct Mladší’s past week',
+    'correct Béďa’s past week',
     correctSettlementIn(
       tx,
       admin,
@@ -499,8 +499,8 @@ export const corrections: Piece = ({ tx, id, now }) => {
 }
 
 /**
- * Instances (#38), after `templates`: Mladší's Zapsat of the dishwasher, waiting for a parent;
- * Starší's, rejected by Táta without a reason (§5.5), so Týden and Úkoly show "Zamítnuto"; then
+ * Instances (#38), after `templates`: Béďa's Zapsat of the dishwasher, waiting for a parent;
+ * Anička's, rejected by Táta without a reason (§5.5), so Týden and Úkoly show "Zamítnuto"; then
  * Táta's "+ Teď" on the school bag (due the next day 7:00). The logs come first: Zapsat refuses
  * a chore already on the board (Jakub 2026-11-22), so the bag's tile says it is taken
  * while the dishwasher stays loggable.
@@ -515,7 +515,7 @@ export const instances: Piece = ({ tx, id, now }) => {
   const bag = byTitle('Nachystat tašku do školy')
   step('Zapsat "Vyndat myčku"', selfLogInstance(tx, id('mladsi'), dishes.id, dishes.score, now))
   const logged = step(
-    'Zapsat "Vyndat myčku" (Starší)',
+    'Zapsat "Vyndat myčku" (Anička)',
     selfLogInstance(tx, id('starsi'), dishes.id, dishes.score, now),
   )
   step('reject "Vyndat myčku"', rejectTask(tx, id('tata'), logged.id, undefined, now))
@@ -550,7 +550,7 @@ const DEMO_SCHEDULED: readonly NewTemplate[] = [
 
 /**
  * #39, early in the past week (only through `pastWeekScheduled`): Táta makes both everyday
- * templates and Starší agrees, then a scheduler tick a day later makes one instance of each.
+ * templates and Anička agrees, then a scheduler tick a day later makes one instance of each.
  * The rest happens at the boot tick (`bootTick`).
  */
 const schedule: Piece = ({ tx, id, start }) => {
@@ -577,8 +577,8 @@ export const bootTick: Piece = ({ tx, now }) => {
 
 /**
  * #43: an open proposal of each kind, so Příští týden, Výchozí týden and the Domů rows have
- * something to show. Starší proposes next week at 60/120 with the default end, and Táta agrees,
- * so Mladší is still waiting; Táta proposes a 14-day default week at 60/120, waiting for both
+ * something to show. Anička proposes next week at 60/120 with the default end, and Táta agrees,
+ * so Béďa is still waiting; Táta proposes a 14-day default week at 60/120, waiting for both
  * boys. Starts the first week now if no earlier piece did.
  */
 export const proposals: Piece = ({ tx, id, now }) => {
@@ -618,7 +618,7 @@ export const WEEK_CHORES: readonly NewTemplate[] = [
 ]
 
 /**
- * #257: Táta's two week-plan chores, agreed by Starší, and the running week's copies of them
+ * #257: Táta's two week-plan chores, agreed by Anička, and the running week's copies of them
  * (the `weekPlan` switch is set after the pieces, so this piece makes them itself). With no week
  * running yet it starts one at today's 00:00 Prague and agrees the chores then, so today's slot
  * is inside the window whatever the hour; inside a seed that already runs a week (`demo`) they
@@ -650,7 +650,7 @@ export const weekChores: Piece = ({ tx, id, now }) => {
  * week ends now and the next one starts with its copies. The default week ends at tomorrow's
  * weekday 00:00, so today is the last day. The family starts in a short first week (from
  * `start`, a week ago, to six days ago 00:00; the audit log stays in time order) where Táta
- * agrees the plan table's chores with Starší; Táta settles it with no points. The running week
+ * agrees the plan table's chores with Anička; Táta settles it with no points. The running week
  * runs from six days ago 00:00 to tomorrow 00:00 with a copy for every slot: the brothers did
  * the past days' everyday chores and Táta approved them (points to settle), the bin's past copies
  * expired, and today's copies are open. Nothing waits for approval. Must come first in a seed: it writes at
@@ -693,8 +693,8 @@ export const lastDayWeek: Piece = ({ tx, id, now, start }) => {
     if (!row) throw new Error(`Demo seed: no copy of template ${String(templateId)}`)
     return row.id
   }
-  // Six past days (0 = six days ago): who did what, done at 18:00 and approved at 19:00. Starší
-  // ends at 50, the lower level; Mladší at 16, below it.
+  // Six past days (0 = six days ago): who did what, done at 18:00 and approved at 19:00. Anička
+  // ends at 50, the lower level; Béďa at 16, below it.
   const done: readonly (readonly [string, number, readonly number[]])[] = [
     ['starsi', flowers, [0, 1, 2, 3, 4, 5]],
     ['starsi', vacuum, [0, 1, 2, 3, 4]],
@@ -752,12 +752,12 @@ export const PLAN_CHORES: readonly NewTemplate[] = [
 ]
 
 /**
- * #258: Táta's four plan-table chores, agreed by Starší, with their week copies. With no week
+ * #258: Táta's four plan-table chores, agreed by Anička, with their week copies. With no week
  * running yet (seed `plantable`) the week starts at yesterday's 00:00 Prague and the chores are
- * agreed then, so yesterday is a column: Starší's "Zalít kytky" there is confirmed and
+ * agreed then, so yesterday is a column: Anička's "Zalít kytky" there is confirmed and
  * "Vyluxovat…" expired. Inside a seed that already runs a week (`demo`) they are agreed now and
- * their copies start with the next slot. Then today's copies, where there are: Mladší holds
- * "Vyluxovat…", Starší's "Zalít kytky" waits for approval, "Prostřít stůl" stays free; Starší
+ * their copies start with the next slot. Then today's copies, where there are: Béďa holds
+ * "Vyluxovat…", Anička's "Zalít kytky" waits for approval, "Prostřít stůl" stays free; Anička
  * holds the next "Vyluxovat…" after today. No on-demand extra: the switch is off while pieces run.
  */
 export const planTable: Piece = ({ tx, id, now }) => {
@@ -806,17 +806,17 @@ export const planTable: Piece = ({ tx, id, now }) => {
   }
   const vacuumToday = on(vacuum, today)
   if (vacuumToday !== undefined)
-    step('Mladší holds the vacuum', reserveTask(tx, id('mladsi'), vacuumToday, now, true))
+    step('Béďa holds the vacuum', reserveTask(tx, id('mladsi'), vacuumToday, now, true))
   const flowersToday = on(flowers, today)
   if (flowersToday !== undefined)
-    step('Starší waters the flowers', completeTask(tx, id('starsi'), flowersToday, now, true))
+    step('Anička waters the flowers', completeTask(tx, id('starsi'), flowersToday, now, true))
   const later = copies(vacuum).find((r) => r.planDayAt !== null && r.planDayAt > toIsoUtc(today))
-  if (later) step('Starší holds a later vacuum', reserveTask(tx, id('starsi'), later.id, now, true))
+  if (later) step('Anička holds a later vacuum', reserveTask(tx, id('starsi'), later.id, now, true))
 }
 
 /**
- * #247: four suggestions from Profil. Two still new (Starší's with a two-line description,
- * Mladší's with none), Táta's marked done and one of Starší's dismissed by the admin. None sent:
+ * #247: four suggestions from Profil. Two still new (Anička's with a two-line description,
+ * Béďa's with none), Táta's marked done and one of Anička's dismissed by the admin. None sent:
  * that needs GitHub.
  */
 export const suggestions: Piece = ({ tx, id, now }) => {

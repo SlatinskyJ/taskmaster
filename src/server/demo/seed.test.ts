@@ -13,6 +13,7 @@ import {
 import { createTestDb } from '~/server/db/testing'
 import { bootstrapAdmin } from '~/server/users'
 import { ALL_FEATURES, NO_FEATURES } from '~/lib/features'
+import { cs } from '~/lib/strings'
 import type { Features } from '~/lib/features'
 import { getFlags } from '~/server/features'
 import { DEMO_LOGINS, DEMO_PASSWORD } from '~/lib/demoAccounts'
@@ -35,6 +36,34 @@ describe('demo seed (#62)', () => {
     for (const username of ['admin', 'tata', 'starsi', 'mladsi']) {
       const r = await login(db, { username, password: DEMO_PASSWORD, ip: '127.0.0.1' }, T0)
       expect(r.ok).toBe(true)
+    }
+  })
+
+  // #353 (Jakub 2026-11-28): the demo kids are Anička (starsi) and Béďa (mladsi).
+  it('seeds the demo family under its display names', () => {
+    const db = createTestDb()
+    seedDemo(db, PREVIEW, T0)
+    const rows = db
+      .select({ username: users.username, displayName: users.displayName })
+      .from(users)
+      .orderBy(asc(users.id))
+      .all()
+      .map((u) => [u.username, u.displayName])
+    expect(rows).toEqual([
+      ['admin', 'Admin'],
+      ['tata', 'Táta'],
+      ['starsi', 'Anička'],
+      ['mladsi', 'Béďa'],
+    ])
+  })
+
+  it('the demo buttons and /dev/multi labels match the seeded names', () => {
+    for (const labels of [cs.demo.users, cs.devMulti.users]) {
+      for (const u of DEMO_USERS) {
+        const key = u.username as keyof typeof labels
+        expect(labels[key], u.username).toBe(u.displayName)
+      }
+      expect(Object.keys(labels)).toEqual(DEMO_USERS.map((u) => u.username))
     }
   })
 

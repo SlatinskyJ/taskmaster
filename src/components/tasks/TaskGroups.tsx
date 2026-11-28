@@ -26,7 +26,7 @@ export function TaskGroups({
   /**
    * ✓ / ✕ on done work waiting for a parent (#206). The whole row is swapped for ApprovableRow,
    * not just its action, because the reason form opens under the row, outside TaskRow. Its meta
-   * ("Udělal …") is what `meta` gives that state anyway, and done work has no lowest bid.
+   * ("Hotovo: …") is what `meta` gives that state anyway, and done work has no lowest bid.
    */
   approve?: { busy: string | null; run: Run }
   /** The `openRows` switch (#205): each row opens its page. */

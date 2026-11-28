@@ -6,7 +6,7 @@ import { logout, passwordLogin } from './helpers'
 // Táta's new price 12 for "Shrabat listí na zahradě" (now 10) waits for the brothers.
 const TASK = 'Shrabat listí na zahradě'
 
-/** Starší opens the task from his "Čeká na tebe" row and lands on its page. */
+/** Anička opens the task from her "Čeká na tebe" row and lands on its page. */
 async function openFromWaiting(page: Page) {
   await passwordLogin(page, 'starsi')
   const row = page
@@ -29,7 +29,7 @@ async function tataOpens(page: Page, url: string) {
 const history = (page: Page) => page.getByRole('region', { name: cs.history.title })
 
 test('saying no, agreeing to a new price, and cancelling a task', async ({ page }) => {
-  // (a) Starší says no: the proposal closes, the price stays 10.
+  // (a) Anička says no: the proposal closes, the price stays 10.
   await openFromWaiting(page)
   await page.getByRole('button', { name: cs.taskPrice.disagree, exact: true }).click()
   await expect(page.getByText(cs.taskPrice.toast.declined)).toBeVisible()
@@ -59,7 +59,7 @@ test('saying no, agreeing to a new price, and cancelling a task', async ({ page 
   const url = page.url()
   await logout(page)
 
-  // (b) Táta proposes 12 again; Starší agrees from his row: the task is worth 12.
+  // (b) Táta proposes 12 again; Anička agrees from her row: the task is worth 12.
   await tataOpens(page, url)
   await page.getByRole('button', { name: new RegExp(cs.taskPrice.change) }).click()
   await page.getByRole('button', { name: cs.tasks.more }).click()

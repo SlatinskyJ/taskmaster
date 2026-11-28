@@ -147,7 +147,7 @@ test('passkey story', async ({ page, browser, baseURL }) => {
   await expect(page).toHaveURL(/\/sprava$/)
   const row = (name: string) => page.getByRole('listitem').filter({ hasText: name })
   await expect(row('Táta')).toContainText(formatKeys(1))
-  await expect(row('Starší')).not.toContainText(formatKeys(1))
+  await expect(row('Anička')).not.toContainText(formatKeys(1))
   await row('Táta').getByRole('button', { name: cs.passkeys.admin.removeAll }).click()
   const adminDialog = page.getByRole('dialog')
   await expect(adminDialog).toContainText(cs.passkeys.admin.confirmTitle('Táta'))

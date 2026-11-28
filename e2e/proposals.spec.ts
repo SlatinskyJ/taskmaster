@@ -9,8 +9,8 @@ async function login(page: Page, username: string) {
   await expect(page).toHaveURL(/\/$/)
 }
 
-// Příští týden and Výchozí týden (#43) on seed `proposals`: Starší's next week waits for
-// Mladší, Táta's 14-day default week waits for both boys. Serial: each step builds on the last,
+// Příští týden and Výchozí týden (#43) on seed `proposals`: Anička's next week waits for
+// Béďa, Táta's 14-day default week waits for both kids. Serial: each step builds on the last,
 // through the real server functions.
 
 const t = cs.proposals
@@ -40,12 +40,12 @@ test('Táta withdraws his default week and proposes another', async ({ page }) =
   await logout(page)
 })
 
-test('Mladší says no to Starší’s next week and proposes a shorter one', async ({ page }) => {
+test('Béďa says no to Anička’s next week and proposes a shorter one', async ({ page }) => {
   await login(page, 'mladsi')
   await expect(page.getByText(t.entry.periodRow)).toBeVisible()
   await page.getByRole('link', { name: t.entry.open, exact: true }).first().click()
   await expect(page).toHaveURL(/\/tyden\/pristi$/)
-  await expect(periodCard(page)).toContainText(t.proposedBy('Starší'))
+  await expect(periodCard(page)).toContainText(t.proposedBy('Anička'))
   await periodCard(page).getByRole('button', { name: t.reject, exact: true }).click()
   const dialog = page.getByRole('dialog')
   await expect(dialog).toContainText(t.confirm.reject.body)
@@ -55,11 +55,11 @@ test('Mladší says no to Starší’s next week and proposes a shorter one', as
   await page.getByRole('button', { name: t.shorter }).click()
   await page.getByRole('button', { name: t.proposeAll }).click()
   await expect(page.getByText(t.sent)).toBeVisible()
-  await expect(periodCard(page)).toContainText(t.proposedBy('Mladší'))
+  await expect(periodCard(page)).toContainText(t.proposedBy('Béďa'))
   await logout(page)
 })
 
-test('Starší and Táta agree: Dohodnuto', async ({ page }) => {
+test('Anička and Táta agree: Dohodnuto', async ({ page }) => {
   await login(page, 'starsi')
   await expect(page.getByText(t.entry.periodRow)).toBeVisible()
   await page.getByRole('link', { name: t.entry.open, exact: true }).first().click()

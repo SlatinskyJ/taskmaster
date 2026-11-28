@@ -8,7 +8,7 @@ import { logout, passwordLogin } from './helpers'
 
 test.use({ viewport: { width: 360, height: 800 } })
 
-test('Starší taps Souhlasím on Vynést kompost and the chore runs at 10', async ({ page }) => {
+test('Anička taps Souhlasím on Vynést kompost and the chore runs at 10', async ({ page }) => {
   await passwordLogin(page, 'starsi')
   await expect(page).toHaveURL(/\/$/)
   const waiting = page.locator('section').filter({ has: page.getByText(cs.home.waiting) })

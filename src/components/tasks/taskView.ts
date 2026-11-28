@@ -268,7 +268,7 @@ export function waitingText(task: TaskView, me: Me): string | null {
 }
 
 /**
- * GHome "Čeká na kluky" (#41): offers with no bid yet that still wait only for the boys. One
+ * GHome "Čeká na děti" (#41): offers with no bid yet that still wait only for the boys. One
  * waiting for this parent is in "Čeká na tebe"; one with bids is in "Vyjednávání".
  */
 export function waitingOnTakers(list: readonly TaskView[], me: Me): TaskView[] {

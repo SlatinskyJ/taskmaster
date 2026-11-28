@@ -24,8 +24,8 @@ async function openViewer(page: Page) {
   await page.goto('/dev/multi')
   await expect(page.locator('[data-device]')).toHaveCount(3)
   await expect(frameOf(page, 0).getByRole('heading', { name: hello('Táta') })).toBeVisible()
-  await expect(frameOf(page, 1).getByRole('heading', { name: hello('Starší') })).toBeVisible()
-  await expect(frameOf(page, 2).getByRole('heading', { name: hello('Mladší') })).toBeVisible()
+  await expect(frameOf(page, 1).getByRole('heading', { name: hello('Anička') })).toBeVisible()
+  await expect(frameOf(page, 2).getByRole('heading', { name: hello('Béďa') })).toBeVisible()
 }
 
 async function goTo(page: Page, i: number, path: string) {
@@ -97,9 +97,9 @@ test('logout inside a frame survives Obnovit', async ({ page }) => {
 
   await reloadOf(page, 2).click()
   await expect(mladsi.getByLabel(cs.login.username)).toBeVisible()
-  await expect(mladsi.getByRole('heading', { name: hello('Mladší') })).toHaveCount(0)
+  await expect(mladsi.getByRole('heading', { name: hello('Béďa') })).toHaveCount(0)
   await expect(frameOf(page, 0).getByRole('heading', { name: hello('Táta') })).toBeVisible()
-  await expect(frameOf(page, 1).getByRole('heading', { name: hello('Starší') })).toBeVisible()
+  await expect(frameOf(page, 1).getByRole('heading', { name: hello('Anička') })).toBeVisible()
 })
 
 test('someone else logging in inside a frame survives Obnovit', async ({ page }) => {
@@ -204,10 +204,10 @@ test('a failed frame login shows retry', async ({ page }) => {
   const starsi = device(page, 1)
   await expect(starsi.getByText(t.loginFailed)).toBeVisible()
   await expect(frameOf(page, 0).getByRole('heading', { name: hello('Táta') })).toBeVisible()
-  await expect(frameOf(page, 2).getByRole('heading', { name: hello('Mladší') })).toBeVisible()
+  await expect(frameOf(page, 2).getByRole('heading', { name: hello('Béďa') })).toBeVisible()
 
   await starsi.getByRole('button', { name: t.retry }).click()
-  await expect(frameOf(page, 1).getByRole('heading', { name: hello('Starší') })).toBeVisible()
+  await expect(frameOf(page, 1).getByRole('heading', { name: hello('Anička') })).toBeVisible()
   expect(failed).toBe(true)
 })
 
